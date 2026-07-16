@@ -164,29 +164,40 @@ Connect domains in Shopify admin:
 6. Confirm SSL is active.
 7. Confirm the canonical primary domain.
 
-## GitHub Deployment
+## Production Workflow
 
-This repository can be connected to Shopify through Shopify GitHub integration or synced with Shopify CLI.
+GitHub is the source of truth and version history for this theme.
 
-Recommended workflow:
+Do not use Shopify's GitHub integration, GitHub Actions, or ZIP uploads for normal site changes.
 
-1. Commit theme changes to GitHub.
-2. Preview through Shopify.
-3. Run Theme Check.
-4. Test mobile, keyboard navigation, links, cart, product pages, forms, and policy pages.
-5. Publish only after the public launch checklist is complete.
+Permanent workflow:
+
+1. Edit the theme in this repository.
+2. Run local audits and Shopify Theme Check.
+3. Commit and push the finished change to GitHub.
+4. Deploy the same repository code to the existing Shopify theme using Shopify CLI.
+5. Do not pull Shopify's remote theme back over the repository unless an emergency recovery plan has been reviewed first.
+
+The production Shopify CLI target is saved in `shopify.theme.toml`.
+
+Current target:
+
+- Store: `f7gmze-fa.myshopify.com`
+- Theme name: `Real World Needs`
+- Theme ID: `141693190207`
+
+Shopify remains the system of record for products, Printify products, inventory, orders, customers, payments, checkout, and other store data.
 
 ## Shopify Theme Syncing
 
-In an environment with Shopify CLI:
+Codex should use these commands internally for future production updates:
 
 ```bash
-shopify theme check
-shopify theme dev
-shopify theme push
+shopify theme check --path .
+shopify theme push --environment production --strict
 ```
 
-This local Codex environment did not have Shopify CLI installed during the initial scaffold.
+For live-theme updates, `shopify.theme.toml` includes `allow-live = true` for the saved production theme ID. Never create a new Shopify theme for routine updates.
 
 ## Local Audits
 
@@ -201,7 +212,7 @@ npm run audit:secrets
 Then run Shopify Theme Check in a Shopify CLI environment:
 
 ```bash
-shopify theme check
+shopify theme check --path .
 ```
 
 ## Rollback

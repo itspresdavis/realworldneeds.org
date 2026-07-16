@@ -1,0 +1,13 @@
+# Shopify CLI environments for Real World Needs.
+# Do not store Shopify passwords, theme access tokens, API keys, or private
+# credentials in this file. Shopify CLI browser auth stays local to the machine.
+
+[environments.production]
+store = "f7gmze-fa.myshopify.com"
+theme = "141693190207"
+allow-live = true
+
+[environments.default]
+store = "f7gmze-fa.myshopify.com"
+theme = "141693190207"
+allow-live = true
