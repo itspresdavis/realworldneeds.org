@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "contact",
+        "kicker": "Contact",
+        "fallback_title": "Contact",
+        "fallback_intro": "Use this page for public contact information and a Shopify contact form."
+      }
+    }
+  },
+  "order": ["main"]
+}

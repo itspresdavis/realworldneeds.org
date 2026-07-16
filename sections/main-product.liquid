@@ -1,0 +1,49 @@
+<section class="rwn-section rwn-section--white">
+  <div class="rwn-section__inner">
+    <div class="editorial-grid">
+      <div class="editorial-card editorial-card--large">
+        {%- if product.featured_media -%}
+          {%- assign product_media_alt = product.featured_media.alt | default: product.title -%}
+          <div class="product-media">
+            {{ product.featured_media.preview_image | image_url: width: 1200 | image_tag: loading: 'eager', alt: product_media_alt }}
+          </div>
+        {%- else -%}
+          <div class="empty-state"><p>Product image will appear after Shopify media is added.</p></div>
+        {%- endif -%}
+      </div>
+      <div class="editorial-card">
+        <p class="section-kicker">Supporter shop</p>
+        <h1>{{ product.title | escape }}</h1>
+        <p class="price">{{ product.selected_or_first_available_variant.price | money }}</p>
+        {%- if product.description != blank -%}<div class="rte">{{ product.description }}</div>{%- endif -%}
+        {%- form 'product', product, class: 'form-grid' -%}
+          <div class="field">
+            <label for="VariantId">Option</label>
+            <select id="VariantId" name="id">
+              {%- for variant in product.variants -%}
+                <option value="{{ variant.id }}" {% if variant == product.selected_or_first_available_variant %}selected{% endif %} {% unless variant.available %}disabled{% endunless %}>
+                  {{ variant.title | escape }}{% unless variant.available %} | Unavailable{% endunless %}
+                </option>
+              {%- endfor -%}
+            </select>
+          </div>
+          <div class="field">
+            <label for="Quantity">Quantity</label>
+            <input id="Quantity" type="number" name="quantity" min="1" value="1">
+          </div>
+          <button class="button button--primary" type="submit" {% unless product.available %}disabled{% endunless %}>
+            {%- if product.available -%}Add to cart{%- else -%}Unavailable{%- endif -%}
+          </button>
+        {%- endform -%}
+        <p class="muted">Checkout, taxes, shipping, and payment are handled by Shopify.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "RWN product",
+  "settings": []
+}
+{% endschema %}

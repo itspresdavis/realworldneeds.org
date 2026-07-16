@@ -1,0 +1,80 @@
+{%- liquid
+  assign donation_ready = false
+  if settings.donations_enabled and settings.donation_url != blank
+    assign donation_ready = true
+  endif
+-%}
+
+<footer class="site-footer">
+  <div class="site-footer__statement">
+    <a class="wordmark wordmark--footer" href="{{ routes.root_url }}">
+      <span class="wordmark__primary">Real World</span>
+      <span class="wordmark__secondary">Needs</span>
+    </a>
+    <p>Real problems. Real solutions.</p>
+    <p class="muted">Real World Needs is being built to identify practical needs, organize responsible help, and document what happens.</p>
+  </div>
+
+  <div class="site-footer__grid">
+    <div>
+      <h2>Explore</h2>
+      {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works' %}
+      {% render 'rwn-page-link', handle: 'needs', label: 'Needs' %}
+      {% render 'rwn-page-link', handle: 'our-work', label: 'Our Work' %}
+      {% render 'rwn-page-link', handle: 'transparency', label: 'Transparency' %}
+      {%- if settings.stories_enabled and blogs['stories'] != blank -%}
+        <a class="text-link" href="{{ blogs['stories'].url }}">Stories</a>
+      {%- endif -%}
+    </div>
+    <div>
+      <h2>Participate</h2>
+      {%- if donation_ready -%}
+        <a class="text-link" href="{{ settings.donation_url | escape }}">Donate</a>
+      {%- endif -%}
+      {% render 'rwn-page-link', handle: 'give-clothing', label: 'Give Clothing' %}
+      {% render 'rwn-page-link', handle: 'volunteer', label: 'Volunteer' %}
+      {% render 'rwn-page-link', handle: 'get-help', label: 'Get Help' %}
+      {%- assign supporter_shop = collections['supporter-shop'] -%}
+      {%- if settings.merchandise_enabled and supporter_shop != blank -%}
+        <a class="text-link" href="{{ supporter_shop.url }}">Supporter Shop</a>
+      {%- endif -%}
+    </div>
+    <div>
+      <h2>Organization</h2>
+      {% render 'rwn-page-link', handle: 'about', label: 'About' %}
+      {% render 'rwn-page-link', handle: 'governance', label: 'Governance' %}
+      {% render 'rwn-page-link', handle: 'financials', label: 'Financials' %}
+      {% render 'rwn-page-link', handle: 'contact', label: 'Contact' %}
+      {% render 'rwn-page-link', handle: 'faq', label: 'FAQ' %}
+    </div>
+    <div>
+      <h2>Legal</h2>
+      {% render 'rwn-page-link', handle: 'privacy-policy', label: 'Privacy Policy' %}
+      {% render 'rwn-page-link', handle: 'terms-of-use', label: 'Terms of Use' %}
+      {% render 'rwn-page-link', handle: 'accessibility', label: 'Accessibility' %}
+      {% render 'rwn-page-link', handle: 'donation-policy', label: 'Donation Policy' %}
+      {% render 'rwn-page-link', handle: 'donation-refund-policy', label: 'Donation Refund Policy' %}
+      {% render 'rwn-page-link', handle: 'shipping-policy', label: 'Shipping Policy' %}
+      {% render 'rwn-page-link', handle: 'return-policy', label: 'Merchandise Return Policy' %}
+      {% render 'rwn-page-link', handle: 'legal', label: 'Legal and Disclosures' %}
+    </div>
+  </div>
+
+  {%- if settings.charitable_solicitation_disclosure != blank -%}
+    <div class="site-footer__disclosure">
+      {{ settings.charitable_solicitation_disclosure | escape }}
+    </div>
+  {%- endif -%}
+
+  <div class="site-footer__bottom">
+    <p>&copy; {{ 'now' | date: '%Y' }} Real World Needs. All rights reserved.</p>
+    <p class="muted">No public impact numbers are shown until real information is published.</p>
+  </div>
+</footer>
+
+{% schema %}
+{
+  "name": "RWN footer",
+  "settings": []
+}
+{% endschema %}

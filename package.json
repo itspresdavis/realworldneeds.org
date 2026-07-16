@@ -1,0 +1,11 @@
+{
+  "name": "rwn-web-shopify-theme",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real World Needs Shopify theme",
+  "scripts": {
+    "audit:links": "node scripts/audit-theme-links.mjs",
+    "audit:secrets": "node scripts/audit-secrets.mjs",
+    "validate:json": "node scripts/validate-json.mjs"
+  }
+}

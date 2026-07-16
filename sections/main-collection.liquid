@@ -1,0 +1,48 @@
+<section class="rwn-section rwn-section--white">
+  <div class="rwn-section__inner">
+    <p class="section-kicker">Supporter shop</p>
+    <h1>{{ collection.title | escape }}</h1>
+    {%- if collection.description != blank -%}
+      <div class="lead">{{ collection.description }}</div>
+    {%- else -%}
+      <p class="lead">Merchandise is secondary to the mission. Products appear here only when real Shopify products are published.</p>
+    {%- endif -%}
+  </div>
+</section>
+
+<section class="rwn-section">
+  <div class="rwn-section__inner">
+    {%- if collection.products_count > 0 -%}
+      {%- paginate collection.products by 12 -%}
+        <div class="product-grid">
+          {%- for product in collection.products -%}
+            <article class="product-card">
+              <a href="{{ product.url | within: collection }}">
+                {%- if product.featured_image -%}
+                  {%- assign product_image_alt = product.featured_image.alt | default: product.title -%}
+                  <div class="product-media">{{ product.featured_image | image_url: width: 700 | image_tag: loading: 'lazy', alt: product_image_alt }}</div>
+                {%- endif -%}
+                <h2>{{ product.title | escape }}</h2>
+              </a>
+              <p class="price">{{ product.price | money }}</p>
+              {%- unless product.available -%}<p class="status-label">Out of stock</p>{%- endunless -%}
+            </article>
+          {%- endfor -%}
+        </div>
+        {%- if paginate.pages > 1 -%}<nav class="pagination" aria-label="Products pagination">{{ paginate | default_pagination }}</nav>{%- endif -%}
+      {%- endpaginate -%}
+    {%- else -%}
+      <div class="empty-state">
+        <h2>No merchandise is currently published.</h2>
+        <p>Printify products imported into Shopify will appear here after they are assigned to the Supporter Shop collection.</p>
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "RWN collection",
+  "settings": []
+}
+{% endschema %}

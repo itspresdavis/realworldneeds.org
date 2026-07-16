@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "donation-policy",
+        "kicker": "Donation Policy",
+        "fallback_title": "Donation Policy",
+        "fallback_intro": "Donation terms must match the actual donation processor, organization status, and public disclosures."
+      }
+    }
+  },
+  "order": ["main"]
+}

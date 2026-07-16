@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "needs",
+        "kicker": "Needs",
+        "fallback_title": "Real Needs",
+        "fallback_intro": "Published needs will appear here when they are verified and ready."
+      }
+    }
+  },
+  "order": ["main"]
+}

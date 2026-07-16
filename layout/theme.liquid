@@ -1,0 +1,41 @@
+<!doctype html>
+<html class="no-js" lang="{{ request.locale.iso_code }}">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#102236">
+    <link rel="canonical" href="{{ canonical_url }}">
+
+    <title>
+      {{ page_title | default: shop.name | escape }}
+      {%- if current_tags %} | tagged {{ current_tags | join: ', ' | escape }}{% endif -%}
+      {%- if current_page != 1 %} | page {{ current_page }}{% endif -%}
+    </title>
+
+    {%- assign fallback_description = settings.default_meta_description | default: 'Real World Needs identifies real human needs, organizes practical responses, and documents what happens.' -%}
+    <meta name="description" content="{{ page_description | default: fallback_description | strip_html | escape }}">
+
+    <meta property="og:site_name" content="{{ shop.name | escape }}">
+    <meta property="og:url" content="{{ canonical_url }}">
+    <meta property="og:title" content="{{ page_title | default: shop.name | escape }}">
+    <meta property="og:type" content="website">
+    <meta property="og:description" content="{{ page_description | default: fallback_description | strip_html | escape }}">
+
+    {{ content_for_header }}
+
+    {{ 'rwn.css' | asset_url | stylesheet_tag }}
+    <script src="{{ 'rwn.js' | asset_url }}" defer></script>
+  </head>
+
+  <body class="template-{{ template.name | handle }}">
+    <a class="skip-link" href="#MainContent">Skip to content</a>
+    {% section 'rwn-header' %}
+
+    <main id="MainContent" class="site-main" tabindex="-1">
+      {{ content_for_layout }}
+    </main>
+
+    {% section 'rwn-footer' %}
+  </body>
+</html>

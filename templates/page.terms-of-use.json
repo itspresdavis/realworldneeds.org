@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "terms-of-use",
+        "kicker": "Terms",
+        "fallback_title": "Terms of Use",
+        "fallback_intro": "Terms must be reviewed before public launch."
+      }
+    }
+  },
+  "order": ["main"]
+}

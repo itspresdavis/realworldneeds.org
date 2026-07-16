@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "faq",
+        "kicker": "FAQ",
+        "fallback_title": "FAQ",
+        "fallback_intro": "Questions and answers should be added when Real World Needs has approved answers."
+      }
+    }
+  },
+  "order": ["main"]
+}

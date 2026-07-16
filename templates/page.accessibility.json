@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "accessibility",
+        "kicker": "Accessibility",
+        "fallback_title": "Accessibility Statement",
+        "fallback_intro": "Real World Needs should aim for a website that is usable by as many people as practical."
+      }
+    }
+  },
+  "order": ["main"]
+}

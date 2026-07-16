@@ -1,0 +1,39 @@
+{%- if settings.merchandise_enabled -%}
+  <details class="cart-drawer">
+    <summary class="icon-button" aria-label="Open cart">
+      {% render 'rwn-icon', icon: 'cart' %}
+      <span class="cart-count" aria-label="{{ cart.item_count }} items in cart">{{ cart.item_count }}</span>
+    </summary>
+    <div class="cart-drawer__panel" role="dialog" aria-label="Cart">
+      <div class="cart-drawer__header">
+        <h2>Your cart</h2>
+        <button class="icon-button" type="button" data-close-details aria-label="Close cart">Close</button>
+      </div>
+      {%- if cart.item_count > 0 -%}
+        <form action="{{ routes.cart_url }}" method="post" novalidate>
+          <ul class="cart-mini-list" role="list">
+            {%- for item in cart.items -%}
+              <li class="cart-mini-item">
+                <a href="{{ item.url }}" class="cart-mini-item__title">{{ item.product.title | escape }}</a>
+                <p>{{ item.variant.title | escape }}</p>
+                <p>{{ item.quantity }} x {{ item.final_line_price | money }}</p>
+              </li>
+            {%- endfor -%}
+          </ul>
+          <p class="cart-drawer__subtotal">Subtotal {{ cart.total_price | money }}</p>
+          <button class="button button--primary" type="submit" name="checkout">Checkout</button>
+          <a class="button button--secondary" href="{{ routes.cart_url }}">View cart</a>
+        </form>
+      {%- else -%}
+        <div class="empty-state empty-state--small">
+          <h3>Your cart is empty.</h3>
+          <p>Supporter merchandise will appear when products are published in Shopify.</p>
+          {%- assign shop_collection = collections['supporter-shop'] -%}
+          {%- if shop_collection != blank and shop_collection.products_count > 0 -%}
+            <a class="button button--secondary" href="{{ shop_collection.url }}">Visit the shop</a>
+          {%- endif -%}
+        </div>
+      {%- endif -%}
+    </div>
+  </details>
+{%- endif -%}

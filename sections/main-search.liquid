@@ -1,0 +1,45 @@
+<section class="rwn-section rwn-section--white">
+  <div class="rwn-section__inner">
+    <p class="section-kicker">Search</p>
+    <h1>Search Real World Needs</h1>
+    <form action="{{ routes.search_url }}" method="get" role="search" class="form-grid">
+      <div class="field">
+        <label for="SearchInput">Search terms</label>
+        <input id="SearchInput" type="search" name="q" value="{{ search.terms | escape }}">
+      </div>
+      <button class="button button--primary" type="submit">Search</button>
+    </form>
+  </div>
+</section>
+
+<section class="rwn-section">
+  <div class="rwn-section__inner">
+    {%- if search.performed -%}
+      {%- if search.results_count > 0 -%}
+        <h2>{{ search.results_count }} result{% unless search.results_count == 1 %}s{% endunless %}</h2>
+        <div class="resource-list">
+          {%- paginate search.results by 12 -%}
+            {%- for item in search.results -%}
+              <article class="policy-card">
+                <h3><a href="{{ item.url }}">{{ item.title | escape }}</a></h3>
+                <p>{{ item.content | strip_html | truncate: 140 | escape }}</p>
+              </article>
+            {%- endfor -%}
+            {%- if paginate.pages > 1 -%}<nav class="pagination" aria-label="Search pagination">{{ paginate | default_pagination }}</nav>{%- endif -%}
+          {%- endpaginate -%}
+        </div>
+      {%- else -%}
+        <div class="empty-state"><h2>No results found.</h2><p>Try a different search term or return to the homepage.</p></div>
+      {%- endif -%}
+    {%- else -%}
+      <div class="empty-state"><h2>Enter a search term to begin.</h2></div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "RWN search",
+  "settings": []
+}
+{% endschema %}

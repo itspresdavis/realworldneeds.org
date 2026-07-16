@@ -1,0 +1,21 @@
+<section class="rwn-section rwn-section--white">
+  <div class="rwn-section__inner">
+    <p class="section-kicker">Page not found</p>
+    <h1>This page is not available.</h1>
+    <p class="lead">The link may have changed or the page may not be published yet.</p>
+    <div class="action-row">
+      <a class="button button--primary" href="{{ routes.root_url }}">Go home</a>
+      {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'button button--secondary' %}
+      {% render 'rwn-page-link', handle: 'needs', label: 'Needs', class: 'button button--secondary' %}
+      {%- if settings.stories_enabled and blogs['stories'] != blank -%}<a class="button button--secondary" href="{{ blogs['stories'].url }}">Stories</a>{%- endif -%}
+      {%- if settings.merchandise_enabled and collections['supporter-shop'] != blank -%}<a class="button button--secondary" href="{{ collections['supporter-shop'].url }}">Shop</a>{%- endif -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "RWN 404",
+  "settings": []
+}
+{% endschema %}

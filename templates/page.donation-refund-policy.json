@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "donation-refund-policy",
+        "kicker": "Donation Refund Policy",
+        "fallback_title": "Donation Refund Policy",
+        "fallback_intro": "Refund language must match the donation processor and organization policy after review."
+      }
+    }
+  },
+  "order": ["main"]
+}

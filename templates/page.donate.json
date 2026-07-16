@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "donate",
+        "kicker": "Donate",
+        "fallback_title": "Donate",
+        "fallback_intro": "Giving should be clear, configured, and accurate before anyone is asked to give."
+      }
+    }
+  },
+  "order": ["main"]
+}

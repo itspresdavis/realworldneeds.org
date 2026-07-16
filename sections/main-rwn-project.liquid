@@ -1,0 +1,46 @@
+{%- liquid
+  assign project_title = metaobject.title.value | default: metaobject.title
+  assign project_summary = metaobject.short_summary.value | default: metaobject.short_summary
+  assign project_status = metaobject.status.value | default: metaobject.status
+  assign project_status_downcase = project_status | downcase
+  assign donation_url = metaobject.donation_url.value | default: metaobject.donation_url
+  assign can_fund = false
+  assign closed_statuses = 'completed,paused,closed'
+  if donation_url != blank
+    unless closed_statuses contains project_status_downcase
+      assign can_fund = true
+    endunless
+  endif
+-%}
+
+<section class="rwn-section rwn-section--white">
+  <div class="rwn-section__inner">
+    <p class="section-kicker">Need</p>
+    <span class="status-label">{{ project_status | default: 'Being verified' | escape }}</span>
+    <h1>{{ project_title | default: 'Need details' | escape }}</h1>
+    {%- if project_summary != blank -%}<p class="lead">{{ project_summary | strip_html | escape }}</p>{%- endif -%}
+    {%- if can_fund -%}
+      <div class="action-row"><a class="button button--primary" href="{{ donation_url | escape }}">Fund this need</a></div>
+    {%- endif -%}
+  </div>
+</section>
+
+<section class="rwn-section">
+  <div class="rwn-section__inner">
+    <div class="policy-grid">
+      <article class="policy-card"><h2>What is needed</h2><p>{{ metaobject.what_is_needed.value | default: 'This information has not been published yet.' | escape }}</p></article>
+      <article class="policy-card"><h2>Why it matters</h2><p>{{ metaobject.why_it_matters.value | default: 'This information has not been published yet.' | escape }}</p></article>
+      <article class="policy-card"><h2>Responsible organization</h2><p>{{ metaobject.responsible_organization.value | default: 'Responsible organization details have not been published yet.' | escape }}</p></article>
+      <article class="policy-card"><h2>Verification notes</h2><p>{{ metaobject.verification_notes.value | default: 'Verification notes have not been published yet.' | escape }}</p></article>
+      <article class="policy-card"><h2>Funding</h2><p>Funding details appear only when real information is entered and reviewed.</p></article>
+      <article class="policy-card"><h2>Updates</h2><p>Project updates will appear after they are published.</p></article>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "RWN project",
+  "settings": []
+}
+{% endschema %}

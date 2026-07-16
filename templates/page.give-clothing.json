@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "give-clothing",
+        "kicker": "Give Clothing",
+        "fallback_title": "Give Clothing",
+        "fallback_intro": "The first intended focus is collecting and distributing quality clothing with care."
+      }
+    }
+  },
+  "order": ["main"]
+}

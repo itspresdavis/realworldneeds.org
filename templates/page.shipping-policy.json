@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "shipping-policy",
+        "kicker": "Shipping",
+        "fallback_title": "Shipping Policy",
+        "fallback_intro": "Shipping language must match Shopify, Printify, and actual fulfillment settings."
+      }
+    }
+  },
+  "order": ["main"]
+}

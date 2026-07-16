@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "legal",
+        "kicker": "Legal",
+        "fallback_title": "Legal and Disclosures",
+        "fallback_intro": "Legal language is editable and requires review before public launch."
+      }
+    }
+  },
+  "order": ["main"]
+}

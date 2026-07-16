@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "governance",
+        "kicker": "Governance",
+        "fallback_title": "Governance",
+        "fallback_intro": "Governance documents and policies should be published after they exist and have been reviewed."
+      }
+    }
+  },
+  "order": ["main"]
+}

@@ -1,0 +1,45 @@
+<section class="rwn-section rwn-section--white">
+  <div class="rwn-section__inner">
+    <p class="section-kicker">Stories</p>
+    <h1>{{ blog.title | escape }}</h1>
+    <p class="lead">Real updates, project reporting, good news from around the world, and practical stories about people helping people.</p>
+  </div>
+</section>
+
+<section class="rwn-section">
+  <div class="rwn-section__inner">
+    {%- if blog.articles_count > 0 -%}
+      <div class="article-list">
+        {%- paginate blog.articles by 12 -%}
+          {%- for article in blog.articles -%}
+            <article class="story-card">
+              {%- if article.image -%}
+                {%- assign article_image_alt = article.image.alt | default: article.title -%}
+                <a class="article-media" href="{{ article.url }}">{{ article.image | image_url: width: 800 | image_tag: loading: 'lazy', alt: article_image_alt }}</a>
+              {%- endif -%}
+              <p class="section-kicker">{{ article.tags.first | default: 'Story' | escape }}</p>
+              <h2><a href="{{ article.url }}">{{ article.title | escape }}</a></h2>
+              <p class="muted">{{ article.published_at | date: '%B %d, %Y' }}</p>
+              <p>{{ article.excerpt_or_content | strip_html | truncate: 150 | escape }}</p>
+            </article>
+          {%- endfor -%}
+          {%- if paginate.pages > 1 -%}
+            <nav class="pagination" aria-label="Stories pagination">{{ paginate | default_pagination }}</nav>
+          {%- endif -%}
+        {%- endpaginate -%}
+      </div>
+    {%- else -%}
+      <div class="empty-state">
+        <h2>No stories have been published yet.</h2>
+        <p>Stories will appear here when real posts are created in Shopify. Temporary draft articles should not be published as production content.</p>
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "RWN blog",
+  "settings": []
+}
+{% endschema %}

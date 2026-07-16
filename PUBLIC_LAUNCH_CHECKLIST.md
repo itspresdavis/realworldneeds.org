@@ -1,0 +1,58 @@
+# Public Launch Checklist
+
+The site is not ready for public fundraising until a responsible administrator verifies every applicable item.
+
+- Real World Needs legal entity name verified
+- Domain ownership confirmed
+- RealWorldNeeds.org connected
+- RealWorldNeeds.com connected or redirected intentionally
+- Organization formation completed
+- EIN obtained if applicable
+- Banking setup completed
+- Applicable federal tax status accurately represented
+- Applicable state charity registration requirements reviewed
+- Applicable charitable solicitation requirements reviewed
+- Required disclosures added
+- Donation processor configured
+- Donation processor tested
+- Donation URL tested
+- Donation receipt process verified
+- Tax deductible language verified before enabling
+- Public contact information added
+- Privacy Policy reviewed
+- Terms reviewed
+- Donation Policy reviewed
+- Donation Refund Policy reviewed
+- Shipping Policy reviewed
+- Merchandise Return Policy reviewed
+- Accessibility Statement reviewed
+- Data collection practices reviewed
+- Analytics reviewed
+- Cookie behavior reviewed
+- Email signup compliance reviewed
+- Volunteer forms reviewed
+- Beneficiary privacy reviewed
+- Real projects reviewed
+- Real financial data verified
+- Real impact data verified
+- All demo content removed
+- Printify products reviewed
+- Printify test order completed
+- Product prices verified
+- Shipping configuration tested
+- Returns process tested
+- Shopify checkout tested
+- Cart tested
+- Mobile tested
+- Keyboard accessibility tested
+- Color contrast checked
+- Shopify Theme Check passed
+- Security review completed
+- All links audited
+- 404 page tested
+- Forms tested
+- No fake claims present
+- No fake data present
+- No dead buttons present
+- No empty links present
+- No unfinished pages present

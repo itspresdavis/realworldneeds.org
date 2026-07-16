@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "get-help",
+        "kicker": "Get Help",
+        "fallback_title": "Get Help",
+        "fallback_intro": "Help intake should be opened only when the process, privacy practices, and response capacity are ready."
+      }
+    }
+  },
+  "order": ["main"]
+}

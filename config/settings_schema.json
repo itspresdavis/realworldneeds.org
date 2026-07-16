@@ -1,0 +1,165 @@
+[
+  {
+    "name": "theme_info",
+    "theme_name": "Real World Needs",
+    "theme_version": "1.0.0",
+    "theme_author": "Real World Needs",
+    "theme_documentation_url": "https://github.com/Anlos0516/RWN-WEB",
+    "theme_support_url": "https://github.com/Anlos0516/RWN-WEB"
+  },
+  {
+    "name": "Launch safety",
+    "settings": [
+      {
+        "type": "checkbox",
+        "id": "public_launch_ready",
+        "label": "Public launch ready",
+        "default": false,
+        "info": "Use only after the public launch checklist has been completed."
+      },
+      {
+        "type": "checkbox",
+        "id": "donations_enabled",
+        "label": "Enable donation calls to action",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "merchandise_enabled",
+        "label": "Enable merchandise and cart entry points",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "projects_enabled",
+        "label": "Enable public projects and needs",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "clothing_program_enabled",
+        "label": "Enable clothing program calls to action",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "volunteer_applications_enabled",
+        "label": "Enable volunteer interest form",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "get_help_requests_enabled",
+        "label": "Enable get help contact form",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "stories_enabled",
+        "label": "Enable stories navigation and story sections",
+        "default": false
+      }
+    ]
+  },
+  {
+    "name": "Donation and legal status",
+    "settings": [
+      {
+        "type": "url",
+        "id": "donation_url",
+        "label": "Global donation URL",
+        "info": "Leave blank until the donation processor is configured and tested."
+      },
+      {
+        "type": "checkbox",
+        "id": "tax_exempt_status_confirmed",
+        "label": "Tax exempt status confirmed by administrator",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "tax_deductible_language_enabled",
+        "label": "Enable tax deductible language",
+        "default": false,
+        "info": "Do not enable until legal status and required disclosures are confirmed."
+      },
+      {
+        "type": "textarea",
+        "id": "nonprofit_status_text",
+        "label": "Nonprofit and tax status text"
+      },
+      {
+        "type": "textarea",
+        "id": "charitable_solicitation_status_text",
+        "label": "Charitable solicitation status text"
+      },
+      {
+        "type": "textarea",
+        "id": "charitable_solicitation_disclosure",
+        "label": "Global charitable solicitation disclosure"
+      },
+      {
+        "type": "text",
+        "id": "donation_processor_name",
+        "label": "Donation processor name"
+      },
+      {
+        "type": "textarea",
+        "id": "donation_receipt_information",
+        "label": "Donation receipt information"
+      }
+    ]
+  },
+  {
+    "name": "Organization information",
+    "settings": [
+      {
+        "type": "text",
+        "id": "contact_email",
+        "label": "Public email"
+      },
+      {
+        "type": "text",
+        "id": "public_phone",
+        "label": "Public phone"
+      },
+      {
+        "type": "textarea",
+        "id": "public_address",
+        "label": "Public mailing address",
+        "info": "Do not add private addresses."
+      },
+      {
+        "type": "textarea",
+        "id": "default_meta_description",
+        "label": "Default SEO description",
+        "default": "Real World Needs identifies real human needs, organizes practical responses, and documents what happens."
+      }
+    ]
+  },
+  {
+    "name": "Social accounts",
+    "settings": [
+      {
+        "type": "url",
+        "id": "social_instagram",
+        "label": "Instagram URL"
+      },
+      {
+        "type": "url",
+        "id": "social_facebook",
+        "label": "Facebook URL"
+      },
+      {
+        "type": "url",
+        "id": "social_youtube",
+        "label": "YouTube URL"
+      },
+      {
+        "type": "url",
+        "id": "social_x",
+        "label": "X URL"
+      }
+    ]
+  }
+]

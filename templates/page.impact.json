@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "impact",
+        "kicker": "Impact",
+        "fallback_title": "Impact",
+        "fallback_intro": "Impact information will be published only after real projects and real outcomes exist."
+      }
+    }
+  },
+  "order": ["main"]
+}

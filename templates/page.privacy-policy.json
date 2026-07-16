@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "privacy-policy",
+        "kicker": "Privacy",
+        "fallback_title": "Privacy Policy",
+        "fallback_intro": "Privacy language must reflect actual data collection, analytics, email, merchandise, donation, and volunteer practices."
+      }
+    }
+  },
+  "order": ["main"]
+}

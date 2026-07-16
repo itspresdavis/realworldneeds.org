@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "main": {
+      "type": "main-rwn-page",
+      "settings": {
+        "page_role": "programs",
+        "kicker": "Programs",
+        "fallback_title": "Programs",
+        "fallback_intro": "Programs will be published when they are ready to operate and report responsibly."
+      }
+    }
+  },
+  "order": ["main"]
+}

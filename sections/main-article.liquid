@@ -1,0 +1,32 @@
+<article>
+  <section class="rwn-section rwn-section--white">
+    <div class="rwn-section__inner">
+      <p class="section-kicker">{{ article.tags.first | default: blog.title | escape }}</p>
+      <h1>{{ article.title | escape }}</h1>
+      <p class="lead">{{ article.published_at | date: '%B %d, %Y' }}</p>
+      {%- if article.image -%}
+        {%- assign article_image_alt = article.image.alt | default: article.title -%}
+        <div class="page-media" style="margin-top:2rem">
+          {{ article.image | image_url: width: 1400 | image_tag: loading: 'eager', sizes: '100vw', alt: article_image_alt }}
+        </div>
+      {%- endif -%}
+    </div>
+  </section>
+  <section class="rwn-section">
+    <div class="rwn-section__inner">
+      <div class="rte">
+        {{ article.content }}
+      </div>
+      <div class="action-row">
+        <a class="button button--secondary" href="{{ blog.url }}">Back to Stories</a>
+      </div>
+    </div>
+  </section>
+</article>
+
+{% schema %}
+{
+  "name": "RWN article",
+  "settings": []
+}
+{% endschema %}
