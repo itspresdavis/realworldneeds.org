@@ -621,7 +621,8 @@ li {
   z-index: 200;
   top: 0;
   right: 0;
-  bottom: 0;
+  height: 100vh;
+  height: 100dvh;
   width: min(100%, 430px);
   padding: 1.5rem;
   overflow-y: auto;
