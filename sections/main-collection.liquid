@@ -1,12 +1,15 @@
+{%- assign collection_heading = collection.title -%}
+{%- if collection.handle == 'all' -%}{%- assign collection_heading = 'Supporter Shop' -%}{%- endif -%}
+
 <section class="collection-hero" aria-labelledby="collection-title">
   <div class="rwn-section__inner collection-hero__inner">
     <div>
       <p class="section-label">Supporter Shop</p>
-      <h1 id="collection-title">{{ collection.title | escape }}</h1>
+      <h1 id="collection-title">{{ collection_heading | escape }}</h1>
       {%- if collection.description != blank -%}
         <div class="lead rte">{{ collection.description }}</div>
       {%- else -%}
-        <p class="lead">Mission merchandise stays secondary to the work. Every item here is managed through Shopify and fulfilled according to its product details.</p>
+        <p class="lead">Simple pieces for people who believe real problems deserve real action. Product and delivery details are shown on each item.</p>
       {%- endif -%}
     </div>
     {%- if collection.products_count > 0 -%}
@@ -51,7 +54,7 @@
       {%- endpaginate -%}
     {%- else -%}
       <div class="shop-empty shop-empty--catalog">
-        <div><p class="section-label">Shop status</p><h2>No products are published here yet.</h2><p>When supporter merchandise is added through Shopify or Printify, it will appear here automatically.</p></div>
+        <div><p class="section-label">Shop status</p><h2>No products are published here yet.</h2><p>The first supporter pieces will appear here when they are ready.</p></div>
         <a class="button button--secondary" href="{{ routes.root_url }}">Return home</a>
       </div>
     {%- endif -%}

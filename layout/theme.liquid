@@ -41,6 +41,9 @@
     endcase
   endif
   assign seo_title = page_title | default: shop.name
+  if request.page_type == 'collection' and collection.handle == 'all'
+    assign seo_title = 'Supporter Shop'
+  endif
   unless request.page_type == 'index'
     unless seo_title contains shop.name
       assign seo_title = seo_title | append: ' | ' | append: shop.name
