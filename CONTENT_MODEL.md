@@ -2,29 +2,30 @@
 
 ## Pages
 
-Create Shopify pages with the handles listed in `ROUTES.md`. Assign the matching theme template when available.
+Use the handles documented in `ROUTES.md`. Assign each page its matching JSON template where available.
 
-The theme is safe when pages are missing. Missing pages hide fallback navigation links and calls to action instead of producing dead routes.
+Missing pages are safe. The theme hides navigation links and calls to action when the destination does not exist.
 
 ## Blog
 
-Create a blog named `Stories` with the handle `stories`.
+Create a blog named `Stories` with handle `stories`.
 
-Story tags may include:
+Recommended article tags:
 
 - Real World Needs
+- Good Around the World
 - Project Update
 - Completed Project
-- Good in the World
-- Community Story
-- Field Note
-- Guide
+- Community
+- Solutions
+- People
+- Field Notes
 
-Do not publish demo articles as production content.
+Articles support featured images, categories through tags, publication dates, reading time, long-form typography, pull quotes through rich text, image captions through Shopify image alt text, and related story states.
 
 ## Collection
 
-Create a collection named `Supporter Shop` with the handle `supporter-shop`.
+Create a collection named `Supporter Shop` with handle `supporter-shop`.
 
 Printify products imported into Shopify should be assigned to this collection after titles, images, variants, prices, shipping, and return policy language are reviewed.
 
@@ -34,23 +35,22 @@ Create a metaobject definition with type `rwn_project`.
 
 Recommended fields:
 
-- `unique_id`
 - `title`
-- `handle`
+- `project_id`
 - `status`
 - `category`
 - `location`
 - `country`
 - `region`
-- `coordinates`
 - `short_summary`
 - `full_story`
 - `what_is_needed`
-- `why_it_matters`
 - `proposed_solution`
+- `why_it_matters`
 - `responsible_organization`
-- `rwn_direct_status`
-- `rwn_verified_status`
+- `rwn_direct`
+- `rwn_verified`
+- `verification_information`
 - `verification_notes`
 - `funding_goal`
 - `amount_raised`
@@ -61,36 +61,36 @@ Recommended fields:
 - `completion_date`
 - `featured_image`
 - `gallery`
-- `videos`
-- `donation_url`
-- `external_partner_url`
+- `video`
 - `updates`
 - `expenses`
 - `receipts`
 - `outcome_metrics`
+- `final_outcome`
 - `final_report`
-- `current_status`
-- `featured`
+- `donation_url`
+- `partner_url`
 - `published`
-- `emergency`
-- `last_verified_date`
+- `featured`
+- `last_updated_date`
 
 Recommended statuses:
 
-- Being verified
+- Being Reviewed
+- Verified
 - Open
 - Funding
 - Funded
-- In progress
+- In Progress
 - Completed
 - Paused
 - Closed
 
-Do not show project donation actions for completed, paused, or closed projects unless the theme logic is intentionally changed after review.
+Donation actions should not render for completed, funded, paused, or closed projects unless that behavior is intentionally changed after review.
 
 ## Expenses
 
-Use a separate metaobject definition for project expenses if expense data grows.
+Use a separate project expense metaobject if expense data grows.
 
 Recommended fields:
 
@@ -100,8 +100,23 @@ Recommended fields:
 - `description`
 - `amount`
 - `category`
-- `receipt_document`
 - `public_note`
+- `receipt`
 - `private`
 
-Never publish donor payment data, private beneficiary information, or private addresses.
+Never publish donor payment data, private beneficiary information, private addresses, unredacted account numbers, or documents containing sensitive personal information.
+
+## Theme Settings
+
+Nontechnical administrators can control:
+
+- Donation availability and URLs
+- Legal and tax status language
+- Charitable solicitation disclosures
+- Public contact information
+- Social links
+- Default SEO description
+- Social sharing image
+- Homepage editorial images
+- Project/story visibility toggles
+- Volunteer and get-help form availability

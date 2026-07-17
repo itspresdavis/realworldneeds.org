@@ -1,17 +1,30 @@
-<section class="rwn-section rwn-section--white">
+<section class="page-hero">
+  <div class="rwn-section__inner page-hero__inner">
+    <div>
+      <p class="section-kicker">Page not found</p>
+      <h1>This page is not available.</h1>
+    </div>
+    <p class="lead">The link may have changed, or the page may not be public right now. You can keep exploring from here.</p>
+  </div>
+</section>
+
+<section class="rwn-section">
   <div class="rwn-section__inner">
-    <p class="section-kicker">Page not found</p>
-    <h1>This page is not available.</h1>
-    <p class="lead">The link may have changed or the page may not be published yet.</p>
-    <div class="action-row">
-      <a class="button button--primary" href="{{ routes.root_url }}">Go home</a>
-      {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'button button--secondary' %}
-      {% render 'rwn-page-link', handle: 'needs', label: 'Needs', class: 'button button--secondary' %}
-      {%- if settings.stories_enabled and blogs['stories'] != blank -%}<a class="button button--secondary" href="{{ blogs['stories'].url }}">Stories</a>{%- endif -%}
-      {%- assign shop_collection = collections['supporter-shop'] -%}
-      {%- assign shop_url = routes.all_products_collection_url -%}
-      {%- if shop_collection != blank -%}{%- assign shop_url = shop_collection.url -%}{%- endif -%}
-      <a class="button button--secondary" href="{{ shop_url }}">Shop</a>
+    {%- assign how_page = pages['how-it-works'] -%}
+    {%- assign needs_page = pages['needs'] -%}
+    {%- assign transparency_page = pages['transparency'] -%}
+    <div class="ways-grid">
+      <a href="{{ routes.root_url }}"><span>Go home</span><p>Return to the beginning of the Real World Needs story.</p></a>
+      {%- if how_page != blank -%}<a href="{{ how_page.url }}"><span>How It Works</span><p>See how needs move from review to action to reporting.</p></a>{%- endif -%}
+      {%- if needs_page != blank -%}<a href="{{ needs_page.url }}"><span>Needs</span><p>View public needs when projects are published.</p></a>{%- endif -%}
+      {%- if transparency_page != blank -%}<a href="{{ transparency_page.url }}"><span>Transparency</span><p>Read the standard for project records and public reporting.</p></a>{%- endif -%}
+      {%- if settings.stories_enabled and blogs['stories'] != blank -%}<a href="{{ blogs['stories'].url }}"><span>Stories</span><p>Read updates and editorial stories when they are published.</p></a>{%- endif -%}
+      {%- if settings.merchandise_enabled -%}
+        {%- assign shop_collection = collections['supporter-shop'] -%}
+        {%- assign shop_url = routes.all_products_collection_url -%}
+        {%- if shop_collection != blank -%}{%- assign shop_url = shop_collection.url -%}{%- endif -%}
+        <a href="{{ shop_url }}"><span>Shop</span><p>Visit the Shopify supporter shop.</p></a>
+      {%- endif -%}
     </div>
   </div>
 </section>

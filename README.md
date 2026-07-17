@@ -1,55 +1,44 @@
 # Real World Needs Shopify Theme
 
-Production theme for Real World Needs.
+Production Shopify theme for Real World Needs.
 
 Primary domain: `RealWorldNeeds.org`
 
 Secondary domain: `RealWorldNeeds.com`
 
-This theme is built around truth first launch safety. It does not invent impact numbers, partners, testimonials, charity ratings, nonprofit status, tax deductible language, projects, events, products, locations, or stories.
+This repository is the source of truth for the website theme. Shopify remains the system of record for products, Printify fulfillment, inventory, checkout, orders, customers, payments, and store data.
 
-## What Was Built
+## What This Theme Is
 
-- Custom Shopify Online Store 2.0 theme scaffold
-- Editorial homepage for Real World Needs
-- Accessible global header and mobile navigation
-- Guarded donation calls to action
-- Storefront-first merchandise entry points
-- Cart drawer and cart page
-- Product and collection templates for Printify products imported into Shopify
-- Stories blog and article templates
-- Search, 404, and password templates
-- Page templates for mission, transparency, legal, contact, clothing, volunteer, help, governance, financials, and policies
-- Future project metaobject template for `rwn_project`
-- Honest empty states for missing projects, stories, reports, events, locations, products, and filings
-- Local audit scripts for links, JSON, and secrets
-- Launch, legal, content model, route, and security documentation
+Real World Needs is presented as a new organization with a serious long-term vision. The theme is built around the message:
 
-## Theme Architecture
+Real problems. Real solutions.
 
-Core files:
+The site is designed to explain the organization, begin with donated clothing, prepare a transparent project system, publish Stories, and sell mission-related merchandise through native Shopify products.
+
+## Core Theme Files
 
 - `layout/theme.liquid`
+- `layout/password.liquid`
 - `sections/rwn-header.liquid`
 - `sections/rwn-footer.liquid`
 - `sections/main-index.liquid`
 - `sections/main-rwn-page.liquid`
 - `sections/main-rwn-project.liquid`
-- `assets/rwn.css`
+- `sections/main-blog.liquid`
+- `sections/main-article.liquid`
+- `sections/main-collection.liquid`
+- `sections/main-product.liquid`
+- `assets/rwn-base.css`
+- `assets/rwn-home.css`
+- `assets/rwn-pages.css`
+- `assets/rwn-responsive.css`
+- `assets/rwn.css` legacy manifest note
 - `assets/rwn.js`
 
-Most standard pages use `sections/main-rwn-page.liquid` with a `page_role` setting configured by JSON templates.
+Most static pages use `sections/main-rwn-page.liquid` with a `page_role` configured in the matching JSON template.
 
-## Content Architecture
-
-See:
-
-- `ROUTES.md`
-- `CONTENT_MODEL.md`
-
-Required Shopify objects before public launch are documented in `ROUTES.md`.
-
-## Required Pages
+## Shopify Admin Setup
 
 Create Shopify pages with these handles and assign the matching templates:
 
@@ -78,128 +67,117 @@ Create Shopify pages with these handles and assign the matching templates:
 - `shipping-policy`
 - `return-policy`
 
-## Required Blog
-
 Create a blog named `Stories` with handle `stories`.
-
-Do not publish demo posts as production stories.
-
-## Required Collection
 
 Create a collection named `Supporter Shop` with handle `supporter-shop`.
 
-Assign Printify products to this collection only after product titles, images, variants, pricing, shipping, and returns have been reviewed.
+## Navigation
 
-## Configure Donations
+Navigation should primarily be managed through Shopify menus.
 
-Theme settings:
+If no primary menu is selected, the theme renders a guarded fallback navigation. Fallback links only appear when the matching Shopify page, blog, collection, or route exists.
 
-1. Add the global donation URL.
-2. Enable `donations_enabled`.
-3. Keep `tax_deductible_language_enabled` off unless legal review confirms the language.
-4. Keep `tax_exempt_status_confirmed` off unless the status is verified.
+## Images
 
-If the donation URL is blank or donations are disabled, donation buttons do not render.
+Homepage images can be replaced in the Shopify theme editor. The repository includes licensed editorial fallback images so the theme never renders empty image boxes.
 
-## Configure Printify Merchandise
+Image sources and licenses are documented in `IMAGE_SOURCES.md`.
 
-1. Connect Printify to Shopify.
-2. Import products into Shopify.
-3. Review titles, descriptions, images, variants, pricing, shipping, and return terms.
-4. Assign products to the `supporter-shop` collection when you want a curated supporter shop.
-5. Keep product titles, descriptions, product images, variants, pricing, shipping, and return terms accurate in Shopify.
-6. Test cart and checkout through Shopify.
-
-The theme does not alter Shopify checkout.
-
-## Create Projects
+## Projects
 
 Create a Shopify metaobject definition with type `rwn_project`.
 
-Recommended fields are listed in `CONTENT_MODEL.md`.
+The project template supports status, category, location, verification information, responsible organization, RWN Direct, RWN Verified, funding fields, dates, updates, expenses, receipts, outcomes, donation URL, partner URL, and final reporting fields.
 
-Enable `projects_enabled` only when real project entries are ready for public display.
+Enable `projects_enabled` only when real project entries are ready.
 
-Project donation buttons require an individual project donation URL and will not render for completed, paused, or closed projects.
+Project donation buttons render only when the project has a donation URL and the status allows support.
 
-## Publish Expenses and Receipts
+## Stories
 
-Use project fields or a related expense metaobject model.
+Use Shopify's native blog system.
 
-Never publish:
+The recommended blog is `Stories` with handle `stories`.
 
-- Personal donor information
-- Payment data
-- Private beneficiary information
-- Private addresses
-- Receipts that expose sensitive data
+Suggested categories can be managed as article tags:
 
-## Clothing Program
+- Real World Needs
+- Good Around the World
+- Project Update
+- Completed Project
+- Community
+- Solutions
+- People
+- Field Notes
 
-Enable `clothing_program_enabled` only when clothing information is ready.
+Only publish real articles, updates, or editorial pieces that are ready for public viewing.
 
-The clothing page includes honest empty states for events, collection locations, and distribution locations until real information is published.
+## Printify and Merchandise
 
-## Volunteer Opportunities
+Printify products should be imported into Shopify normally.
 
-Enable `volunteer_applications_enabled` only when Real World Needs is ready to receive volunteer interest.
+Recommended workflow:
 
-The form uses Shopify contact forms. Do not collect unnecessary sensitive information.
+1. Connect Printify to Shopify.
+2. Import products into Shopify.
+3. Review product titles, descriptions, images, variants, pricing, shipping, and returns.
+4. Assign approved products to the `supporter-shop` collection.
+5. Test product pages, cart, checkout, shipping, taxes, and fulfillment.
 
-## Legal Review
+The theme does not modify Shopify checkout or Printify fulfillment.
 
-See `LEGAL_LAUNCH_CHECKLIST.md`.
+## Donations
 
-The theme does not claim legal compliance. It only provides editable structure and launch safety settings.
+Donation calls to action are controlled by theme settings:
 
-## Domain Setup
+- `donations_enabled`
+- `donation_url`
+- `monthly_donation_url`
+- `donation_processor_name`
+- `donation_receipt_information`
 
-Connect domains in Shopify admin:
+Donation buttons do not render when donations are disabled or the relevant URL is blank.
 
-1. Go to Shopify admin.
-2. Open Settings.
-3. Open Domains.
-4. Connect `RealWorldNeeds.org`.
-5. Connect or redirect `RealWorldNeeds.com`.
-6. Confirm SSL is active.
-7. Confirm the canonical primary domain.
+Do not enable tax deductibility language until legal status and required disclosures are verified.
+
+## Legal Status
+
+Configure legal and trust language in theme settings:
+
+- Legal organization name
+- Organization status
+- Federal tax status
+- Tax deductibility status
+- Charitable solicitation disclosures
+- State disclosures
+- Donation processor
+- Public mailing address
+- Public email
+- Public phone
+
+See `LEGAL_LAUNCH_CHECKLIST.md` before launch.
 
 ## Production Workflow
 
-GitHub is the source of truth and version history for this theme.
-
-Do not use Shopify's GitHub integration, GitHub Actions, or ZIP uploads for normal site changes.
+Do not use Shopify's GitHub integration, GitHub Actions, or ZIP uploads for normal updates.
 
 Permanent workflow:
 
 1. Edit the theme in this repository.
-2. Run local audits and Shopify Theme Check.
-3. Commit and push the finished change to GitHub.
-4. Deploy the same repository code to the existing Shopify theme using Shopify CLI.
-5. Do not pull Shopify's remote theme back over the repository unless an emergency recovery plan has been reviewed first.
+2. Validate locally.
+3. Commit and push to GitHub.
+4. Deploy the same repository code to the existing Shopify theme with Shopify CLI.
+5. Do not overwrite the repository with Shopify's remote theme.
+6. Do not create a new Shopify theme for routine updates.
 
-The production Shopify CLI target is saved in `shopify.theme.toml`.
-
-Current target:
+Production target:
 
 - Store: `f7gmze-fa.myshopify.com`
 - Theme name: `Real World Needs`
 - Theme ID: `141693190207`
+- Config: `shopify.theme.toml`
 
-Shopify remains the system of record for products, Printify products, inventory, orders, customers, payments, checkout, and other store data.
-
-## Shopify Theme Syncing
-
-Codex should use these commands internally for future production updates:
-
-```bash
-shopify theme check --path .
-shopify theme push --environment production --strict
-```
-
-For live-theme updates, `shopify.theme.toml` includes `allow-live = true` for the saved production theme ID. Never create a new Shopify theme for routine updates.
-
-## Local Audits
+## Validation
 
 Run:
 
@@ -207,18 +185,15 @@ Run:
 npm run validate:json
 npm run audit:links
 npm run audit:secrets
+shopify theme check --path .
 ```
 
-Then run Shopify Theme Check in a Shopify CLI environment:
+Deployment command:
 
 ```bash
-shopify theme check --path .
+shopify theme push --environment production --strict
 ```
 
 ## Rollback
 
-Use GitHub history or Shopify theme versions to roll back to the last known good commit or published theme.
-
-## Public Launch
-
-Do not consider the site ready for public fundraising until `PUBLIC_LAUNCH_CHECKLIST.md` is complete.
+Use GitHub history to identify the last known good commit. Deploy that commit back to the saved production theme ID with Shopify CLI.

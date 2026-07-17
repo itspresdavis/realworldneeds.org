@@ -1,6 +1,6 @@
 # Real World Needs Route Audit
 
-This theme never renders intentional placeholder links, empty links, or script based dead links.
+This theme never renders intentional setup-only links, empty links, or script based dead links.
 
 Visible calls to action are guarded by Shopify object existence and theme settings. If a destination does not exist, the control is hidden or replaced with an informational empty state.
 
@@ -11,7 +11,7 @@ Visible calls to action are guarded by Shopify object existence and theme settin
 | Our Work | Page | `our-work` | Header hides if absent | Primary menu or fallback nav | Recommended |
 | Programs | Page | `programs` | Page template available but links hide if absent | Admin menu | No |
 | How It Works | Page | `how-it-works` | CTAs hide if absent | Primary menu or fallback nav | Recommended |
-| Impact | Page | `impact` | Page template available, no fake metrics | Admin menu | No |
+| Impact | Page | `impact` | Page template available, no invented metrics | Admin menu | No |
 | Transparency | Page | `transparency` | CTAs hide if absent | Primary menu or fallback nav | Recommended |
 | Financials | Page | `financials` | Honest empty state | Footer | Recommended before fundraising |
 | Donate | Page | `donate` | Donation actions hidden unless URL and setting are enabled | Admin menu | Required before fundraising |
@@ -33,7 +33,7 @@ Visible calls to action are guarded by Shopify object existence and theme settin
 | Legal and Disclosures | Page | `legal` | Starter language requires review | Footer | Required before launch |
 | Stories | Blog | `stories` | Story sections show honest empty state | Header if enabled | Required before stories launch |
 | Supporter Shop | Collection | `supporter-shop` preferred, falls back to all-products collection | Shop is always visible; product grids show real Shopify products when published and a setup state when empty | Header and homepage | Required before merchandise launch |
-| Product | Product object | Shopify product handle | No fake product pages | Collection/product routes | Required for merchandise launch |
+| Product | Product object | Shopify product handle | Product pages come from Shopify products | Collection/product routes | Required for merchandise launch |
 | Project detail | Metaobject | `rwn_project` entry route | No donation button unless project URL exists and status permits | Needs index | Required before projects launch |
 | Search | Theme template | `/search` | Shows useful no results state | Shopify route | No |
 | Cart | Theme template | `/cart` | Shows empty cart state | Cart drawer | Required before merchandise launch |

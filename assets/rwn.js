@@ -1,4 +1,7 @@
 (() => {
+  document.documentElement.classList.remove('no-js');
+  document.documentElement.classList.add('js');
+
   const header = document.querySelector('[data-site-header]');
   const syncHeader = () => {
     if (!header) return;
@@ -21,4 +24,22 @@
       details.open = false;
     });
   });
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion && 'IntersectionObserver' in window) {
+    const revealTargets = document.querySelectorAll(
+      '.rwn-section__inner, .home-hero__copy, .home-hero__media, .product-card, .story-card, .need-card, .launch-state'
+    );
+    revealTargets.forEach((target) => target.classList.add('will-reveal'));
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+
+    revealTargets.forEach((target) => observer.observe(target));
+  }
 })();

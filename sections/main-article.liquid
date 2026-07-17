@@ -1,25 +1,66 @@
-<article>
-  <section class="rwn-section rwn-section--white">
-    <div class="rwn-section__inner">
-      <p class="section-kicker">{{ article.tags.first | default: blog.title | escape }}</p>
-      <h1>{{ article.title | escape }}</h1>
-      <p class="lead">{{ article.published_at | date: '%B %d, %Y' }}</p>
-      {%- if article.image -%}
-        {%- assign article_image_alt = article.image.alt | default: article.title -%}
-        <div class="page-media" style="margin-top:2rem">
-          {{ article.image | image_url: width: 1400 | image_tag: loading: 'eager', sizes: '100vw', alt: article_image_alt }}
-        </div>
+{%- assign word_count = article.content | strip_html | split: ' ' | size -%}
+{%- assign read_time = word_count | divided_by: 220 -%}
+{%- if read_time < 1 -%}{%- assign read_time = 1 -%}{%- endif -%}
+
+<article class="article-page">
+  <section class="page-hero article-hero">
+    <div class="rwn-section__inner article-hero__inner">
+      <div>
+        <p class="section-kicker">{{ article.tags.first | default: blog.title | escape }}</p>
+        <h1>{{ article.title | escape }}</h1>
+        <p class="story-card__meta">{{ article.published_at | date: '%B %d, %Y' }} · {{ read_time }} min read</p>
+      </div>
+      {%- if article.excerpt != blank -%}
+        <p class="lead">{{ article.excerpt | strip_html | escape }}</p>
       {%- endif -%}
     </div>
   </section>
-  <section class="rwn-section">
-    <div class="rwn-section__inner">
-      <div class="rte">
+
+  {%- if article.image -%}
+    {%- assign article_image_alt = article.image.alt | default: article.title -%}
+    <figure class="article-featured-media">
+      {{ article.image | image_url: width: 1800 | image_tag: loading: 'eager', sizes: '100vw', alt: article_image_alt }}
+      {%- if article.image.alt != blank -%}<figcaption>{{ article.image.alt | escape }}</figcaption>{%- endif -%}
+    </figure>
+  {%- endif -%}
+
+  <section class="rwn-section article-content-section">
+    <div class="article-shell">
+      <div class="article-share" aria-label="Article actions">
+        <a href="{{ blog.url }}">Stories</a>
+        <a href="mailto:?subject={{ article.title | escape }}&body={{ canonical_url | escape }}">Email</a>
+      </div>
+      <div class="rte article-rte">
         {{ article.content }}
       </div>
-      <div class="action-row">
-        <a class="button button--secondary" href="{{ blog.url }}">Back to Stories</a>
+    </div>
+  </section>
+
+  <section class="rwn-section related-stories">
+    <div class="rwn-section__inner">
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">More Stories</p>
+          <h2>Keep reading.</h2>
+        </div>
+        <a class="button button--secondary" href="{{ blog.url }}">All Stories</a>
       </div>
+      {%- assign related_count = 0 -%}
+      <div class="article-list">
+        {%- for related in blog.articles limit: 4 -%}
+          {%- unless related.handle == article.handle -%}
+            {%- assign related_count = related_count | plus: 1 -%}
+            <article class="story-card">
+              <p class="section-kicker">{{ related.tags.first | default: 'Story' | escape }}</p>
+              <h3><a href="{{ related.url }}">{{ related.title | escape }}</a></h3>
+              <p class="story-card__meta">{{ related.published_at | date: '%B %d, %Y' }}</p>
+            </article>
+          {%- endunless -%}
+        {%- endfor -%}
+      </div>
+      {%- if related_count == 0 -%}
+        <div class="launch-state"><h3>No related stories are posted right now.</h3><p>More articles appear here as the publication grows.</p></div>
+      {%- endif -%}
     </div>
   </section>
 </article>

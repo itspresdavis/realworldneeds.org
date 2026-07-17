@@ -4,6 +4,7 @@
   if settings.donations_enabled and settings.donation_url != blank
     assign donation_ready = true
   endif
+
   assign supporter_shop = collections['supporter-shop']
   assign shop_url = routes.all_products_collection_url
   if supporter_shop != blank
@@ -14,8 +15,11 @@
 <header class="site-header" data-site-header>
   <div class="site-header__inner">
     <a class="wordmark" href="{{ routes.root_url }}" aria-label="Real World Needs home">
-      <span class="wordmark__primary">Real World</span>
-      <span class="wordmark__secondary">Needs</span>
+      <span class="wordmark__mark" aria-hidden="true">RWN</span>
+      <span class="wordmark__text">
+        <span class="wordmark__primary">Real World</span>
+        <span class="wordmark__secondary">Needs</span>
+      </span>
     </a>
 
     <nav class="site-nav" aria-label="Primary navigation">
@@ -24,14 +28,18 @@
           <a href="{{ link.url }}" {% if link.current %}aria-current="page"{% endif %}>{{ link.title | escape }}</a>
         {%- endfor -%}
       {%- else -%}
-        <a href="{{ shop_url }}">Shop</a>
-        {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'site-nav__link' %}
         {% render 'rwn-page-link', handle: 'needs', label: 'Needs', class: 'site-nav__link' %}
+        {% render 'rwn-page-link', handle: 'our-work', label: 'Our Work', class: 'site-nav__link' %}
+        {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'site-nav__link' %}
         {% render 'rwn-page-link', handle: 'transparency', label: 'Transparency', class: 'site-nav__link' %}
         {%- if settings.stories_enabled and blogs['stories'] != blank -%}
           <a href="{{ blogs['stories'].url }}">Stories</a>
         {%- endif -%}
         {% render 'rwn-page-link', handle: 'give-clothing', label: 'Give Clothing', class: 'site-nav__link' %}
+        {% render 'rwn-page-link', handle: 'volunteer', label: 'Volunteer', class: 'site-nav__link' %}
+        {%- if settings.merchandise_enabled -%}
+          <a href="{{ shop_url }}">Shop</a>
+        {%- endif -%}
         {% render 'rwn-page-link', handle: 'about', label: 'About', class: 'site-nav__link' %}
       {%- endif -%}
     </nav>
@@ -40,28 +48,46 @@
       {%- if donation_ready -%}
         <a class="button button--donate" href="{{ settings.donation_url | escape }}">Donate</a>
       {%- endif -%}
-      {% render 'rwn-cart-drawer' %}
+
+      {%- if settings.merchandise_enabled -%}
+        {% render 'rwn-cart-drawer' %}
+      {%- endif -%}
+
       <details class="mobile-menu">
         <summary class="mobile-menu__summary" aria-label="Open menu">
           <span></span><span></span><span></span>
         </summary>
-        <nav class="mobile-menu__panel" aria-label="Mobile navigation">
-          {%- if main_menu.links.size > 0 -%}
-            {%- for link in main_menu.links -%}
-              <a href="{{ link.url }}" {% if link.current %}aria-current="page"{% endif %}>{{ link.title | escape }}</a>
-            {%- endfor -%}
-          {%- else -%}
-            <a href="{{ shop_url }}">Shop</a>
-            {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'mobile-menu__link' %}
-            {% render 'rwn-page-link', handle: 'needs', label: 'Needs', class: 'mobile-menu__link' %}
-            {% render 'rwn-page-link', handle: 'transparency', label: 'Transparency', class: 'mobile-menu__link' %}
-            {% render 'rwn-page-link', handle: 'give-clothing', label: 'Give Clothing', class: 'mobile-menu__link' %}
-            {% render 'rwn-page-link', handle: 'about', label: 'About', class: 'mobile-menu__link' %}
-          {%- endif -%}
+        <div class="mobile-menu__panel">
+          <div class="mobile-menu__brand">
+            <span>Real World Needs</span>
+            <strong>Real problems. Real solutions.</strong>
+          </div>
+          <nav class="mobile-menu__links" aria-label="Mobile navigation">
+            {%- if main_menu.links.size > 0 -%}
+              {%- for link in main_menu.links -%}
+                <a href="{{ link.url }}" {% if link.current %}aria-current="page"{% endif %}>{{ link.title | escape }}</a>
+              {%- endfor -%}
+            {%- else -%}
+              {% render 'rwn-page-link', handle: 'needs', label: 'Needs', class: 'mobile-menu__link' %}
+              {% render 'rwn-page-link', handle: 'our-work', label: 'Our Work', class: 'mobile-menu__link' %}
+              {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'mobile-menu__link' %}
+              {% render 'rwn-page-link', handle: 'transparency', label: 'Transparency', class: 'mobile-menu__link' %}
+              {%- if settings.stories_enabled and blogs['stories'] != blank -%}
+                <a href="{{ blogs['stories'].url }}">Stories</a>
+              {%- endif -%}
+              {% render 'rwn-page-link', handle: 'give-clothing', label: 'Give Clothing', class: 'mobile-menu__link' %}
+              {% render 'rwn-page-link', handle: 'volunteer', label: 'Volunteer', class: 'mobile-menu__link' %}
+              {% render 'rwn-page-link', handle: 'get-help', label: 'Get Help', class: 'mobile-menu__link' %}
+              {%- if settings.merchandise_enabled -%}
+                <a href="{{ shop_url }}">Shop</a>
+              {%- endif -%}
+              {% render 'rwn-page-link', handle: 'about', label: 'About', class: 'mobile-menu__link' %}
+            {%- endif -%}
+          </nav>
           {%- if donation_ready -%}
             <a class="button button--primary" href="{{ settings.donation_url | escape }}">Donate</a>
           {%- endif -%}
-        </nav>
+        </div>
       </details>
     </div>
   </div>

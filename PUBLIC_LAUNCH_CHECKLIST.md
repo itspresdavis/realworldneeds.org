@@ -6,9 +6,9 @@ The site is not ready for public fundraising until a responsible administrator v
 - Domain ownership confirmed
 - RealWorldNeeds.org connected
 - RealWorldNeeds.com connected or redirected intentionally
-- Organization formation completed
-- EIN obtained if applicable
-- Banking setup completed
+- Nonprofit legal entity formed
+- EIN obtained
+- Bank account established
 - Applicable federal tax status accurately represented
 - Applicable state charity registration requirements reviewed
 - Applicable charitable solicitation requirements reviewed
@@ -35,7 +35,7 @@ The site is not ready for public fundraising until a responsible administrator v
 - Real projects reviewed
 - Real financial data verified
 - Real impact data verified
-- All demo content removed
+- All sample-only content removed
 - Printify products reviewed
 - Printify test order completed
 - Product prices verified
@@ -51,8 +51,8 @@ The site is not ready for public fundraising until a responsible administrator v
 - All links audited
 - 404 page tested
 - Forms tested
-- No fake claims present
-- No fake data present
+- No invented claims present
+- No invented data present
 - No dead buttons present
 - No empty links present
 - No unfinished pages present

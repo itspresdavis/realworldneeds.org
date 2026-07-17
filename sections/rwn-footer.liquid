@@ -3,6 +3,7 @@
   if settings.donations_enabled and settings.donation_url != blank
     assign donation_ready = true
   endif
+
   assign supporter_shop = collections['supporter-shop']
   assign shop_url = routes.all_products_collection_url
   if supporter_shop != blank
@@ -11,45 +12,56 @@
 -%}
 
 <footer class="site-footer">
-  <div class="site-footer__statement">
-    <a class="wordmark wordmark--footer" href="{{ routes.root_url }}">
-      <span class="wordmark__primary">Real World</span>
-      <span class="wordmark__secondary">Needs</span>
+  <div class="site-footer__lead">
+    <a class="wordmark wordmark--footer" href="{{ routes.root_url }}" aria-label="Real World Needs home">
+      <span class="wordmark__mark" aria-hidden="true">RWN</span>
+      <span class="wordmark__text">
+        <span class="wordmark__primary">Real World</span>
+        <span class="wordmark__secondary">Needs</span>
+      </span>
     </a>
-    <p>Real problems. Real solutions.</p>
-    <p class="muted">Real World Needs is being built to identify practical needs, organize responsible help, and document what happens.</p>
+    <div>
+      <p class="site-footer__tagline">Real problems. Real solutions.</p>
+      <p class="muted">Real World Needs connects practical help with needs that can be understood, acted on, and reported clearly.</p>
+    </div>
   </div>
 
   <div class="site-footer__grid">
-    <div>
+    <nav aria-label="Explore">
       <h2>Explore</h2>
-      {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works' %}
       {% render 'rwn-page-link', handle: 'needs', label: 'Needs' %}
       {% render 'rwn-page-link', handle: 'our-work', label: 'Our Work' %}
+      {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works' %}
       {% render 'rwn-page-link', handle: 'transparency', label: 'Transparency' %}
       {%- if settings.stories_enabled and blogs['stories'] != blank -%}
         <a class="text-link" href="{{ blogs['stories'].url }}">Stories</a>
       {%- endif -%}
-    </div>
-    <div>
-      <h2>Participate</h2>
-      {%- if donation_ready -%}
-        <a class="text-link" href="{{ settings.donation_url | escape }}">Donate</a>
-      {%- endif -%}
+    </nav>
+
+    <nav aria-label="Get involved">
+      <h2>Get Involved</h2>
       {% render 'rwn-page-link', handle: 'give-clothing', label: 'Give Clothing' %}
       {% render 'rwn-page-link', handle: 'volunteer', label: 'Volunteer' %}
       {% render 'rwn-page-link', handle: 'get-help', label: 'Get Help' %}
-      <a class="text-link" href="{{ shop_url }}">Supporter Shop</a>
-    </div>
-    <div>
+      {%- if settings.merchandise_enabled -%}
+        <a class="text-link" href="{{ shop_url }}">Supporter Shop</a>
+      {%- endif -%}
+      {%- if donation_ready -%}
+        <a class="text-link" href="{{ settings.donation_url | escape }}">Donate</a>
+      {%- endif -%}
+    </nav>
+
+    <nav aria-label="Organization">
       <h2>Organization</h2>
       {% render 'rwn-page-link', handle: 'about', label: 'About' %}
       {% render 'rwn-page-link', handle: 'governance', label: 'Governance' %}
+      {% render 'rwn-page-link', handle: 'leadership-board', label: 'Leadership and Board' %}
       {% render 'rwn-page-link', handle: 'financials', label: 'Financials' %}
       {% render 'rwn-page-link', handle: 'contact', label: 'Contact' %}
       {% render 'rwn-page-link', handle: 'faq', label: 'FAQ' %}
-    </div>
-    <div>
+    </nav>
+
+    <nav aria-label="Legal">
       <h2>Legal</h2>
       {% render 'rwn-page-link', handle: 'privacy-policy', label: 'Privacy Policy' %}
       {% render 'rwn-page-link', handle: 'terms-of-use', label: 'Terms of Use' %}
@@ -59,18 +71,49 @@
       {% render 'rwn-page-link', handle: 'shipping-policy', label: 'Shipping Policy' %}
       {% render 'rwn-page-link', handle: 'return-policy', label: 'Merchandise Return Policy' %}
       {% render 'rwn-page-link', handle: 'legal', label: 'Legal and Disclosures' %}
+    </nav>
+  </div>
+
+  <div class="site-footer__meta">
+    <div>
+      {%- if settings.legal_organization_name != blank -%}
+        <p>{{ settings.legal_organization_name | escape }}</p>
+      {%- else -%}
+        <p>Real World Needs</p>
+      {%- endif -%}
+      {%- if settings.organization_status_text != blank -%}
+        <p class="muted">{{ settings.organization_status_text | escape }}</p>
+      {%- endif -%}
+      {%- if settings.public_address != blank -%}
+        <p class="muted">{{ settings.public_address | escape | newline_to_br }}</p>
+      {%- endif -%}
+    </div>
+
+    <div class="site-footer__contact">
+      {%- if settings.contact_email != blank -%}
+        <a href="mailto:{{ settings.contact_email | escape }}">{{ settings.contact_email | escape }}</a>
+      {%- endif -%}
+      {%- if settings.public_phone != blank -%}
+        <a href="tel:{{ settings.public_phone | escape }}">{{ settings.public_phone | escape }}</a>
+      {%- endif -%}
+      <div class="social-links">
+        {%- if settings.social_instagram != blank -%}<a href="{{ settings.social_instagram | escape }}" rel="noopener noreferrer" target="_blank">Instagram</a>{%- endif -%}
+        {%- if settings.social_facebook != blank -%}<a href="{{ settings.social_facebook | escape }}" rel="noopener noreferrer" target="_blank">Facebook</a>{%- endif -%}
+        {%- if settings.social_youtube != blank -%}<a href="{{ settings.social_youtube | escape }}" rel="noopener noreferrer" target="_blank">YouTube</a>{%- endif -%}
+        {%- if settings.social_x != blank -%}<a href="{{ settings.social_x | escape }}" rel="noopener noreferrer" target="_blank">X</a>{%- endif -%}
+      </div>
     </div>
   </div>
 
   {%- if settings.charitable_solicitation_disclosure != blank -%}
     <div class="site-footer__disclosure">
-      {{ settings.charitable_solicitation_disclosure | escape }}
+      {{ settings.charitable_solicitation_disclosure | escape | newline_to_br }}
     </div>
   {%- endif -%}
 
   <div class="site-footer__bottom">
     <p>&copy; {{ 'now' | date: '%Y' }} Real World Needs. All rights reserved.</p>
-    <p class="muted">No public impact numbers are shown until real information is published.</p>
+    <p class="muted">Public claims must match verified records, published projects, and approved disclosures.</p>
   </div>
 </footer>
 

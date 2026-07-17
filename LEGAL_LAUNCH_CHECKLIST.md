@@ -1,42 +1,41 @@
-# Legal Review Required Before Public Launch
+# Legal Launch Checklist
 
-This theme contains conservative starter language and launch safety settings. It is not legal advice.
+This checklist is not legal advice. It is the operational list Real World Needs should review before public fundraising, public donation claims, or public assistance intake.
 
-Final legal requirements depend on:
-
-- Actual nonprofit formation status
-- EIN status if applicable
-- 501(c)(3) determination status
-- States where donations are solicited
-- Locations where programs operate
-- Donation processor
-- Merchandise operations
-- Data collection practices
-- Email marketing
-- Analytics
-- Cookies
-- Volunteer programs
-- Beneficiary information
-
-## Required Review
-
-- Real World Needs legal entity name verified
-- Nonprofit formation status reviewed
-- Federal tax status reviewed
-- Tax deductible language reviewed before enabling
-- Charitable solicitation requirements reviewed
+- Nonprofit legal entity formed
+- Legal organization name verified
+- EIN obtained
+- Bank account established
+- Federal tax status accurately represented
+- Tax exempt status reviewed
+- Tax deductibility language verified
+- Applicable state charity registration reviewed
+- Applicable charitable solicitation registration reviewed
 - Required state disclosures added
-- Privacy Policy reviewed
+- Charitable solicitation disclosures reviewed
+- Donation processor configured
+- Donation processor public name verified
+- Donation receipts reviewed
+- Donation refund policy reviewed
+- Donor privacy policy reviewed
+- Privacy practices reviewed
 - Terms of Use reviewed
-- Donation Policy reviewed
-- Donation Refund Policy reviewed
-- Shipping Policy reviewed
-- Merchandise Return Policy reviewed
 - Accessibility Statement reviewed
-- Donor privacy reviewed
+- Email marketing practices reviewed
+- Cookie and analytics behavior reviewed
+- Volunteer data collection reviewed
+- Get-help intake privacy reviewed
 - Beneficiary privacy reviewed
-- Partner project disclaimer reviewed
-- External link disclaimer reviewed
-- User submitted content policy reviewed if needed
-- Photography and media policy reviewed if needed
-- Cookie and analytics language reviewed
+- Photography and media permission policy reviewed
+- Partner verification language reviewed
+- Project reporting privacy boundaries reviewed
+- Expense and receipt redaction process reviewed
+- Merchandise policies reviewed
+- Printify fulfillment reviewed
+- Shipping reviewed
+- Returns reviewed
+- Public mailing address reviewed
+- Public email reviewed
+- Public phone reviewed
+- Board and governance publication reviewed
+- Leadership compensation publication reviewed if applicable

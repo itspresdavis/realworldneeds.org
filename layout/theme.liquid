@@ -13,7 +13,7 @@
       {%- if current_page != 1 %} | page {{ current_page }}{% endif -%}
     </title>
 
-    {%- assign fallback_description = settings.default_meta_description | default: 'Real World Needs identifies real human needs, organizes practical responses, and documents what happens.' -%}
+    {%- assign fallback_description = settings.default_meta_description | default: 'Real World Needs connects practical help with needs that can be understood, acted on, and reported clearly.' -%}
     <meta name="description" content="{{ page_description | default: fallback_description | strip_html | escape }}">
 
     <meta property="og:site_name" content="{{ shop.name | escape }}">
@@ -21,10 +21,28 @@
     <meta property="og:title" content="{{ page_title | default: shop.name | escape }}">
     <meta property="og:type" content="website">
     <meta property="og:description" content="{{ page_description | default: fallback_description | strip_html | escape }}">
+    {%- if settings.social_share_image != blank -%}
+      <meta property="og:image" content="{{ settings.social_share_image | image_url: width: 1200 }}">
+      <meta name="twitter:card" content="summary_large_image">
+    {%- endif -%}
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Real World Needs",
+        "url": "{{ shop.url }}"{% if settings.contact_email != blank %},
+        "email": {{ settings.contact_email | json }}{% endif %}{% if settings.public_phone != blank %},
+        "telephone": {{ settings.public_phone | json }}{% endif %}
+      }
+    </script>
 
     {{ content_for_header }}
 
-    {{ 'rwn.css' | asset_url | stylesheet_tag }}
+    {{ 'rwn-base.css' | asset_url | stylesheet_tag }}
+    {{ 'rwn-home.css' | asset_url | stylesheet_tag }}
+    {{ 'rwn-pages.css' | asset_url | stylesheet_tag }}
+    {{ 'rwn-responsive.css' | asset_url | stylesheet_tag }}
     <script src="{{ 'rwn.js' | asset_url }}" defer></script>
   </head>
 

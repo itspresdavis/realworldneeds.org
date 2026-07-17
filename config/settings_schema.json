@@ -2,7 +2,7 @@
   {
     "name": "theme_info",
     "theme_name": "Real World Needs",
-    "theme_version": "1.0.0",
+    "theme_version": "2.0.0",
     "theme_author": "Real World Needs",
     "theme_documentation_url": "https://github.com/Anlos0516/RWN-WEB",
     "theme_support_url": "https://github.com/Anlos0516/RWN-WEB"
@@ -27,7 +27,7 @@
         "type": "checkbox",
         "id": "merchandise_enabled",
         "label": "Enable merchandise and cart entry points",
-        "default": false
+        "default": true
       },
       {
         "type": "checkbox",
@@ -62,13 +62,54 @@
     ]
   },
   {
-    "name": "Donation and legal status",
+    "name": "Donation settings",
     "settings": [
       {
         "type": "url",
         "id": "donation_url",
         "label": "Global donation URL",
         "info": "Leave blank until the donation processor is configured and tested."
+      },
+      {
+        "type": "url",
+        "id": "monthly_donation_url",
+        "label": "Monthly donation URL",
+        "info": "Leave blank unless monthly giving has a separate tested destination."
+      },
+      {
+        "type": "text",
+        "id": "donation_processor_name",
+        "label": "Donation processor name"
+      },
+      {
+        "type": "textarea",
+        "id": "donation_receipt_information",
+        "label": "Donation receipt information"
+      }
+    ]
+  },
+  {
+    "name": "Legal and trust status",
+    "settings": [
+      {
+        "type": "text",
+        "id": "legal_organization_name",
+        "label": "Legal organization name"
+      },
+      {
+        "type": "textarea",
+        "id": "organization_status_text",
+        "label": "Organization status text"
+      },
+      {
+        "type": "textarea",
+        "id": "federal_tax_status_text",
+        "label": "Federal tax status text"
+      },
+      {
+        "type": "textarea",
+        "id": "tax_deductibility_status_text",
+        "label": "Tax deductibility status text"
       },
       {
         "type": "checkbox",
@@ -99,14 +140,9 @@
         "label": "Global charitable solicitation disclosure"
       },
       {
-        "type": "text",
-        "id": "donation_processor_name",
-        "label": "Donation processor name"
-      },
-      {
         "type": "textarea",
-        "id": "donation_receipt_information",
-        "label": "Donation receipt information"
+        "id": "state_disclosures",
+        "label": "State disclosures"
       }
     ]
   },
@@ -133,7 +169,32 @@
         "type": "textarea",
         "id": "default_meta_description",
         "label": "Default SEO description",
-        "default": "Real World Needs identifies real human needs, organizes practical responses, and documents what happens."
+        "default": "Real World Needs connects practical help with needs that can be understood, acted on, and reported clearly."
+      },
+      {
+        "type": "image_picker",
+        "id": "social_share_image",
+        "label": "Default social sharing image"
+      }
+    ]
+  },
+  {
+    "name": "Editorial imagery",
+    "settings": [
+      {
+        "type": "image_picker",
+        "id": "default_page_image",
+        "label": "Default page image"
+      },
+      {
+        "type": "image_picker",
+        "id": "default_project_image",
+        "label": "Default project image"
+      },
+      {
+        "type": "image_picker",
+        "id": "default_story_image",
+        "label": "Default story image"
       }
     ]
   },

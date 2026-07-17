@@ -8,10 +8,12 @@
         <p class="lead">Supporter merchandise, Printify products, and Shopify products appear here when they are published.</p>
       {%- endif -%}
     </div>
-    <div class="collection-hero__count">
-      <span>{{ collection.products_count }}</span>
-      <p>product{% unless collection.products_count == 1 %}s{% endunless %}</p>
-    </div>
+    {%- if collection.products_count > 0 -%}
+      <div class="collection-hero__count">
+        <span>{{ collection.products_count }}</span>
+        <p>product{% unless collection.products_count == 1 %}s{% endunless %}</p>
+      </div>
+    {%- endif -%}
   </div>
 </section>
 
@@ -27,7 +29,7 @@
                   {%- assign product_image_alt = product.featured_image.alt | default: product.title -%}
                   <div class="product-media">{{ product.featured_image | image_url: width: 900 | image_tag: loading: 'lazy', alt: product_image_alt }}</div>
                 {%- else -%}
-                  <div class="product-media product-media--empty">Image pending</div>
+                  <div class="product-media product-media--empty">Image not available</div>
                 {%- endif -%}
                 <h2>{{ product.title | escape }}</h2>
               </a>
@@ -43,10 +45,12 @@
     {%- else -%}
       <div class="shop-empty shop-empty--catalog">
         <div>
-          <h2>No products are published here yet.</h2>
-          <p>When Printify or Shopify products are added to this collection, this page becomes the product catalog automatically.</p>
+          <h2>The shop is ready for real products.</h2>
+          <p>Printify and Shopify products appear here after they are published and assigned to this collection.</p>
         </div>
-        <a class="button button--primary" href="{{ routes.all_products_collection_url }}">View all products</a>
+        {%- unless collection.handle == 'all' -%}
+          <a class="button button--primary" href="{{ routes.all_products_collection_url }}">View all products</a>
+        {%- endunless -%}
       </div>
     {%- endif -%}
   </div>

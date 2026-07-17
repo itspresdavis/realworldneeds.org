@@ -8,9 +8,22 @@ This theme does not implement custom payments, custom authentication, or custom 
 - No stored payment data
 - No hard coded access tokens
 - No external JavaScript libraries
-- No fake donation notifications
+- No invented donation notifications
 - No hidden recurring donation choices
-- No unguarded placeholder links
+- No unguarded setup-only links
+- No custom checkout logic
+- No private donor, customer, or beneficiary data stored in theme files
+
+## Review Areas
+
+- XSS through rich content added in Shopify admin
+- Unsafe configurable URLs in donation, partner, and social settings
+- External links that open in new tabs without `rel="noopener noreferrer"`
+- Public documents that include private donor, beneficiary, address, payment, or account data
+- Third party Shopify apps that inject scripts
+- Analytics, cookies, and email marketing behavior
+- Sensitive console logging in any future JavaScript
+- Project receipts that need redaction before publication
 
 ## Configurable URLs
 
