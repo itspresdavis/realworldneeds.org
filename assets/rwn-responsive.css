@@ -226,6 +226,34 @@
     grid-template-columns: 1fr;
   }
 
+  .stories-stage__inner,
+  .final-statement__inner {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+
+  .stories-stage__heading,
+  .final-statement h2 {
+    position: static;
+    grid-row: auto;
+  }
+
+  .take-part__links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .take-part__links a + a {
+    border-left: 0;
+  }
+
+  .take-part__links a:nth-child(even) {
+    border-left: 1px solid var(--border);
+  }
+
+  .take-part__links a:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+
   .clothing-story__media img {
     min-height: 580px;
   }
@@ -569,6 +597,16 @@
   .take-part__links a {
     min-height: 82px;
     font-size: 1.75rem;
+  }
+
+  .take-part__links {
+    grid-template-columns: 1fr;
+  }
+
+  .take-part__links a + a,
+  .take-part__links a:nth-child(even) {
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
 
   .final-statement__inner {
