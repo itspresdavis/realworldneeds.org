@@ -6,7 +6,7 @@
         "page_role": "donation-policy",
         "kicker": "Donation Policy",
         "fallback_title": "Donation Policy",
-        "fallback_intro": "Donation terms must match the actual donation processor, organization status, and public disclosures."
+        "fallback_intro": "When online giving opens, the terms will explain how gifts are processed, acknowledged, restricted, and handled."
       }
     }
   },

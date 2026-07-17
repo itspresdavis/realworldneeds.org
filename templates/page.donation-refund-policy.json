@@ -6,7 +6,7 @@
         "page_role": "donation-refund-policy",
         "kicker": "Donation Refund Policy",
         "fallback_title": "Donation Refund Policy",
-        "fallback_intro": "Refund language must match the donation processor and organization policy after review."
+        "fallback_intro": "The refund policy will explain what can be refunded, who reviews requests, and how to ask."
       }
     }
   },
