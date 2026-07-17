@@ -1,29 +1,94 @@
+{%- liquid
+  assign fallback_description = settings.default_meta_description | default: 'Real World Needs identifies genuine human needs, organizes practical help, and publishes a clear record of what happened.'
+  assign seo_description = page_description | default: fallback_description | strip_html | strip
+  if page_description == blank
+    case request.page_type
+      when 'index'
+        assign seo_description = 'Real World Needs identifies genuine human needs, organizes practical help, and publishes a clear record of what happened.'
+      when 'blog'
+        assign seo_description = 'Read Stories from Real World Needs about practical solutions, honest project updates, and good work from around the world.'
+      when 'collection'
+        assign seo_description = 'Browse mission merchandise from the Real World Needs Supporter Shop, powered by Shopify and prepared for Printify fulfillment.'
+      when 'page'
+        case page.handle
+          when 'needs'
+            assign seo_description = 'Explore how Real World Needs will verify, publish, fund, track, and report genuine humanitarian needs.'
+          when 'our-work', 'programs'
+            assign seo_description = 'See the current and future work of Real World Needs, starting with a practical clothing donation program.'
+          when 'how-it-works'
+            assign seo_description = 'See how Real World Needs identifies a need, verifies it, organizes support, acts, and reports what happened.'
+          when 'transparency'
+            assign seo_description = 'Read the Real World Needs transparency standard for projects, spending, updates, governance, reports, and final outcomes.'
+          when 'give-clothing'
+            assign seo_description = 'Learn what clothing to donate, how donations will be sorted, and how future Real World Needs clothing drives will work.'
+          when 'volunteer'
+            assign seo_description = 'Learn about future volunteer opportunities with Real World Needs, from clothing sorting to community outreach and skilled support.'
+          when 'get-help'
+            assign seo_description = 'Find accurate information about help currently available through Real World Needs without promises the organization cannot keep.'
+          when 'about'
+            assign seo_description = 'Learn why Real World Needs exists, why it is starting with clothing, and how it plans to grow with honesty and public accountability.'
+          when 'financials'
+            assign seo_description = 'Find public financial reports, filings, audits, and annual records from Real World Needs as they become available.'
+          when 'governance', 'leadership-board'
+            assign seo_description = 'Find published governance, board, leadership, compensation, and policy information for Real World Needs.'
+          when 'faq'
+            assign seo_description = 'Read clear answers about Real World Needs projects, clothing donations, volunteer opportunities, donations, and public reporting.'
+          when 'contact'
+            assign seo_description = 'Contact Real World Needs with a straightforward message through the official website.'
+          when 'donate'
+            assign seo_description = 'See whether online donations to Real World Needs are currently enabled and review the public giving information.'
+        endcase
+    endcase
+  endif
+  assign seo_title = page_title | default: shop.name
+  unless request.page_type == 'index'
+    unless seo_title contains shop.name
+      assign seo_title = seo_title | append: ' | ' | append: shop.name
+    endunless
+  endunless
+
+  assign og_type = 'website'
+  if request.page_type == 'product'
+    assign og_type = 'product'
+  elsif request.page_type == 'article'
+    assign og_type = 'article'
+  endif
+
+  assign social_image = page_image | default: settings.social_share_image
+  assign breadcrumb_collection = blank
+  if request.page_type == 'product'
+    assign breadcrumb_collection = product.collections.first
+  endif
+-%}
 <!doctype html>
 <html class="no-js" lang="{{ request.locale.iso_code }}">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="theme-color" content="#102236">
+    <meta name="theme-color" content="#071f34">
     <link rel="canonical" href="{{ canonical_url }}">
 
-    <title>
-      {{ page_title | default: shop.name | escape }}
-      {%- if current_tags %} | tagged {{ current_tags | join: ', ' | escape }}{% endif -%}
-      {%- if current_page != 1 %} | page {{ current_page }}{% endif -%}
-    </title>
-
-    {%- assign fallback_description = settings.default_meta_description | default: 'Real World Needs connects practical help with needs that can be understood, acted on, and reported clearly.' -%}
-    <meta name="description" content="{{ page_description | default: fallback_description | strip_html | escape }}">
+    <title>{{ seo_title | escape }}{%- if current_tags %} | {{ current_tags | join: ', ' | escape }}{% endif -%}{%- if current_page != 1 %} | Page {{ current_page }}{% endif -%}</title>
+    <meta name="description" content="{{ seo_description | escape }}">
 
     <meta property="og:site_name" content="{{ shop.name | escape }}">
     <meta property="og:url" content="{{ canonical_url }}">
-    <meta property="og:title" content="{{ page_title | default: shop.name | escape }}">
-    <meta property="og:type" content="website">
-    <meta property="og:description" content="{{ page_description | default: fallback_description | strip_html | escape }}">
-    {%- if settings.social_share_image != blank -%}
-      <meta property="og:image" content="{{ settings.social_share_image | image_url: width: 1200 }}">
+    <meta property="og:title" content="{{ seo_title | escape }}">
+    <meta property="og:type" content="{{ og_type }}">
+    <meta property="og:description" content="{{ seo_description | escape }}">
+    {%- if social_image != blank -%}
+      <meta property="og:image" content="{{ social_image | image_url: width: 1200 }}">
+      <meta property="og:image:width" content="1200">
       <meta name="twitter:card" content="summary_large_image">
+    {%- else -%}
+      <meta name="twitter:card" content="summary">
+    {%- endif -%}
+    <meta name="twitter:title" content="{{ seo_title | escape }}">
+    <meta name="twitter:description" content="{{ seo_description | escape }}">
+    {%- if request.page_type == 'product' -%}
+      <meta property="product:price:amount" content="{{ product.selected_or_first_available_variant.price | money_without_currency | strip_html | escape }}">
+      <meta property="product:price:currency" content="{{ shop.currency }}">
     {%- endif -%}
 
     <script type="application/ld+json">
@@ -31,11 +96,92 @@
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "Real World Needs",
-        "url": "{{ shop.url }}"{% if settings.contact_email != blank %},
+        "url": {{ shop.url | json }},
+        "description": {{ fallback_description | json }}{% if settings.contact_email != blank %},
         "email": {{ settings.contact_email | json }}{% endif %}{% if settings.public_phone != blank %},
-        "telephone": {{ settings.public_phone | json }}{% endif %}
+        "telephone": {{ settings.public_phone | json }}{% endif %}{% if settings.public_address != blank %},
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": {{ settings.public_address | strip_html | json }}
+        }{% endif %}{% assign social_total = 0 %}{% if settings.social_instagram != blank %}{% assign social_total = social_total | plus: 1 %}{% endif %}{% if settings.social_facebook != blank %}{% assign social_total = social_total | plus: 1 %}{% endif %}{% if settings.social_youtube != blank %}{% assign social_total = social_total | plus: 1 %}{% endif %}{% if settings.social_x != blank %}{% assign social_total = social_total | plus: 1 %}{% endif %}{% if social_total > 0 %},
+        "sameAs": [{% assign social_output = 0 %}{% if settings.social_instagram != blank %}{{ settings.social_instagram | json }}{% assign social_output = social_output | plus: 1 %}{% endif %}{% if settings.social_facebook != blank %}{% if social_output > 0 %},{% endif %}{{ settings.social_facebook | json }}{% assign social_output = social_output | plus: 1 %}{% endif %}{% if settings.social_youtube != blank %}{% if social_output > 0 %},{% endif %}{{ settings.social_youtube | json }}{% assign social_output = social_output | plus: 1 %}{% endif %}{% if settings.social_x != blank %}{% if social_output > 0 %},{% endif %}{{ settings.social_x | json }}{% endif %}]
+        {% endif %}
       }
     </script>
+
+    {%- if request.page_type == 'article' -%}
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          "headline": {{ article.title | json }},
+          "mainEntityOfPage": {{ canonical_url | json }},
+          "datePublished": {{ article.published_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+          "dateModified": {{ article.updated_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+          "author": {"@type": "Person", "name": {{ article.author | default: shop.name | json }}},
+          "publisher": {"@type": "Organization", "name": "Real World Needs", "url": {{ shop.url | json }}},
+          "description": {{ article.excerpt_or_content | strip_html | truncate: 240 | json }}{% if article.image != blank %},
+          "image": {{ article.image | image_url: width: 1600 | json }}{% endif %}
+        }
+      </script>
+    {%- elsif request.page_type == 'product' -%}
+      {%- assign schema_variant = product.selected_or_first_available_variant -%}
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": {{ product.title | json }},
+          "url": {{ canonical_url | json }},
+          "description": {{ product.description | strip_html | json }}{% if product.featured_image != blank %},
+          "image": {{ product.featured_image | image_url: width: 1600 | json }}{% endif %}{% if schema_variant.sku != blank %},
+          "sku": {{ schema_variant.sku | json }}{% endif %}{% if product.vendor != blank %},
+          "brand": {"@type": "Brand", "name": {{ product.vendor | json }}}{% endif %},
+          "offers": {
+            "@type": "Offer",
+            "url": {{ canonical_url | append: '?variant=' | append: schema_variant.id | json }},
+            "priceCurrency": {{ shop.currency | json }},
+            "price": {{ schema_variant.price | divided_by: 100.0 | json }},
+            "availability": "https://schema.org/{% if schema_variant.available %}InStock{% else %}OutOfStock{% endif %}",
+            "itemCondition": "https://schema.org/NewCondition"
+          }
+        }
+      </script>
+    {%- endif -%}
+
+    {%- if request.page_type == 'page' and page.handle == 'faq' -%}
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {"@type": "Question", "name": "Is Real World Needs active yet?", "acceptedAnswer": {"@type": "Answer", "text": "Real World Needs is new. Clothing is the first planned focus. Public projects will appear only after there is enough information to share them responsibly."}},
+            {"@type": "Question", "name": "Can I donate money today?", "acceptedAnswer": {"@type": "Answer", "text": "Donation buttons appear only when a real destination has been configured, tested, and reviewed."}},
+            {"@type": "Question", "name": "Can I donate clothing today?", "acceptedAnswer": {"@type": "Answer", "text": "Approved collection locations and drive dates will appear on the Give Clothing page when they are ready."}},
+            {"@type": "Question", "name": "Where will project reports appear?", "acceptedAnswer": {"@type": "Answer", "text": "Each project will have its own record. The Transparency page will also index public updates, expenses, reports, and outcomes."}}
+          ]
+        }
+      </script>
+    {%- endif -%}
+
+    {%- unless request.page_type == 'index' or request.page_type == 'search' or request.page_type == 'cart' -%}
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": {{ shop.url | json }}}{% if request.page_type == 'article' %},
+            {"@type": "ListItem", "position": 2, "name": {{ blog.title | json }}, "item": {{ shop.url | append: blog.url | json }}},
+            {"@type": "ListItem", "position": 3, "name": {{ article.title | json }}, "item": {{ canonical_url | json }}}{% elsif request.page_type == 'product' and breadcrumb_collection != blank %},
+            {"@type": "ListItem", "position": 2, "name": {{ breadcrumb_collection.title | json }}, "item": {{ shop.url | append: breadcrumb_collection.url | json }}},
+            {"@type": "ListItem", "position": 3, "name": {{ product.title | json }}, "item": {{ canonical_url | json }}}{% elsif request.page_type == 'product' %},
+            {"@type": "ListItem", "position": 2, "name": {{ product.title | json }}, "item": {{ canonical_url | json }}}{% elsif request.page_type == 'collection' %},
+            {"@type": "ListItem", "position": 2, "name": {{ collection.title | json }}, "item": {{ canonical_url | json }}}{% elsif request.page_type == 'blog' %},
+            {"@type": "ListItem", "position": 2, "name": {{ blog.title | json }}, "item": {{ canonical_url | json }}}{% elsif request.page_type == 'page' %},
+            {"@type": "ListItem", "position": 2, "name": {{ page.title | json }}, "item": {{ canonical_url | json }}}{% endif %}
+          ]
+        }
+      </script>
+    {%- endunless -%}
 
     {{ content_for_header }}
 

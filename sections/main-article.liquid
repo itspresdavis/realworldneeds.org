@@ -1,68 +1,81 @@
-{%- assign word_count = article.content | strip_html | split: ' ' | size -%}
-{%- assign read_time = word_count | divided_by: 220 -%}
-{%- if read_time < 1 -%}{%- assign read_time = 1 -%}{%- endif -%}
+{%- liquid
+  assign word_count = article.content | strip_html | split: ' ' | size
+  assign read_time = word_count | divided_by: 220
+  if read_time < 1
+    assign read_time = 1
+  endif
+-%}
+
+<div class="article-progress" aria-hidden="true"><span data-article-progress></span></div>
 
 <article class="article-page">
-  <section class="page-hero article-hero">
+  <section class="page-hero article-hero" aria-labelledby="article-title">
     <div class="rwn-section__inner article-hero__inner">
       <div>
-        <p class="section-kicker">{{ article.tags.first | default: blog.title | escape }}</p>
-        <h1>{{ article.title | escape }}</h1>
-        <p class="story-card__meta">{{ article.published_at | date: '%B %d, %Y' }} · {{ read_time }} min read</p>
+        <p class="section-label"><a href="{{ blog.url }}">Stories</a>{% if article.tags.first != blank %} / {{ article.tags.first | escape }}{% endif %}</p>
+        <h1 id="article-title">{{ article.title | escape }}</h1>
+        <p class="story-card__meta">
+          {%- if article.author != blank -%}<span>By {{ article.author | escape }}</span><span aria-hidden="true">|</span>{%- endif -%}
+          <time datetime="{{ article.published_at | date: '%Y-%m-%d' }}">{{ article.published_at | date: '%B %d, %Y' }}</time>
+          <span aria-hidden="true">|</span>
+          <span>{{ read_time }} min read</span>
+        </p>
       </div>
-      {%- if article.excerpt != blank -%}
-        <p class="lead">{{ article.excerpt | strip_html | escape }}</p>
-      {%- endif -%}
+      {%- if article.excerpt != blank -%}<p class="lead">{{ article.excerpt | strip_html | escape }}</p>{%- endif -%}
     </div>
   </section>
 
   {%- if article.image -%}
     {%- assign article_image_alt = article.image.alt | default: article.title -%}
     <figure class="article-featured-media">
-      {{ article.image | image_url: width: 1800 | image_tag: loading: 'eager', sizes: '100vw', alt: article_image_alt }}
+      {{ article.image | image_url: width: 2200 | image_tag: loading: 'eager', fetchpriority: 'high', widths: '720, 960, 1200, 1600, 2200', sizes: '100vw', alt: article_image_alt }}
       {%- if article.image.alt != blank -%}<figcaption>{{ article.image.alt | escape }}</figcaption>{%- endif -%}
     </figure>
   {%- endif -%}
 
   <section class="rwn-section article-content-section">
     <div class="article-shell">
-      <div class="article-share" aria-label="Article actions">
-        <a href="{{ blog.url }}">Stories</a>
-        <a href="mailto:?subject={{ article.title | escape }}&body={{ canonical_url | escape }}">Email</a>
-      </div>
+      <nav class="article-share" aria-label="Article actions">
+        <a href="{{ blog.url }}">All Stories</a>
+        <a href="mailto:?subject={{ article.title | url_encode }}&body={{ canonical_url | url_encode }}">Email story</a>
+        <button type="button" data-copy-link>Copy link</button>
+      </nav>
       <div class="rte article-rte">
         {{ article.content }}
       </div>
     </div>
   </section>
 
-  <section class="rwn-section related-stories">
-    <div class="rwn-section__inner">
-      <div class="section-heading-row">
-        <div>
-          <p class="section-kicker">More Stories</p>
-          <h2>Keep reading.</h2>
+  {%- if blog.articles_count > 1 -%}
+    <section class="rwn-section related-stories">
+      <div class="rwn-section__inner">
+        <div class="section-heading-row">
+          <div><p class="section-label">Continue reading</p><h2>More from Stories.</h2></div>
+          <a class="text-link text-link--arrow" href="{{ blog.url }}">Browse all Stories {% render 'rwn-icon', icon: 'arrow' %}</a>
         </div>
-        <a class="button button--secondary" href="{{ blog.url }}">All Stories</a>
+        <div class="article-list">
+          {%- assign related_count = 0 -%}
+          {%- for related in blog.articles -%}
+            {%- unless related.handle == article.handle -%}
+              <article class="story-card">
+                {%- if related.image -%}
+                  {%- assign related_alt = related.image.alt | default: related.title -%}
+                  <a class="article-media" href="{{ related.url }}">{{ related.image | image_url: width: 800 | image_tag: loading: 'lazy', widths: '360, 540, 720, 800', alt: related_alt }}</a>
+                {%- endif -%}
+                <div class="story-card__body">
+                  <p class="section-label">{{ related.tags.first | default: 'Story' | escape }}</p>
+                  <h3><a href="{{ related.url }}">{{ related.title | escape }}</a></h3>
+                  <p class="story-card__meta">{{ related.published_at | date: '%B %d, %Y' }}</p>
+                </div>
+              </article>
+              {%- assign related_count = related_count | plus: 1 -%}
+              {%- if related_count == 3 -%}{%- break -%}{%- endif -%}
+            {%- endunless -%}
+          {%- endfor -%}
+        </div>
       </div>
-      {%- assign related_count = 0 -%}
-      <div class="article-list">
-        {%- for related in blog.articles limit: 4 -%}
-          {%- unless related.handle == article.handle -%}
-            {%- assign related_count = related_count | plus: 1 -%}
-            <article class="story-card">
-              <p class="section-kicker">{{ related.tags.first | default: 'Story' | escape }}</p>
-              <h3><a href="{{ related.url }}">{{ related.title | escape }}</a></h3>
-              <p class="story-card__meta">{{ related.published_at | date: '%B %d, %Y' }}</p>
-            </article>
-          {%- endunless -%}
-        {%- endfor -%}
-      </div>
-      {%- if related_count == 0 -%}
-        <div class="launch-state"><h3>No related stories are posted right now.</h3><p>More articles appear here as the publication grows.</p></div>
-      {%- endif -%}
-    </div>
-  </section>
+    </section>
+  {%- endif -%}
 </article>
 
 {% schema %}

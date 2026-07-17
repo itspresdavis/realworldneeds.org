@@ -7,20 +7,20 @@ Visible calls to action are guarded by Shopify object existence and theme settin
 | Route purpose | Expected Shopify object | Expected handle | Fallback behavior | Navigation source | Required before public launch |
 | --- | --- | --- | --- | --- | --- |
 | Home | Theme template | `/` | Always available | Header wordmark | Yes |
-| Needs index | Page | `needs` | Header and CTAs hide if absent | Primary menu or fallback nav | Recommended |
-| Our Work | Page | `our-work` | Header hides if absent | Primary menu or fallback nav | Recommended |
+| Needs index | Page | `needs` | Falls back to homepage `#needs` | Primary menu or fallback nav | Recommended |
+| Our Work | Page | `our-work` | Falls back to homepage `#starting-point` | Primary menu or fallback nav | Recommended |
 | Programs | Page | `programs` | Page template available but links hide if absent | Admin menu | No |
-| How It Works | Page | `how-it-works` | CTAs hide if absent | Primary menu or fallback nav | Recommended |
+| How It Works | Page | `how-it-works` | Falls back to homepage `#how-it-works` | Primary menu or fallback nav | Recommended |
 | Impact | Page | `impact` | Page template available, no invented metrics | Admin menu | No |
-| Transparency | Page | `transparency` | CTAs hide if absent | Primary menu or fallback nav | Recommended |
+| Transparency | Page | `transparency` | Falls back to homepage `#transparency` | Primary menu or fallback nav | Recommended |
 | Financials | Page | `financials` | Honest empty state | Footer | Recommended before fundraising |
 | Donate | Page | `donate` | Donation actions hidden unless URL and setting are enabled | Admin menu | Required before fundraising |
-| Give Clothing | Page | `give-clothing` | Clothing CTAs hidden unless enabled | Primary menu or fallback nav | Required before clothing launch |
-| Volunteer | Page | `volunteer` | Form hidden unless enabled | Primary menu or fallback nav | Required before volunteer intake |
+| Give Clothing | Page | `give-clothing` | Falls back to homepage `#clothing`; real locations remain hidden | Primary menu or fallback nav | Required before clothing launch |
+| Volunteer | Page | `volunteer` | Falls back to homepage `#take-part`; form hidden unless enabled | Primary menu or fallback nav | Required before volunteer intake |
 | Get Help | Page | `get-help` | Intake form hidden unless enabled | Footer or admin menu | Required before help intake |
 | Contact | Page | `contact` | Contact form still works through Shopify | Footer | Recommended |
 | FAQ | Page | `faq` | Honest starter state | Footer or admin menu | No |
-| About | Page | `about` | Header hides if absent | Primary menu or fallback nav | Recommended |
+| About | Page | `about` | Falls back to homepage mission section where used | Primary menu or fallback nav | Recommended |
 | Leadership and Board | Page | `leadership-board` | No invented names | Admin menu | Required when public leadership is published |
 | Governance | Page | `governance` | Honest empty state | Footer | Recommended |
 | Privacy Policy | Page | `privacy-policy` | Starter language requires review | Footer | Required before launch |
@@ -32,7 +32,7 @@ Visible calls to action are guarded by Shopify object existence and theme settin
 | Merchandise Return Policy | Page | `return-policy` | Starter language requires review | Footer | Required before merchandise launch |
 | Legal and Disclosures | Page | `legal` | Starter language requires review | Footer | Required before launch |
 | Stories | Blog | `stories` | Story sections show honest empty state | Header if enabled | Required before stories launch |
-| Supporter Shop | Collection | `supporter-shop` preferred, falls back to all-products collection | Shop is always visible; product grids show real Shopify products when published and a setup state when empty | Header and homepage | Required before merchandise launch |
+| Supporter Shop | Collection | `supporter-shop` preferred, falls back to all-products collection | Homepage merchandise is hidden with no products; collection has an honest empty state | Header and homepage | Required before merchandise launch |
 | Product | Product object | Shopify product handle | Product pages come from Shopify products | Collection/product routes | Required for merchandise launch |
 | Project detail | Metaobject | `rwn_project` entry route | No donation button unless project URL exists and status permits | Needs index | Required before projects launch |
 | Search | Theme template | `/search` | Shows useful no results state | Shopify route | No |

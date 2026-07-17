@@ -1,18 +1,16 @@
-<section class="collection-hero">
+<section class="collection-hero" aria-labelledby="collection-title">
   <div class="rwn-section__inner collection-hero__inner">
     <div>
-      <h1>{{ collection.title | escape }}</h1>
+      <p class="section-label">Supporter Shop</p>
+      <h1 id="collection-title">{{ collection.title | escape }}</h1>
       {%- if collection.description != blank -%}
-        <div class="lead">{{ collection.description }}</div>
+        <div class="lead rte">{{ collection.description }}</div>
       {%- else -%}
-        <p class="lead">Supporter merchandise, Printify products, and Shopify products appear here when they are published.</p>
+        <p class="lead">Mission merchandise stays secondary to the work. Every item here is managed through Shopify and fulfilled according to its product details.</p>
       {%- endif -%}
     </div>
     {%- if collection.products_count > 0 -%}
-      <div class="collection-hero__count">
-        <span>{{ collection.products_count }}</span>
-        <p>product{% unless collection.products_count == 1 %}s{% endunless %}</p>
-      </div>
+      <div class="collection-hero__count"><span>{{ collection.products_count }}</span><p>product{% unless collection.products_count == 1 %}s{% endunless %}</p></div>
     {%- endif -%}
   </div>
 </section>
@@ -21,21 +19,30 @@
   <div class="rwn-section__inner">
     {%- if collection.products_count > 0 -%}
       {%- paginate collection.products by 16 -%}
+        <form class="collection-toolbar" action="{{ collection.url }}" method="get">
+          <p>Showing {{ paginate.current_offset | plus: 1 }} to {% if paginate.next %}{{ paginate.current_offset | plus: paginate.page_size }}{% else %}{{ collection.products_count }}{% endif %} of {{ collection.products_count }}</p>
+          <div class="field">
+            <label for="SortBy">Sort</label>
+            <select id="SortBy" name="sort_by" data-auto-submit>
+              {%- assign sort_by = collection.sort_by | default: collection.default_sort_by -%}
+              {%- for option in collection.sort_options -%}<option value="{{ option.value | escape }}"{% if option.value == sort_by %} selected{% endif %}>{{ option.name | escape }}</option>{%- endfor -%}
+            </select>
+          </div>
+        </form>
+
         <div class="product-grid product-grid--catalog">
           {%- for product in collection.products -%}
-            <article class="product-card product-card--storefront">
+            <article class="product-card product-card--storefront{% unless product.featured_image %} product-card--no-media{% endunless %}" data-reveal>
               <a href="{{ product.url | within: collection }}">
                 {%- if product.featured_image -%}
                   {%- assign product_image_alt = product.featured_image.alt | default: product.title -%}
-                  <div class="product-media">{{ product.featured_image | image_url: width: 900 | image_tag: loading: 'lazy', alt: product_image_alt }}</div>
-                {%- else -%}
-                  <div class="product-media product-media--empty">Image not available</div>
+                  <div class="product-media">{{ product.featured_image | image_url: width: 1000 | image_tag: loading: 'lazy', widths: '360, 540, 720, 900, 1000', sizes: '(min-width: 1100px) 25vw, (min-width: 680px) 33vw, 100vw', alt: product_image_alt }}</div>
                 {%- endif -%}
                 <h2>{{ product.title | escape }}</h2>
               </a>
               <div class="product-card__footer">
                 <p class="price">{{ product.price | money }}</p>
-                {%- unless product.available -%}<p class="status-label">Out of stock</p>{%- endunless -%}
+                {%- if product.compare_at_price > product.price -%}<p class="availability-label">Sale</p>{%- elsif product.available == false -%}<p class="availability-label">Out of stock</p>{%- endif -%}
               </div>
             </article>
           {%- endfor -%}
@@ -44,13 +51,8 @@
       {%- endpaginate -%}
     {%- else -%}
       <div class="shop-empty shop-empty--catalog">
-        <div>
-          <h2>The shop is ready for real products.</h2>
-          <p>Printify and Shopify products appear here after they are published and assigned to this collection.</p>
-        </div>
-        {%- unless collection.handle == 'all' -%}
-          <a class="button button--primary" href="{{ routes.all_products_collection_url }}">View all products</a>
-        {%- endunless -%}
+        <div><p class="section-label">Shop status</p><h2>No products are published here yet.</h2><p>When supporter merchandise is added through Shopify or Printify, it will appear here automatically.</p></div>
+        <a class="button button--secondary" href="{{ routes.root_url }}">Return home</a>
       </div>
     {%- endif -%}
   </div>

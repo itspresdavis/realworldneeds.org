@@ -1,50 +1,120 @@
-<section class="product-page">
+{%- liquid
+  assign selected_variant = product.selected_or_first_available_variant
+  assign supporter_shop = collections['supporter-shop']
+  assign shop_url = routes.all_products_collection_url
+  if supporter_shop != blank
+    assign shop_url = supporter_shop.url
+  endif
+  assign related_collection = product.collections.first
+-%}
+
+<section class="product-page" aria-labelledby="product-title">
   <div class="rwn-section__inner product-page__inner">
-    <div class="product-gallery">
+    <div class="product-gallery" aria-label="Product media">
       {%- if product.media.size > 0 -%}
-        {%- for media in product.media limit: 6 -%}
-          {%- assign media_alt = media.alt | default: product.title -%}
-          <div class="product-gallery__item {% if forloop.first %}product-gallery__item--primary{% endif %}">
-            {{ media.preview_image | image_url: width: 1200 | image_tag: loading: 'eager', alt: media_alt }}
-          </div>
+        {%- for media in product.media limit: 8 -%}
+          {%- liquid
+            assign media_alt = media.alt | default: product.title
+            assign media_loading = 'lazy'
+            if forloop.first
+              assign media_loading = 'eager'
+            endif
+          -%}
+          <figure class="product-gallery__item{% if forloop.first %} product-gallery__item--primary{% endif %}">
+            {%- if media.media_type == 'image' -%}
+              {{ media.preview_image | image_url: width: 1600 | image_tag: loading: media_loading, widths: '480, 720, 960, 1200, 1600', sizes: '(min-width: 900px) 62vw, 100vw', alt: media_alt }}
+            {%- else -%}
+              {{ media | media_tag: image_size: '1200x', controls: true, preload: 'metadata' }}
+            {%- endif -%}
+          </figure>
         {%- endfor -%}
       {%- else -%}
-        <div class="product-gallery__item product-gallery__item--primary product-media--empty">Product image not available</div>
+        <div class="product-gallery__missing"><p>Product photography has not been added.</p></div>
       {%- endif -%}
     </div>
 
     <div class="product-buybox">
-      <a class="product-buybox__back" href="{{ routes.all_products_collection_url }}">Back to shop</a>
-      <h1>{{ product.title | escape }}</h1>
-      <p class="price product-buybox__price">{{ product.selected_or_first_available_variant.price | money }}</p>
+      <a class="product-buybox__back" href="{{ shop_url }}">{% render 'rwn-icon', icon: 'arrow' %} Supporter Shop</a>
+      {%- if product.vendor != blank -%}<p class="section-label">{{ product.vendor | escape }}</p>{%- endif -%}
+      <h1 id="product-title">{{ product.title | escape }}</h1>
+      <p class="price product-buybox__price" data-product-price>{{ selected_variant.price | money }}</p>
+
       {%- if product.description != blank -%}<div class="rte product-buybox__description">{{ product.description }}</div>{%- endif -%}
 
-      {%- form 'product', product, class: 'form-grid product-form' -%}
-        <div class="field">
-          <label for="VariantId">Option</label>
-          <select id="VariantId" name="id">
+      {%- form 'product', product, class: 'form-grid product-form', data-product-form: '', data-currency: shop.currency, data-locale: request.locale.iso_code -%}
+        <div class="variant-select-wrap">
+          <label for="Variant-{{ section.id }}">Option</label>
+          <select id="Variant-{{ section.id }}" name="id" data-variant-id>
             {%- for variant in product.variants -%}
-              <option value="{{ variant.id }}" {% if variant == product.selected_or_first_available_variant %}selected{% endif %} {% unless variant.available %}disabled{% endunless %}>
-                {{ variant.title | escape }}{% unless variant.available %} | Unavailable{% endunless %}
-              </option>
+              <option value="{{ variant.id }}"{% if variant == selected_variant %} selected{% endif %}{% unless variant.available %} disabled{% endunless %}>{{ variant.title | escape }}{% unless variant.available %} | Out of stock{% endunless %}</option>
             {%- endfor -%}
           </select>
         </div>
-        <div class="field">
-          <label for="Quantity">Quantity</label>
-          <input id="Quantity" type="number" name="quantity" min="1" value="1">
+
+        {%- unless product.has_only_default_variant -%}
+          <div class="product-option-selectors">
+            {%- for option in product.options_with_values -%}
+              <div class="field product-option-select">
+                <label for="Option-{{ section.id }}-{{ forloop.index0 }}">{{ option.name | escape }}</label>
+                <select id="Option-{{ section.id }}-{{ forloop.index0 }}" data-product-option>
+                  {%- for value in option.values -%}
+                    <option value="{{ value | escape }}"{% if option.selected_value == value %} selected{% endif %}>{{ value | escape }}</option>
+                  {%- endfor -%}
+                </select>
+              </div>
+            {%- endfor -%}
+          </div>
+        {%- endunless -%}
+
+        <div class="field product-quantity">
+          <label for="Quantity-{{ section.id }}">Quantity</label>
+          <input id="Quantity-{{ section.id }}" type="number" name="quantity" min="1" value="1" inputmode="numeric">
         </div>
-        <button class="button button--primary" type="submit" {% unless product.available %}disabled{% endunless %}>
-          {%- if product.available -%}Add to cart{%- else -%}Unavailable{%- endif -%}
+        <p class="variant-status" data-variant-status aria-live="polite"></p>
+        <button class="button button--primary" type="submit" data-add-to-cart{% unless selected_variant.available %} disabled{% endunless %}>
+          {%- if selected_variant.available -%}Add to cart{%- else -%}Out of stock{%- endif -%}
         </button>
+        <script type="application/json" data-product-variants>{{ product.variants | json }}</script>
       {%- endform -%}
 
       <div class="product-note">
-        <strong>Secure checkout by Shopify.</strong>
-        <span>Taxes, shipping, inventory, and payments are handled through the store.</span>
+        <strong>Checkout is secured by Shopify.</strong>
+        <span>Product availability and fulfillment stay connected to Shopify and Printify.</span>
+        <nav aria-label="Store policies">
+          {%- if shop.shipping_policy.url != blank -%}<a href="{{ shop.shipping_policy.url }}">Shipping</a>{%- endif -%}
+          {%- if shop.refund_policy.url != blank -%}<a href="{{ shop.refund_policy.url }}">Returns</a>{%- endif -%}
+        </nav>
       </div>
     </div>
   </div>
+
+  {%- if related_collection != blank and related_collection.products_count > 1 -%}
+    <div class="rwn-section__inner related-products">
+      <div class="section-heading-row">
+        <div><p class="section-label">Supporter Shop</p><h2>More from the collection.</h2></div>
+        <a class="text-link text-link--arrow" href="{{ related_collection.url }}">View collection {% render 'rwn-icon', icon: 'arrow' %}</a>
+      </div>
+      <div class="product-grid product-grid--featured">
+        {%- assign related_count = 0 -%}
+        {%- for related in related_collection.products -%}
+          {%- unless related.id == product.id -%}
+            <article class="product-card">
+              <a href="{{ related.url | within: related_collection }}">
+                {%- if related.featured_image -%}
+                  {%- assign related_alt = related.featured_image.alt | default: related.title -%}
+                  <div class="product-media">{{ related.featured_image | image_url: width: 900 | image_tag: loading: 'lazy', widths: '360, 540, 720, 900', alt: related_alt }}</div>
+                {%- endif -%}
+                <h3>{{ related.title | escape }}</h3>
+              </a>
+              <p class="price">{{ related.price | money }}</p>
+            </article>
+            {%- assign related_count = related_count | plus: 1 -%}
+            {%- if related_count == 4 -%}{%- break -%}{%- endif -%}
+          {%- endunless -%}
+        {%- endfor -%}
+      </div>
+    </div>
+  {%- endif -%}
 </section>
 
 {% schema %}

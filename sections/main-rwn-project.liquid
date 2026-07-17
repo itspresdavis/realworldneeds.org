@@ -2,7 +2,7 @@
   assign project_title = metaobject.title.value | default: metaobject.title
   assign project_id = metaobject.project_id.value | default: metaobject.project_id
   assign project_summary = metaobject.short_summary.value | default: metaobject.short_summary
-  assign project_status = metaobject.status.value | default: metaobject.status | default: 'Being reviewed'
+  assign project_status = metaobject.status.value | default: metaobject.status | default: 'Being Reviewed'
   assign project_status_downcase = project_status | downcase
   assign project_category = metaobject.category.value | default: metaobject.category
   assign project_location = metaobject.location.value | default: metaobject.location
@@ -16,7 +16,20 @@
   assign funding_goal = metaobject.funding_goal.value | default: metaobject.funding_goal
   assign amount_raised = metaobject.amount_raised.value | default: metaobject.amount_raised
   assign amount_spent = metaobject.amount_spent.value | default: metaobject.amount_spent
+  assign remaining_funds = metaobject.remaining_funds.value | default: metaobject.remaining_funds
   assign last_updated = metaobject.last_updated_date.value | default: metaobject.last_updated_date
+  assign featured_image = metaobject.featured_image.value | default: metaobject.featured_image
+  assign project_story = metaobject.full_story.value | default: metaobject.full_story
+  assign project_need = metaobject.what_is_needed.value | default: metaobject.what_is_needed
+  assign project_solution = metaobject.proposed_solution.value | default: metaobject.proposed_solution
+  assign project_why = metaobject.why_it_matters.value | default: metaobject.why_it_matters
+  assign verification = metaobject.verification_information.value | default: metaobject.verification_notes.value | default: metaobject.verification_information | default: metaobject.verification_notes
+  assign project_updates = metaobject.updates.value | default: metaobject.updates
+  assign project_expenses = metaobject.expenses.value | default: metaobject.expenses
+  assign project_gallery = metaobject.gallery.value | default: metaobject.gallery
+  assign outcome_metrics = metaobject.outcome_metrics.value | default: metaobject.outcome_metrics
+  assign final_outcome = metaobject.final_outcome.value | default: metaobject.final_outcome
+  assign final_report = metaobject.final_report.value | default: metaobject.final_report
   assign closed_statuses = 'completed,paused,closed,funded'
   assign can_fund = false
   if donation_url != blank
@@ -27,74 +40,111 @@
 -%}
 
 <article class="project-page">
-  <section class="page-hero project-hero">
+  <section class="project-hero" aria-labelledby="project-title">
     <div class="rwn-section__inner project-hero__grid">
-      <div>
-        <p class="section-kicker">Need Record{% if project_id != blank %} · {{ project_id | escape }}{% endif %}</p>
+      <div class="project-hero__copy">
+        <p class="section-label">Public Need Record{% if project_id != blank %} / {{ project_id | escape }}{% endif %}</p>
         <span class="status-label">{{ project_status | escape }}</span>
-        <h1>{{ project_title | default: 'Project record' | escape }}</h1>
+        <h1 id="project-title">{{ project_title | default: 'Project record' | escape }}</h1>
         {%- if project_summary != blank -%}<p class="lead">{{ project_summary | strip_html | escape }}</p>{%- endif -%}
         <div class="action-row">
-          {%- if can_fund -%}<a class="button button--primary" href="{{ donation_url | escape }}">Support This Need</a>{%- endif -%}
-          {%- if partner_url != blank -%}<a class="button button--secondary" href="{{ partner_url | escape }}" rel="noopener noreferrer" target="_blank">Responsible Partner</a>{%- endif -%}
+          {%- if can_fund -%}<a class="button button--primary" href="{{ donation_url | escape }}"{% if donation_url contains 'http' %} target="_blank" rel="noopener noreferrer"{% endif %}>Support This Need {% render 'rwn-icon', icon: 'arrow' %}</a>{%- endif -%}
+          {%- if partner_url != blank -%}<a class="button button--secondary" href="{{ partner_url | escape }}" target="_blank" rel="noopener noreferrer">Responsible Organization {% render 'rwn-icon', icon: 'arrow' %}</a>{%- endif -%}
         </div>
       </div>
 
-      <aside class="project-summary-panel" aria-label="Project summary">
-        {%- if project_category != blank -%}<p><span>Category</span>{{ project_category | escape }}</p>{%- endif -%}
-        {%- if project_location != blank -%}<p><span>Location</span>{{ project_location | escape }}</p>{%- endif -%}
-        {%- if project_region != blank or project_country != blank -%}<p><span>Region</span>{{ project_region | escape }}{% if project_region != blank and project_country != blank %}, {% endif %}{{ project_country | escape }}</p>{%- endif -%}
-        {%- if responsible_org != blank -%}<p><span>Responsible organization</span>{{ responsible_org | escape }}</p>{%- endif -%}
-        <p><span>RWN Direct</span>{% if rwn_direct == true or rwn_direct == 'true' %}Yes{% else %}Not indicated{% endif %}</p>
-        <p><span>RWN Verified</span>{% if rwn_verified == true or rwn_verified == 'true' %}Yes{% else %}Not indicated{% endif %}</p>
-        {%- if last_updated != blank -%}<p><span>Last updated</span>{{ last_updated | date: '%B %d, %Y' }}</p>{%- endif -%}
-      </aside>
+      {%- if featured_image != blank -%}
+        <figure class="project-hero__media">
+          {{ featured_image | image_url: width: 1600 | image_tag: loading: 'eager', fetchpriority: 'high', widths: '720, 960, 1200, 1600', sizes: '(min-width: 900px) 46vw, 100vw', alt: project_title }}
+          <figcaption>Project documentation. Last updated {% if last_updated != blank %}{{ last_updated | date: '%B %d, %Y' }}{% else %}date not published{% endif %}.</figcaption>
+        </figure>
+      {%- else -%}
+        <aside class="project-summary-panel" aria-label="Project summary">
+          {%- if project_category != blank -%}<p><span>Category</span>{{ project_category | escape }}</p>{%- endif -%}
+          {%- if project_location != blank -%}<p><span>Location</span>{{ project_location | escape }}</p>{%- endif -%}
+          {%- if project_region != blank or project_country != blank -%}<p><span>Region</span>{{ project_region | escape }}{% if project_region != blank and project_country != blank %}, {% endif %}{{ project_country | escape }}</p>{%- endif -%}
+          {%- if responsible_org != blank -%}<p><span>Responsible organization</span>{{ responsible_org | escape }}</p>{%- endif -%}
+          <p><span>RWN Direct</span>{% if rwn_direct == true or rwn_direct == 'true' %}Yes{% else %}Not indicated{% endif %}</p>
+          <p><span>RWN Verified</span>{% if rwn_verified == true or rwn_verified == 'true' %}Yes{% else %}Not indicated{% endif %}</p>
+          {%- if last_updated != blank -%}<p><span>Last updated</span>{{ last_updated | date: '%B %d, %Y' }}</p>{%- endif -%}
+        </aside>
+      {%- endif -%}
     </div>
   </section>
+
+  <nav class="project-record-nav" aria-label="Project record sections">
+    <div class="rwn-section__inner">
+      {%- if project_need != blank or project_story != blank -%}<a href="#project-need">The need</a>{%- endif -%}
+      {%- if project_solution != blank -%}<a href="#project-plan">The plan</a>{%- endif -%}
+      {%- if verification != blank -%}<a href="#project-verification">Verification</a>{%- endif -%}
+      {%- if project_updates != blank -%}<a href="#project-updates">Updates</a>{%- endif -%}
+      {%- if project_expenses != blank -%}<a href="#project-spending">Spending</a>{%- endif -%}
+      {%- if final_outcome != blank or outcome_metrics != blank -%}<a href="#project-outcome">Outcome</a>{%- endif -%}
+    </div>
+  </nav>
 
   <section class="rwn-section project-record">
     <div class="rwn-section__inner project-record__grid">
       <div class="project-record__main">
-        <section>
-          <p class="section-kicker">The Need</p>
-          <h2>What is needed</h2>
-          <div class="rte">{{ metaobject.what_is_needed.value | default: metaobject.what_is_needed | default: 'This information has not been added.' }}</div>
-        </section>
-        <section>
-          <p class="section-kicker">Proposed Solution</p>
-          <h2>How support can help</h2>
-          <div class="rte">{{ metaobject.proposed_solution.value | default: metaobject.proposed_solution | default: 'The proposed solution has not been added.' }}</div>
-        </section>
-        <section>
-          <p class="section-kicker">Why It Matters</p>
-          <h2>What changes if this works</h2>
-          <div class="rte">{{ metaobject.why_it_matters.value | default: metaobject.why_it_matters | default: 'This information has not been added.' }}</div>
-        </section>
-        <section>
-          <p class="section-kicker">Verification</p>
-          <h2>What Real World Needs reviewed</h2>
-          <div class="rte">{{ metaobject.verification_information.value | default: metaobject.verification_notes.value | default: metaobject.verification_information | default: metaobject.verification_notes | default: 'Verification information has not been added.' }}</div>
-        </section>
-        <section>
-          <p class="section-kicker">Final Outcome</p>
-          <h2>What happened</h2>
-          <div class="rte">{{ metaobject.final_outcome.value | default: metaobject.final_outcome | default: 'A final outcome has not been added.' }}</div>
-        </section>
+        {%- if project_story != blank or project_need != blank -%}
+          <section id="project-need">
+            <p class="section-label">The need</p>
+            <h2>What is needed.</h2>
+            {%- if project_story != blank -%}<div class="rte">{{ project_story }}</div>{%- endif -%}
+            {%- if project_need != blank -%}<div class="rte">{{ project_need }}</div>{%- endif -%}
+            {%- if project_why != blank -%}<div class="project-why"><h3>Why it matters</h3><div class="rte">{{ project_why }}</div></div>{%- endif -%}
+          </section>
+        {%- endif -%}
+
+        {%- if project_solution != blank -%}
+          <section id="project-plan"><p class="section-label">The plan</p><h2>How support will be used.</h2><div class="rte">{{ project_solution }}</div></section>
+        {%- endif -%}
+
+        {%- if verification != blank -%}
+          <section id="project-verification"><p class="section-label">Verification</p><h2>What was reviewed.</h2><div class="rte">{{ verification }}</div></section>
+        {%- endif -%}
+
+        {%- if project_gallery != blank -%}
+          <section><p class="section-label">Documentation</p><h2>Photos from the record.</h2><div class="project-gallery">{%- for image in project_gallery -%}{{ image | image_url: width: 1200 | image_tag: loading: 'lazy', widths: '480, 720, 960, 1200', alt: image.alt | default: project_title }}{%- endfor -%}</div></section>
+        {%- endif -%}
+
+        {%- if project_updates != blank -%}
+          <section id="project-updates"><p class="section-label">Updates</p><h2>What happened next.</h2><div class="project-update-list">{%- for update in project_updates -%}{%- assign update_title = update.title.value | default: update.title | default: 'Project update' -%}{%- assign update_date = update.date.value | default: update.date | default: update.published_at.value | default: update.published_at -%}{%- assign update_body = update.body.value | default: update.content.value | default: update.body | default: update.content -%}<article>{%- if update_date != blank -%}<time datetime="{{ update_date | date: '%Y-%m-%d' }}">{{ update_date | date: '%B %d, %Y' }}</time>{%- endif -%}<h3>{{ update_title | escape }}</h3>{%- if update_body != blank -%}<div class="rte">{{ update_body }}</div>{%- endif -%}</article>{%- endfor -%}</div></section>
+        {%- endif -%}
+
+        {%- if project_expenses != blank -%}
+          <section id="project-spending"><p class="section-label">Project spending</p><h2>Published expenses.</h2><div class="project-expense-list" role="table" aria-label="Published project expenses">{%- for expense in project_expenses -%}{%- assign expense_date = expense.date.value | default: expense.date -%}{%- assign expense_vendor = expense.vendor.value | default: expense.vendor -%}{%- assign expense_description = expense.description.value | default: expense.description -%}{%- assign expense_amount = expense.amount.value | default: expense.amount -%}<div role="row"><span role="cell">{% if expense_date != blank %}{{ expense_date | date: '%B %d, %Y' }}{% endif %}</span><strong role="cell">{{ expense_vendor | default: expense_description | escape }}</strong><span role="cell">{{ expense_amount }}</span></div>{%- endfor -%}</div><p class="project-privacy-note">Only public, reviewed expense information appears here. Private donor and beneficiary data is never included.</p></section>
+        {%- endif -%}
+
+        {%- if final_outcome != blank or outcome_metrics != blank or final_report != blank -%}
+          <section id="project-outcome"><p class="section-label">Outcome</p><h2>What the record shows.</h2>{%- if outcome_metrics != blank -%}<div class="rte">{{ outcome_metrics }}</div>{%- endif -%}{%- if final_outcome != blank -%}<div class="rte">{{ final_outcome }}</div>{%- endif -%}{%- if final_report.url != blank -%}<a class="button button--secondary" href="{{ final_report.url }}" target="_blank" rel="noopener noreferrer">Open Final Report {% render 'rwn-icon', icon: 'arrow' %}</a>{%- endif -%}</section>
+        {%- endif -%}
+
+        {%- if project_story == blank and project_need == blank and project_solution == blank and verification == blank and project_updates == blank and final_outcome == blank -%}
+          <div class="record-zero"><div><h2>This record is still being prepared.</h2></div><p>Details will appear only after they are ready to publish and safe to share.</p></div>
+        {%- endif -%}
       </div>
 
-      <aside class="project-ledger">
-        <h2>Project Ledger</h2>
+      <aside class="project-ledger" aria-label="Project ledger">
+        <p class="section-label">At a glance</p>
+        <h2>Project ledger</h2>
         <dl>
-          <div><dt>Funding goal</dt><dd>{% if funding_goal != blank %}{{ funding_goal }}{% else %}Not published{% endif %}</dd></div>
-          <div><dt>Amount raised</dt><dd>{% if amount_raised != blank %}{{ amount_raised }}{% else %}Not published{% endif %}</dd></div>
-          <div><dt>Amount spent</dt><dd>{% if amount_spent != blank %}{{ amount_spent }}{% else %}Not published{% endif %}</dd></div>
-          <div><dt>Start date</dt><dd>{% if metaobject.start_date.value != blank %}{{ metaobject.start_date.value | date: '%B %d, %Y' }}{% else %}Not published{% endif %}</dd></div>
-          <div><dt>Expected completion</dt><dd>{% if metaobject.expected_completion_date.value != blank %}{{ metaobject.expected_completion_date.value | date: '%B %d, %Y' }}{% else %}Not published{% endif %}</dd></div>
-          <div><dt>Completed</dt><dd>{% if metaobject.completion_date.value != blank %}{{ metaobject.completion_date.value | date: '%B %d, %Y' }}{% else %}Not published{% endif %}</dd></div>
+          <div><dt>Status</dt><dd>{{ project_status | escape }}</dd></div>
+          {%- if project_category != blank -%}<div><dt>Category</dt><dd>{{ project_category | escape }}</dd></div>{%- endif -%}
+          {%- if project_location != blank -%}<div><dt>Location</dt><dd>{{ project_location | escape }}</dd></div>{%- endif -%}
+          {%- if responsible_org != blank -%}<div><dt>Responsible</dt><dd>{{ responsible_org | escape }}</dd></div>{%- endif -%}
+          <div><dt>RWN Direct</dt><dd>{% if rwn_direct == true or rwn_direct == 'true' %}Yes{% else %}Not indicated{% endif %}</dd></div>
+          <div><dt>RWN Verified</dt><dd>{% if rwn_verified == true or rwn_verified == 'true' %}Yes{% else %}Not indicated{% endif %}</dd></div>
+          {%- if funding_goal != blank -%}<div><dt>Funding goal</dt><dd>{{ funding_goal }}</dd></div>{%- endif -%}
+          {%- if amount_raised != blank -%}<div><dt>Amount received</dt><dd>{{ amount_raised }}</dd></div>{%- endif -%}
+          {%- if amount_spent != blank -%}<div><dt>Amount spent</dt><dd>{{ amount_spent }}</dd></div>{%- endif -%}
+          {%- if remaining_funds != blank -%}<div><dt>Remaining</dt><dd>{{ remaining_funds }}</dd></div>{%- endif -%}
+          {%- if metaobject.start_date.value != blank -%}<div><dt>Started</dt><dd>{{ metaobject.start_date.value | date: '%B %d, %Y' }}</dd></div>{%- endif -%}
+          {%- if metaobject.expected_completion_date.value != blank -%}<div><dt>Expected completion</dt><dd>{{ metaobject.expected_completion_date.value | date: '%B %d, %Y' }}</dd></div>{%- endif -%}
+          {%- if metaobject.completion_date.value != blank -%}<div><dt>Completed</dt><dd>{{ metaobject.completion_date.value | date: '%B %d, %Y' }}</dd></div>{%- endif -%}
+          {%- if last_updated != blank -%}<div><dt>Last updated</dt><dd>{{ last_updated | date: '%B %d, %Y' }}</dd></div>{%- endif -%}
         </dl>
-        <div class="trust-note">
-          <p>Expenses, receipts, updates, photos, and final reports appear only after donor, beneficiary, and operational privacy are reviewed.</p>
-        </div>
+        {%- unless funding_goal != blank or amount_raised != blank or amount_spent != blank -%}<p class="project-ledger__note">No financial figures are published for this record.</p>{%- endunless -%}
       </aside>
     </div>
   </section>

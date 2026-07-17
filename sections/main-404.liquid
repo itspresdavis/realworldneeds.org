@@ -10,14 +10,17 @@
 
 <section class="rwn-section">
   <div class="rwn-section__inner">
-    {%- assign how_page = pages['how-it-works'] -%}
-    {%- assign needs_page = pages['needs'] -%}
-    {%- assign transparency_page = pages['transparency'] -%}
+    {%- assign how_url = routes.root_url | append: '#how-it-works' -%}
+    {%- if pages['how-it-works'] != blank -%}{%- assign how_url = pages['how-it-works'].url -%}{%- endif -%}
+    {%- assign needs_url = routes.root_url | append: '#needs' -%}
+    {%- if pages['needs'] != blank -%}{%- assign needs_url = pages['needs'].url -%}{%- endif -%}
+    {%- assign transparency_url = routes.root_url | append: '#transparency' -%}
+    {%- if pages['transparency'] != blank -%}{%- assign transparency_url = pages['transparency'].url -%}{%- endif -%}
     <div class="ways-grid">
       <a href="{{ routes.root_url }}"><span>Go home</span><p>Return to the beginning of the Real World Needs story.</p></a>
-      {%- if how_page != blank -%}<a href="{{ how_page.url }}"><span>How It Works</span><p>See how needs move from review to action to reporting.</p></a>{%- endif -%}
-      {%- if needs_page != blank -%}<a href="{{ needs_page.url }}"><span>Needs</span><p>View public needs when projects are published.</p></a>{%- endif -%}
-      {%- if transparency_page != blank -%}<a href="{{ transparency_page.url }}"><span>Transparency</span><p>Read the standard for project records and public reporting.</p></a>{%- endif -%}
+      <a href="{{ how_url }}"><span>How It Works</span><p>See how needs move from review to action to reporting.</p></a>
+      <a href="{{ needs_url }}"><span>Needs</span><p>View public needs when projects are published.</p></a>
+      <a href="{{ transparency_url }}"><span>Transparency</span><p>Read the standard for project records and public reporting.</p></a>
       {%- if settings.stories_enabled and blogs['stories'] != blank -%}<a href="{{ blogs['stories'].url }}"><span>Stories</span><p>Read updates and editorial stories when they are published.</p></a>{%- endif -%}
       {%- if settings.merchandise_enabled -%}
         {%- assign shop_collection = collections['supporter-shop'] -%}

@@ -6,7 +6,7 @@
         "page_role": "get-help",
         "kicker": "Get Help",
         "fallback_title": "Get Help",
-        "fallback_intro": "Help intake should be opened only when the process, privacy practices, and response capacity are ready."
+        "fallback_intro": "Help intake opens only when the process, privacy practices, and response capacity are in place."
       }
     }
   },

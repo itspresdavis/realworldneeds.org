@@ -44,8 +44,14 @@ The site is not ready for public fundraising until a responsible administrator v
 - Shopify checkout tested
 - Cart tested
 - Mobile tested
+- Desktop and large desktop tested
 - Keyboard accessibility tested
 - Color contrast checked
+- Reduced motion behavior tested
+- Social sharing image tested
+- Page titles and meta descriptions reviewed
+- Structured data validated
+- Editorial image captions and licenses reviewed
 - Shopify Theme Check passed
 - Security review completed
 - All links audited

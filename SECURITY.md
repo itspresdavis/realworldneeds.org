@@ -2,6 +2,21 @@
 
 This theme does not implement custom payments, custom authentication, or custom checkout. Shopify handles checkout and payment security.
 
+## Production Review
+
+The theme received a source-level security review on July 17, 2026. The review covered Liquid output, browser JavaScript, configurable URLs, external links, forms, third party resources, credentials, customer data, and checkout boundaries.
+
+- `npm run audit:secrets` passed.
+- Shopify Theme Check passed all theme files with no offenses.
+- No browser code uses `innerHTML`, `insertAdjacentHTML`, `eval`, `document.write`, or dynamic script injection.
+- No third party JavaScript or remote font service is loaded by the theme.
+- External links opened by theme code include `rel="noopener noreferrer"`.
+- Donation and partner controls are omitted when their destination is blank or unavailable.
+- Product, cart, customer, newsletter, and contact interactions use Shopify's native forms and routes.
+- The theme contains no API keys, access tokens, passwords, payment data, or private customer data.
+
+This review covers the repository. Shopify apps, administrator-authored rich content, analytics, uploaded documents, and operational handling of personal data require separate review when they are configured.
+
 ## What the theme avoids
 
 - No custom credit card forms

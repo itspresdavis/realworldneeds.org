@@ -6,7 +6,7 @@
     <div class="cart-drawer__panel" role="dialog" aria-label="Cart">
       <div class="cart-drawer__header">
         <h2>Your cart</h2>
-        <button class="icon-button" type="button" data-close-details aria-label="Close cart">Close</button>
+        <button class="icon-button" type="button" data-close-details aria-label="Close cart">{% render 'rwn-icon', icon: 'close' %}</button>
       </div>
       {%- if cart.item_count > 0 -%}
         <form action="{{ routes.cart_url }}" method="post" novalidate>
@@ -15,18 +15,18 @@
               <li class="cart-mini-item">
                 <a href="{{ item.url }}" class="cart-mini-item__title">{{ item.product.title | escape }}</a>
                 <p>{{ item.variant.title | escape }}</p>
-                <p>{{ item.quantity }} x {{ item.final_line_price | money }}</p>
+                <p>{{ item.quantity }} x {{ item.final_price | money }}</p>
               </li>
             {%- endfor -%}
           </ul>
-          <p class="cart-drawer__subtotal">Subtotal {{ cart.total_price | money }}</p>
+          <p class="cart-drawer__subtotal"><span>Subtotal</span><strong>{{ cart.total_price | money }}</strong></p>
           <button class="button button--primary" type="submit" name="checkout">Checkout</button>
           <a class="button button--secondary" href="{{ routes.cart_url }}">View cart</a>
         </form>
       {%- else -%}
         <div class="empty-state empty-state--small">
           <h3>Your cart is empty.</h3>
-          <p>Supporter merchandise appears here after products are published in Shopify.</p>
+          <p>Supporter merchandise will appear here after you add an item.</p>
           {%- assign shop_collection = collections['supporter-shop'] -%}
           {%- assign shop_url = routes.all_products_collection_url -%}
           {%- if shop_collection != blank -%}{%- assign shop_url = shop_collection.url -%}{%- endif -%}

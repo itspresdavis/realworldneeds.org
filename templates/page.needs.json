@@ -6,7 +6,7 @@
         "page_role": "needs",
         "kicker": "Needs",
         "fallback_title": "Real Needs",
-        "fallback_intro": "Published needs will appear here when they are verified and ready."
+        "fallback_intro": "Reviewed needs live here once they have enough information to publish responsibly."
       }
     }
   },
