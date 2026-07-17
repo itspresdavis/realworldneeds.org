@@ -146,8 +146,8 @@
   }
 
   .home-hero__copy {
-    min-height: 650px;
-    padding: 6rem var(--page-gutter) 3rem;
+    min-height: auto;
+    padding: 4.5rem var(--page-gutter) 3.5rem;
   }
 
   .home-hero h1 {
@@ -155,10 +155,15 @@
     font-size: 5rem;
   }
 
-  .home-hero__media,
+  .home-hero__media {
+    order: -1;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
   .home-hero__image,
   .home-hero__image img {
-    min-height: 620px;
+    min-height: 0;
   }
 
   .idea-section__grid {
@@ -382,8 +387,8 @@
   }
 
   .home-hero__copy {
-    min-height: 610px;
-    padding-top: 4rem;
+    min-height: auto;
+    padding-top: 2.75rem;
   }
 
   .home-hero h1 {
@@ -419,10 +424,14 @@
     margin-top: 2.5rem;
   }
 
-  .home-hero__media,
+  .home-hero__media {
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+
   .home-hero__image,
   .home-hero__image img {
-    min-height: 430px;
+    min-height: 0;
   }
 
   .home-hero__media figcaption {

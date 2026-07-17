@@ -493,6 +493,7 @@ li {
 }
 
 .mobile-menu__summary {
+  position: relative;
   list-style: none;
 }
 
@@ -502,16 +503,31 @@ li {
 }
 
 .mobile-menu__summary span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
   width: 20px;
   height: 1.5px;
-  margin: 3px 0;
+  margin: 0;
   background: currentColor;
   transition: transform 180ms ease, opacity 180ms ease;
 }
 
+.mobile-menu__summary span:nth-child(1) {
+  transform: translate(-50%, -6px);
+}
+
+.mobile-menu__summary span:nth-child(2) {
+  transform: translate(-50%, 0);
+}
+
+.mobile-menu__summary span:nth-child(3) {
+  transform: translate(-50%, 6px);
+}
+
 .mobile-menu[open] .mobile-menu__summary span:nth-child(1) {
-  transform: translateY(4.5px) rotate(45deg);
+  transform: translate(-50%, 0) rotate(45deg);
 }
 
 .mobile-menu[open] .mobile-menu__summary span:nth-child(2) {
@@ -519,12 +535,12 @@ li {
 }
 
 .mobile-menu[open] .mobile-menu__summary span:nth-child(3) {
-  transform: translateY(-4.5px) rotate(-45deg);
+  transform: translate(-50%, 0) rotate(-45deg);
 }
 
 .mobile-menu__panel {
   position: fixed;
-  z-index: -1;
+  z-index: 20;
   top: var(--header-height);
   right: 0;
   bottom: 0;

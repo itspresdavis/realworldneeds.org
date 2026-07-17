@@ -123,18 +123,28 @@
   const processSteps = document.querySelectorAll('[data-process-step]');
   if (processSteps.length && 'IntersectionObserver' in window) {
     const processLinks = document.querySelectorAll('[data-process-link]');
-    const processObserver = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => Math.abs(a.boundingClientRect.top) - Math.abs(b.boundingClientRect.top))[0];
-      if (!visible) return;
-      const activeStep = visible.target.dataset.processStep;
+    const visibleSteps = new Set();
+    const activateProcessStep = (activeStep) => {
       processLinks.forEach((link) => {
         if (link.dataset.processLink === activeStep) link.setAttribute('aria-current', 'step');
         else link.removeAttribute('aria-current');
       });
+    };
+    const processObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) visibleSteps.add(entry.target);
+        else visibleSteps.delete(entry.target);
+      });
+      const viewportFocus = window.innerHeight * 0.42;
+      const visible = Array.from(visibleSteps).sort((a, b) => {
+        return Math.abs(a.getBoundingClientRect().top - viewportFocus) - Math.abs(b.getBoundingClientRect().top - viewportFocus);
+      })[0];
+      if (visible) activateProcessStep(visible.dataset.processStep);
     }, { rootMargin: '-30% 0px -50% 0px', threshold: 0 });
     processSteps.forEach((step) => processObserver.observe(step));
+    processLinks.forEach((link) => {
+      link.addEventListener('click', () => activateProcessStep(link.dataset.processLink));
+    });
   }
 
   const progress = document.querySelector('[data-article-progress]');
