@@ -1,41 +1,47 @@
-<section class="rwn-section rwn-section--white">
-  <div class="rwn-section__inner">
-    <div class="editorial-grid">
-      <div class="editorial-card editorial-card--large">
-        {%- if product.featured_media -%}
-          {%- assign product_media_alt = product.featured_media.alt | default: product.title -%}
-          <div class="product-media">
-            {{ product.featured_media.preview_image | image_url: width: 1200 | image_tag: loading: 'eager', alt: product_media_alt }}
+<section class="product-page">
+  <div class="rwn-section__inner product-page__inner">
+    <div class="product-gallery">
+      {%- if product.media.size > 0 -%}
+        {%- for media in product.media limit: 6 -%}
+          {%- assign media_alt = media.alt | default: product.title -%}
+          <div class="product-gallery__item {% if forloop.first %}product-gallery__item--primary{% endif %}">
+            {{ media.preview_image | image_url: width: 1200 | image_tag: loading: 'eager', alt: media_alt }}
           </div>
-        {%- else -%}
-          <div class="empty-state"><p>Product image will appear after Shopify media is added.</p></div>
-        {%- endif -%}
-      </div>
-      <div class="editorial-card">
-        <p class="section-kicker">Supporter shop</p>
-        <h1>{{ product.title | escape }}</h1>
-        <p class="price">{{ product.selected_or_first_available_variant.price | money }}</p>
-        {%- if product.description != blank -%}<div class="rte">{{ product.description }}</div>{%- endif -%}
-        {%- form 'product', product, class: 'form-grid' -%}
-          <div class="field">
-            <label for="VariantId">Option</label>
-            <select id="VariantId" name="id">
-              {%- for variant in product.variants -%}
-                <option value="{{ variant.id }}" {% if variant == product.selected_or_first_available_variant %}selected{% endif %} {% unless variant.available %}disabled{% endunless %}>
-                  {{ variant.title | escape }}{% unless variant.available %} | Unavailable{% endunless %}
-                </option>
-              {%- endfor -%}
-            </select>
-          </div>
-          <div class="field">
-            <label for="Quantity">Quantity</label>
-            <input id="Quantity" type="number" name="quantity" min="1" value="1">
-          </div>
-          <button class="button button--primary" type="submit" {% unless product.available %}disabled{% endunless %}>
-            {%- if product.available -%}Add to cart{%- else -%}Unavailable{%- endif -%}
-          </button>
-        {%- endform -%}
-        <p class="muted">Checkout, taxes, shipping, and payment are handled by Shopify.</p>
+        {%- endfor -%}
+      {%- else -%}
+        <div class="product-gallery__item product-gallery__item--primary product-media--empty">Product image pending</div>
+      {%- endif -%}
+    </div>
+
+    <div class="product-buybox">
+      <a class="product-buybox__back" href="{{ routes.all_products_collection_url }}">Back to shop</a>
+      <h1>{{ product.title | escape }}</h1>
+      <p class="price product-buybox__price">{{ product.selected_or_first_available_variant.price | money }}</p>
+      {%- if product.description != blank -%}<div class="rte product-buybox__description">{{ product.description }}</div>{%- endif -%}
+
+      {%- form 'product', product, class: 'form-grid product-form' -%}
+        <div class="field">
+          <label for="VariantId">Option</label>
+          <select id="VariantId" name="id">
+            {%- for variant in product.variants -%}
+              <option value="{{ variant.id }}" {% if variant == product.selected_or_first_available_variant %}selected{% endif %} {% unless variant.available %}disabled{% endunless %}>
+                {{ variant.title | escape }}{% unless variant.available %} | Unavailable{% endunless %}
+              </option>
+            {%- endfor -%}
+          </select>
+        </div>
+        <div class="field">
+          <label for="Quantity">Quantity</label>
+          <input id="Quantity" type="number" name="quantity" min="1" value="1">
+        </div>
+        <button class="button button--primary" type="submit" {% unless product.available %}disabled{% endunless %}>
+          {%- if product.available -%}Add to cart{%- else -%}Unavailable{%- endif -%}
+        </button>
+      {%- endform -%}
+
+      <div class="product-note">
+        <strong>Secure checkout by Shopify.</strong>
+        <span>Taxes, shipping, inventory, and payments are handled through the store.</span>
       </div>
     </div>
   </div>

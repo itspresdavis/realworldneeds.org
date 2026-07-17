@@ -1,40 +1,52 @@
-<section class="rwn-section rwn-section--white">
-  <div class="rwn-section__inner">
-    <p class="section-kicker">Supporter shop</p>
-    <h1>{{ collection.title | escape }}</h1>
-    {%- if collection.description != blank -%}
-      <div class="lead">{{ collection.description }}</div>
-    {%- else -%}
-      <p class="lead">Merchandise is secondary to the mission. Products appear here only when real Shopify products are published.</p>
-    {%- endif -%}
+<section class="collection-hero">
+  <div class="rwn-section__inner collection-hero__inner">
+    <div>
+      <h1>{{ collection.title | escape }}</h1>
+      {%- if collection.description != blank -%}
+        <div class="lead">{{ collection.description }}</div>
+      {%- else -%}
+        <p class="lead">Supporter merchandise, Printify products, and Shopify products appear here when they are published.</p>
+      {%- endif -%}
+    </div>
+    <div class="collection-hero__count">
+      <span>{{ collection.products_count }}</span>
+      <p>product{% unless collection.products_count == 1 %}s{% endunless %}</p>
+    </div>
   </div>
 </section>
 
-<section class="rwn-section">
+<section class="rwn-section shop-section">
   <div class="rwn-section__inner">
     {%- if collection.products_count > 0 -%}
-      {%- paginate collection.products by 12 -%}
-        <div class="product-grid">
+      {%- paginate collection.products by 16 -%}
+        <div class="product-grid product-grid--catalog">
           {%- for product in collection.products -%}
-            <article class="product-card">
+            <article class="product-card product-card--storefront">
               <a href="{{ product.url | within: collection }}">
                 {%- if product.featured_image -%}
                   {%- assign product_image_alt = product.featured_image.alt | default: product.title -%}
-                  <div class="product-media">{{ product.featured_image | image_url: width: 700 | image_tag: loading: 'lazy', alt: product_image_alt }}</div>
+                  <div class="product-media">{{ product.featured_image | image_url: width: 900 | image_tag: loading: 'lazy', alt: product_image_alt }}</div>
+                {%- else -%}
+                  <div class="product-media product-media--empty">Image pending</div>
                 {%- endif -%}
                 <h2>{{ product.title | escape }}</h2>
               </a>
-              <p class="price">{{ product.price | money }}</p>
-              {%- unless product.available -%}<p class="status-label">Out of stock</p>{%- endunless -%}
+              <div class="product-card__footer">
+                <p class="price">{{ product.price | money }}</p>
+                {%- unless product.available -%}<p class="status-label">Out of stock</p>{%- endunless -%}
+              </div>
             </article>
           {%- endfor -%}
         </div>
         {%- if paginate.pages > 1 -%}<nav class="pagination" aria-label="Products pagination">{{ paginate | default_pagination }}</nav>{%- endif -%}
       {%- endpaginate -%}
     {%- else -%}
-      <div class="empty-state">
-        <h2>No merchandise is currently published.</h2>
-        <p>Printify products imported into Shopify will appear here after they are assigned to the Supporter Shop collection.</p>
+      <div class="shop-empty shop-empty--catalog">
+        <div>
+          <h2>No products are published here yet.</h2>
+          <p>When Printify or Shopify products are added to this collection, this page becomes the product catalog automatically.</p>
+        </div>
+        <a class="button button--primary" href="{{ routes.all_products_collection_url }}">View all products</a>
       </div>
     {%- endif -%}
   </div>

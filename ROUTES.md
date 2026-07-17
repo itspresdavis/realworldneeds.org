@@ -32,7 +32,7 @@ Visible calls to action are guarded by Shopify object existence and theme settin
 | Merchandise Return Policy | Page | `return-policy` | Starter language requires review | Footer | Required before merchandise launch |
 | Legal and Disclosures | Page | `legal` | Starter language requires review | Footer | Required before launch |
 | Stories | Blog | `stories` | Story sections show honest empty state | Header if enabled | Required before stories launch |
-| Supporter Shop | Collection | `supporter-shop` | Shop sections hide unless products exist and merchandise is enabled | Header if enabled | Required before merchandise launch |
+| Supporter Shop | Collection | `supporter-shop` preferred, falls back to all-products collection | Shop is always visible; product grids show real Shopify products when published and a setup state when empty | Header and homepage | Required before merchandise launch |
 | Product | Product object | Shopify product handle | No fake product pages | Collection/product routes | Required for merchandise launch |
 | Project detail | Metaobject | `rwn_project` entry route | No donation button unless project URL exists and status permits | Needs index | Required before projects launch |
 | Search | Theme template | `/search` | Shows useful no results state | Shopify route | No |

@@ -8,7 +8,10 @@
       {% render 'rwn-page-link', handle: 'how-it-works', label: 'How It Works', class: 'button button--secondary' %}
       {% render 'rwn-page-link', handle: 'needs', label: 'Needs', class: 'button button--secondary' %}
       {%- if settings.stories_enabled and blogs['stories'] != blank -%}<a class="button button--secondary" href="{{ blogs['stories'].url }}">Stories</a>{%- endif -%}
-      {%- if settings.merchandise_enabled and collections['supporter-shop'] != blank -%}<a class="button button--secondary" href="{{ collections['supporter-shop'].url }}">Shop</a>{%- endif -%}
+      {%- assign shop_collection = collections['supporter-shop'] -%}
+      {%- assign shop_url = routes.all_products_collection_url -%}
+      {%- if shop_collection != blank -%}{%- assign shop_url = shop_collection.url -%}{%- endif -%}
+      <a class="button button--secondary" href="{{ shop_url }}">Shop</a>
     </div>
   </div>
 </section>

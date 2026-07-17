@@ -1,5 +1,4 @@
-{%- if settings.merchandise_enabled -%}
-  <details class="cart-drawer">
+<details class="cart-drawer">
     <summary class="icon-button" aria-label="Open cart">
       {% render 'rwn-icon', icon: 'cart' %}
       <span class="cart-count" aria-label="{{ cart.item_count }} items in cart">{{ cart.item_count }}</span>
@@ -29,11 +28,10 @@
           <h3>Your cart is empty.</h3>
           <p>Supporter merchandise will appear when products are published in Shopify.</p>
           {%- assign shop_collection = collections['supporter-shop'] -%}
-          {%- if shop_collection != blank and shop_collection.products_count > 0 -%}
-            <a class="button button--secondary" href="{{ shop_collection.url }}">Visit the shop</a>
-          {%- endif -%}
+          {%- assign shop_url = routes.all_products_collection_url -%}
+          {%- if shop_collection != blank -%}{%- assign shop_url = shop_collection.url -%}{%- endif -%}
+          <a class="button button--secondary" href="{{ shop_url }}">Visit the shop</a>
         </div>
       {%- endif -%}
     </div>
   </details>
-{%- endif -%}

@@ -14,7 +14,7 @@ This theme is built around truth first launch safety. It does not invent impact 
 - Editorial homepage for Real World Needs
 - Accessible global header and mobile navigation
 - Guarded donation calls to action
-- Guarded merchandise entry points
+- Storefront-first merchandise entry points
 - Cart drawer and cart page
 - Product and collection templates for Printify products imported into Shopify
 - Stories blog and article templates
@@ -106,8 +106,8 @@ If the donation URL is blank or donations are disabled, donation buttons do not 
 1. Connect Printify to Shopify.
 2. Import products into Shopify.
 3. Review titles, descriptions, images, variants, pricing, shipping, and return terms.
-4. Assign products to the `supporter-shop` collection.
-5. Enable `merchandise_enabled` in theme settings.
+4. Assign products to the `supporter-shop` collection when you want a curated supporter shop.
+5. Keep product titles, descriptions, product images, variants, pricing, shipping, and return terms accurate in Shopify.
 6. Test cart and checkout through Shopify.
 
 The theme does not alter Shopify checkout.

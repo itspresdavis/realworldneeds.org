@@ -2,7 +2,7 @@
   "current": {
     "public_launch_ready": false,
     "donations_enabled": false,
-    "merchandise_enabled": false,
+    "merchandise_enabled": true,
     "projects_enabled": false,
     "clothing_program_enabled": false,
     "volunteer_applications_enabled": false,
