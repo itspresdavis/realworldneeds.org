@@ -1,14 +1,17 @@
 {
-  "name": "rwn-web-shopify-theme",
-  "version": "3.0.0",
+  "name": "rwn-web",
+  "version": "1.0.0",
   "private": true,
-  "description": "Real World Needs Shopify theme",
+  "type": "module",
+  "description": "Real World Needs global verified aid resource finder.",
   "scripts": {
-    "audit:links": "node scripts/audit-theme-links.mjs",
-    "audit:secrets": "node scripts/audit-secrets.mjs",
-    "validate:json": "node scripts/validate-json.mjs",
-    "theme:check": "shopify theme check --path .",
-    "theme:info": "shopify theme info --environment production --json",
-    "theme:deploy": "shopify theme push --environment production --strict"
+    "build": "node scripts/build.mjs",
+    "dev": "python3 -m http.server 5173",
+    "preview": "python3 -m http.server 4173 -d dist"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=20"
   }
 }

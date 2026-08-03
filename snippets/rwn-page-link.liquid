@@ -1,7 +1,0 @@
-{%- liquid
-  assign linked_page = pages[handle]
-  assign link_class = class | default: 'text-link'
--%}
-{%- if linked_page != blank -%}
-  <a class="{{ link_class }}" href="{{ linked_page.url }}">{{ label | escape }}</a>
-{%- endif -%}
