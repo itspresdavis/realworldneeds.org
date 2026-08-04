@@ -1,1 +1,4 @@
-m«ëˆ§½©buªàºg§¶››–'?®†è¶ËqµKæÚ±î¸Ø[é¢Šwâ•ê(º×â•æÛ­æ¤n·š‘éÜ¡×¢ëiºÛ©Š{h–)Ş²‡åzx-†{¦×^r‡^uç(uè§¦ëa…éiv+)•¬­†+&zËè¢›­Šznµø¥y×Ÿjém~ŠìµØ§¢‹­¦ëhºÚnµø¥y×Ÿjém~ŠìµÚ.
+User-agent: *
+Allow: /
+
+Sitemap: https://rwn-web-anlos.vercel.app/sitemap.xml
