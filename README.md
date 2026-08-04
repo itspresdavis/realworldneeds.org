@@ -43,7 +43,7 @@ npm run build
 
 Vercel uses `vercel.json`, runs the static build, and serves `dist`.
 
-Production alias: `https://rwn-web-anlos.vercel.app`
+Production alias: `https://rwn-web.vercel.app`
 
 ## Verification
 
