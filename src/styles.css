@@ -1,5 +1,5 @@
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   color-scheme: light;
@@ -256,9 +256,9 @@ svg {
   color: #188d56;
   font-size: 0.68rem;
   font-weight: 850;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .finder .section-kicker,
@@ -2919,6 +2919,18 @@ svg {
 }
 
 /* Simplified public-service reading flow */
+.finder-intro h1,
+.about-rwn__heading h2,
+.source-band__heading h2,
+.accountability__heading h2 {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  font-weight: 600;
+}
+
+.globe-stage::before {
+  background-image: none;
+}
+
 .finder__grid {
   grid-template-columns: minmax(17rem, 0.62fr) minmax(36rem, 1.65fr) minmax(21rem, 0.82fr);
   min-height: clamp(43rem, calc(100svh - 4.5rem), 52rem);
@@ -3060,6 +3072,86 @@ svg {
 .results-section {
   padding-top: 1.75rem;
   padding-bottom: 2.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+}
+
+.results-section .section-kicker {
+  color: #087a43;
+}
+
+.results-heading p {
+  color: var(--muted);
+}
+
+.results-section .directory-tool {
+  border-color: #b9c4c7;
+  color: #31434c;
+}
+
+.results-section .directory-tool b {
+  background: #edf2f1;
+}
+
+.results-section .directory-tool:hover,
+.results-section .directory-tool:focus-visible,
+.results-section .directory-tool.is-active {
+  border-color: #087a43;
+  background: #eef8f2;
+  color: #076d3c;
+}
+
+.results-section .resource-list-head {
+  border-color: #bcc8ca;
+  color: #607078;
+}
+
+.results-section .resource-row {
+  border-color: var(--line);
+}
+
+.results-section .resource-row:hover,
+.results-section .resource-row:focus-within,
+.results-section .resource-row.is-selected {
+  border-color: var(--line);
+  background: #f4f8f6;
+}
+
+.results-section .resource-row button {
+  color: var(--ink);
+}
+
+.results-section .resource-row__service small,
+.results-section .resource-row__place,
+.results-section .resource-row__type,
+.results-section .resource-row__access,
+.results-section .resource-row__reviewed {
+  color: #5f7077;
+}
+
+.results-section .resource-row__service small {
+  color: #50646c;
+}
+
+.results-section .outline-button--dark {
+  border-color: #839196;
+  color: var(--ink);
+}
+
+.results-section .outline-button--dark:hover,
+.results-section .outline-button--dark:focus-visible {
+  border-color: #087a43;
+  background: #eef8f2;
+  color: #076d3c;
+}
+
+.results-section .results-empty {
+  border-color: var(--line);
+}
+
+.results-section .results-empty p {
+  color: var(--muted);
 }
 
 .resource-list-head,

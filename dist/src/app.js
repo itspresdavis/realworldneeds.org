@@ -1,3 +1,4 @@
+import * as THREE from "/vendor/three.module.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import {
   launchGates,
@@ -54,6 +55,16 @@ const root = document.getElementById("root");
 let pinSignature = "";
 let pinElements = new Map();
 let lastFrame = performance.now();
+let globeRenderer = null;
+let globeScene = null;
+let globeCamera = null;
+let globeWorld = null;
+let globeSurface = null;
+let globeBorders = null;
+let globeLight = null;
+let connectionGroup = null;
+let connectionSignature = "";
+let connectionParticles = [];
 
 const icon = {
   globe: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
@@ -166,9 +177,9 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <span class="section-kicker">Real World Needs</span>
-              <h1>Real help, easier to find.</h1>
-              <p>RWN connects people to free essential services and keeps the original source attached, so every next step can be checked.</p>
+              <span class="section-kicker">Find free essential services</span>
+              <h1>Help should be easier to find.</h1>
+              <p>Real World Needs brings public and nonprofit resources into one searchable place. Every listing leads back to its source.</p>
             </div>
 
             <div class="mode-switch" aria-label="Map data mode">
@@ -262,32 +273,32 @@ function shell() {
 
       <section class="about-rwn" id="about">
         <div class="about-rwn__heading">
-          <span class="section-kicker">What RWN is</span>
-          <h2>A simple idea: make real-world help easier to reach.</h2>
-          <p>Real World Needs is a public-interest project building a clearer path from need to support. It starts with useful information today and grows only when the safeguards for tomorrow are ready.</p>
+          <span class="section-kicker">About Real World Needs</span>
+          <h2>Building a clearer path from need to support.</h2>
+          <p>RWN is a public-interest project. Today, it helps people find services. The long-term goal is to help communities publish verified needs and show how support reaches them.</p>
         </div>
         <div class="mission-steps">
-          <article><span>Now</span><h3>Find help</h3><p>Search free essential services and open the organization or public source behind every listing.</p></article>
-          <article><span>Next</span><h3>Show real needs</h3><p>Publish needs only after identity, privacy, urgency, and evidence can be reviewed responsibly.</p></article>
-          <article><span>Then</span><h3>Follow support</h3><p>If RWN manages support, show how it was approved, delivered, evidenced, and corrected.</p></article>
+          <article><span>Today</span><h3>One global directory</h3><p>Search essential services and open the organization or public source behind every listing.</p></article>
+          <article><span>Next stage</span><h3>Responsible need publication</h3><p>Publish needs only after identity, privacy, urgency, and evidence can be reviewed.</p></article>
+          <article><span>Before funds</span><h3>Traceable support</h3><p>Show how support was approved, delivered, evidenced, and corrected before managing it.</p></article>
         </div>
       </section>
 
       <section class="source-band" id="standards">
         <div class="source-band__heading">
-          <span class="section-kicker">Trust standards</span>
-          <h2>Useful information, without overstating certainty.</h2>
-          <p>RWN keeps the source, access conditions, and review date visible. People should always confirm availability before traveling.</p>
+          <span class="section-kicker">Directory standard</span>
+          <h2>People should be able to check what they find.</h2>
+          <p>Every record keeps its source, access conditions, and review date visible. Availability should still be confirmed before travel.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
       </section>
 
       <section class="accountability" id="accountability">
         <div class="accountability__heading">
-          <span class="section-kicker">Accountability</span>
-          <h2>Clear about what is live and what is not.</h2>
-          <p>The directory is live. Public need intake, donation processing, and RWN-managed support are not. Expansion comes after the legal, financial, program, and reporting controls are in place.</p>
-          <button class="outline-button" type="button" data-open-launch>Review launch requirements ${icon.arrow}</button>
+          <span class="section-kicker">Current operating status</span>
+          <h2>The directory is live. Fundraising is not.</h2>
+          <p>RWN does not currently accept public needs or donations. Those services will remain unavailable until legal, financial, program, privacy, and reporting controls are in place.</p>
+          <button class="outline-button" type="button" data-open-launch>Requirements for future operations ${icon.arrow}</button>
         </div>
         <div class="accountability-status">
           <article class="is-live"><span>${icon.check}</span><div><small>Live now</small><h3>Source-backed aid directory</h3><p>Search, filters, map, local saves, and direct links to provider or public sources.</p></div></article>
@@ -605,6 +616,318 @@ function focusGlobeOn(resource) {
   state.interactionUntil = performance.now() + 5000;
 }
 
+function latLngVector(lat, lng, radius = 1) {
+  const latitude = toRad(lat);
+  const longitude = toRad(lng);
+  const cosLat = Math.cos(latitude);
+  return new THREE.Vector3(
+    radius * cosLat * Math.sin(longitude),
+    radius * Math.sin(latitude),
+    radius * cosLat * Math.cos(longitude)
+  );
+}
+
+function texturePoint(lng, lat, width, height) {
+  return {
+    x: ((lng + 180) / 360) * width,
+    y: ((90 - lat) / 180) * height
+  };
+}
+
+function drawTextureRing(ctx, ring, width, height, fill, stroke) {
+  if (ring.length < 3) return;
+  const unwrapped = [];
+  let previous = ring[0][0];
+  let offset = 0;
+  for (const [longitude, latitude] of ring) {
+    const delta = longitude - previous;
+    if (delta > 180) offset -= 360;
+    if (delta < -180) offset += 360;
+    unwrapped.push([longitude + offset, latitude]);
+    previous = longitude;
+  }
+  for (const copy of [-360, 0, 360]) {
+    ctx.beginPath();
+    unwrapped.forEach(([longitude, latitude], index) => {
+      const point = texturePoint(longitude + copy, latitude, width, height);
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+  }
+}
+
+function createGlobeTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2048;
+  canvas.height = 1024;
+  const ctx = canvas.getContext("2d");
+  const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  ocean.addColorStop(0, "#061827");
+  ocean.addColorStop(0.5, "#082538");
+  ocean.addColorStop(1, "#041623");
+  ctx.fillStyle = ocean;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.lineWidth = 0.65;
+  ctx.strokeStyle = "rgba(127, 186, 185, 0.1)";
+  for (let longitude = -180; longitude <= 180; longitude += 15) {
+    const x = texturePoint(longitude, 0, canvas.width, canvas.height).x;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let latitude = -75; latitude <= 75; latitude += 15) {
+    const y = texturePoint(0, latitude, canvas.width, canvas.height).y;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  state.landRings.forEach((ring, index) => {
+    const palette = ["#28514f", "#2d5854", "#244a4b", "#315b55"];
+    drawTextureRing(ctx, ring, canvas.width, canvas.height, palette[index % palette.length], "rgba(176, 218, 203, 0.24)");
+  });
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "700 13px Helvetica Neue, Arial, sans-serif";
+  ctx.fillStyle = "rgba(207, 230, 221, 0.28)";
+  for (const item of mapLabels) {
+    const point = texturePoint(item.lng, item.lat, canvas.width, canvas.height);
+    ctx.fillText(item.label, point.x, point.y);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = globeRenderer?.capabilities.getMaxAnisotropy() || 1;
+  return texture;
+}
+
+function createGraticule() {
+  const positions = [];
+  const addLine = (points) => {
+    for (let index = 1; index < points.length; index += 1) {
+      positions.push(...points[index - 1].toArray(), ...points[index].toArray());
+    }
+  };
+  for (let latitude = -75; latitude <= 75; latitude += 15) {
+    const points = [];
+    for (let longitude = -180; longitude <= 180; longitude += 3) points.push(latLngVector(latitude, longitude, 1.003));
+    addLine(points);
+  }
+  for (let longitude = -180; longitude < 180; longitude += 30) {
+    const points = [];
+    for (let latitude = -87; latitude <= 87; latitude += 3) points.push(latLngVector(latitude, longitude, 1.003));
+    addLine(points);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x8fc6bf, transparent: true, opacity: 0.1 }));
+}
+
+function rebuildCountryBorders() {
+  if (!globeWorld || !state.landRings.length) return;
+  if (globeBorders) {
+    globeBorders.geometry.dispose();
+    globeBorders.material.dispose();
+    globeWorld.remove(globeBorders);
+  }
+  const positions = [];
+  for (const ring of state.landRings) {
+    for (let index = 1; index < ring.length; index += 1) {
+      const start = latLngVector(ring[index - 1][1], ring[index - 1][0], 1.006);
+      const end = latLngVector(ring[index][1], ring[index][0], 1.006);
+      positions.push(...start.toArray(), ...end.toArray());
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  globeBorders = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+    color: 0xb7d6cc,
+    transparent: true,
+    opacity: 0.22,
+    depthWrite: false
+  }));
+  globeWorld.add(globeBorders);
+}
+
+function refreshGlobeSurface() {
+  if (!globeSurface) return;
+  const previousTexture = globeSurface.material.map;
+  globeSurface.material.map = createGlobeTexture();
+  globeSurface.material.needsUpdate = true;
+  previousTexture?.dispose();
+  rebuildCountryBorders();
+}
+
+function initThreeGlobe() {
+  const canvas = document.getElementById("globeCanvas");
+  try {
+    globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
+  } catch (error) {
+    console.error("WebGL globe could not be initialized.", error);
+    globeRenderer = null;
+    return;
+  }
+  globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  globeRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  globeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  globeRenderer.toneMappingExposure = 1.08;
+  globeRenderer.setClearColor(0x02131f, 0);
+
+  globeScene = new THREE.Scene();
+  globeCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  globeCamera.position.set(0, 0, 3.2);
+
+  globeWorld = new THREE.Group();
+  globeWorld.rotation.order = "YXZ";
+  globeScene.add(globeWorld);
+
+  globeSurface = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 128, 96),
+    new THREE.MeshPhongMaterial({
+      map: createGlobeTexture(),
+      color: 0xffffff,
+      emissive: 0x0b2630,
+      emissiveIntensity: 0.62,
+      specular: 0x346979,
+      shininess: 18
+    })
+  );
+  globeWorld.add(globeSurface);
+  globeWorld.add(createGraticule());
+
+  const atmosphere = new THREE.Mesh(
+    new THREE.SphereGeometry(1.03, 96, 64),
+    new THREE.ShaderMaterial({
+      uniforms: { glowColor: { value: new THREE.Color(0x45c9b1) } },
+      vertexShader: `varying vec3 vNormal; varying vec3 vPositionNormal; void main(){vNormal=normalize(normalMatrix*normal);vPositionNormal=normalize((modelViewMatrix*vec4(position,1.0)).xyz);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader: `uniform vec3 glowColor; varying vec3 vNormal; varying vec3 vPositionNormal; void main(){float intensity=pow(0.72-dot(vNormal,-vPositionNormal),3.0);gl_FragColor=vec4(glowColor,intensity*0.22);}`,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false
+    })
+  );
+  globeWorld.add(atmosphere);
+
+  globeScene.add(new THREE.AmbientLight(0x91acb4, 1.15));
+  globeScene.add(new THREE.HemisphereLight(0x8bbdc2, 0x0a2630, 0.8));
+  const fill = new THREE.DirectionalLight(0x6da5ba, 0.65);
+  fill.position.set(-3, 1, 4);
+  globeScene.add(fill);
+  globeLight = new THREE.DirectionalLight(0xd8fff0, 2.3);
+  globeScene.add(globeLight);
+  globeScene.add(globeLight.target);
+
+  connectionGroup = new THREE.Group();
+  globeWorld.add(connectionGroup);
+}
+
+function slerpVector(start, end, progress) {
+  const dot = THREE.MathUtils.clamp(start.dot(end), -1, 1);
+  const omega = Math.acos(dot);
+  if (omega < 0.0001) return start.clone();
+  const sinOmega = Math.sin(omega);
+  return start.clone().multiplyScalar(Math.sin((1 - progress) * omega) / sinOmega)
+    .add(end.clone().multiplyScalar(Math.sin(progress * omega) / sinOmega));
+}
+
+function clearConnections() {
+  if (!connectionGroup) return;
+  for (const child of [...connectionGroup.children]) {
+    child.geometry?.dispose();
+    child.material?.dispose();
+    connectionGroup.remove(child);
+  }
+  connectionParticles = [];
+}
+
+function rebuildConnections() {
+  if (!connectionGroup) return;
+  const selected = selectedResource();
+  const signature = selected ? `${selected.id}:${state.filtered.map((resource) => resource.id).join(",")}` : "none";
+  if (signature === connectionSignature) return;
+  connectionSignature = signature;
+  clearConnections();
+  if (!selected || state.viewMode !== "aid") return;
+
+  const start = latLngVector(selected.lat, selected.lng);
+  connectionDestinations(selected).forEach((resource, index) => {
+    const end = latLngVector(resource.lat, resource.lng);
+    const points = [];
+    for (let step = 0; step <= 48; step += 1) {
+      const progress = step / 48;
+      const lift = 1.016 + Math.sin(progress * Math.PI) * 0.075;
+      points.push(slerpVector(start, end, progress).normalize().multiplyScalar(lift));
+    }
+    const curve = new THREE.CatmullRomCurve3(points);
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(curve.getPoints(64)),
+      new THREE.LineBasicMaterial({ color: categories[resource.category].color, transparent: true, opacity: 0.32, depthWrite: false })
+    );
+    connectionGroup.add(line);
+    if (!reduceMotion) {
+      const particle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.007, 10, 8),
+        new THREE.MeshBasicMaterial({ color: categories[resource.category].color })
+      );
+      connectionGroup.add(particle);
+      connectionParticles.push({ particle, curve, offset: index / Math.max(1, connectionDestinations(selected).length) });
+    }
+  });
+}
+
+function renderThreeGlobe(width, height, now) {
+  if (!globeRenderer) return false;
+  const canvas = globeRenderer.domElement;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    globeRenderer.setPixelRatio(dpr);
+    globeRenderer.setSize(width, height, false);
+    globeCamera.aspect = width / height;
+    globeCamera.updateProjectionMatrix();
+  }
+
+  globeWorld.rotation.y = -toRad(state.rotationLon);
+  globeWorld.rotation.x = toRad(state.rotationLat);
+  globeWorld.scale.setScalar(state.zoom * state.ambientZoom);
+  globeWorld.updateMatrixWorld(true);
+
+  const sun = subsolarPoint(new Date());
+  const sunPosition = latLngVector(sun.lat, sun.lng, 5).applyEuler(globeWorld.rotation);
+  globeLight.position.copy(sunPosition);
+  globeLight.target.position.set(0, 0, 0);
+  globeLight.target.updateMatrixWorld();
+
+  rebuildConnections();
+  connectionParticles.forEach(({ particle, curve, offset }) => {
+    particle.position.copy(curve.getPoint((now * 0.000055 + offset) % 1));
+  });
+  globeRenderer.render(globeScene, globeCamera);
+  return true;
+}
+
+function projectGlobePoint(lat, lng, width, height) {
+  if (!globeWorld || !globeCamera) return projectPoint(lat, lng, width, height);
+  globeWorld.updateMatrixWorld(true);
+  const worldPoint = latLngVector(lat, lng, 1.035).applyMatrix4(globeWorld.matrixWorld);
+  const scale = globeWorld.scale.x || 1;
+  const projected = worldPoint.clone().project(globeCamera);
+  return {
+    x: (projected.x * 0.5 + 0.5) * width,
+    y: (-projected.y * 0.5 + 0.5) * height,
+    z: worldPoint.z / scale
+  };
+}
+
 function projectPoint(lat, lng, width, height) {
   const radius = Math.min(width, height) * 0.405 * state.zoom * state.ambientZoom;
   const centerX = width * 0.5;
@@ -892,7 +1215,7 @@ function clusterVisibleResources(width, height) {
   const selected = selectedResource();
   const threshold = 34 - (state.zoom - 0.74) * 18;
   const entries = state.filtered
-    .map((resource) => ({ resource, point: projectPoint(resource.lat, resource.lng, width, height) }))
+    .map((resource) => ({ resource, point: projectGlobePoint(resource.lat, resource.lng, width, height) }))
     .filter((entry) => entry.point.z > 0.03)
     .sort((a, b) => Number(b.resource.id === selected?.id) - Number(a.resource.id === selected?.id));
   const clusters = [];
@@ -904,8 +1227,8 @@ function clusterVisibleResources(width, height) {
     );
     if (target) {
       target.members.push(entry.resource);
-      target.x = target.members.reduce((sum, resource) => sum + projectPoint(resource.lat, resource.lng, width, height).x, 0) / target.members.length;
-      target.y = target.members.reduce((sum, resource) => sum + projectPoint(resource.lat, resource.lng, width, height).y, 0) / target.members.length;
+      target.x = target.members.reduce((sum, resource) => sum + projectGlobePoint(resource.lat, resource.lng, width, height).x, 0) / target.members.length;
+      target.y = target.members.reduce((sum, resource) => sum + projectGlobePoint(resource.lat, resource.lng, width, height).y, 0) / target.members.length;
       target.z = Math.max(target.z, entry.point.z);
     } else {
       clusters.push({ members: [entry.resource], x: entry.point.x, y: entry.point.y, z: entry.point.z, selected: keepSeparate });
@@ -1013,17 +1336,19 @@ function animateGlobe(now) {
   }
   const canvas = document.getElementById("globeCanvas");
   const rect = canvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const width = Math.max(1, rect.width);
   const height = Math.max(1, rect.height);
-  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-  }
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   advanceGlobe(now);
-  drawGlobe(ctx, width, height, now);
+  if (!renderThreeGlobe(width, height, now)) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+    }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawGlobe(ctx, width, height, now);
+  }
   renderPins(width, height);
   updateGlobeReadout();
   requestAnimationFrame(animateGlobe);
@@ -1080,6 +1405,7 @@ async function loadLandGeometry() {
     if (!response.ok) throw new Error(`Map data returned ${response.status}`);
     const data = await response.json();
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
+    refreshGlobeSurface();
   } catch (error) {
     console.error("Natural Earth geometry could not be loaded.", error);
     notify("Base map could not be loaded; aid locations remain available.");
@@ -1303,6 +1629,7 @@ shell();
 renderStatic();
 updateFilters();
 bindEvents();
+initThreeGlobe();
 loadLandGeometry();
 if (requestedResource === initialResource) focusGlobeOn(resources.find((resource) => resource.id === requestedResource));
 requestAnimationFrame(animateGlobe);

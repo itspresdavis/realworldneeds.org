@@ -16,7 +16,7 @@ RWN's goal is simple: make real-world help easier to find and, over time, make t
 
 The site intentionally avoids invented impact numbers, unverified availability, or unsupported eligibility claims.
 
-The globe supports inertial drag, keyboard navigation, zoom, regional focus views, geographic marker clustering, selected-layer paths, seasonal daylight context, reduced motion, and an optional in-browser location marker. Its idle motion uses a restrained camera drift and stops as soon as someone interacts.
+The Three.js globe supports inertial drag, keyboard navigation, zoom, regional focus views, geographic marker clustering, three-dimensional connection paths, seasonal daylight context, reduced motion, and an optional in-browser location marker. Real lighting, a restrained atmosphere, detailed country boundaries, and accessible HTML markers keep the experience legible without turning the aid finder into decoration. Its idle motion uses a restrained camera drift and stops as soon as someone interacts.
 
 Directory results load progressively so the primary finder remains concise while all records stay available. People can save records locally, share a deep link, print one resource, or download the currently filtered directory as CSV. These tools do not require an account.
 
@@ -48,7 +48,7 @@ Every seed listing in `src/data/resources.js` includes:
 
 Only add a listing when an official organization, government, or recognized referral source supports the claim.
 
-The globe uses the public-domain Natural Earth 1:110m country dataset stored locally in `public/data/countries.geojson`. The interface does not depend on a third-party map request at runtime.
+The globe uses a locally stored, simplified edition of the public-domain Natural Earth 1:50m country dataset in `public/data/countries.geojson`. The interface does not depend on a third-party map request at runtime.
 
 The current release has no accounts, public forms, analytics, or marketing cookies. Optional geolocation is used only in the browser session to sort listed resources by approximate distance. Saved-resource IDs stay in local browser storage and are never sent to RWN.
 
