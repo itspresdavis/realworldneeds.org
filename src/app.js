@@ -2,9 +2,7 @@ import { categories, resourceTypes, resources, trustPrinciples } from "./data/re
 import {
   allocationFields,
   launchGates,
-  ledgerColumns,
   platformStatus,
-  publicLedger,
   supportStages
 } from "./data/platform.js";
 import { createInitialTypeSet, distanceKm, matchesResource, toRad } from "./utils/geo.js";
@@ -12,12 +10,24 @@ import { createInitialTypeSet, distanceKm, matchesResource, toRad } from "./util
 const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+function loadSavedResources() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem("rwn-saved-resources") || "[]");
+    return new Set(saved.filter((id) => resources.some((resource) => resource.id === id)));
+  } catch {
+    return new Set();
+  }
+}
+
+const requestedResource = new URL(window.location.href).searchParams.get("resource");
+const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : DEFAULT_RESOURCE;
+
 const state = {
   query: "",
   viewMode: "aid",
   accessMode: "all",
   activeTypes: createInitialTypeSet(),
-  selectedId: DEFAULT_RESOURCE,
+  selectedId: initialResource,
   filtered: resources,
   userLocation: null,
   rotationLon: -8,
@@ -35,7 +45,10 @@ const state = {
   interactionUntil: 0,
   landRings: [],
   visibleResults: 12,
-  globeVisible: true
+  globeVisible: true,
+  ambientZoom: 1,
+  savedIds: loadSavedResources(),
+  savedOnly: false
 };
 
 const root = document.getElementById("root");
@@ -61,6 +74,10 @@ const icon = {
   plus: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>`,
   minus: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>`,
   phone: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L9 11a16 16 0 0 0 4 4l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2Z"/></svg>`,
+  bookmark: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg>`,
+  share: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"/></svg>`,
+  print: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/></svg>`,
+  download: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>`,
   close: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>`
 };
 
@@ -137,11 +154,11 @@ function shell() {
       </a>
       <nav aria-label="Primary navigation">
         <a href="#finder">Find help</a>
-        <a href="#operations">Operations</a>
+        <a href="#operations">How it works</a>
         <a href="#transparency">Transparency</a>
-        <a href="#standards">Standards</a>
+        <a href="#standards">Data standards</a>
       </nav>
-      <a class="header-action" href="#funding">How funding works</a>
+      <a class="header-action" href="#funding">Accountability</a>
     </header>
 
     <main>
@@ -151,7 +168,7 @@ function shell() {
             <div class="finder-intro">
               <span class="section-kicker">Find help</span>
               <h1>Real World Needs</h1>
-              <p>Official-source services, mapped with their access conditions intact.</p>
+              <p>Find free aid and services from official sources, with access conditions kept clear.</p>
             </div>
 
             <div class="mode-switch" aria-label="Map data mode">
@@ -226,68 +243,76 @@ function shell() {
           <p>Reviewed <strong>${checkedDate(latestReviewDate())}</strong></p>
         </div>
 
+        <div class="service-boundary" role="note">
+          ${icon.info}<p><strong>This directory is not emergency dispatch.</strong> If someone is in immediate danger, contact local emergency services.</p>
+        </div>
+
         <div class="results-section">
           <div class="results-heading">
-            <div><span class="section-kicker">Directory</span><h2 id="resultTitle">Available help</h2></div>
-            <p id="resultCount" aria-live="polite"></p>
+            <div><span class="section-kicker">Directory of available help</span><h2 id="resultTitle">Services you can verify</h2><p id="resultCount" aria-live="polite"></p></div>
+            <div class="results-tools">
+              <button class="directory-tool" type="button" id="toggleSaved" aria-pressed="false">${icon.bookmark}<span>Saved</span><b id="savedCount">0</b></button>
+              <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
+            </div>
           </div>
-          <div class="resource-grid" id="resourceGrid"></div>
+          <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Type</span><span>Aid</span><span>Access</span><span>Reviewed</span><span></span></div>
+          <div class="resource-grid resource-list" id="resourceGrid" aria-label="Available aid directory"></div>
           <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
         </div>
       </section>
 
       <section class="source-band" id="standards">
         <div class="source-band__heading">
-          <span class="section-kicker">Directory standard</span>
-          <h2>Find help without losing the source.</h2>
-          <p>Hours, inventory, capacity, and eligibility can change. Every listing keeps the official source and a review date visible so people can confirm before travel.</p>
+          <span class="section-kicker">Methodology</span>
+          <h2>Every listing keeps its source.</h2>
+          <p>The directory exists so people can act with confidence. Each entry is sourced, reviewed, and labeled for access.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
       </section>
 
       <section class="operations" id="operations">
         <div class="section-heading">
-          <span class="section-kicker">Operating model</span>
-          <h2>One accountable chain.</h2>
-          <p>Future RWN-managed support will remain disabled until each handoff has ownership, controls, and publishable evidence.</p>
+          <span class="section-kicker">Accountability process</span>
+          <h2>Accountability before activity.</h2>
+          <p>If and when RWN manages support, it will follow this published standard. Managed needs and funds are not live in this release.</p>
         </div>
         <ol class="support-rail" id="supportRail"></ol>
         <p class="release-note">${icon.info} No RWN-managed needs or funds are published in this release.</p>
       </section>
 
       <section class="transparency" id="transparency">
-        <div class="section-heading section-heading--row">
-          <div><span class="section-kicker">Transparency</span><h2>Public ledger</h2></div>
-          <strong>${publicLedger.length} managed records</strong>
+        <div class="transparency__intro">
+          <span class="section-kicker">Transparency status</span>
+          <h2>Public records start at zero.</h2>
+          <p>There are no RWN-managed records yet. When activity begins, every public record must disclose the fields shown here.</p>
+          <button class="text-button" type="button" data-open-launch>Why we start with zero ${icon.arrow}</button>
         </div>
-        <div class="ledger-wrap" role="region" aria-label="RWN public fund ledger" tabindex="0">
-          <table class="ledger-table">
-            <thead><tr id="ledgerHead"></tr></thead>
-            <tbody id="ledgerBody"></tbody>
-          </table>
-        </div>
-        <div class="ledger-note">
-          <p>Donation processing remains disabled until legal identity, payment controls, policies, and reconciliation are verified.</p>
-          <button class="outline-button" type="button" data-open-launch>Review launch requirements</button>
+        <div class="disclosure-register" aria-label="Future public record requirements">
+          <div class="disclosure-register__head"><strong>Future public record must disclose</strong><span>Status</span></div>
+          <div id="disclosureRows"></div>
+          <p>${icon.info} Donation intake and processing are disabled in this release.</p>
         </div>
       </section>
 
       <section class="funding" id="funding">
-        <div class="funding__heading"><span class="section-kicker">Funding trace</span><h2>What every future contribution must show</h2></div>
+        <div class="funding__heading"><span class="section-kicker">Funding controls</span><h2>Before RWN accepts money</h2><p>RWN will only process donations after these controls are live and independently verified.</p><button class="funding-button" type="button" data-open-launch>Review launch requirements ${icon.arrow}</button></div>
         <div class="allocation-track" id="allocationTrack"></div>
         <div class="donation-status"><span>${icon.shield}</span><div><strong>Donations not enabled</strong><p>${platformStatus.statusNote}</p></div></div>
       </section>
 
       <section class="launch-controls">
-        <div class="section-heading"><span class="section-kicker">Governance</span><h2>Launch controls</h2></div>
+        <div class="section-heading"><span class="section-kicker">Governance register</span><h2>Required before launch</h2><p>These controls must be in place before RWN manages activity.</p></div>
         <div class="launch-register" id="launchRows"></div>
       </section>
     </main>
 
     <footer class="site-footer">
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
-      <p>Source-backed aid discovery. No donation processing or public need intake in this release.</p>
-      <nav aria-label="Footer navigation"><a href="#finder">Find help</a><a href="#operations">Operations</a><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Map data: Natural Earth</a></nav>
+      <nav aria-label="Footer find help"><strong>Find help</strong><a href="#finder">Directory</a><a href="#finder">Map view</a><a href="#finder">Aid layers</a></nav>
+      <nav aria-label="Footer methodology"><strong>Methodology</strong><a href="#standards">How sources are used</a><a href="#standards">Access labels</a><a href="#standards">Review policy</a></nav>
+      <nav aria-label="Footer accountability"><strong>Accountability</strong><a href="#operations">Operating model</a><a href="#transparency">Transparency status</a><a href="#funding">Funding controls</a></nav>
+      <nav aria-label="Footer map data"><strong>Map data</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a></nav>
+      <p><span class="status-dot"></span>Release boundary: ${resources.length} source-backed records · ${directCount()} direct service sites · ${resourceTypes.length} aid layers · zero RWN-managed needs or funds · donation processing disabled · no public need intake</p>
     </footer>
 
     <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
@@ -324,17 +349,17 @@ function renderStatic() {
     <li><span>${index + 1}</span><div><h3>${stage.label}</h3><p>${stage.description}</p></div></li>
   `).join("");
 
-  document.getElementById("ledgerHead").innerHTML = ledgerColumns.map((column) => `<th scope="col">${column}</th>`).join("");
-  document.getElementById("ledgerBody").innerHTML = publicLedger.length
-    ? publicLedger.map((entry) => `<tr>${ledgerColumns.map((column) => `<td>${entry[column] || ""}</td>`).join("")}</tr>`).join("")
-    : `<tr><td colspan="${ledgerColumns.length}">No RWN-managed funds recorded.</td></tr>`;
+  const disclosureFields = [...allocationFields, ["Review history", "Corrections and public review dates"]];
+  document.getElementById("disclosureRows").innerHTML = disclosureFields.map(([label]) => `
+    <div><strong>${label}</strong><span>Not live</span></div>
+  `).join("");
 
   document.getElementById("allocationTrack").innerHTML = allocationFields.map(([label, description], index) => `
     <article><span>0${index + 1}</span><div><h3>${label}</h3><p>${description}</p></div></article>
   `).join("");
 
   document.getElementById("launchRows").innerHTML = launchGates.map(([label, description]) => `
-    <div><strong>${label}</strong><p>${description}</p><span>Required</span></div>
+    <div><strong>${label}</strong><p>${description}</p><span>Required before launch</span></div>
   `).join("");
 
   document.getElementById("dialogRequirements").innerHTML = launchGates.map(([label, description]) => `
@@ -352,11 +377,12 @@ function updateFilters() {
   const base = state.viewMode === "aid"
     ? resources.filter((resource) => matchesResource(resource, state.query, state.activeTypes))
     : [];
-  const accessFiltered = base.filter((resource) => {
+  let accessFiltered = base.filter((resource) => {
     if (state.accessMode === "direct") return resource.kind === "direct";
     if (state.accessMode === "discovery") return resource.kind !== "direct";
     return true;
   });
+  if (state.savedOnly) accessFiltered = accessFiltered.filter((resource) => state.savedIds.has(resource.id));
 
   state.filtered = state.userLocation
     ? [...accessFiltered].sort((a, b) => distanceKm(state.userLocation.lat, state.userLocation.lng, a.lat, a.lng) - distanceKm(state.userLocation.lat, state.userLocation.lng, b.lat, b.lng))
@@ -399,6 +425,10 @@ function renderControls() {
   document.getElementById("toggleAll").textContent = state.activeTypes.size === resourceTypes.length ? "Clear" : "Show all";
   document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} visible` : "0 published";
   document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching resources` : "No verified needs published";
+  const savedToggle = document.getElementById("toggleSaved");
+  savedToggle.classList.toggle("is-active", state.savedOnly);
+  savedToggle.setAttribute("aria-pressed", String(state.savedOnly));
+  document.getElementById("savedCount").textContent = String(state.savedIds.size);
 
   document.getElementById("globeLegend").innerHTML = aidMode
     ? resourceTypes.filter((type) => state.activeTypes.has(type)).map((type) => `<span style="--legend:${categories[type].color}"><i></i>${categories[type].label}</span>`).join("")
@@ -408,7 +438,9 @@ function renderControls() {
   empty.hidden = state.filtered.length > 0;
   empty.innerHTML = state.viewMode === "needs"
     ? `<strong>No verified needs published</strong><p>RWN does not infer need locations or publish unreviewed requests.</p>`
-    : `<strong>No matching services</strong><p>Adjust the search, layers, or access filter.</p>`;
+    : state.savedOnly
+      ? `<strong>No saved services match</strong><p>Turn off Saved or adjust the current filters.</p>`
+      : `<strong>No matching services</strong><p>Adjust the search, layers, or resource type.</p>`;
 }
 
 function serviceLayerTags(resource) {
@@ -426,10 +458,10 @@ function renderResourcePanel() {
   }
 
   const category = categories[resource.category];
-  const phoneHref = resource.phone ? resource.phone.replace(/[^+\d]/g, "") : "";
+  const saved = state.savedIds.has(resource.id);
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
-    <div class="panel-source"><span>${icon.check} ${resource.sourceKind}</span><strong>${kindLabel(resource)}</strong></div>
+    <div class="panel-source"><span>${icon.check} Official source linked</span><a href="#standards">About sources ${icon.arrow}</a></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${resource.city}, ${resource.country}</p></div></div>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
@@ -437,37 +469,49 @@ function renderResourcePanel() {
       <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
       <div><dt>Cost</dt><dd>${resource.costNote}</dd></div>
       <div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
+      ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
       ${state.userLocation ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
       <div><dt>Reviewed</dt><dd><time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></dd></div>
+      <div><dt>Source</dt><dd>${resource.sourceKind} · ${kindLabel(resource)}</dd></div>
     </dl>
     <div class="panel-services"><h3>What they can help with</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
     <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
     <div class="panel-source-note"><span>${resource.sourceName}</span><p>${resource.sourceDetail}</p></div>
-    <div class="panel-actions">
+    <div class="panel-actions panel-actions--primary">
       <a class="primary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Open official source ${icon.external}</a>
-      ${resource.kind === "direct" ? `<a class="icon-action" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer" title="Directions" aria-label="Directions to ${resource.name}">${icon.route}</a>` : ""}
-      ${resource.phone ? `<a class="icon-action" href="tel:${phoneHref}" title="Call ${resource.phone}" aria-label="Call ${resource.name}">${icon.phone}</a>` : ""}
-      <button class="icon-action" type="button" id="copyAddress" title="Copy address or coverage" aria-label="Copy address or coverage">${icon.copy}</button>
+      ${resource.kind === "direct" ? `<a class="secondary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+    </div>
+    <div class="panel-utilities">
+      <button type="button" id="saveResource" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>
+      <button type="button" id="shareResource">${icon.share}<span>Share</span></button>
+      <button type="button" id="printResource">${icon.print}<span>Print</span></button>
+      <button type="button" id="copyAddress">${icon.copy}<span>Copy</span></button>
     </div>
   `;
 
   document.getElementById("copyAddress")?.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(resource.address);
+    await copyText(resource.address);
     notify("Address copied");
   });
+  document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
+  document.getElementById("shareResource")?.addEventListener("click", () => shareResource(resource));
+  document.getElementById("printResource")?.addEventListener("click", () => window.print());
 }
 
 function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
+  const aidDots = allTypes(resource).map((type) => `<i style="--dot:${categories[type].color}" title="${categories[type].label}"></i>`).join("");
   return `
-    <article class="resource-card ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
+    <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-card__top"><span>${kindLabel(resource)}</span><i></i></span>
-        <strong>${resource.name}</strong>
-        <span class="resource-card__place">${resource.city}, ${resource.country}</span>
-        <span class="resource-card__service">${resource.services.slice(0, 2).join(" · ")}</span>
-        <span class="resource-card__foot"><span>${resource.accessType}</span>${state.userLocation ? `<b>${distanceLabel(resource)}</b>` : icon.arrow}</span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName}</small></span></span>
+        <span class="resource-row__place">${resource.city}, ${resource.country}</span>
+        <span class="resource-row__type">${kindLabel(resource)}</span>
+        <span class="resource-row__aid">${aidDots}</span>
+        <span class="resource-row__access">${state.userLocation ? distanceLabel(resource) : resource.accessType}</span>
+        <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time>
+        <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
     </article>
   `;
@@ -478,7 +522,7 @@ function renderResults() {
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
-  document.getElementById("resultTitle").textContent = state.viewMode === "aid" ? "Available help" : "Verified needs";
+  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : "Services you can verify";
   count.textContent = state.viewMode === "aid" ? `Showing ${visibleResources.length} of ${state.filtered.length} matching records` : "0 published records";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
@@ -493,7 +537,81 @@ function setSelected(id, focus = true) {
   renderResourcePanel();
   renderResults();
   pinSignature = "";
+  const url = new URL(window.location.href);
+  url.searchParams.set("resource", id);
+  window.history.replaceState({}, "", url);
   if (window.innerWidth < 900) document.getElementById("resourcePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function persistSavedResources() {
+  try {
+    window.localStorage.setItem("rwn-saved-resources", JSON.stringify([...state.savedIds]));
+  } catch {
+    notify("Saved resources are unavailable in this browser");
+  }
+}
+
+function toggleSavedResource(id) {
+  if (state.savedIds.has(id)) state.savedIds.delete(id);
+  else state.savedIds.add(id);
+  persistSavedResources();
+  if (state.savedOnly) updateFilters();
+  else {
+    renderControls();
+    renderResourcePanel();
+    renderResults();
+  }
+  notify(state.savedIds.has(id) ? "Resource saved in this browser" : "Resource removed from saved");
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const input = document.createElement("textarea");
+  input.value = value;
+  document.body.append(input);
+  input.select();
+  document.execCommand("copy");
+  input.remove();
+}
+
+async function shareResource(resource) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("resource", resource.id);
+  const data = { title: resource.name, text: `${resource.name} · ${resource.city}, ${resource.country}`, url: url.toString() };
+  if (navigator.share) {
+    try {
+      await navigator.share(data);
+      return;
+    } catch (error) {
+      if (error.name === "AbortError") return;
+    }
+  }
+  await copyText(data.url);
+  notify("Resource link copied");
+}
+
+function downloadDirectory() {
+  const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source"];
+  const rows = state.filtered.map((resource) => [
+    resource.name,
+    resource.city,
+    resource.country,
+    kindLabel(resource),
+    allTypes(resource).map((type) => categories[type].label).join("; "),
+    resource.accessType,
+    resource.costNote,
+    resource.address,
+    resource.lastChecked,
+    resource.sourceUrl
+  ]);
+  const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "rwn-source-backed-directory.csv";
+  anchor.click();
+  URL.revokeObjectURL(url);
+  notify(`Downloaded ${state.filtered.length} directory records`);
 }
 
 function focusGlobeOn(resource) {
@@ -506,7 +624,7 @@ function focusGlobeOn(resource) {
 }
 
 function projectPoint(lat, lng, width, height) {
-  const radius = Math.min(width, height) * 0.405 * state.zoom;
+  const radius = Math.min(width, height) * 0.405 * state.zoom * state.ambientZoom;
   const centerX = width * 0.5;
   const centerY = height * 0.51;
   const latitude = toRad(lat);
@@ -531,7 +649,7 @@ function vectorFor(resource) {
 }
 
 function projectVector(vector, width, height) {
-  const radius = Math.min(width, height) * 0.405 * state.zoom;
+  const radius = Math.min(width, height) * 0.405 * state.zoom * state.ambientZoom;
   const lon = toRad(state.rotationLon);
   const lat = toRad(state.rotationLat);
   const equatorFront = vector.x * Math.cos(lon) + vector.z * Math.sin(lon);
@@ -699,6 +817,38 @@ function drawUserLocation(ctx, width, height, now) {
   ctx.restore();
 }
 
+function subsolarPoint(date) {
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const dayOfYear = (date.getTime() - startOfYear) / 86400000;
+  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  return {
+    lat: -23.44 * Math.cos(toRad((360 / 365.24) * (dayOfYear + 10))),
+    lng: normalizeLongitude(180 - utcHours * 15)
+  };
+}
+
+function drawSolarShading(ctx, width, height, centerX, centerY, radius) {
+  const sun = subsolarPoint(new Date());
+  const point = projectPoint(sun.lat, sun.lng, width, height);
+  const dx = (point.x - centerX) / radius;
+  const dy = (point.y - centerY) / radius;
+  const directionLength = Math.hypot(dx, dy) || 1;
+  const directionX = dx / directionLength;
+  const directionY = dy / directionLength;
+  const centerNight = Math.max(0, -point.z) * 0.24;
+  const lightX = centerX + directionX * radius;
+  const lightY = centerY + directionY * radius;
+  const darkX = centerX - directionX * radius;
+  const darkY = centerY - directionY * radius;
+  const gradient = ctx.createLinearGradient(lightX, lightY, darkX, darkY);
+  gradient.addColorStop(0, `rgba(0, 6, 14, ${0.08 + centerNight})`);
+  gradient.addColorStop(0.46, `rgba(0, 7, 16, ${0.02 + centerNight})`);
+  gradient.addColorStop(0.58, `rgba(0, 7, 16, ${0.18 + centerNight})`);
+  gradient.addColorStop(1, `rgba(0, 5, 13, ${0.58 + centerNight})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+}
+
 function drawGlobe(ctx, width, height, now) {
   const projected = projectPoint(0, state.rotationLon, width, height);
   const { radius, centerX, centerY } = projected;
@@ -728,21 +878,14 @@ function drawGlobe(ctx, width, height, now) {
   drawGraticule(ctx, width, height);
   drawLand(ctx, width, height);
   drawMapLabels(ctx, width, height);
+  drawSolarShading(ctx, width, height, centerX, centerY, radius);
   drawConnections(ctx, width, height, now);
-
-  const daylight = ctx.createLinearGradient(centerX - radius, centerY - radius * 0.3, centerX + radius, centerY + radius * 0.2);
-  daylight.addColorStop(0, "rgba(0, 5, 14, 0.34)");
-  daylight.addColorStop(0.48, "rgba(2, 12, 22, 0.02)");
-  daylight.addColorStop(1, "rgba(0, 5, 14, 0.42)");
-  ctx.fillStyle = daylight;
-  ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-
   drawUserLocation(ctx, width, height, now);
 
   const shade = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
-  shade.addColorStop(0, "rgba(0, 8, 17, 0.56)");
-  shade.addColorStop(0.42, "rgba(0, 8, 17, 0.04)");
-  shade.addColorStop(1, "rgba(0, 8, 17, 0.42)");
+  shade.addColorStop(0, "rgba(0, 8, 17, 0.3)");
+  shade.addColorStop(0.42, "rgba(0, 8, 17, 0.015)");
+  shade.addColorStop(1, "rgba(0, 8, 17, 0.24)");
   ctx.fillStyle = shade;
   ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
   ctx.restore();
@@ -850,6 +993,7 @@ function shortestLongitude(from, to) {
 function advanceGlobe(now) {
   const dt = Math.min(0.04, (now - lastFrame) / 1000);
   lastFrame = now;
+  let isIdle = false;
   if (state.targetLon !== null) {
     const lonGap = shortestLongitude(state.rotationLon, state.targetLon);
     const latGap = state.targetLat - state.rotationLat;
@@ -867,10 +1011,15 @@ function advanceGlobe(now) {
     const friction = Math.pow(0.055, dt);
     state.velocityLon *= friction;
     state.velocityLat *= friction;
-    if (state.autoRotate && now > state.interactionUntil && Math.abs(state.velocityLon) < 0.12) {
-      state.rotationLon = normalizeLongitude(state.rotationLon + dt * 2.35);
+    isIdle = state.autoRotate && now > state.interactionUntil && Math.abs(state.velocityLon) < 0.12;
+    if (isIdle) {
+      state.rotationLon = normalizeLongitude(state.rotationLon + dt * 1.55);
+      const idleLatitude = 10 + Math.sin(now * 0.000075) * 7;
+      state.rotationLat += (idleLatitude - state.rotationLat) * Math.min(1, dt * 0.35);
+      state.ambientZoom = 1 + Math.sin(now * 0.00016) * 0.008;
     }
   }
+  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * Math.min(1, dt * 3);
   state.zoom += (state.targetZoom - state.zoom) * Math.min(1, dt * 6);
 }
 
@@ -1023,6 +1172,12 @@ function bindEvents() {
     renderResults();
   });
 
+  document.getElementById("toggleSaved").addEventListener("click", () => {
+    state.savedOnly = !state.savedOnly;
+    updateFilters();
+  });
+  document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
+
   document.getElementById("locateMe").addEventListener("click", () => {
     if (state.userLocation) {
       state.userLocation = null;
@@ -1167,4 +1322,5 @@ renderStatic();
 updateFilters();
 bindEvents();
 loadLandGeometry();
+if (requestedResource === initialResource) focusGlobeOn(resources.find((resource) => resource.id === requestedResource));
 requestAnimationFrame(animateGlobe);

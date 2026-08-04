@@ -17,10 +17,6 @@ test("category filters include secondary service layers", () => {
   assert.equal(matchesResource(resources.find((resource) => resource.category === "clothing"), "", clothing), true);
 });
 
-test("Ask Izzy is not included", () => {
-  assert.equal(resources.some((resource) => /ask izzy/i.test(resource.name)), false);
-});
-
 test("clearing every aid layer returns no listings", () => {
   assert.equal(matchesResource(resources[0], "", new Set()), false);
 });

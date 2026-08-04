@@ -518,8 +518,8 @@ export const resources = [
     availabilityNote: "The warehouse is not presented as a public pantry. Use the official site to identify supported beneficiary organizations.",
     sourceName: "FoodForward SA",
     sourceKind: "Official network",
-    sourceUrl: "https://foodforwardsa.org/our-foodbanking-model/",
-    sourceDetail: "The official food-support information describes distribution through beneficiary organizations."
+    sourceUrl: "https://www.foodforwardsa.org/warehouse-food-banking/",
+    sourceDetail: "The official warehouse-foodbanking page describes recovery and redistribution through the vetted beneficiary network."
   }),
   verified({
     id: "uturn-wynberg",

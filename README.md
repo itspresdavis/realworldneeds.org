@@ -16,13 +16,15 @@ RWN helps people explore free or no-cost core aid from official provider, govern
 
 The site intentionally avoids invented impact numbers, unverified availability, or unsupported eligibility claims.
 
-The globe supports inertial drag, keyboard navigation, zoom, regional focus views, geographic marker clustering, selected-layer paths, reduced motion, and an optional in-browser location marker. Directory results load progressively so the primary finder remains concise while all records stay available.
+The globe supports inertial drag, keyboard navigation, zoom, regional focus views, geographic marker clustering, selected-layer paths, seasonal daylight context, reduced motion, and an optional in-browser location marker. Its idle motion uses a restrained camera drift and stops as soon as someone interacts.
+
+Directory results load progressively so the primary finder remains concise while all records stay available. People can save records locally, share a deep link, print one resource, or download the currently filtered directory as CSV. These tools do not require an account.
 
 ## Current Release Boundary
 
 The public aid finder is live. Verified-needs publishing, public intake, partner accounts, donation processing, allocations, disbursements, and impact reporting remain disabled until RWN has the real organizational and operational controls to support them.
 
-The interface exposes those future workflows as a truthful operating model and empty public ledger. It does not use placeholder transactions or invented activity.
+The interface exposes those future workflows as a truthful operating model and an empty disclosure register. It does not use placeholder transactions or invented activity.
 
 ## Operating Documentation
 
@@ -48,7 +50,7 @@ Only add a listing when an official organization, government, or recognized refe
 
 The globe uses the public-domain Natural Earth 1:110m country dataset stored locally in `public/data/countries.geojson`. The interface does not depend on a third-party map request at runtime.
 
-The current release has no accounts, public forms, analytics, or marketing cookies. Optional geolocation is used only in the browser session to sort listed resources by approximate distance.
+The current release has no accounts, public forms, analytics, or marketing cookies. Optional geolocation is used only in the browser session to sort listed resources by approximate distance. Saved-resource IDs stay in local browser storage and are never sent to RWN.
 
 ## Local Development
 
