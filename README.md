@@ -16,6 +16,8 @@ RWN helps people explore free or no-cost core aid from official provider, govern
 
 The site intentionally avoids invented impact numbers, unverified availability, or unsupported eligibility claims.
 
+The globe supports inertial drag, keyboard navigation, zoom, regional focus views, geographic marker clustering, selected-layer paths, reduced motion, and an optional in-browser location marker. Directory results load progressively so the primary finder remains concise while all records stay available.
+
 ## Current Release Boundary
 
 The public aid finder is live. Verified-needs publishing, public intake, partner accounts, donation processing, allocations, disbursements, and impact reporting remain disabled until RWN has the real organizational and operational controls to support them.

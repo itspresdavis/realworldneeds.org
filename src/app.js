@@ -33,7 +33,9 @@ const state = {
   velocityLat: 0,
   autoRotate: !reduceMotion,
   interactionUntil: 0,
-  landRings: []
+  landRings: [],
+  visibleResults: 12,
+  globeVisible: true
 };
 
 const root = document.getElementById("root");
@@ -61,6 +63,30 @@ const icon = {
   phone: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L9 11a16 16 0 0 0 4 4l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2Z"/></svg>`,
   close: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>`
 };
+
+const regionViews = {
+  world: { lon: -8, lat: 12, zoom: 1 },
+  americas: { lon: -88, lat: 16, zoom: 1.06 },
+  europeAfrica: { lon: 13, lat: 18, zoom: 1.06 },
+  asia: { lon: 92, lat: 24, zoom: 1.04 },
+  oceania: { lon: 145, lat: -23, zoom: 1.12 }
+};
+
+const regionGroups = {
+  americas: ["North America", "South America"],
+  europeAfrica: ["Europe", "Africa"],
+  asia: ["Asia"],
+  oceania: ["Oceania"]
+};
+
+const mapLabels = [
+  { label: "NORTH AMERICA", lat: 43, lng: -105 },
+  { label: "SOUTH AMERICA", lat: -17, lng: -60 },
+  { label: "EUROPE", lat: 51, lng: 17 },
+  { label: "AFRICA", lat: 6, lng: 21 },
+  { label: "ASIA", lat: 43, lng: 88 },
+  { label: "OCEANIA", lat: -24, lng: 138 }
+];
 
 function allTypes(resource) {
   return [resource.category, ...(resource.secondaryCategories || [])];
@@ -138,28 +164,43 @@ function shell() {
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
                 <input id="resourceSearch" type="search" placeholder="Place, service, or organization" autocomplete="off">
+                <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
 
               <div class="filter-heading"><span>Aid layers</span><button type="button" id="toggleAll">Clear</button></div>
               <div class="layer-list" id="layerList" aria-label="Aid category filters"></div>
 
-              <div class="filter-heading"><span>Access</span></div>
-              <div class="access-switch" aria-label="Access type filter">
+              <div class="filter-heading"><span>Resource type</span></div>
+              <div class="access-switch" aria-label="Resource type filter">
                 <button class="is-active" type="button" data-access="all" aria-pressed="true">All</button>
-                <button type="button" data-access="direct" aria-pressed="false">Direct sites</button>
-                <button type="button" data-access="discovery" aria-pressed="false">Locators</button>
+                <button type="button" data-access="direct" aria-pressed="false">Service sites</button>
+                <button type="button" data-access="discovery" aria-pressed="false">Directories</button>
               </div>
 
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
+              <p class="location-privacy">Location is used only in this browser to sort results.</p>
             </div>
           </aside>
 
           <section class="globe-stage" aria-label="Interactive global aid resource globe">
             <div class="globe-meta">
               <div><span class="status-dot"></span><strong>Source-backed directory</strong></div>
-              <span id="globeCount"></span>
+              <div class="globe-meta__tools">
+                <span id="globeCount"></span>
+                <label class="region-menu">
+                  <span class="sr-only">Focus globe region</span>
+                  <select id="regionFocus" aria-label="Focus globe region">
+                    <option value="world">World view</option>
+                    <option value="americas">Americas</option>
+                    <option value="europeAfrica">Europe &amp; Africa</option>
+                    <option value="asia">Asia</option>
+                    <option value="oceania">Oceania</option>
+                  </select>
+                </label>
+              </div>
             </div>
+            <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
             <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Use plus and minus to zoom. Select any colored location marker for details.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
@@ -171,6 +212,7 @@ function shell() {
               <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">${icon.minus}</button>
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">${icon.plus}</button>
             </div>
+            <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
             <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
           </section>
 
@@ -190,6 +232,7 @@ function shell() {
             <p id="resultCount" aria-live="polite"></p>
           </div>
           <div class="resource-grid" id="resourceGrid"></div>
+          <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
         </div>
       </section>
 
@@ -318,6 +361,7 @@ function updateFilters() {
   state.filtered = state.userLocation
     ? [...accessFiltered].sort((a, b) => distanceKm(state.userLocation.lat, state.userLocation.lng, a.lat, a.lng) - distanceKm(state.userLocation.lat, state.userLocation.lng, b.lat, b.lng))
     : accessFiltered;
+  state.visibleResults = 12;
 
   if (!state.filtered.some((resource) => resource.id === state.selectedId)) {
     state.selectedId = state.filtered[0]?.id || null;
@@ -349,6 +393,7 @@ function renderControls() {
     button.disabled = !aidMode;
   });
   document.getElementById("resourceSearch").disabled = !aidMode;
+  document.getElementById("clearSearch").hidden = !state.query;
   document.getElementById("locateMe").disabled = !aidMode;
   document.getElementById("toggleAll").disabled = !aidMode;
   document.getElementById("toggleAll").textContent = state.activeTypes.size === resourceTypes.length ? "Clear" : "Show all";
@@ -367,7 +412,7 @@ function renderControls() {
 }
 
 function serviceLayerTags(resource) {
-  return allTypes(resource).map((type) => `<span style="--tag:${categories[type].color}"><i></i>${categories[type].label}</span>`).join("");
+  return allTypes(resource).map((type) => `<span style="--tag:${categories[type].color}" title="${categories[type].label}"><i></i><b>${categories[type].label}</b></span>`).join("");
 }
 
 function renderResourcePanel() {
@@ -431,11 +476,14 @@ function resourceCard(resource) {
 function renderResults() {
   const count = document.getElementById("resultCount");
   const grid = document.getElementById("resourceGrid");
+  const showMore = document.getElementById("showMoreResults");
+  const visibleResources = state.filtered.slice(0, state.visibleResults);
   document.getElementById("resultTitle").textContent = state.viewMode === "aid" ? "Available help" : "Verified needs";
-  count.textContent = state.viewMode === "aid" ? `${state.filtered.length} of ${resources.length} records` : "0 published records";
+  count.textContent = state.viewMode === "aid" ? `Showing ${visibleResources.length} of ${state.filtered.length} matching records` : "0 published records";
   grid.innerHTML = state.filtered.length
-    ? state.filtered.map(resourceCard).join("")
+    ? visibleResources.map(resourceCard).join("")
     : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No records are published in this layer." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "Need intake and publication are not enabled in this release." : "Try another place, service, or access type."}</p></div>`;
+  showMore.hidden = state.visibleResults >= state.filtered.length;
 }
 
 function setSelected(id, focus = true) {
@@ -451,7 +499,7 @@ function setSelected(id, focus = true) {
 function focusGlobeOn(resource) {
   state.targetLon = resource.lng;
   state.targetLat = Math.max(-46, Math.min(46, resource.lat * 0.62));
-  state.targetZoom = 1.08;
+  state.targetZoom = 1.14;
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.interactionUntil = performance.now() + 5000;
@@ -529,18 +577,20 @@ function drawVisiblePath(ctx, points, width, height, close = false) {
 
 function drawGraticule(ctx, width, height) {
   ctx.save();
-  ctx.strokeStyle = "rgba(160, 211, 204, 0.105)";
-  ctx.lineWidth = 0.7;
   for (let lat = -60; lat <= 60; lat += 20) {
     const points = [];
     for (let lng = -180; lng <= 180; lng += 4) points.push([lng, lat]);
     drawVisiblePath(ctx, points, width, height);
+    ctx.strokeStyle = lat === 0 ? "rgba(160, 221, 211, 0.19)" : "rgba(160, 211, 204, 0.09)";
+    ctx.lineWidth = lat === 0 ? 0.9 : 0.6;
     ctx.stroke();
   }
   for (let lng = -180; lng < 180; lng += 20) {
     const points = [];
     for (let lat = -88; lat <= 88; lat += 3) points.push([lng, lat]);
     drawVisiblePath(ctx, points, width, height);
+    ctx.strokeStyle = lng === 0 ? "rgba(160, 221, 211, 0.19)" : "rgba(160, 211, 204, 0.09)";
+    ctx.lineWidth = lng === 0 ? 0.9 : 0.6;
     ctx.stroke();
   }
   ctx.restore();
@@ -562,19 +612,43 @@ function drawLand(ctx, width, height) {
   ctx.restore();
 }
 
+function drawMapLabels(ctx, width, height) {
+  if (state.zoom < 0.9) return;
+  ctx.save();
+  ctx.fillStyle = "rgba(196, 224, 216, 0.28)";
+  ctx.font = "700 9px Inter, ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const item of mapLabels) {
+    const point = projectPoint(item.lat, item.lng, width, height);
+    if (point.z < 0.58) continue;
+    ctx.globalAlpha = Math.min(1, (point.z - 0.52) * 2.2);
+    ctx.fillText(item.label, point.x, point.y);
+  }
+  ctx.restore();
+}
+
+function connectionDestinations(selected) {
+  return state.filtered
+    .filter((resource) => resource.id !== selected.id && resource.category === selected.category)
+    .sort((a, b) => distanceKm(selected.lat, selected.lng, a.lat, a.lng) - distanceKm(selected.lat, selected.lng, b.lat, b.lng))
+    .slice(0, 6);
+}
+
 function drawConnections(ctx, width, height, now) {
   const selected = selectedResource();
   if (!selected || state.viewMode !== "aid") return;
-  const destinations = state.filtered
-    .filter((resource) => resource.id !== selected.id && allTypes(resource).some((type) => allTypes(selected).includes(type)))
-    .slice(0, 7);
+  const destinations = connectionDestinations(selected);
   const start = vectorFor(selected);
   destinations.forEach((resource, index) => {
     const end = vectorFor(resource);
     ctx.beginPath();
     let drawing = false;
-    for (let step = 0; step <= 42; step += 1) {
-      const point = projectVector(slerp(start, end, step / 42), width, height);
+    for (let step = 0; step <= 52; step += 1) {
+      const progress = step / 52;
+      const vector = slerp(start, end, progress);
+      const lift = 1 + Math.sin(progress * Math.PI) * 0.075;
+      const point = projectVector({ x: vector.x * lift, y: vector.y * lift, z: vector.z * lift }, width, height);
       if (point.z <= 0.02) {
         drawing = false;
         continue;
@@ -583,13 +657,15 @@ function drawConnections(ctx, width, height, now) {
       else ctx.lineTo(point.x, point.y);
       drawing = true;
     }
-    ctx.strokeStyle = `${categories[resource.category].color}40`;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = `${categories[resource.category].color}52`;
+    ctx.lineWidth = 1.1;
     ctx.stroke();
 
     if (!reduceMotion) {
       const progress = ((now * 0.00008 + index * 0.17) % 1);
-      const particle = projectVector(slerp(start, end, progress), width, height);
+      const vector = slerp(start, end, progress);
+      const lift = 1 + Math.sin(progress * Math.PI) * 0.075;
+      const particle = projectVector({ x: vector.x * lift, y: vector.y * lift, z: vector.z * lift }, width, height);
       if (particle.z > 0.04) {
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, 2, 0, Math.PI * 2);
@@ -601,6 +677,26 @@ function drawConnections(ctx, width, height, now) {
       }
     }
   });
+}
+
+function drawUserLocation(ctx, width, height, now) {
+  if (!state.userLocation) return;
+  const point = projectPoint(state.userLocation.lat, state.userLocation.lng, width, height);
+  if (point.z <= 0.03) return;
+  const pulse = reduceMotion ? 12 : 10 + Math.sin(now * 0.004) * 2;
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(point.x - 4, point.y);
+  ctx.lineTo(point.x + 4, point.y);
+  ctx.moveTo(point.x, point.y - 4);
+  ctx.lineTo(point.x, point.y + 4);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawGlobe(ctx, width, height, now) {
@@ -631,7 +727,17 @@ function drawGlobe(ctx, width, height, now) {
 
   drawGraticule(ctx, width, height);
   drawLand(ctx, width, height);
+  drawMapLabels(ctx, width, height);
   drawConnections(ctx, width, height, now);
+
+  const daylight = ctx.createLinearGradient(centerX - radius, centerY - radius * 0.3, centerX + radius, centerY + radius * 0.2);
+  daylight.addColorStop(0, "rgba(0, 5, 14, 0.34)");
+  daylight.addColorStop(0.48, "rgba(2, 12, 22, 0.02)");
+  daylight.addColorStop(1, "rgba(0, 5, 14, 0.42)");
+  ctx.fillStyle = daylight;
+  ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+
+  drawUserLocation(ctx, width, height, now);
 
   const shade = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
   shade.addColorStop(0, "rgba(0, 8, 17, 0.56)");
@@ -649,31 +755,88 @@ function drawGlobe(ctx, width, height, now) {
   ctx.shadowBlur = 18;
   ctx.stroke();
   ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius + 3, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(111, 231, 212, 0.12)";
+  ctx.lineWidth = 5;
+  ctx.stroke();
+}
+
+function clusterVisibleResources(width, height) {
+  const selected = selectedResource();
+  const threshold = 34 - (state.zoom - 0.74) * 18;
+  const entries = state.filtered
+    .map((resource) => ({ resource, point: projectPoint(resource.lat, resource.lng, width, height) }))
+    .filter((entry) => entry.point.z > 0.03)
+    .sort((a, b) => Number(b.resource.id === selected?.id) - Number(a.resource.id === selected?.id));
+  const clusters = [];
+
+  for (const entry of entries) {
+    const keepSeparate = entry.resource.id === selected?.id;
+    const target = keepSeparate ? null : clusters.find((cluster) =>
+      !cluster.selected && Math.hypot(cluster.x - entry.point.x, cluster.y - entry.point.y) < threshold
+    );
+    if (target) {
+      target.members.push(entry.resource);
+      target.x = target.members.reduce((sum, resource) => sum + projectPoint(resource.lat, resource.lng, width, height).x, 0) / target.members.length;
+      target.y = target.members.reduce((sum, resource) => sum + projectPoint(resource.lat, resource.lng, width, height).y, 0) / target.members.length;
+      target.z = Math.max(target.z, entry.point.z);
+    } else {
+      clusters.push({ members: [entry.resource], x: entry.point.x, y: entry.point.y, z: entry.point.z, selected: keepSeparate });
+    }
+  }
+  return clusters;
 }
 
 function renderPins(width, height) {
   const layer = document.getElementById("pinLayer");
   const selected = selectedResource();
-  const signature = `${state.viewMode}:${state.filtered.map((resource) => resource.id).join("|")}:${state.selectedId}`;
+  const clusters = clusterVisibleResources(width, height);
+  const clusterKeys = clusters.map((cluster) => cluster.members.map((resource) => resource.id).sort().join(","));
+  const signature = `${state.viewMode}:${clusterKeys.join("|")}:${state.selectedId}`;
   if (pinSignature !== signature) {
-    layer.innerHTML = state.filtered.map((resource, index) => {
-      const category = categories[resource.category];
-      return `<button class="globe-pin ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-pin-id="${resource.id}" style="--pin:${category.color};--pin-glow:${category.glow};--delay:${(index % 8) * -0.22}s" aria-label="Select ${resource.name}"><span></span><strong>${resource.name}<small>${resource.city}, ${resource.country}</small></strong></button>`;
+    layer.innerHTML = clusters.map((cluster, index) => {
+      const resource = cluster.members[0];
+      const clustered = cluster.members.length > 1;
+      const oneCategory = cluster.members.every((item) => item.category === resource.category);
+      const color = oneCategory ? categories[resource.category].color : "#f5c45b";
+      const glow = oneCategory ? categories[resource.category].glow : "rgba(245, 196, 91, 0.4)";
+      const key = cluster.members.map((item) => item.id).sort().join(",");
+      const kinds = [...new Set(cluster.members.map(kindLabel))].join(" and ");
+      if (clustered) {
+        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow};--delay:${(index % 8) * -0.22}s" aria-label="Explore ${cluster.members.length} grouped resources"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} resources in this area<small>${kinds}</small></strong></button>`;
+      }
+      const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
+      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow};--delay:${(index % 8) * -0.22}s" aria-label="Select ${resource.name}, ${kindLabel(resource)}"><span></span><strong>${resource.name}<small>${resource.city}, ${resource.country} · ${kindLabel(resource)}</small></strong></button>`;
     }).join("");
-    pinElements = new Map([...layer.querySelectorAll("[data-pin-id]")].map((button) => [button.dataset.pinId, button]));
+    pinElements = new Map([...layer.querySelectorAll("[data-globe-key]")].map((button) => [button.dataset.globeKey, button]));
     pinSignature = signature;
   }
 
-  state.filtered.forEach((resource) => {
-    const button = pinElements.get(resource.id);
+  clusters.forEach((cluster) => {
+    const key = cluster.members.map((resource) => resource.id).sort().join(",");
+    const button = pinElements.get(key);
     if (!button) return;
-    const point = projectPoint(resource.lat, resource.lng, width, height);
-    const visible = point.z > 0.03;
-    button.style.transform = `translate3d(${point.x}px, ${point.y}px, 0) scale(${0.72 + Math.max(0, point.z) * 0.3})`;
-    button.style.opacity = visible ? String(0.46 + point.z * 0.54) : "0";
-    button.style.pointerEvents = visible ? "auto" : "none";
-    button.style.zIndex = String(Math.round(point.z * 100));
+    button.style.transform = `translate3d(${cluster.x}px, ${cluster.y}px, 0) scale(${0.74 + Math.max(0, cluster.z) * 0.28})`;
+    button.style.opacity = String(0.5 + cluster.z * 0.5);
+    button.style.pointerEvents = "auto";
+    button.style.zIndex = String(Math.round(cluster.z * 100));
   });
+}
+
+function formatCoordinate(value, positive, negative) {
+  return `${Math.abs(value).toFixed(2)}°${value >= 0 ? positive : negative}`;
+}
+
+function updateGlobeReadout() {
+  const resource = selectedResource();
+  const readout = document.getElementById("globeReadout");
+  if (!readout) return;
+  const content = resource
+    ? `<strong>${resource.region}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")}</span>`
+    : `<strong>World view</strong><span>${state.filtered.length} visible resources</span>`;
+  if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
 function normalizeLongitude(value) {
@@ -712,6 +875,11 @@ function advanceGlobe(now) {
 }
 
 function animateGlobe(now) {
+  if (!state.globeVisible || document.hidden) {
+    lastFrame = now;
+    requestAnimationFrame(animateGlobe);
+    return;
+  }
   const canvas = document.getElementById("globeCanvas");
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -726,7 +894,46 @@ function animateGlobe(now) {
   advanceGlobe(now);
   drawGlobe(ctx, width, height, now);
   renderPins(width, height);
+  updateGlobeReadout();
   requestAnimationFrame(animateGlobe);
+}
+
+function focusRegion(key, selectMatching = false) {
+  const view = regionViews[key] || regionViews.world;
+  state.targetLon = view.lon;
+  state.targetLat = view.lat;
+  state.targetZoom = view.zoom;
+  state.velocityLon = 0;
+  state.velocityLat = 0;
+  state.interactionUntil = performance.now() + 6000;
+  if (selectMatching && regionGroups[key]) {
+    const match = state.filtered.find((resource) => regionGroups[key].includes(resource.region));
+    if (match) {
+      state.selectedId = match.id;
+      renderResourcePanel();
+      renderResults();
+      pinSignature = "";
+    }
+  }
+}
+
+function focusCluster(ids) {
+  const members = ids.map((id) => resources.find((resource) => resource.id === id)).filter(Boolean);
+  if (!members.length) return;
+  const vector = members.reduce((sum, resource) => {
+    const point = vectorFor(resource);
+    return { x: sum.x + point.x, y: sum.y + point.y, z: sum.z + point.z };
+  }, { x: 0, y: 0, z: 0 });
+  const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
+  const normalized = { x: vector.x / length, y: vector.y / length, z: vector.z / length };
+  state.targetLon = Math.atan2(normalized.z, normalized.x) * 180 / Math.PI;
+  const latitude = Math.asin(normalized.y) * 180 / Math.PI;
+  state.targetLat = Math.max(-48, Math.min(48, latitude * 0.68));
+  state.targetZoom = Math.min(1.38, state.targetZoom + 0.2);
+  state.velocityLon = 0;
+  state.velocityLat = 0;
+  state.interactionUntil = performance.now() + 6000;
+  notify(`Focused ${members.length} resources in this area`);
 }
 
 function extractRings(geometry) {
@@ -749,8 +956,21 @@ async function loadLandGeometry() {
 }
 
 function bindEvents() {
-  document.getElementById("resourceSearch").addEventListener("input", (event) => {
+  const searchInput = document.getElementById("resourceSearch");
+  searchInput.addEventListener("input", (event) => {
     state.query = event.target.value;
+    updateFilters();
+  });
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !state.query) return;
+    state.query = "";
+    searchInput.value = "";
+    updateFilters();
+  });
+  document.getElementById("clearSearch").addEventListener("click", () => {
+    state.query = "";
+    searchInput.value = "";
+    searchInput.focus();
     updateFilters();
   });
 
@@ -789,11 +1009,31 @@ function bindEvents() {
   });
 
   document.getElementById("pinLayer").addEventListener("click", (event) => {
+    const cluster = event.target.closest("[data-cluster-ids]");
+    if (cluster) {
+      focusCluster(cluster.dataset.clusterIds.split(","));
+      return;
+    }
     const button = event.target.closest("[data-pin-id]");
     if (button) setSelected(button.dataset.pinId);
   });
 
+  document.getElementById("showMoreResults").addEventListener("click", () => {
+    state.visibleResults += 12;
+    renderResults();
+  });
+
   document.getElementById("locateMe").addEventListener("click", () => {
+    if (state.userLocation) {
+      state.userLocation = null;
+      const button = document.getElementById("locateMe");
+      button.classList.remove("has-location");
+      button.innerHTML = `${icon.locate}<span>Use my location</span>`;
+      button.setAttribute("aria-label", "Use my location");
+      updateFilters();
+      notify("Location sorting cleared");
+      return;
+    }
     if (!navigator.geolocation) {
       notify("Location is not available in this browser");
       return;
@@ -803,7 +1043,9 @@ function bindEvents() {
     navigator.geolocation.getCurrentPosition((position) => {
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       button.classList.remove("is-loading");
-      button.querySelector("span").textContent = "Sorted by distance";
+      button.classList.add("has-location");
+      button.innerHTML = `${icon.check}<span>Sorted by distance</span>`;
+      button.setAttribute("aria-label", "Clear location sorting");
       updateFilters();
       if (state.filtered[0]) setSelected(state.filtered[0].id);
       notify("Results sorted by approximate distance");
@@ -846,6 +1088,10 @@ function bindEvents() {
     state.targetZoom = Math.max(0.74, Math.min(1.38, state.targetZoom - event.deltaY * 0.001));
     state.interactionUntil = performance.now() + 5000;
   }, { passive: false });
+  canvas.addEventListener("dblclick", () => {
+    state.targetZoom = Math.min(1.38, state.targetZoom + 0.16);
+    state.interactionUntil = performance.now() + 5000;
+  });
   canvas.addEventListener("keydown", (event) => {
     const step = event.shiftKey ? 12 : 5;
     if (event.key === "ArrowLeft") state.rotationLon = normalizeLongitude(state.rotationLon - step);
@@ -854,6 +1100,14 @@ function bindEvents() {
     else if (event.key === "ArrowDown") state.rotationLat = Math.min(58, state.rotationLat - step);
     else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(1.38, state.targetZoom + 0.1);
     else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(0.74, state.targetZoom - 0.1);
+    else if (event.key === "Home") focusRegion("world");
+    else if (event.key === " ") {
+      state.autoRotate = !state.autoRotate;
+      const motionButton = document.getElementById("toggleMotion");
+      motionButton.innerHTML = state.autoRotate ? icon.pause : icon.play;
+      motionButton.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
+      motionButton.setAttribute("aria-label", motionButton.title);
+    }
     else return;
     state.targetLon = null;
     state.targetLat = null;
@@ -861,15 +1115,18 @@ function bindEvents() {
     event.preventDefault();
   });
 
-  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(1.38, state.targetZoom + 0.1); });
-  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(0.74, state.targetZoom - 0.1); });
+  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(1.38, state.targetZoom + 0.1); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(0.74, state.targetZoom - 0.1); state.interactionUntil = performance.now() + 5000; });
   document.getElementById("resetGlobe").addEventListener("click", () => {
-    state.targetLon = -8;
-    state.targetLat = 12;
-    state.targetZoom = 1;
-    state.velocityLon = 0;
-    state.velocityLat = 0;
+    document.getElementById("regionFocus").value = "world";
+    focusRegion("world");
   });
+  document.getElementById("northGlobe").addEventListener("click", () => {
+    state.targetLat = 0;
+    state.velocityLat = 0;
+    state.interactionUntil = performance.now() + 5000;
+  });
+  document.getElementById("regionFocus").addEventListener("change", (event) => focusRegion(event.target.value, true));
   document.getElementById("toggleMotion").addEventListener("click", (event) => {
     state.autoRotate = !state.autoRotate;
     event.currentTarget.innerHTML = state.autoRotate ? icon.pause : icon.play;
@@ -882,6 +1139,13 @@ function bindEvents() {
   document.querySelectorAll("[data-open-launch]").forEach((button) => button.addEventListener("click", () => dialog.showModal()));
   dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+
+  if ("IntersectionObserver" in window) {
+    const globeObserver = new IntersectionObserver(([entry]) => {
+      state.globeVisible = entry.isIntersecting;
+    }, { rootMargin: "160px" });
+    globeObserver.observe(document.querySelector(".globe-stage"));
+  }
 
   if (!reduceMotion && "IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
