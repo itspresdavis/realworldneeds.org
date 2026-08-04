@@ -45,11 +45,18 @@ const state = {
   dragging: false,
   pointerX: 0,
   pointerY: 0,
+  pointerStartX: 0,
+  pointerStartY: 0,
+  pointerMoved: false,
   velocityLon: 0,
   velocityLat: 0,
   autoRotate: !reduceMotion,
   interactionUntil: 0,
   landRings: [],
+  countryFeatures: [],
+  focusedCountry: null,
+  focusPoint: null,
+  focusedRegion: null,
   visibleResults: initialResultCount(),
   globeVisible: true,
   ambientZoom: 1,
@@ -67,7 +74,9 @@ let globeCamera = null;
 let globeWorld = null;
 let globeSurface = null;
 let globeBorders = null;
+let globeCountryHighlight = null;
 let globeLight = null;
+let globeFocusLight = null;
 let earthTextureImage = null;
 let connectionGroup = null;
 let connectionSignature = "";
@@ -101,18 +110,15 @@ const icon = {
 };
 
 const regionViews = {
-  world: { lon: -8, lat: 12, zoom: 1 },
-  americas: { lon: -88, lat: 16, zoom: 1.06 },
-  europeAfrica: { lon: 13, lat: 18, zoom: 1.06 },
-  asia: { lon: 92, lat: 24, zoom: 1.04 },
-  oceania: { lon: 145, lat: -23, zoom: 1.12 }
+  world: { label: "World view", lon: -8, lat: 12, zoom: 1 },
+  americas: { label: "Americas", lon: -88, lat: 16, zoom: 1.06 },
+  europeAfrica: { label: "Europe & Africa", lon: 13, lat: 18, zoom: 1.06 },
+  asia: { label: "Asia", lon: 92, lat: 24, zoom: 1.04 },
+  oceania: { label: "Oceania", lon: 145, lat: -23, zoom: 1.12 }
 };
 
-const regionGroups = {
-  americas: ["North America", "South America"],
-  europeAfrica: ["Europe", "Africa"],
-  asia: ["Asia"],
-  oceania: ["Oceania"]
+const countryNameAliases = {
+  "United States": "United States of America"
 };
 
 const mapLabels = [
@@ -240,7 +246,8 @@ function shell() {
                 <label class="region-menu">
                   <span class="sr-only">Focus globe region</span>
                   <select id="regionFocus" aria-label="Focus globe region">
-                    <option value="world">World view</option>
+                    <option value="focus" hidden>Focused view</option>
+                    <option value="world" selected>World view</option>
                     <option value="americas">Americas</option>
                     <option value="europeAfrica">Europe &amp; Africa</option>
                     <option value="asia">Asia</option>
@@ -251,7 +258,7 @@ function shell() {
             </div>
             <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
-            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Use plus and minus to zoom. Select any colored location marker for details.</p>
+            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Use plus and minus to zoom. Select a country or any colored location marker for details.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-controls" aria-label="Globe controls">
@@ -464,7 +471,7 @@ function renderResourcePanel() {
   const resource = selectedResource();
   if (!resource) {
     panel.innerHTML = `
-      <div class="panel-empty"><span>${icon.shield}</span><h2>${state.viewMode === "needs" ? "No verified needs published" : "No matching service"}</h2><p>${state.viewMode === "needs" ? "RWN has not opened need submissions or published any reviewed needs." : "Adjust the current filters to continue searching."}</p></div>
+      <div class="panel-empty"><span>${icon.shield}</span><h2>${state.viewMode === "needs" ? "No verified needs published" : state.filtered.length ? "Select a service" : "No matching service"}</h2><p>${state.viewMode === "needs" ? "RWN has not opened need submissions or published any reviewed needs." : state.filtered.length ? "Choose a location marker or directory result to see access details and the original source." : "Adjust the current filters to continue searching."}</p></div>
     `;
     return;
   }
@@ -544,17 +551,25 @@ function renderResults() {
   showMore.hidden = state.visibleResults >= state.filtered.length;
 }
 
-function setSelected(id, focus = true) {
+function setSelected(id, focus = true, reveal = "panel") {
   state.selectedId = id;
   const resource = selectedResource();
-  if (focus && resource) focusGlobeOn(resource);
+  if (focus && resource) focusGlobeOn(resource, reveal === "map");
   renderResourcePanel();
   renderResults();
   pinSignature = "";
   const url = new URL(window.location.href);
   url.searchParams.set("resource", id);
   window.history.replaceState({}, "", url);
-  if (window.innerWidth < 900) document.getElementById("resourcePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (reveal) {
+    const target = reveal === "map" ? document.querySelector(".globe-stage") : document.getElementById("resourcePanel");
+    const bounds = target?.getBoundingClientRect();
+    const headerOffset = document.querySelector(".site-header")?.getBoundingClientRect().height || 0;
+    if (target && bounds && (bounds.top < headerOffset || bounds.bottom > window.innerHeight)) {
+      if (reveal === "map") state.globeVisible = true;
+      target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+    }
+  }
 }
 
 function persistSavedResources() {
@@ -628,13 +643,25 @@ function downloadDirectory() {
   notify(`Downloaded ${state.filtered.length} directory records`);
 }
 
-function focusGlobeOn(resource) {
+function focusGlobeOn(resource, immediate = false) {
   state.targetLon = resource.lng;
-  state.targetLat = Math.max(-46, Math.min(46, resource.lat * 0.62));
-  state.targetZoom = 1.14;
+  state.targetLat = Math.max(-70, Math.min(70, resource.lat));
+  state.targetZoom = 1.1;
+  if (immediate) {
+    state.rotationLon = state.targetLon;
+    state.rotationLat = state.targetLat;
+    state.zoom = state.targetZoom;
+    state.targetLon = null;
+    state.targetLat = null;
+  }
   state.velocityLon = 0;
   state.velocityLat = 0;
-  state.interactionUntil = performance.now() + 5000;
+  state.focusPoint = { lat: resource.lat, lng: resource.lng };
+  state.focusedRegion = null;
+  setCountryHighlight(resource.country);
+  const regionSelect = document.getElementById("regionFocus");
+  if (regionSelect) regionSelect.value = "focus";
+  state.interactionUntil = performance.now() + 7000;
 }
 
 function latLngVector(lat, lng, radius = 1) {
@@ -691,7 +718,7 @@ function createGlobeTexture() {
 
   if (hasEarthImagery) {
     ctx.drawImage(earthTextureImage, 0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "rgba(2, 18, 27, 0.2)";
+    ctx.fillStyle = "rgba(2, 18, 27, 0.12)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   } else {
     const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -827,12 +854,57 @@ function rebuildCountryBorders() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   globeBorders = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
-    color: 0xb7d6cc,
+    color: 0xcde8df,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.34,
     depthWrite: false
   }));
   globeWorld.add(globeBorders);
+}
+
+function featureNameForCountry(name) {
+  return countryNameAliases[name] || name;
+}
+
+function resourceCountryForFeature(name) {
+  return Object.entries(countryNameAliases).find(([, featureName]) => featureName === name)?.[0] || name;
+}
+
+function countryFeatureByName(name) {
+  const featureName = featureNameForCountry(name);
+  return state.countryFeatures.find((feature) => feature.properties?.NAME === featureName) || null;
+}
+
+function setCountryHighlight(name) {
+  state.focusedCountry = name || null;
+  if (!globeWorld) return;
+  if (globeCountryHighlight) {
+    globeCountryHighlight.geometry.dispose();
+    globeCountryHighlight.material.dispose();
+    globeWorld.remove(globeCountryHighlight);
+    globeCountryHighlight = null;
+  }
+
+  const feature = name ? countryFeatureByName(name) : null;
+  if (!feature) return;
+  const positions = [];
+  for (const ring of extractRings(feature.geometry)) {
+    for (let index = 1; index < ring.length; index += 1) {
+      const start = latLngVector(ring[index - 1][1], ring[index - 1][0], 1.012);
+      const end = latLngVector(ring[index][1], ring[index][0], 1.012);
+      positions.push(...start.toArray(), ...end.toArray());
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  globeCountryHighlight = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+    color: 0xa8ffd2,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false
+  }));
+  globeCountryHighlight.renderOrder = 4;
+  globeWorld.add(globeCountryHighlight);
 }
 
 function refreshGlobeSurface() {
@@ -864,7 +936,7 @@ function initThreeGlobe() {
   globeCamera.position.set(0, 0, 3.2);
 
   globeWorld = new THREE.Group();
-  globeWorld.rotation.order = "YXZ";
+  globeWorld.rotation.order = "XYZ";
   globeScene.add(globeWorld);
   globeScene.add(createStarField());
 
@@ -896,14 +968,17 @@ function initThreeGlobe() {
   );
   globeWorld.add(atmosphere);
 
-  globeScene.add(new THREE.AmbientLight(0x91acb4, 1.15));
-  globeScene.add(new THREE.HemisphereLight(0x8bbdc2, 0x0a2630, 0.8));
+  globeScene.add(new THREE.AmbientLight(0xa6bdc2, 1.34));
+  globeScene.add(new THREE.HemisphereLight(0x9bc8ca, 0x12313b, 0.94));
   const fill = new THREE.DirectionalLight(0x6da5ba, 0.65);
   fill.position.set(-3, 1, 4);
   globeScene.add(fill);
   globeLight = new THREE.DirectionalLight(0xd8fff0, 2.3);
   globeScene.add(globeLight);
   globeScene.add(globeLight.target);
+  globeFocusLight = new THREE.DirectionalLight(0xe5fff7, 0);
+  globeScene.add(globeFocusLight);
+  globeScene.add(globeFocusLight.target);
 
   connectionGroup = new THREE.Group();
   globeWorld.add(connectionGroup);
@@ -984,6 +1059,16 @@ function renderThreeGlobe(width, height, now) {
   globeLight.position.copy(sunPosition);
   globeLight.target.position.set(0, 0, 0);
   globeLight.target.updateMatrixWorld();
+
+  if (state.focusPoint && globeFocusLight) {
+    const focusPosition = latLngVector(state.focusPoint.lat, state.focusPoint.lng, 4).applyEuler(globeWorld.rotation);
+    globeFocusLight.position.copy(focusPosition);
+    globeFocusLight.intensity = 0.82;
+    globeFocusLight.target.position.set(0, 0, 0);
+    globeFocusLight.target.updateMatrixWorld();
+  } else if (globeFocusLight) {
+    globeFocusLight.intensity = 0;
+  }
 
   rebuildConnections();
   connectionParticles.forEach(({ particle, curve, offset }) => {
@@ -1359,8 +1444,12 @@ function updateGlobeReadout() {
   const resource = selectedResource();
   const readout = document.getElementById("globeReadout");
   if (!readout) return;
-  const content = resource
-    ? `<strong>${resource.region}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")}</span>`
+  const content = state.focusedRegion
+    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.length} visible resources</span>`
+    : resource && state.focusPoint
+    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")}</span>`
+    : state.focusedCountry && state.focusPoint
+      ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")}</span>`
     : `<strong>World view</strong><span>${state.filtered.length} visible resources</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
@@ -1439,15 +1528,19 @@ function focusRegion(key, selectMatching = false) {
   state.targetZoom = view.zoom;
   state.velocityLon = 0;
   state.velocityLat = 0;
+  state.focusPoint = null;
+  state.focusedRegion = view.label;
+  setCountryHighlight(null);
+  document.getElementById("regionFocus").value = key in regionViews ? key : "world";
   state.interactionUntil = performance.now() + 6000;
-  if (selectMatching && regionGroups[key]) {
-    const match = state.filtered.find((resource) => regionGroups[key].includes(resource.region));
-    if (match) {
-      state.selectedId = match.id;
-      renderResourcePanel();
-      renderResults();
-      pinSignature = "";
-    }
+  if (selectMatching) {
+    state.selectedId = null;
+    renderResourcePanel();
+    renderResults();
+    pinSignature = "";
+    const url = new URL(window.location.href);
+    url.searchParams.delete("resource");
+    window.history.replaceState({}, "", url);
   }
 }
 
@@ -1466,6 +1559,10 @@ function focusCluster(ids) {
   state.targetZoom = Math.min(1.38, state.targetZoom + 0.2);
   state.velocityLon = 0;
   state.velocityLat = 0;
+  state.focusPoint = { lat: latitude, lng: state.targetLon };
+  state.focusedRegion = null;
+  setCountryHighlight(null);
+  document.getElementById("regionFocus").value = "focus";
   state.interactionUntil = performance.now() + 6000;
   notify(`Focused ${members.length} resources in this area`);
 }
@@ -1477,13 +1574,95 @@ function extractRings(geometry) {
   return [];
 }
 
+function ringContainsCoordinate(ring, lat, lng) {
+  let inside = false;
+  for (let current = 0, previous = ring.length - 1; current < ring.length; previous = current, current += 1) {
+    const currentLng = lng + normalizeLongitude(ring[current][0] - lng);
+    const previousLng = lng + normalizeLongitude(ring[previous][0] - lng);
+    const currentLat = ring[current][1];
+    const previousLat = ring[previous][1];
+    const crossesLatitude = (currentLat > lat) !== (previousLat > lat);
+    const boundaryLng = ((previousLng - currentLng) * (lat - currentLat)) / ((previousLat - currentLat) || Number.EPSILON) + currentLng;
+    if (crossesLatitude && lng < boundaryLng) inside = !inside;
+  }
+  return inside;
+}
+
+function geometryContainsCoordinate(geometry, lat, lng) {
+  const polygons = geometry?.type === "Polygon" ? [geometry.coordinates] : geometry?.coordinates || [];
+  return polygons.some((polygon) => {
+    if (!polygon.length || !ringContainsCoordinate(polygon[0], lat, lng)) return false;
+    return !polygon.slice(1).some((hole) => ringContainsCoordinate(hole, lat, lng));
+  });
+}
+
+function countryAtCoordinate(lat, lng) {
+  return state.countryFeatures.find((feature) => geometryContainsCoordinate(feature.geometry, lat, lng)) || null;
+}
+
+function selectCountryFromPointer(event) {
+  if (!globeRenderer || !globeCamera || !globeWorld || !globeSurface || !state.countryFeatures.length) return;
+  const rect = globeRenderer.domElement.getBoundingClientRect();
+  const pointer = new THREE.Vector2(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  globeWorld.updateMatrixWorld(true);
+  globeCamera.updateMatrixWorld(true);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(pointer, globeCamera);
+  const hit = raycaster.intersectObject(globeSurface, false)[0];
+  if (!hit) return;
+
+  const localPoint = hit.point.clone().applyMatrix4(new THREE.Matrix4().copy(globeWorld.matrixWorld).invert()).normalize();
+  const lat = Math.asin(THREE.MathUtils.clamp(localPoint.y, -1, 1)) * 180 / Math.PI;
+  const lng = Math.atan2(localPoint.x, localPoint.z) * 180 / Math.PI;
+  const country = countryAtCoordinate(lat, lng);
+  if (!country) return;
+
+  const featureName = country.properties.NAME;
+  const displayName = resourceCountryForFeature(featureName);
+  const matches = state.filtered
+    .filter((resource) => featureNameForCountry(resource.country) === featureName)
+    .sort((a, b) => distanceKm(lat, lng, a.lat, a.lng) - distanceKm(lat, lng, b.lat, b.lng));
+
+  document.getElementById("regionFocus").value = "focus";
+  if (matches.length) {
+    setSelected(matches[0].id, false, false);
+    focusGlobeOn(matches[0]);
+    notify(`${displayName}: ${matches.length} ${matches.length === 1 ? "listed service" : "listed services"}`);
+    return;
+  }
+
+  state.selectedId = null;
+  state.targetLon = lng;
+  state.targetLat = Math.max(-70, Math.min(70, lat));
+  state.targetZoom = Math.max(1.16, state.targetZoom);
+  state.velocityLon = 0;
+  state.velocityLat = 0;
+  state.focusPoint = { lat, lng };
+  state.focusedRegion = null;
+  setCountryHighlight(displayName);
+  state.interactionUntil = performance.now() + 7000;
+  renderResourcePanel();
+  renderResults();
+  pinSignature = "";
+  const url = new URL(window.location.href);
+  url.searchParams.delete("resource");
+  window.history.replaceState({}, "", url);
+  notify(`No listed services in ${displayName} match the current filters`);
+}
+
 async function loadLandGeometry() {
   try {
     const response = await fetch("/data/countries.geojson");
     if (!response.ok) throw new Error(`Map data returned ${response.status}`);
     const data = await response.json();
+    state.countryFeatures = data.features;
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
     refreshGlobeSurface();
+    const resource = selectedResource();
+    if (resource && state.focusPoint) setCountryHighlight(resource.country);
   } catch (error) {
     console.error("Natural Earth geometry could not be loaded.", error);
     notify("Base map could not be loaded; aid locations remain available.");
@@ -1540,7 +1719,7 @@ function bindEvents() {
 
   document.getElementById("resourceGrid").addEventListener("click", (event) => {
     const button = event.target.closest("[data-resource-id]");
-    if (button) setSelected(button.dataset.resourceId);
+    if (button) setSelected(button.dataset.resourceId, true, "map");
   });
 
   document.getElementById("pinLayer").addEventListener("click", (event) => {
@@ -1603,13 +1782,21 @@ function bindEvents() {
     state.targetLat = null;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
+    state.pointerStartX = event.clientX;
+    state.pointerStartY = event.clientY;
+    state.pointerMoved = false;
     state.velocityLon = 0;
     state.velocityLat = 0;
+    state.focusPoint = null;
+    state.focusedRegion = null;
+    setCountryHighlight(null);
+    document.getElementById("regionFocus").value = "focus";
     state.interactionUntil = performance.now() + 6000;
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener("pointermove", (event) => {
     if (!state.dragging) return;
+    if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
     const dx = event.clientX - state.pointerX;
     const dy = event.clientY - state.pointerY;
     const lonDelta = -dx * 0.32 / state.zoom;
@@ -1621,9 +1808,12 @@ function bindEvents() {
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
   });
-  const releasePointer = () => { state.dragging = false; };
-  canvas.addEventListener("pointerup", releasePointer);
-  canvas.addEventListener("pointercancel", releasePointer);
+  canvas.addEventListener("pointerup", (event) => {
+    const shouldSelectCountry = state.dragging && !state.pointerMoved;
+    state.dragging = false;
+    if (shouldSelectCountry) selectCountryFromPointer(event);
+  });
+  canvas.addEventListener("pointercancel", () => { state.dragging = false; });
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
     state.targetZoom = Math.max(0.74, Math.min(1.38, state.targetZoom - event.deltaY * 0.001));
@@ -1641,17 +1831,27 @@ function bindEvents() {
     else if (event.key === "ArrowDown") state.rotationLat = Math.min(58, state.rotationLat - step);
     else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(1.38, state.targetZoom + 0.1);
     else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(0.74, state.targetZoom - 0.1);
-    else if (event.key === "Home") focusRegion("world");
+    else if (event.key === "Home") {
+      focusRegion("world");
+      event.preventDefault();
+      return;
+    }
     else if (event.key === " ") {
       state.autoRotate = !state.autoRotate;
       const motionButton = document.getElementById("toggleMotion");
       motionButton.innerHTML = state.autoRotate ? icon.pause : icon.play;
       motionButton.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
       motionButton.setAttribute("aria-label", motionButton.title);
+      event.preventDefault();
+      return;
     }
     else return;
     state.targetLon = null;
     state.targetLat = null;
+    state.focusPoint = null;
+    state.focusedRegion = null;
+    setCountryHighlight(null);
+    document.getElementById("regionFocus").value = "focus";
     state.interactionUntil = performance.now() + 5000;
     event.preventDefault();
   });

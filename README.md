@@ -16,7 +16,7 @@ RWN's goal is simple: make real-world help easier to find and, over time, make t
 
 The site intentionally avoids invented impact numbers, unverified availability, or unsupported eligibility claims.
 
-The Three.js globe supports inertial drag, keyboard navigation, zoom, regional focus views, geographic marker clustering, three-dimensional connection paths, seasonal daylight context, reduced motion, and an optional in-browser location marker. NASA Earth Observatory imagery, real-time lighting, a restrained atmosphere, detailed country boundaries, and accessible HTML markers keep the experience legible without turning the aid finder into decoration. Its idle motion uses a restrained camera drift and stops as soon as someone interacts.
+The Three.js globe supports direct country selection, exact resource focus, inertial drag, keyboard navigation, zoom, regional views, geographic marker clustering, three-dimensional connection paths, seasonal daylight context, reduced motion, and an optional in-browser location marker. NASA Earth Observatory imagery, real-time lighting, selected-country outlines, detailed boundaries, and accessible HTML markers keep the experience legible without turning the aid finder into decoration. Its idle motion stops as soon as someone interacts.
 
 Directory results load progressively so the primary finder remains concise while all records stay available. People can save records locally, share a deep link, print one resource, or download the currently filtered directory as CSV. These tools do not require an account.
 
@@ -68,7 +68,7 @@ npm run build
 
 Vercel uses `vercel.json`, runs the static build, and serves `dist`.
 
-Production alias: `https://rwn-web.vercel.app`
+Production site: `https://www.realworldneeds.org`
 
 ## Verification
 
