@@ -4,7 +4,7 @@ Vercel-ready website for Real World Needs: a source-backed global aid finder and
 
 ## What This Is
 
-RWN helps people explore free or no-cost core aid from official provider, government, and network sources. The current directory contains 40 records and focuses on:
+RWN's goal is simple: make real-world help easier to find and, over time, make the path from need to support easier to verify. Today, RWN helps people explore free or no-cost core aid from official provider, government, and network sources. The current directory contains 40 records and focuses on:
 
 - food banks and food relief
 - drinking-water and seasonal hydration support

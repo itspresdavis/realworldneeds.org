@@ -1,6 +1,5 @@
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import {
-  allocationFields,
   launchGates,
   platformStatus,
   supportStages
@@ -44,7 +43,7 @@ const state = {
   autoRotate: !reduceMotion,
   interactionUntil: 0,
   landRings: [],
-  visibleResults: 12,
+  visibleResults: 8,
   globeVisible: true,
   ambientZoom: 1,
   savedIds: loadSavedResources(),
@@ -78,6 +77,7 @@ const icon = {
   share: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"/></svg>`,
   print: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v7H7z"/></svg>`,
   download: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>`,
+  filter: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>`,
   close: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>`
 };
 
@@ -154,11 +154,11 @@ function shell() {
       </a>
       <nav aria-label="Primary navigation">
         <a href="#finder">Find help</a>
-        <a href="#operations">How it works</a>
-        <a href="#transparency">Transparency</a>
-        <a href="#standards">Data standards</a>
+        <a href="#about">About RWN</a>
+        <a href="#standards">Trust standards</a>
+        <a href="#accountability">Accountability</a>
       </nav>
-      <a class="header-action" href="#funding">Accountability</a>
+      <a class="header-action" href="#finder">Explore services</a>
     </header>
 
     <main>
@@ -166,17 +166,17 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <span class="section-kicker">Find help</span>
-              <h1>Real World Needs</h1>
-              <p>Find free aid and services from official sources, with access conditions kept clear.</p>
+              <span class="section-kicker">Real World Needs</span>
+              <h1>Real help, easier to find.</h1>
+              <p>RWN connects people to free essential services and keeps the original source attached, so every next step can be checked.</p>
             </div>
 
             <div class="mode-switch" aria-label="Map data mode">
-              <button class="is-active" type="button" data-view-mode="aid" aria-pressed="true">Available aid</button>
-              <button type="button" data-view-mode="needs" aria-pressed="false">Verified needs <span>${platformStatus.managedNeedsPublished}</span></button>
+              <button class="is-active" type="button" data-view-mode="aid" aria-pressed="true">Find services</button>
+              <button type="button" data-view-mode="needs" aria-pressed="false">Published needs <span>${platformStatus.managedNeedsPublished}</span></button>
             </div>
 
-            <div class="finder-controls" role="search">
+            <div class="finder-search" role="search">
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
@@ -184,25 +184,30 @@ function shell() {
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
-
-              <div class="filter-heading"><span>Aid layers</span><button type="button" id="toggleAll">Clear</button></div>
-              <div class="layer-list" id="layerList" aria-label="Aid category filters"></div>
-
-              <div class="filter-heading"><span>Resource type</span></div>
-              <div class="access-switch" aria-label="Resource type filter">
-                <button class="is-active" type="button" data-access="all" aria-pressed="true">All</button>
-                <button type="button" data-access="direct" aria-pressed="false">Service sites</button>
-                <button type="button" data-access="discovery" aria-pressed="false">Directories</button>
-              </div>
-
-              <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
-              <p class="location-privacy">Location is used only in this browser to sort results.</p>
             </div>
+
+            <details class="filter-disclosure">
+              <summary>${icon.filter}<strong>Filter services</strong><span id="filterSummary">All 7 aid types</span></summary>
+              <div class="finder-controls">
+                <div class="filter-heading"><span>Aid types</span><button type="button" id="toggleAll">Clear</button></div>
+                <div class="layer-list" id="layerList" aria-label="Aid category filters"></div>
+
+                <div class="filter-heading"><span>Listing type</span></div>
+                <div class="access-switch" aria-label="Resource type filter">
+                  <button class="is-active" type="button" data-access="all" aria-pressed="true">All</button>
+                  <button type="button" data-access="direct" aria-pressed="false">Service sites</button>
+                  <button type="button" data-access="discovery" aria-pressed="false">Directories</button>
+                </div>
+              </div>
+            </details>
+
+            <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
+            <p class="location-privacy">Used only in this browser to sort nearby services.</p>
           </aside>
 
           <section class="globe-stage" aria-label="Interactive global aid resource globe">
             <div class="globe-meta">
-              <div><span class="status-dot"></span><strong>Source-backed directory</strong></div>
+              <div><span class="status-dot"></span><strong>Global service map</strong></div>
               <div class="globe-meta__tools">
                 <span id="globeCount"></span>
                 <label class="region-menu">
@@ -236,15 +241,9 @@ function shell() {
           <aside class="resource-panel" id="resourcePanel" aria-live="polite"></aside>
         </div>
 
-        <div class="directory-status">
-          <p><strong>${resources.length}</strong> source-backed records</p>
-          <p><strong>${directCount()}</strong> direct service sites</p>
-          <p><strong>${resourceTypes.length}</strong> aid layers</p>
-          <p>Reviewed <strong>${checkedDate(latestReviewDate())}</strong></p>
-        </div>
-
-        <div class="service-boundary" role="note">
-          ${icon.info}<p><strong>This directory is not emergency dispatch.</strong> If someone is in immediate danger, contact local emergency services.</p>
+        <div class="directory-strip">
+          <p><strong>${resources.length}</strong> source-backed resources <span>${directCount()} service sites</span> <span>Reviewed ${checkedDate(latestReviewDate())}</span></p>
+          <p role="note">${icon.info}<span>Not emergency dispatch. For immediate danger, contact local emergency services.</span></p>
         </div>
 
         <div class="results-section">
@@ -255,64 +254,59 @@ function shell() {
               <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
             </div>
           </div>
-          <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Type</span><span>Aid</span><span>Access</span><span>Reviewed</span><span></span></div>
+          <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Aid</span><span>Access</span><span>Reviewed</span><span></span></div>
           <div class="resource-grid resource-list" id="resourceGrid" aria-label="Available aid directory"></div>
           <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
         </div>
       </section>
 
+      <section class="about-rwn" id="about">
+        <div class="about-rwn__heading">
+          <span class="section-kicker">What RWN is</span>
+          <h2>A simple idea: make real-world help easier to reach.</h2>
+          <p>Real World Needs is a public-interest project building a clearer path from need to support. It starts with useful information today and grows only when the safeguards for tomorrow are ready.</p>
+        </div>
+        <div class="mission-steps">
+          <article><span>Now</span><h3>Find help</h3><p>Search free essential services and open the organization or public source behind every listing.</p></article>
+          <article><span>Next</span><h3>Show real needs</h3><p>Publish needs only after identity, privacy, urgency, and evidence can be reviewed responsibly.</p></article>
+          <article><span>Then</span><h3>Follow support</h3><p>If RWN manages support, show how it was approved, delivered, evidenced, and corrected.</p></article>
+        </div>
+      </section>
+
       <section class="source-band" id="standards">
         <div class="source-band__heading">
-          <span class="section-kicker">Methodology</span>
-          <h2>Every listing keeps its source.</h2>
-          <p>The directory exists so people can act with confidence. Each entry is sourced, reviewed, and labeled for access.</p>
+          <span class="section-kicker">Trust standards</span>
+          <h2>Useful information, without overstating certainty.</h2>
+          <p>RWN keeps the source, access conditions, and review date visible. People should always confirm availability before traveling.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
       </section>
 
-      <section class="operations" id="operations">
-        <div class="section-heading">
-          <span class="section-kicker">Accountability process</span>
-          <h2>Accountability before activity.</h2>
-          <p>If and when RWN manages support, it will follow this published standard. Managed needs and funds are not live in this release.</p>
+      <section class="accountability" id="accountability">
+        <div class="accountability__heading">
+          <span class="section-kicker">Accountability</span>
+          <h2>Clear about what is live and what is not.</h2>
+          <p>The directory is live. Public need intake, donation processing, and RWN-managed support are not. Expansion comes after the legal, financial, program, and reporting controls are in place.</p>
+          <button class="outline-button" type="button" data-open-launch>Review launch requirements ${icon.arrow}</button>
         </div>
-        <ol class="support-rail" id="supportRail"></ol>
-        <p class="release-note">${icon.info} No RWN-managed needs or funds are published in this release.</p>
-      </section>
-
-      <section class="transparency" id="transparency">
-        <div class="transparency__intro">
-          <span class="section-kicker">Transparency status</span>
-          <h2>Public records start at zero.</h2>
-          <p>There are no RWN-managed records yet. When activity begins, every public record must disclose the fields shown here.</p>
-          <button class="text-button" type="button" data-open-launch>Why we start with zero ${icon.arrow}</button>
+        <div class="accountability-status">
+          <article class="is-live"><span>${icon.check}</span><div><small>Live now</small><h3>Source-backed aid directory</h3><p>Search, filters, map, local saves, and direct links to provider or public sources.</p></div></article>
+          <article><span>${icon.pause}</span><div><small>Not live</small><h3>Needs and donations</h3><p>No public need intake, partner portal, donation processing, or managed funds.</p></div></article>
+          <article><span>${icon.shield}</span><div><small>Required first</small><h3>Professional controls</h3><p>Legal identity, financial safeguards, program review, privacy, complaints, and public reporting.</p></div></article>
         </div>
-        <div class="disclosure-register" aria-label="Future public record requirements">
-          <div class="disclosure-register__head"><strong>Future public record must disclose</strong><span>Status</span></div>
-          <div id="disclosureRows"></div>
-          <p>${icon.info} Donation intake and processing are disabled in this release.</p>
+        <div class="future-process">
+          <div><span class="section-kicker">Future operating standard</span><h3>Every managed need must move through one accountable chain.</h3></div>
+          <ol class="support-rail" id="supportRail"></ol>
         </div>
-      </section>
-
-      <section class="funding" id="funding">
-        <div class="funding__heading"><span class="section-kicker">Funding controls</span><h2>Before RWN accepts money</h2><p>RWN will only process donations after these controls are live and independently verified.</p><button class="funding-button" type="button" data-open-launch>Review launch requirements ${icon.arrow}</button></div>
-        <div class="allocation-track" id="allocationTrack"></div>
-        <div class="donation-status"><span>${icon.shield}</span><div><strong>Donations not enabled</strong><p>${platformStatus.statusNote}</p></div></div>
-      </section>
-
-      <section class="launch-controls">
-        <div class="section-heading"><span class="section-kicker">Governance register</span><h2>Required before launch</h2><p>These controls must be in place before RWN manages activity.</p></div>
-        <div class="launch-register" id="launchRows"></div>
       </section>
     </main>
 
     <footer class="site-footer">
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
-      <nav aria-label="Footer find help"><strong>Find help</strong><a href="#finder">Directory</a><a href="#finder">Map view</a><a href="#finder">Aid layers</a></nav>
-      <nav aria-label="Footer methodology"><strong>Methodology</strong><a href="#standards">How sources are used</a><a href="#standards">Access labels</a><a href="#standards">Review policy</a></nav>
-      <nav aria-label="Footer accountability"><strong>Accountability</strong><a href="#operations">Operating model</a><a href="#transparency">Transparency status</a><a href="#funding">Funding controls</a></nav>
+      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="#about">About RWN</a></nav>
+      <nav aria-label="Footer standards"><strong>Standards</strong><a href="#standards">Source policy</a><a href="#accountability">Accountability</a></nav>
       <nav aria-label="Footer map data"><strong>Map data</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a></nav>
-      <p><span class="status-dot"></span>Release boundary: ${resources.length} source-backed records · ${directCount()} direct service sites · ${resourceTypes.length} aid layers · zero RWN-managed needs or funds · donation processing disabled · no public need intake</p>
+      <p><span class="status-dot"></span>${resources.length} source-backed records · zero RWN-managed needs or funds · donation processing disabled · no public need intake</p>
     </footer>
 
     <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
@@ -349,19 +343,6 @@ function renderStatic() {
     <li><span>${index + 1}</span><div><h3>${stage.label}</h3><p>${stage.description}</p></div></li>
   `).join("");
 
-  const disclosureFields = [...allocationFields, ["Review history", "Corrections and public review dates"]];
-  document.getElementById("disclosureRows").innerHTML = disclosureFields.map(([label]) => `
-    <div><strong>${label}</strong><span>Not live</span></div>
-  `).join("");
-
-  document.getElementById("allocationTrack").innerHTML = allocationFields.map(([label, description], index) => `
-    <article><span>0${index + 1}</span><div><h3>${label}</h3><p>${description}</p></div></article>
-  `).join("");
-
-  document.getElementById("launchRows").innerHTML = launchGates.map(([label, description]) => `
-    <div><strong>${label}</strong><p>${description}</p><span>Required before launch</span></div>
-  `).join("");
-
   document.getElementById("dialogRequirements").innerHTML = launchGates.map(([label, description]) => `
     <section><h3>${label}</h3><p>${description}</p><span>Required</span></section>
   `).join("");
@@ -387,7 +368,7 @@ function updateFilters() {
   state.filtered = state.userLocation
     ? [...accessFiltered].sort((a, b) => distanceKm(state.userLocation.lat, state.userLocation.lng, a.lat, a.lng) - distanceKm(state.userLocation.lat, state.userLocation.lng, b.lat, b.lng))
     : accessFiltered;
-  state.visibleResults = 12;
+  state.visibleResults = 8;
 
   if (!state.filtered.some((resource) => resource.id === state.selectedId)) {
     state.selectedId = state.filtered[0]?.id || null;
@@ -423,6 +404,10 @@ function renderControls() {
   document.getElementById("locateMe").disabled = !aidMode;
   document.getElementById("toggleAll").disabled = !aidMode;
   document.getElementById("toggleAll").textContent = state.activeTypes.size === resourceTypes.length ? "Clear" : "Show all";
+  const typeCount = state.activeTypes.size;
+  document.getElementById("filterSummary").textContent = typeCount === resourceTypes.length
+    ? `All ${resourceTypes.length} aid types`
+    : `${typeCount} of ${resourceTypes.length} aid types`;
   document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} visible` : "0 published";
   document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching resources` : "No verified needs published";
   const savedToggle = document.getElementById("toggleSaved");
@@ -471,12 +456,10 @@ function renderResourcePanel() {
       <div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
       ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
       ${state.userLocation ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
-      <div><dt>Reviewed</dt><dd><time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></dd></div>
-      <div><dt>Source</dt><dd>${resource.sourceKind} · ${kindLabel(resource)}</dd></div>
     </dl>
     <div class="panel-services"><h3>What they can help with</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
     <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
-    <div class="panel-source-note"><span>${resource.sourceName}</span><p>${resource.sourceDetail}</p></div>
+    <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p><p>Reviewed <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
       <a class="primary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Open official source ${icon.external}</a>
       ${resource.kind === "direct" ? `<a class="secondary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
@@ -507,7 +490,6 @@ function resourceCard(resource) {
       <button type="button" data-resource-id="${resource.id}">
         <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName}</small></span></span>
         <span class="resource-row__place">${resource.city}, ${resource.country}</span>
-        <span class="resource-row__type">${kindLabel(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${state.userLocation ? distanceLabel(resource) : resource.accessType}</span>
         <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time>
@@ -1168,7 +1150,7 @@ function bindEvents() {
   });
 
   document.getElementById("showMoreResults").addEventListener("click", () => {
-    state.visibleResults += 12;
+    state.visibleResults += 8;
     renderResults();
   });
 
@@ -1310,7 +1292,7 @@ function bindEvents() {
         observer.unobserve(entry.target);
       });
     }, { threshold: 0.12 });
-    document.querySelectorAll(".source-band, .operations, .transparency, .funding, .launch-controls").forEach((element) => {
+    document.querySelectorAll(".about-rwn, .source-band, .accountability").forEach((element) => {
       element.classList.add("reveal");
       observer.observe(element);
     });
