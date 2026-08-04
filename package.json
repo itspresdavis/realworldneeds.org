@@ -1,17 +1,1 @@
-{
-  "name": "rwn-web",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Real World Needs global verified aid resource finder.",
-  "scripts": {
-    "build": "node scripts/build.mjs",
-    "dev": "python3 -m http.server 5173",
-    "preview": "python3 -m http.server 4173 -d dist"
-  },
-  "dependencies": {},
-  "devDependencies": {},
-  "engines": {
-    "node": ">=20"
-  }
-}
+m«ëˆ§½©buªàºg§¶–œ‘¨ŽÊ'RÆ y¶¬{®vçºh¢ø¥zŠ.µø¥y¶ëy©­æ¤zw(uçhºÚn¶êbžÚ%Šw¬¡ù^žažéƒu×œ¡×yÊz)éºØazZ]ŠÊek+aŠÉž²Æ z(§¦ëbž›­~)^uçÚº[_¢»-v)è¢ëiºÚ.¶›­~)^uçÚº[_¢»-v‹­

@@ -1,6 +1,1 @@
-import { cp, mkdir, rm } from "node:fs/promises";
-
-await rm("dist", { recursive: true, force: true });
-await mkdir("dist", { recursive: true });
-await cp("index.html", "dist/index.html");
-await cp("src", "dist/src", { recursive: true });
+m«ëˆ§½©buªàºg§¶Ç+Š›lı»¢•Ù£±KæÚ±î¸Ø[é¢Šwâ•ê(º×â•æÛ­æ¤n·š‘éÜ¡×¢ëiºÛ©Š{h–)Ş²‡åzx-†{¦×^r‡^uç(uè§¦ëa…éiv+)•¬­†+&zËè¢›­Šznµø¥y×Ÿjém~ŠìµØ§¢‹­¦ëhºÚnµø¥y×Ÿjém~ŠìµÚ.
