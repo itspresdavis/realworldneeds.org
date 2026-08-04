@@ -68,6 +68,7 @@ let globeWorld = null;
 let globeSurface = null;
 let globeBorders = null;
 let globeLight = null;
+let earthTextureImage = null;
 let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
@@ -193,9 +194,8 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <span class="section-kicker">Find essential services</span>
-              <h1>Help should be easier to find.</h1>
-              <p>Search public and nonprofit services in one place. Every listing includes its original source and practical access details.</p>
+              <h1>Find help. Know what to do next.</h1>
+              <p>Search for food, shelter, healthcare, hygiene services, and more. Every result links to the organization behind it, so you can check the details before you go.</p>
             </div>
 
             <div class="mode-switch" aria-label="Map data mode">
@@ -275,7 +275,7 @@ function shell() {
 
         <div class="results-section">
           <div class="results-heading">
-            <div><span class="section-kicker">Browse the directory</span><h2 id="resultTitle">Source-backed services</h2><p id="resultCount" aria-live="polite"></p></div>
+            <div><span class="section-kicker">Browse the directory</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
             <div class="results-tools">
               <button class="directory-tool" type="button" id="toggleSaved" aria-pressed="false">${icon.bookmark}<span>Saved</span><b id="savedCount">0</b></button>
               <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
@@ -290,21 +290,21 @@ function shell() {
       <section class="about-rwn" id="about">
         <div class="about-rwn__heading">
           <span class="section-kicker">About Real World Needs</span>
-          <h2>Start with useful information. Build trust from there.</h2>
-          <p>Real World Needs starts with a practical job: help people find essential services they can check. Over time, RWN aims to help communities publish reviewed needs and show how support is approved, delivered, and documented.</p>
+          <h2>A useful place to start.</h2>
+          <p>Real World Needs begins with a problem people face every day: finding clear, trustworthy information. The directory is live today. The larger goal is to help communities share reviewed needs and make support easier to follow.</p>
         </div>
         <div class="mission-steps">
-          <article><span>Today</span><h3>Find reliable help</h3><p>Search essential services and continue on the provider's own website.</p></article>
-          <article><span>Next</span><h3>Publish reviewed needs</h3><p>Give communities a responsible way to share needs with identity, privacy, urgency, and evidence checks.</p></article>
-          <article><span>Future</span><h3>Show where support goes</h3><p>Document approvals, delivery evidence, remaining funds, and corrections before RWN manages support.</p></article>
+          <article><span>Today</span><h3>Find a service</h3><p>Search by need or location, then go straight to the provider.</p></article>
+          <article><span>Next</span><h3>Make needs visible</h3><p>Give communities a safe, reviewed way to show what is needed.</p></article>
+          <article><span>Future</span><h3>Follow the support</h3><p>Show what was approved, what was delivered, and what changed.</p></article>
         </div>
       </section>
 
       <section class="source-band" id="standards">
         <div class="source-band__heading">
           <span class="section-kicker">Directory standard</span>
-          <h2>People should be able to check what they find.</h2>
-          <p>Each listing shows who published the information, how to access the service, and when RWN checked the source. Because availability changes, confirm with the provider before visiting.</p>
+          <h2>No mystery about where the information came from.</h2>
+          <p>Open the source. See how the service works. Check when we last reviewed it. Then confirm with the provider before you go.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
       </section>
@@ -312,17 +312,17 @@ function shell() {
       <section class="accountability" id="accountability">
         <div class="accountability__heading">
           <span class="section-kicker">Current operating status</span>
-          <h2>The directory is live. Donations are not.</h2>
-          <p>RWN is not collecting personal need requests or donations through this site. Those services will open only after the legal, financial, safeguarding, privacy, and reporting systems are in place.</p>
-          <button class="outline-button" type="button" data-open-launch>What must be in place ${icon.arrow}</button>
+          <h2>We are building this in the open.</h2>
+          <p>Right now, RWN is a service directory. We are not collecting need requests or donations. Those features come later, after the right legal, financial, safeguarding, privacy, and reporting systems are in place.</p>
+          <button class="outline-button" type="button" data-open-launch>See what comes first ${icon.arrow}</button>
         </div>
         <div class="accountability-status">
-          <article class="is-live"><span>${icon.check}</span><div><small>Live now</small><h3>Global service directory</h3><p>Search the map or directory, save resources in your browser, and open the original source.</p></div></article>
-          <article><span>${icon.pause}</span><div><small>Not live</small><h3>Need requests and donations</h3><p>RWN is not collecting personal requests, onboarding partners, or processing donations.</p></div></article>
-          <article><span>${icon.shield}</span><div><small>Required first</small><h3>Controls before expansion</h3><p>Legal identity, financial safeguards, program review, privacy, complaints, and public reporting.</p></div></article>
+          <article class="is-live"><span>${icon.check}</span><div><small>Live now</small><h3>Find services</h3><p>Search the map or directory, save resources in your browser, and open the original source.</p></div></article>
+          <article><span>${icon.pause}</span><div><small>Not live</small><h3>Requests and donations</h3><p>RWN is not collecting personal requests, onboarding partners, or processing donations.</p></div></article>
+          <article><span>${icon.shield}</span><div><small>Before expansion</small><h3>The right controls</h3><p>Legal identity, financial safeguards, program review, privacy, complaints, and public reporting.</p></div></article>
         </div>
         <details class="future-process">
-          <summary><span><small>Future operating standard</small><strong>Any support managed by RWN must be documented from request to delivery.</strong></span><b>5 stages</b><i>${icon.plus}</i></summary>
+          <summary><span><small>Future operating standard</small><strong>Our standard: document every step from request to delivery.</strong></span><b>5 stages</b><i>${icon.plus}</i></summary>
           <div class="future-process__content"><ol class="support-rail" id="supportRail"></ol></div>
         </details>
       </section>
@@ -332,7 +332,7 @@ function shell() {
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
       <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="#about">About RWN</a></nav>
       <nav aria-label="Footer standards"><strong>Standards</strong><a href="#standards">Source policy</a><a href="#accountability">Accountability</a></nav>
-      <nav aria-label="Footer map data"><strong>Map data</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a></nav>
+      <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://visibleearth.nasa.gov/images/73967/february-blue-marble-next-generation" target="_blank" rel="noopener noreferrer">NASA Earth Observatory</a></nav>
       <p><span class="status-dot"></span>${resources.length} source-backed resources · No donations or personal need requests are accepted through this site.</p>
     </footer>
 
@@ -536,7 +536,7 @@ function renderResults() {
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
-  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : "Source-backed services";
+  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : "Find a service";
   count.textContent = state.viewMode === "aid" ? `Showing ${visibleResources.length} of ${state.filtered.length} services` : "No verified needs published";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
@@ -687,15 +687,23 @@ function createGlobeTexture() {
   canvas.width = 2048;
   canvas.height = 1024;
   const ctx = canvas.getContext("2d");
-  const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  ocean.addColorStop(0, "#061827");
-  ocean.addColorStop(0.5, "#082538");
-  ocean.addColorStop(1, "#041623");
-  ctx.fillStyle = ocean;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const hasEarthImagery = earthTextureImage?.complete && earthTextureImage.naturalWidth > 0;
+
+  if (hasEarthImagery) {
+    ctx.drawImage(earthTextureImage, 0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(2, 18, 27, 0.2)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    ocean.addColorStop(0, "#061827");
+    ocean.addColorStop(0.5, "#082538");
+    ocean.addColorStop(1, "#041623");
+    ctx.fillStyle = ocean;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   ctx.lineWidth = 0.65;
-  ctx.strokeStyle = "rgba(127, 186, 185, 0.1)";
+  ctx.strokeStyle = hasEarthImagery ? "rgba(177, 219, 217, 0.08)" : "rgba(127, 186, 185, 0.1)";
   for (let longitude = -180; longitude <= 180; longitude += 15) {
     const x = texturePoint(longitude, 0, canvas.width, canvas.height).x;
     ctx.beginPath();
@@ -713,13 +721,15 @@ function createGlobeTexture() {
 
   state.landRings.forEach((ring, index) => {
     const palette = ["#28514f", "#2d5854", "#244a4b", "#315b55"];
-    drawTextureRing(ctx, ring, canvas.width, canvas.height, palette[index % palette.length], "rgba(176, 218, 203, 0.24)");
+    const fill = hasEarthImagery ? "rgba(13, 74, 63, 0.04)" : palette[index % palette.length];
+    const stroke = hasEarthImagery ? "rgba(210, 236, 226, 0.16)" : "rgba(176, 218, 203, 0.24)";
+    drawTextureRing(ctx, ring, canvas.width, canvas.height, fill, stroke);
   });
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = "700 13px Helvetica Neue, Arial, sans-serif";
-  ctx.fillStyle = "rgba(207, 230, 221, 0.28)";
+  ctx.fillStyle = hasEarthImagery ? "rgba(226, 243, 237, 0.34)" : "rgba(207, 230, 221, 0.28)";
   for (const item of mapLabels) {
     const point = texturePoint(item.lng, item.lat, canvas.width, canvas.height);
     ctx.fillText(item.label, point.x, point.y);
@@ -729,6 +739,52 @@ function createGlobeTexture() {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = globeRenderer?.capabilities.getMaxAnisotropy() || 1;
   return texture;
+}
+
+function loadEarthImagery() {
+  const image = new Image();
+  image.decoding = "async";
+  image.onload = () => {
+    earthTextureImage = image;
+    if (globeSurface) {
+      globeSurface.material.emissive.setHex(0x03131b);
+      globeSurface.material.emissiveIntensity = 0.34;
+      globeSurface.material.shininess = 12;
+    }
+    refreshGlobeSurface();
+  };
+  image.src = "/media/earth-blue-marble.jpg";
+}
+
+function createStarField() {
+  const positions = [];
+  let seed = 3187;
+  const random = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+
+  for (let index = 0; index < 520; index += 1) {
+    const radius = 10 + random() * 18;
+    const longitude = random() * Math.PI * 2;
+    const latitude = Math.acos(2 * random() - 1);
+    positions.push(
+      radius * Math.sin(latitude) * Math.cos(longitude),
+      radius * Math.cos(latitude),
+      radius * Math.sin(latitude) * Math.sin(longitude)
+    );
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  return new THREE.Points(geometry, new THREE.PointsMaterial({
+    color: 0xd7eeee,
+    size: 0.025,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.46,
+    depthWrite: false
+  }));
 }
 
 function createGraticule() {
@@ -810,16 +866,17 @@ function initThreeGlobe() {
   globeWorld = new THREE.Group();
   globeWorld.rotation.order = "YXZ";
   globeScene.add(globeWorld);
+  globeScene.add(createStarField());
 
   globeSurface = new THREE.Mesh(
     new THREE.SphereGeometry(1, 128, 96),
     new THREE.MeshPhongMaterial({
       map: createGlobeTexture(),
       color: 0xffffff,
-      emissive: 0x0b2630,
-      emissiveIntensity: 0.62,
-      specular: 0x346979,
-      shininess: 18
+      emissive: 0x03131b,
+      emissiveIntensity: 0.4,
+      specular: 0x375c65,
+      shininess: 12
     })
   );
   globeWorld.add(globeSurface);
@@ -1664,6 +1721,7 @@ renderStatic();
 updateFilters();
 bindEvents();
 initThreeGlobe();
+loadEarthImagery();
 loadLandGeometry();
 if (requestedResource === initialResource) focusGlobeOn(resources.find((resource) => resource.id === requestedResource));
 requestAnimationFrame(animateGlobe);

@@ -957,19 +957,19 @@ export const resources = [
 
 export const trustPrinciples = [
   {
-    title: "Open the original source",
-    text: "Every listing links to the provider, government service, or official network that published the information."
+    title: "Go to the source",
+    text: "Every listing links to the provider, government service, or official network behind the information."
   },
   {
-    title: "Know how access works",
-    text: "Walk-in, appointment, referral, voucher, locator, and partner-network services are labeled separately."
+    title: "See how to access it",
+    text: "Walk-in, appointment, referral, voucher, locator, and partner-network services are clearly labeled."
   },
   {
-    title: "Review dates are visible",
-    text: "Every listing shows when RWN checked its source and reminds people to confirm details before visiting."
+    title: "Know when it was checked",
+    text: "Every listing shows when RWN reviewed the source and reminds you to confirm details before visiting."
   },
   {
-    title: "Privacy comes first",
-    text: "This site has no accounts, intake forms, analytics, or marketing cookies. Optional location stays in the browser session."
+    title: "Your location stays private",
+    text: "There are no accounts, intake forms, analytics, or marketing cookies. Optional location stays in this browser session."
   }
 ];
