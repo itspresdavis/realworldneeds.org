@@ -11,10 +11,18 @@ test("search does not return unrelated listings", () => {
   assert.equal(matches.length, 0);
 });
 
-test("category filters match the pin's primary color layer", () => {
+test("category filters include secondary service layers", () => {
   const clothing = new Set(["clothing"]);
-  assert.equal(matchesResource(resources[0], "", clothing), false);
+  assert.equal(matchesResource(resources[0], "", clothing), true);
   assert.equal(matchesResource(resources.find((resource) => resource.category === "clothing"), "", clothing), true);
+});
+
+test("Ask Izzy is not included", () => {
+  assert.equal(resources.some((resource) => /ask izzy/i.test(resource.name)), false);
+});
+
+test("clearing every aid layer returns no listings", () => {
+  assert.equal(matchesResource(resources[0], "", new Set()), false);
 });
 
 test("distance calculation is stable", () => {

@@ -24,7 +24,8 @@ export function distanceKm(fromLat, fromLng, toLat, toLng) {
 }
 
 export function matchesResource(resource, query, activeTypes) {
-  const typeMatch = activeTypes.size === 0 || activeTypes.has(resource.category);
+  const serviceTypes = [resource.category, ...(resource.secondaryCategories || [])];
+  const typeMatch = serviceTypes.some((type) => activeTypes.has(type));
 
   if (!typeMatch) return false;
   if (!query.trim()) return true;
@@ -37,7 +38,9 @@ export function matchesResource(resource, query, activeTypes) {
     resource.address,
     resource.summary,
     resource.services.join(" "),
-    resource.sourceName
+    resource.sourceName,
+    resource.accessType,
+    resource.costNote
   ]
     .join(" ")
     .toLowerCase();

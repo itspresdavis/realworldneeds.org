@@ -4,13 +4,15 @@ Vercel-ready website for Real World Needs: a source-backed global aid finder and
 
 ## What This Is
 
-RWN helps people explore free aid resources from verified public sources. The first version focuses on:
+RWN helps people explore free or no-cost core aid from official provider, government, and network sources. The current directory contains 40 records and focuses on:
 
 - food banks and food relief
+- drinking-water and seasonal hydration support
+- shelter and housing navigation
+- showers, laundry, toilets, and hygiene items
 - clothing and everyday material aid
-- shelter or homelessness support
-- referral/search hubs
-- global food-bank networks
+- health, dental, mental-health, and recovery support
+- official referral tools and food-bank networks
 
 The site intentionally avoids invented impact numbers, unverified availability, or unsupported eligibility claims.
 
@@ -33,11 +35,16 @@ Every seed listing in `src/data/resources.js` includes:
 - organization name
 - address or national online-service scope
 - service categories
+- direct-site, locator, or partner-network type
+- access and cost notes
+- confirmation-before-travel guidance
 - official source URL
 - source note
 - last checked date
 
 Only add a listing when an official organization, government, or recognized referral source supports the claim.
+
+The globe uses the public-domain Natural Earth 1:110m country dataset stored locally in `public/data/countries.geojson`. The interface does not depend on a third-party map request at runtime.
 
 The current release has no accounts, public forms, analytics, or marketing cookies. Optional geolocation is used only in the browser session to sort listed resources by approximate distance.
 

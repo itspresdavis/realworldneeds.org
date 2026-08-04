@@ -12,6 +12,11 @@ const required = [
   "category",
   "address",
   "summary",
+  "kind",
+  "accessType",
+  "costNote",
+  "availabilityNote",
+  "sourceKind",
   "services",
   "sourceName",
   "sourceUrl",
@@ -31,6 +36,9 @@ for (const resource of resources) {
   ids.add(resource.id);
 
   if (!categories[resource.category]) throw new Error(`Unknown category: ${resource.category}`);
+  if (!["direct", "locator", "network"].includes(resource.kind)) {
+    throw new Error(`Unknown resource kind: ${resource.id}`);
+  }
   for (const type of resource.secondaryCategories || []) {
     if (!categories[type]) throw new Error(`Unknown secondary category: ${type}`);
   }
