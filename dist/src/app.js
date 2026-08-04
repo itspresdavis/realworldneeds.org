@@ -5,10 +5,24 @@ import {
   platformStatus,
   supportStages
 } from "./data/platform.js";
-import { createInitialTypeSet, distanceKm, matchesResource, toRad } from "./utils/geo.js";
+import {
+  cameraDistanceForSphere,
+  createInitialTypeSet,
+  distanceKm,
+  featureGlobeView,
+  matchesResource,
+  normalizeLongitude,
+  THREE_SPHERE_TEXTURE_OFFSET,
+  toRad
+} from "./utils/geo.js";
 
 const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const MIN_GLOBE_ZOOM = 0.9;
+
+function maxGlobeZoom() {
+  return window.innerWidth <= 600 ? 1.12 : 1.2;
+}
 
 function initialResultCount() {
   if (window.innerWidth <= 600) return 5;
@@ -61,7 +75,8 @@ const state = {
   globeVisible: true,
   ambientZoom: 1,
   savedIds: loadSavedResources(),
-  savedOnly: false
+  savedOnly: false,
+  inspectorOpen: true
 };
 
 const root = document.getElementById("root");
@@ -111,10 +126,10 @@ const icon = {
 
 const regionViews = {
   world: { label: "World view", lon: -8, lat: 12, zoom: 1 },
-  americas: { label: "Americas", lon: -88, lat: 16, zoom: 1.06 },
-  europeAfrica: { label: "Europe & Africa", lon: 13, lat: 18, zoom: 1.06 },
-  asia: { label: "Asia", lon: 92, lat: 24, zoom: 1.04 },
-  oceania: { label: "Oceania", lon: 145, lat: -23, zoom: 1.12 }
+  americas: { label: "Americas", lon: -88, lat: 16, zoom: 1.02 },
+  europeAfrica: { label: "Europe & Africa", lon: 13, lat: 18, zoom: 1.02 },
+  asia: { label: "Asia", lon: 92, lat: 24, zoom: 1.02 },
+  oceania: { label: "Oceania", lon: 145, lat: -23, zoom: 1.04 }
 };
 
 const countryNameAliases = {
@@ -213,7 +228,7 @@ function shell() {
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" placeholder="Place, service, or organization" autocomplete="off">
+                <input id="resourceSearch" type="search" placeholder="${window.innerWidth <= 600 ? "Search resources" : "Place, service, or organization"}" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
@@ -243,6 +258,7 @@ function shell() {
               <div><span class="status-dot"></span><strong>Global service map</strong></div>
               <div class="globe-meta__tools">
                 <span id="globeCount"></span>
+                <button class="globe-inspector-toggle" id="openInspector" type="button" hidden>Service details</button>
                 <label class="region-menu">
                   <span class="sr-only">Focus globe region</span>
                   <select id="regionFocus" aria-label="Focus globe region">
@@ -256,17 +272,16 @@ function shell() {
                 </label>
               </div>
             </div>
-            <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
             <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Use plus and minus to zoom. Select a country or any colored location marker for details.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-controls" aria-label="Globe controls">
-              <button type="button" id="toggleMotion" title="Pause globe rotation" aria-label="Pause globe rotation">${icon.pause}</button>
-              <button type="button" id="resetGlobe" title="Reset globe view" aria-label="Reset globe view">${icon.reset}</button>
-              <span></span>
-              <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">${icon.minus}</button>
+              <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">${icon.plus}</button>
+              <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">${icon.minus}</button>
+              <button type="button" id="resetGlobe" title="Reset globe view" aria-label="Reset globe view">${icon.reset}</button>
+              <button type="button" id="toggleMotion" title="Pause globe rotation" aria-label="Pause globe rotation">${icon.pause}</button>
             </div>
             <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
             <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
@@ -468,11 +483,19 @@ function serviceLayerTags(resource) {
 
 function renderResourcePanel() {
   const panel = document.getElementById("resourcePanel");
+  const grid = document.querySelector(".finder__grid");
+  const inspectorToggle = document.getElementById("openInspector");
   const resource = selectedResource();
+  const inspectorVisible = Boolean(resource && state.inspectorOpen);
+  panel.hidden = !inspectorVisible;
+  grid?.classList.toggle("is-panel-collapsed", !inspectorVisible);
+  if (inspectorToggle) inspectorToggle.hidden = !resource || inspectorVisible;
   if (!resource) {
-    panel.innerHTML = `
-      <div class="panel-empty"><span>${icon.shield}</span><h2>${state.viewMode === "needs" ? "No verified needs published" : state.filtered.length ? "Select a service" : "No matching service"}</h2><p>${state.viewMode === "needs" ? "RWN has not opened need submissions or published any reviewed needs." : state.filtered.length ? "Choose a location marker or directory result to see access details and the original source." : "Adjust the current filters to continue searching."}</p></div>
-    `;
+    panel.innerHTML = "";
+    return;
+  }
+  if (!inspectorVisible) {
+    panel.innerHTML = "";
     return;
   }
 
@@ -480,7 +503,7 @@ function renderResourcePanel() {
   const saved = state.savedIds.has(resource.id);
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
-    <div class="panel-source"><span>${icon.check} Original source linked</span><a href="#standards">How sources work ${icon.arrow}</a></div>
+    <div class="panel-source"><span>${icon.check} Original source linked</span><span class="panel-source__actions"><a href="#standards">How sources work ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${resource.city}, ${resource.country}</p></div></div>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
@@ -518,6 +541,10 @@ function renderResourcePanel() {
   document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
   document.getElementById("shareResource")?.addEventListener("click", () => shareResource(resource));
   document.getElementById("printResource")?.addEventListener("click", () => window.print());
+  document.getElementById("closeInspector")?.addEventListener("click", () => {
+    state.inspectorOpen = false;
+    renderResourcePanel();
+  });
 }
 
 function resourceCard(resource) {
@@ -553,6 +580,7 @@ function renderResults() {
 
 function setSelected(id, focus = true, reveal = "panel") {
   state.selectedId = id;
+  state.inspectorOpen = true;
   const resource = selectedResource();
   if (focus && resource) focusGlobeOn(resource, reveal === "map");
   renderResourcePanel();
@@ -644,9 +672,10 @@ function downloadDirectory() {
 }
 
 function focusGlobeOn(resource, immediate = false) {
-  state.targetLon = resource.lng;
-  state.targetLat = Math.max(-70, Math.min(70, resource.lat));
-  state.targetZoom = 1.1;
+  const view = featureGlobeView(countryFeatureByName(resource.country), { lat: resource.lat, lng: resource.lng });
+  state.targetLon = view.lng;
+  state.targetLat = Math.max(-70, Math.min(70, view.lat));
+  state.targetZoom = window.innerWidth <= 600 ? Math.min(1.06, view.zoom) : view.zoom;
   if (immediate) {
     state.rotationLon = state.targetLon;
     state.rotationLat = state.targetLat;
@@ -718,7 +747,7 @@ function createGlobeTexture() {
 
   if (hasEarthImagery) {
     ctx.drawImage(earthTextureImage, 0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "rgba(2, 18, 27, 0.12)";
+    ctx.fillStyle = "rgba(1, 8, 14, 0.035)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   } else {
     const ocean = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -729,42 +758,28 @@ function createGlobeTexture() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  ctx.lineWidth = 0.65;
-  ctx.strokeStyle = hasEarthImagery ? "rgba(177, 219, 217, 0.08)" : "rgba(127, 186, 185, 0.1)";
-  for (let longitude = -180; longitude <= 180; longitude += 15) {
-    const x = texturePoint(longitude, 0, canvas.width, canvas.height).x;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  }
-  for (let latitude = -75; latitude <= 75; latitude += 15) {
-    const y = texturePoint(0, latitude, canvas.width, canvas.height).y;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
+  if (!hasEarthImagery) {
+    state.landRings.forEach((ring, index) => {
+      const palette = ["#28514f", "#2d5854", "#244a4b", "#315b55"];
+      drawTextureRing(ctx, ring, canvas.width, canvas.height, palette[index % palette.length], "rgba(176, 218, 203, 0.24)");
+    });
   }
 
-  state.landRings.forEach((ring, index) => {
-    const palette = ["#28514f", "#2d5854", "#244a4b", "#315b55"];
-    const fill = hasEarthImagery ? "rgba(13, 74, 63, 0.04)" : palette[index % palette.length];
-    const stroke = hasEarthImagery ? "rgba(210, 236, 226, 0.16)" : "rgba(176, 218, 203, 0.24)";
-    drawTextureRing(ctx, ring, canvas.width, canvas.height, fill, stroke);
-  });
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "700 13px Helvetica Neue, Arial, sans-serif";
-  ctx.fillStyle = hasEarthImagery ? "rgba(226, 243, 237, 0.34)" : "rgba(207, 230, 221, 0.28)";
-  for (const item of mapLabels) {
-    const point = texturePoint(item.lng, item.lat, canvas.width, canvas.height);
-    ctx.fillText(item.label, point.x, point.y);
+  const focusedFeature = state.focusedCountry ? countryFeatureByName(state.focusedCountry) : null;
+  if (focusedFeature) {
+    for (const ring of extractRings(focusedFeature.geometry)) {
+      drawTextureRing(ctx, ring, canvas.width, canvas.height, "rgba(63, 214, 139, 0.16)", "rgba(168, 255, 210, 0.72)");
+    }
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.offset.x = THREE_SPHERE_TEXTURE_OFFSET;
   texture.anisotropy = globeRenderer?.capabilities.getMaxAnisotropy() || 1;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
   return texture;
 }
 
@@ -774,9 +789,9 @@ function loadEarthImagery() {
   image.onload = () => {
     earthTextureImage = image;
     if (globeSurface) {
-      globeSurface.material.emissive.setHex(0x03131b);
-      globeSurface.material.emissiveIntensity = 0.34;
-      globeSurface.material.shininess = 12;
+      globeSurface.material.emissive.setHex(0xffffff);
+      globeSurface.material.emissiveIntensity = 0.2;
+      globeSurface.material.roughness = 0.94;
     }
     refreshGlobeSurface();
   };
@@ -791,7 +806,7 @@ function createStarField() {
     return (seed - 1) / 2147483646;
   };
 
-  for (let index = 0; index < 520; index += 1) {
+  for (let index = 0; index < 180; index += 1) {
     const radius = 10 + random() * 18;
     const longitude = random() * Math.PI * 2;
     const latitude = Math.acos(2 * random() - 1);
@@ -806,10 +821,10 @@ function createStarField() {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   return new THREE.Points(geometry, new THREE.PointsMaterial({
     color: 0xd7eeee,
-    size: 0.025,
+    size: 0.014,
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.46,
+    opacity: 0.2,
     depthWrite: false
   }));
 }
@@ -833,7 +848,7 @@ function createGraticule() {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x8fc6bf, transparent: true, opacity: 0.1 }));
+  return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xa8c9c5, transparent: true, opacity: 0.045 }));
 }
 
 function rebuildCountryBorders() {
@@ -854,9 +869,9 @@ function rebuildCountryBorders() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   globeBorders = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
-    color: 0xcde8df,
+    color: 0xd8e7e1,
     transparent: true,
-    opacity: 0.34,
+    opacity: 0.22,
     depthWrite: false
   }));
   globeWorld.add(globeBorders);
@@ -886,7 +901,10 @@ function setCountryHighlight(name) {
   }
 
   const feature = name ? countryFeatureByName(name) : null;
-  if (!feature) return;
+  if (!feature) {
+    updateGlobeTexture();
+    return;
+  }
   const positions = [];
   for (const ring of extractRings(feature.geometry)) {
     for (let index = 1; index < ring.length; index += 1) {
@@ -905,21 +923,29 @@ function setCountryHighlight(name) {
   }));
   globeCountryHighlight.renderOrder = 4;
   globeWorld.add(globeCountryHighlight);
+  updateGlobeTexture();
+}
+
+function updateGlobeTexture() {
+  if (!globeSurface) return;
+  const previousTexture = globeSurface.material.map;
+  const texture = createGlobeTexture();
+  globeSurface.material.map = texture;
+  globeSurface.material.emissiveMap = texture;
+  globeSurface.material.needsUpdate = true;
+  previousTexture?.dispose();
 }
 
 function refreshGlobeSurface() {
   if (!globeSurface) return;
-  const previousTexture = globeSurface.material.map;
-  globeSurface.material.map = createGlobeTexture();
-  globeSurface.material.needsUpdate = true;
-  previousTexture?.dispose();
+  updateGlobeTexture();
   rebuildCountryBorders();
 }
 
 function initThreeGlobe() {
   const canvas = document.getElementById("globeCanvas");
   try {
-    globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
+    globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   } catch (error) {
     console.error("WebGL globe could not be initialized.", error);
     globeRenderer = null;
@@ -928,7 +954,7 @@ function initThreeGlobe() {
   globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   globeRenderer.outputColorSpace = THREE.SRGBColorSpace;
   globeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-  globeRenderer.toneMappingExposure = 1.08;
+  globeRenderer.toneMappingExposure = 1.02;
   globeRenderer.setClearColor(0x02131f, 0);
 
   globeScene = new THREE.Scene();
@@ -940,26 +966,28 @@ function initThreeGlobe() {
   globeScene.add(globeWorld);
   globeScene.add(createStarField());
 
+  const surfaceTexture = createGlobeTexture();
   globeSurface = new THREE.Mesh(
     new THREE.SphereGeometry(1, 128, 96),
-    new THREE.MeshPhongMaterial({
-      map: createGlobeTexture(),
+    new THREE.MeshStandardMaterial({
+      map: surfaceTexture,
+      emissiveMap: surfaceTexture,
       color: 0xffffff,
-      emissive: 0x03131b,
-      emissiveIntensity: 0.4,
-      specular: 0x375c65,
-      shininess: 12
+      emissive: 0xffffff,
+      emissiveIntensity: 0.2,
+      metalness: 0,
+      roughness: 0.94
     })
   );
   globeWorld.add(globeSurface);
   globeWorld.add(createGraticule());
 
   const atmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1.03, 96, 64),
+    new THREE.SphereGeometry(1.025, 96, 64),
     new THREE.ShaderMaterial({
-      uniforms: { glowColor: { value: new THREE.Color(0x45c9b1) } },
-      vertexShader: `varying vec3 vNormal; varying vec3 vPositionNormal; void main(){vNormal=normalize(normalMatrix*normal);vPositionNormal=normalize((modelViewMatrix*vec4(position,1.0)).xyz);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader: `uniform vec3 glowColor; varying vec3 vNormal; varying vec3 vPositionNormal; void main(){float intensity=pow(0.72-dot(vNormal,-vPositionNormal),3.0);gl_FragColor=vec4(glowColor,intensity*0.22);}`,
+      uniforms: { glowColor: { value: new THREE.Color(0x76b8cf) } },
+      vertexShader: `varying vec3 vNormal; varying vec3 vEye; void main(){vec4 viewPosition=modelViewMatrix*vec4(position,1.0);vNormal=normalize(normalMatrix*normal);vEye=normalize(-viewPosition.xyz);gl_Position=projectionMatrix*viewPosition;}`,
+      fragmentShader: `uniform vec3 glowColor; varying vec3 vNormal; varying vec3 vEye; void main(){float fresnel=pow(1.0-max(0.0,dot(normalize(vNormal),normalize(vEye))),4.0);gl_FragColor=vec4(glowColor,fresnel*0.16);}`,
       side: THREE.BackSide,
       blending: THREE.AdditiveBlending,
       transparent: true,
@@ -968,12 +996,12 @@ function initThreeGlobe() {
   );
   globeWorld.add(atmosphere);
 
-  globeScene.add(new THREE.AmbientLight(0xa6bdc2, 1.34));
-  globeScene.add(new THREE.HemisphereLight(0x9bc8ca, 0x12313b, 0.94));
-  const fill = new THREE.DirectionalLight(0x6da5ba, 0.65);
+  globeScene.add(new THREE.AmbientLight(0xb9c6ca, 0.88));
+  globeScene.add(new THREE.HemisphereLight(0xbad5d8, 0x0a1b23, 0.82));
+  const fill = new THREE.DirectionalLight(0x7ba6b6, 0.48);
   fill.position.set(-3, 1, 4);
   globeScene.add(fill);
-  globeLight = new THREE.DirectionalLight(0xd8fff0, 2.3);
+  globeLight = new THREE.DirectionalLight(0xf2f8ef, 1.7);
   globeScene.add(globeLight);
   globeScene.add(globeLight.target);
   globeFocusLight = new THREE.DirectionalLight(0xe5fff7, 0);
@@ -1010,7 +1038,7 @@ function rebuildConnections() {
   if (signature === connectionSignature) return;
   connectionSignature = signature;
   clearConnections();
-  if (!selected || state.viewMode !== "aid") return;
+  if (!selected || !state.focusPoint || state.viewMode !== "aid") return;
 
   const start = latLngVector(selected.lat, selected.lng);
   connectionDestinations(selected).forEach((resource, index) => {
@@ -1041,11 +1069,12 @@ function rebuildConnections() {
 function renderThreeGlobe(width, height, now) {
   if (!globeRenderer) return false;
   const canvas = globeRenderer.domElement;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, width < 640 ? 1.65 : 2);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
     globeCamera.aspect = width / height;
+    globeCamera.position.z = cameraDistanceForSphere(globeCamera.fov, globeCamera.aspect, 1.055, 1.07);
     globeCamera.updateProjectionMatrix();
   }
 
@@ -1063,7 +1092,7 @@ function renderThreeGlobe(width, height, now) {
   if (state.focusPoint && globeFocusLight) {
     const focusPosition = latLngVector(state.focusPoint.lat, state.focusPoint.lng, 4).applyEuler(globeWorld.rotation);
     globeFocusLight.position.copy(focusPosition);
-    globeFocusLight.intensity = 0.82;
+    globeFocusLight.intensity = 0.3;
     globeFocusLight.target.position.set(0, 0, 0);
     globeFocusLight.target.updateMatrixWorld();
   } else if (globeFocusLight) {
@@ -1218,7 +1247,7 @@ function connectionDestinations(selected) {
   return state.filtered
     .filter((resource) => resource.id !== selected.id && resource.category === selected.category)
     .sort((a, b) => distanceKm(selected.lat, selected.lng, a.lat, a.lng) - distanceKm(selected.lat, selected.lng, b.lat, b.lng))
-    .slice(0, 6);
+    .slice(0, 3);
 }
 
 function drawConnections(ctx, width, height, now) {
@@ -1376,10 +1405,10 @@ function drawGlobe(ctx, width, height, now) {
 
 function clusterVisibleResources(width, height) {
   const selected = selectedResource();
-  const threshold = 34 - (state.zoom - 0.74) * 18;
+  const threshold = (width < 600 ? 54 : 44) - (state.zoom - 0.86) * 16;
   const entries = state.filtered
     .map((resource) => ({ resource, point: projectGlobePoint(resource.lat, resource.lng, width, height) }))
-    .filter((entry) => entry.point.z > 0.03)
+    .filter((entry) => entry.point.z > 0.03 && entry.point.x > 12 && entry.point.x < width - 12 && entry.point.y > 12 && entry.point.y < height - 12)
     .sort((a, b) => Number(b.resource.id === selected?.id) - Number(a.resource.id === selected?.id));
   const clusters = [];
 
@@ -1407,7 +1436,7 @@ function renderPins(width, height) {
   const clusterKeys = clusters.map((cluster) => cluster.members.map((resource) => resource.id).sort().join(","));
   const signature = `${state.viewMode}:${clusterKeys.join("|")}:${state.selectedId}`;
   if (pinSignature !== signature) {
-    layer.innerHTML = clusters.map((cluster, index) => {
+    layer.innerHTML = clusters.map((cluster) => {
       const resource = cluster.members[0];
       const clustered = cluster.members.length > 1;
       const oneCategory = cluster.members.every((item) => item.category === resource.category);
@@ -1416,10 +1445,10 @@ function renderPins(width, height) {
       const key = cluster.members.map((item) => item.id).sort().join(",");
       const kinds = [...new Set(cluster.members.map(kindLabel))].join(" and ");
       if (clustered) {
-        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow};--delay:${(index % 8) * -0.22}s" aria-label="Explore ${cluster.members.length} grouped resources"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} resources in this area<small>${kinds}</small></strong></button>`;
+        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped resources"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} resources in this area<small>${kinds}</small></strong></button>`;
       }
       const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
-      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow};--delay:${(index % 8) * -0.22}s" aria-label="Select ${resource.name}, ${kindLabel(resource)}"><span></span><strong>${resource.name}<small>${resource.city}, ${resource.country} · ${kindLabel(resource)}</small></strong></button>`;
+      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}"><span></span><strong>${resource.name}<small>${resource.city}, ${resource.country} · ${kindLabel(resource)}</small></strong></button>`;
     }).join("");
     pinElements = new Map([...layer.querySelectorAll("[data-globe-key]")].map((button) => [button.dataset.globeKey, button]));
     pinSignature = signature;
@@ -1454,10 +1483,6 @@ function updateGlobeReadout() {
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
-function normalizeLongitude(value) {
-  return ((value + 180) % 360 + 360) % 360 - 180;
-}
-
 function shortestLongitude(from, to) {
   return normalizeLongitude(to - from);
 }
@@ -1485,10 +1510,9 @@ function advanceGlobe(now) {
     state.velocityLat *= friction;
     isIdle = state.autoRotate && now > state.interactionUntil && Math.abs(state.velocityLon) < 0.12;
     if (isIdle) {
-      state.rotationLon = normalizeLongitude(state.rotationLon + dt * 1.55);
-      const idleLatitude = 10 + Math.sin(now * 0.000075) * 7;
-      state.rotationLat += (idleLatitude - state.rotationLat) * Math.min(1, dt * 0.35);
-      state.ambientZoom = 1 + Math.sin(now * 0.00016) * 0.008;
+      state.rotationLon = normalizeLongitude(state.rotationLon + dt * 0.55);
+      state.rotationLat += (10 - state.rotationLat) * Math.min(1, dt * 0.22);
+      state.ambientZoom = 1;
     }
   }
   if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * Math.min(1, dt * 3);
@@ -1535,6 +1559,7 @@ function focusRegion(key, selectMatching = false) {
   state.interactionUntil = performance.now() + 6000;
   if (selectMatching) {
     state.selectedId = null;
+    state.inspectorOpen = false;
     renderResourcePanel();
     renderResults();
     pinSignature = "";
@@ -1555,8 +1580,8 @@ function focusCluster(ids) {
   const normalized = { x: vector.x / length, y: vector.y / length, z: vector.z / length };
   state.targetLon = Math.atan2(normalized.z, normalized.x) * 180 / Math.PI;
   const latitude = Math.asin(normalized.y) * 180 / Math.PI;
-  state.targetLat = Math.max(-48, Math.min(48, latitude * 0.68));
-  state.targetZoom = Math.min(1.38, state.targetZoom + 0.2);
+  state.targetLat = Math.max(-65, Math.min(65, latitude));
+  state.targetZoom = window.innerWidth <= 600 ? 1.06 : 1.1;
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = { lat: latitude, lng: state.targetLon };
@@ -1635,12 +1660,14 @@ function selectCountryFromPointer(event) {
   }
 
   state.selectedId = null;
-  state.targetLon = lng;
-  state.targetLat = Math.max(-70, Math.min(70, lat));
-  state.targetZoom = Math.max(1.16, state.targetZoom);
+  state.inspectorOpen = false;
+  const countryView = featureGlobeView(country, { lat, lng });
+  state.targetLon = countryView.lng;
+  state.targetLat = Math.max(-70, Math.min(70, countryView.lat));
+  state.targetZoom = window.innerWidth <= 600 ? Math.min(1.06, countryView.zoom) : countryView.zoom;
   state.velocityLon = 0;
   state.velocityLat = 0;
-  state.focusPoint = { lat, lng };
+  state.focusPoint = { lat: countryView.lat, lng: countryView.lng };
   state.focusedRegion = null;
   setCountryHighlight(displayName);
   state.interactionUntil = performance.now() + 7000;
@@ -1662,7 +1689,7 @@ async function loadLandGeometry() {
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
     refreshGlobeSurface();
     const resource = selectedResource();
-    if (resource && state.focusPoint) setCountryHighlight(resource.country);
+    if (resource && state.focusPoint) focusGlobeOn(resource);
   } catch (error) {
     console.error("Natural Earth geometry could not be loaded.", error);
     notify("Base map could not be loaded; aid locations remain available.");
@@ -1714,7 +1741,14 @@ function bindEvents() {
     if (!button) return;
     state.viewMode = button.dataset.viewMode;
     state.selectedId = state.viewMode === "aid" ? DEFAULT_RESOURCE : null;
+    state.inspectorOpen = state.viewMode === "aid";
     updateFilters();
+  });
+
+  document.getElementById("openInspector").addEventListener("click", () => {
+    if (!selectedResource()) return;
+    state.inspectorOpen = true;
+    renderResourcePanel();
   });
 
   document.getElementById("resourceGrid").addEventListener("click", (event) => {
@@ -1816,11 +1850,11 @@ function bindEvents() {
   canvas.addEventListener("pointercancel", () => { state.dragging = false; });
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
-    state.targetZoom = Math.max(0.74, Math.min(1.38, state.targetZoom - event.deltaY * 0.001));
+    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom - event.deltaY * 0.001));
     state.interactionUntil = performance.now() + 5000;
   }, { passive: false });
   canvas.addEventListener("dblclick", () => {
-    state.targetZoom = Math.min(1.38, state.targetZoom + 0.16);
+    state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom + 0.12);
     state.interactionUntil = performance.now() + 5000;
   });
   canvas.addEventListener("keydown", (event) => {
@@ -1829,8 +1863,8 @@ function bindEvents() {
     else if (event.key === "ArrowRight") state.rotationLon = normalizeLongitude(state.rotationLon + step);
     else if (event.key === "ArrowUp") state.rotationLat = Math.max(-58, state.rotationLat + step);
     else if (event.key === "ArrowDown") state.rotationLat = Math.min(58, state.rotationLat - step);
-    else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(1.38, state.targetZoom + 0.1);
-    else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(0.74, state.targetZoom - 0.1);
+    else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom + 0.1);
+    else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom - 0.1);
     else if (event.key === "Home") {
       focusRegion("world");
       event.preventDefault();
@@ -1856,8 +1890,8 @@ function bindEvents() {
     event.preventDefault();
   });
 
-  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(1.38, state.targetZoom + 0.1); state.interactionUntil = performance.now() + 5000; });
-  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(0.74, state.targetZoom - 0.1); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom + 0.1); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom - 0.1); state.interactionUntil = performance.now() + 5000; });
   document.getElementById("resetGlobe").addEventListener("click", () => {
     document.getElementById("regionFocus").value = "world";
     focusRegion("world");
