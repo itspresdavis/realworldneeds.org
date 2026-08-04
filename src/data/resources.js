@@ -300,5 +300,9 @@ export const trustPrinciples = [
   {
     title: "Built for updates",
     text: "Resources are structured so volunteers can add review dates, source notes, and changed-service flags."
+  },
+  {
+    title: "Privacy by default",
+    text: "This release has no accounts, intake forms, analytics, or marketing cookies. Optional location stays in the browser session."
   }
 ];

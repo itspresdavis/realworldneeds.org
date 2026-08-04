@@ -1,4 +1,5 @@
 import { categories, resources } from "../src/data/resources.js";
+import { platformStatus, publicLedger } from "../src/data/platform.js";
 
 const required = [
   "id",
@@ -47,3 +48,9 @@ for (const resource of resources) {
 }
 
 console.log(`Validated ${resources.length} source-backed resources.`);
+
+if (platformStatus.donationProcessingEnabled || publicLedger.length > 0) {
+  throw new Error("Donation processing or ledger data cannot be enabled without verified operations.");
+}
+
+console.log("Validated truthful platform launch state.");

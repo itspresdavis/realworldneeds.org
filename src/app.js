@@ -1,12 +1,22 @@
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
+import {
+  allocationFields,
+  controlPoints,
+  launchGates,
+  ledgerColumns,
+  platformStatus,
+  publicLedger,
+  supportStages
+} from "./data/platform.js";
 import { createInitialTypeSet, distanceKm, matchesResource } from "./utils/geo.js";
 
 const state = {
   query: "",
+  viewMode: "aid",
   activeTypes: createInitialTypeSet(),
-  selectedId: resources[0].id,
-  rotationLon: -74,
-  rotationLat: 4,
+  selectedId: "ask-izzy",
+  rotationLon: 133.7751,
+  rotationLat: -10,
   zoom: 1,
   dragging: false,
   pointerX: 0,
@@ -27,16 +37,29 @@ const icon = {
   pin: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>`,
   route: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 19c4-9 10 0 14-14"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="5" r="2"/></svg>`,
   locate: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`,
-  copy: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`
+  copy: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`,
+  arrow: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></svg>`,
+  info: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`,
+  shield: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.8 2.8 8.2 7 10 4.2-1.8 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  document: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></svg>`,
+  organization: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 21h16M6 21V9l6-5 6 5v12M9 21v-6h6v6"/></svg>`,
+  payment: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>`,
+  evidence: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5m-6 6 2 2 4-4"/></svg>`,
+  lock: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`,
+  close: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>`
 };
 
 function categoryCount(type) {
   return resources.filter((resource) => resource.category === type).length;
 }
 
+function latestReviewDate() {
+  return [...resources].map((resource) => resource.lastChecked).sort().at(-1);
+}
+
 function shell() {
   root.innerHTML = `
-    <a class="skip-link" href="#main">Skip to aid finder</a>
+    <a class="skip-link" href="#main">Skip to find help</a>
     <div class="app-shell" id="top">
       <header class="site-header">
         <a class="brand" href="#top" aria-label="Real World Needs home">
@@ -44,42 +67,43 @@ function shell() {
           <span><strong>RWN</strong><small>Real World Needs</small></span>
         </a>
         <nav aria-label="Primary navigation">
-          <a href="#resources">Resources</a>
-          <a href="#map">Globe</a>
-          <a href="#verify">Verify</a>
-          <a href="#safety">Safety</a>
-          <a href="#mission">Mission</a>
+          <a href="#find-help">Find help</a>
+          <a href="#support-flow">How support moves</a>
+          <a href="#transparency">Transparency</a>
+          <a href="#standards">Standards</a>
         </nav>
-        <a class="header-action" href="#verify">Source standards</a>
+        <a class="header-action" href="#funding">How funding works</a>
       </header>
 
       <main id="main">
-        <section class="hero-shell" id="map">
-          <div class="hero-copy">
-            <h1>Find real help, from <span>verified sources.</span></h1>
-            <p>Explore free food, clothing, shelter, and nonprofit aid using official, source-backed listings across the globe.</p>
-            <div class="proof-row" aria-label="RWN data standards">
-              <span><strong>${resources.length}</strong> source-backed listings</span>
-              <span><strong>${resourceTypes.length}</strong> aid layers</span>
-              <span><strong>0</strong> unsupported claims</span>
-            </div>
-            <div class="finder-controls" id="resources" role="search">
+        <section class="hero-shell" id="find-help">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <h1>Real World<br>Needs</h1>
+              <h2>Find verified help.<br>Follow every handoff.</h2>
+              <p>Explore official-source services now. See how verified needs can move from intake to funding, delivery, and public evidence.</p>
+              <div class="mode-switch" aria-label="Map data mode">
+                <button class="is-active" type="button" data-view-mode="aid" aria-pressed="true">Available aid</button>
+                <button type="button" data-view-mode="needs" aria-pressed="false">Verified needs <span>${platformStatus.managedNeedsPublished}</span></button>
+              </div>
+              <div class="finder-controls" id="resources" role="search">
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" placeholder="Search city, service, organization, or address" type="search">
+                <input id="resourceSearch" placeholder="Search place, service, or organization" type="search" autocomplete="off">
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
               <div class="toggle-grid" id="toggleGrid" aria-label="Aid category filters"></div>
               <div class="finder-actions">
-                <button class="locate-button" type="button" id="locateMe">${icon.locate}Find nearest listed resource</button>
-                <button class="reset-button" type="button" id="resetFilters">Show all verified layers</button>
+                <button class="locate-button" type="button" id="locateMe">${icon.locate}Use my location</button>
+                <button class="reset-button" type="button" id="resetFilters">Reset filters</button>
+              </div>
+                <p class="truth-line">${icon.check}${resources.length} official-source listings <span>·</span> ${resourceTypes.length} aid categories <span>·</span> Reviewed ${checkedDate(latestReviewDate())}</p>
               </div>
             </div>
-          </div>
 
-          <div class="globe-layout">
             <section class="globe-stage" aria-label="Interactive global aid resource globe">
+              <div class="globe-heading"><h2>Global support map</h2><span>Drag to rotate</span></div>
               <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing source-backed aid resources"></canvas>
               <p class="sr-only" id="globeHelp">Drag to rotate, use the mouse wheel or zoom buttons, or focus the globe and use arrow keys. Resource buttons below provide the same listings without the map.</p>
               <div class="globe-pin-layer" id="pinLayer"></div>
@@ -90,6 +114,7 @@ function shell() {
                 <button type="button" id="resetGlobe" aria-label="Reset globe">${icon.route}</button>
               </div>
               <div class="globe-legend" id="globeLegend"></div>
+              <a class="globe-standard-link" href="#standards">See data standards${icon.arrow}</a>
             </section>
             <aside class="resource-panel" aria-live="polite" id="resourcePanel"></aside>
           </div>
@@ -97,56 +122,94 @@ function shell() {
           <div class="resource-rail">
             <div class="resource-rail__top">
               <p id="resultCount" aria-live="polite"></p>
-              <span>Official sources only</span>
+              <span>Open a listing to verify details before travel</span>
             </div>
             <div class="resource-strip" id="resourceStrip" tabindex="0" aria-label="Scrollable verified resource list"></div>
           </div>
-
-          <div class="category-cue" id="categoryCue" aria-label="Category color legend"></div>
         </section>
 
-        <section class="safety-section" id="safety" aria-labelledby="safetyTitle">
-          <div class="safety-section__signal">Important</div>
+        <section class="value-band" aria-label="RWN platform principles">
+          <article><span>${icon.search}</span><div><h2>Find help with confidence.</h2><p>Every visible listing keeps its official source and review date close.</p></div></article>
+          <article><span>${icon.route}</span><div><h2>See how support moves.</h2><p>Each future handoff has an owner, record, control, and evidence requirement.</p></div></article>
+          <article><span>${icon.shield}</span><div><h2>Built for accountability.</h2><p>No donation or impact claim appears before the underlying controls exist.</p></div></article>
+        </section>
+
+        <section class="support-section" id="support-flow">
+          <div class="section-heading section-heading--wide">
+            <h2>Every contribution needs a chain of custody.</h2>
+            <p>RWN is being designed so a need cannot quietly become a claim. Each handoff must have an owner, a record, and evidence before it can be closed.</p>
+          </div>
+          <ol class="support-rail" id="supportRail"></ol>
+          <div class="control-layout">
+            <div class="control-register">
+              <h3>Control points</h3>
+              <div id="controlRows"></div>
+              <p class="release-note">${icon.info}No RWN-managed needs or funds are published in this release.</p>
+              <button class="text-action" type="button" data-open-launch>Read the operating standard${icon.arrow}</button>
+            </div>
+            <div class="custody-map" aria-label="Need to evidence custody path" id="custodyPath"></div>
+          </div>
+        </section>
+
+        <section class="transparency-section" id="transparency">
+          <div class="section-heading">
+            <h2>Transparency starts before the first dollar.</h2>
+            <p>RWN will not present pledges, allocations, or deliveries as impact until the underlying records can be reviewed.</p>
+          </div>
+          <div class="ledger-wrap" role="region" aria-label="RWN public fund ledger" tabindex="0">
+            <table class="ledger-table">
+              <thead><tr id="ledgerHead"></tr></thead>
+              <tbody id="ledgerBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="allocation-section" id="funding">
           <div>
-            <h2 id="safetyTitle">Confirm before you travel.</h2>
-            <p>RWN is an informational directory, not an emergency service or a provider of the listed programs. Hours, eligibility, inventory, and availability can change. Open the official source and contact the organization before making a trip. If anyone is in immediate danger, contact the emergency services for their location.</p>
+            <h2>How a contribution will be traced</h2>
+            <div class="allocation-track" id="allocationTrack"></div>
+          </div>
+          <div class="donation-lock">
+            <button type="button" data-open-launch disabled>${icon.lock}Donations not yet enabled</button>
+            <p>${platformStatus.statusNote}</p>
           </div>
         </section>
 
-        <section class="verification-section" id="verify">
-          <div class="section-copy">
-            <h2>RWN is built around proof before reach.</h2>
-            <p>The directory starts small on purpose. Every visible listing points to a public source, keeps its service claim modest, and shows when RWN last checked the source.</p>
+        <section class="standards-section" id="standards">
+          <div class="section-heading section-heading--compact">
+            <h2>Professional launch gates</h2>
+            <p>Operational features stay unavailable until the organization can publish and maintain the controls behind them.</p>
           </div>
-          <div class="principle-grid" id="principleGrid"></div>
+          <div class="launch-register" id="launchRows"></div>
+          <button class="outline-action" type="button" data-open-launch>Review launch requirements${icon.arrow}</button>
         </section>
 
-        <section class="mission-section" id="mission">
-          <div class="mission-panel">
-            <h2>A serious support layer for real needs.</h2>
-            <p>RWN is building a public trust layer between people who need help and organizations already doing the work. The directory makes sources visible and keeps claims intentionally narrow.</p>
+        <section class="source-standards">
+          <div class="source-standards__copy">
+            <h2>Official sources, modest claims.</h2>
+            <p>The aid finder is an informational directory, not an emergency service or provider. Hours, eligibility, inventory, and availability can change. Open the official source and contact the organization before traveling.</p>
+            <p>If anyone is in immediate danger, contact the emergency services for their location.</p>
           </div>
-          <div class="mission-steps">
-            <article><span>01</span><div><h3>Find aid quickly</h3><p>Search by need, location, organization, or source-backed service category.</p></div></article>
-            <article><span>02</span><div><h3>Show the source</h3><p>Every listing keeps its official source close, visible, and easy to open.</p></div></article>
-            <article><span>03</span><div><h3>Keep records current</h3><p>Future RWN operators can review listings, flag changes, and add local notes.</p></div></article>
-          </div>
-        </section>
-
-        <section class="sources-section">
-          <div>
-            <h2>Seed data sources</h2>
-            <p>This prototype uses verified public sources only. It does not claim live hours, eligibility, inventory, or availability unless a source is opened and reviewed.</p>
-          </div>
-          <div class="source-cloud" id="sourceCloud"></div>
+          <div class="principle-list" id="principleGrid"></div>
+          <div class="source-directory"><h3>Current source directory</h3><div class="source-cloud" id="sourceCloud"></div></div>
         </section>
       </main>
 
       <footer class="site-footer">
-        <div><span>Real World Needs</span><p>Source-backed aid discovery, built to grow carefully.</p></div>
-        <nav aria-label="Footer navigation"><a href="#resources">Find aid</a><a href="#verify">Data standards</a><a href="#safety">Safety</a></nav>
+        <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><strong>RWN · Real World Needs</strong></a>
+        <nav aria-label="Footer navigation"><a href="#find-help">Find help</a><a href="#standards">Source standards</a><a href="#support-flow">Operating model</a><button type="button" data-open-launch>Launch requirements</button></nav>
+        <p>Source-backed aid discovery. No donation processing in this release.</p>
       </footer>
       <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
+      <dialog class="launch-dialog" id="launchDialog" aria-labelledby="launchDialogTitle">
+        <form method="dialog" class="dialog-close"><button aria-label="Close launch requirements">${icon.close}</button></form>
+        <div>
+          <h2 id="launchDialogTitle">What RWN must verify before operations go live</h2>
+          <p>These are launch controls, not claims about RWN's current legal or operational status.</p>
+          <div class="dialog-requirements" id="dialogRequirements"></div>
+          <div class="dialog-boundary"><h3>Current public release</h3><p>The source-backed aid finder is live. Public need intake, partner accounts, donation processing, fund allocation, disbursement, and impact reporting are not enabled.</p></div>
+        </div>
+      </dialog>
     </div>
   `;
 }
@@ -216,12 +279,47 @@ function renderStaticBits() {
     `;
   }).join("");
 
-  document.getElementById("categoryCue").innerHTML = Object.entries(categories).map(([type, category]) => `
-    <span style="--cue-color:${category.color}">${category.label}</span>
+  document.getElementById("supportRail").innerHTML = supportStages.map((stage, index) => `
+    <li><span>${index + 1}</span><h3>${stage.label}</h3><p>${stage.description}</p></li>
+  `).join("");
+
+  document.getElementById("controlRows").innerHTML = controlPoints.map(([label, requirement], index) => `
+    <div><span class="register-icon register-icon--${index + 1}">${[icon.shield, icon.check, icon.payment, icon.evidence, icon.document][index]}</span><strong>${label}</strong><p>${requirement}</p></div>
+  `).join("");
+
+  const custodySteps = [
+    ["Need", icon.document],
+    ["Review", icon.search],
+    ["Organization", icon.organization],
+    ["Funding", icon.payment],
+    ["Evidence", icon.evidence]
+  ];
+  document.getElementById("custodyPath").innerHTML = custodySteps.map(([label, glyph]) => `
+    <div><span>${glyph}</span><strong>${label}</strong></div>
+  `).join("");
+
+  document.getElementById("ledgerHead").innerHTML = ledgerColumns
+    .map((column) => `<th scope="col">${column}</th>`)
+    .join("");
+  document.getElementById("ledgerBody").innerHTML = publicLedger.length
+    ? publicLedger.map((entry) => `<tr>${ledgerColumns.map((column) => `<td>${entry[column] || ""}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${ledgerColumns.length}"><div class="ledger-empty">${icon.info}<h3>No RWN-managed funds recorded</h3><p>Donation processing remains disabled until the organization, payment account, policies, and reconciliation controls are verified.</p><button type="button" data-open-launch>Review launch requirements${icon.arrow}</button></div></td></tr>`;
+
+  const allocationIcons = [icon.document, icon.payment, icon.route, icon.evidence];
+  document.getElementById("allocationTrack").innerHTML = allocationFields.map(([label, description], index) => `
+    <div><span>${allocationIcons[index]}</span><div><strong>${label}</strong><p>${description}</p></div></div>
+  `).join("");
+
+  document.getElementById("launchRows").innerHTML = launchGates.map(([label, description], index) => `
+    <div><span class="register-icon register-icon--${index + 1}">${[icon.shield, icon.organization, icon.route, icon.evidence][index]}</span><strong>${label}</strong><p>${description}</p></div>
+  `).join("");
+
+  document.getElementById("dialogRequirements").innerHTML = launchGates.map(([label, description]) => `
+    <section><h3>${label}</h3><p>${description}</p></section>
   `).join("");
 
   document.getElementById("principleGrid").innerHTML = trustPrinciples.map((principle) => `
-    <article><span>${icon.check}</span><h3>${principle.title}</h3><p>${principle.text}</p></article>
+    <article><span>${icon.check}</span><div><h3>${principle.title}</h3><p>${principle.text}</p></div></article>
   `).join("");
 
   const sources = new Map();
@@ -232,34 +330,72 @@ function renderStaticBits() {
 }
 
 function renderFilters() {
-  document.querySelectorAll(".type-toggle").forEach((button) => {
-    const type = button.dataset.type;
-    const active = state.activeTypes.has(type);
+  document.querySelectorAll("[data-view-mode]").forEach((button) => {
+    const active = button.dataset.viewMode === state.viewMode;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", String(active));
   });
 
-  document.getElementById("globeLegend").innerHTML = resourceTypes
+  const aidMode = state.viewMode === "aid";
+  document.getElementById("resourceSearch").disabled = !aidMode;
+  document.getElementById("locateMe").disabled = !aidMode;
+  document.getElementById("resetFilters").disabled = !aidMode;
+  document.getElementById("toggleGrid").classList.toggle("is-disabled", !aidMode);
+  document.querySelectorAll(".type-toggle").forEach((button) => {
+    const type = button.dataset.type;
+    const active = state.activeTypes.has(type);
+    button.disabled = !aidMode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  document.getElementById("globeLegend").innerHTML = aidMode ? resourceTypes
     .filter((type) => state.activeTypes.has(type))
     .map((type) => `<span style="--legend-color:${categories[type].color}">${categories[type].label}</span>`)
-    .join("");
+    .join("") : `<span class="needs-legend">No verified needs published</span>`;
 
   const selected = selectedResource();
   const activeLabels = resourceTypes
     .filter((type) => state.activeTypes.has(type))
     .map((type) => categories[type].label)
     .join(", ");
-  document.getElementById("globeStatus").innerHTML = `
-    <span>Showing ${state.filtered.length} of ${resources.length}</span>
-    <strong>${selected ? selected.name : "No matching listings"}</strong>
-    <small>${activeLabels || "All aid layers"}</small>
-  `;
-  document.getElementById("searchStatus").textContent = `${state.filtered.length} source-backed listing${state.filtered.length === 1 ? "" : "s"} found.`;
+  document.getElementById("globeStatus").innerHTML = aidMode ? `
+      <span>Showing ${state.filtered.length} of ${resources.length}</span>
+      <strong>${selected ? selected.name : "No matching listings"}</strong>
+      <small>${activeLabels || "All aid layers"}</small>
+    ` : `
+      <span>Verified needs</span>
+      <strong>None published</strong>
+      <small>No inferred or unreviewed need locations are shown.</small>
+    `;
+  document.getElementById("searchStatus").textContent = aidMode
+    ? `${state.filtered.length} source-backed listing${state.filtered.length === 1 ? "" : "s"} found.`
+    : "No RWN-verified needs are published.";
+  document.getElementById("globeCanvas").setAttribute(
+    "aria-label",
+    aidMode
+      ? "Interactive globe showing source-backed aid resources"
+      : "Interactive globe with no RWN-verified needs currently published"
+  );
 }
 
 function renderResourcePanel() {
   const resource = selectedResource();
   const panel = document.getElementById("resourcePanel");
+  if (state.viewMode === "needs") {
+    panel.removeAttribute("style");
+    panel.innerHTML = `
+      <div class="empty-state empty-state--needs">
+        <span>${icon.shield}</span>
+        <h2>No verified needs are published.</h2>
+        <p>RWN will only map a need after identity, safeguarding, scope, and evidence review. Public need intake is not enabled in this release.</p>
+        <button type="button" data-return-aid>View available aid</button>
+        <a href="#support-flow">See the verification chain${icon.arrow}</a>
+      </div>
+    `;
+    panel.querySelector("[data-return-aid]").addEventListener("click", () => setViewMode("aid"));
+    return;
+  }
   if (!resource) {
     panel.removeAttribute("style");
     panel.innerHTML = `
@@ -281,7 +417,7 @@ function renderResourcePanel() {
   panel.style.setProperty("--type-glow", category.glow);
   panel.innerHTML = `
     <div class="resource-panel__top">
-      <span class="verified-chip verified-chip--strong">${icon.check}source-backed</span>
+      <span class="verified-chip verified-chip--strong">${icon.check}official source</span>
       <span class="resource-panel__category">${category.label}</span>
     </div>
     <h2>${resource.name}</h2>
@@ -301,7 +437,7 @@ function renderResourcePanel() {
       ${resource.services.map((service) => `<span>${service}</span>`).join("")}
     </div>
     <div class="source-box">
-      <span>Verified source</span>
+      <span>Official source</span>
       <strong>${resource.sourceName}</strong>
       <p>${resource.sourceDetail}</p>
     </div>
@@ -337,7 +473,7 @@ function resourceCard(resource) {
         </span>
       </button>
       <div class="resource-card__footer">
-        <span class="verified-chip">${icon.check}source-backed</span>
+        <span class="verified-chip">${icon.check}official source</span>
         <a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Open source${icon.external}</a>
       </div>
     </article>
@@ -345,6 +481,11 @@ function resourceCard(resource) {
 }
 
 function renderResourceStrip() {
+  if (state.viewMode === "needs") {
+    document.getElementById("resultCount").textContent = "0 verified needs published";
+    document.getElementById("resourceStrip").innerHTML = `<p class="resource-strip__empty">No need records are shown until RWN's review and safeguarding controls are operational.</p>`;
+    return;
+  }
   document.getElementById("resultCount").textContent = `${state.filtered.length} source-backed listing${state.filtered.length === 1 ? "" : "s"}`;
   document.getElementById("resourceStrip").innerHTML = state.filtered.length
     ? state.filtered.map(resourceCard).join("")
@@ -355,7 +496,9 @@ function renderResourceStrip() {
 }
 
 function updateFiltered() {
-  state.filtered = resources.filter((resource) => matchesResource(resource, state.query, state.activeTypes));
+  state.filtered = state.viewMode === "aid"
+    ? resources.filter((resource) => matchesResource(resource, state.query, state.activeTypes))
+    : [];
   if (state.userLocation) {
     state.filtered.sort((a, b) => {
       const aDistance = distanceKm(state.userLocation.lat, state.userLocation.lng, a.lat, a.lng);
@@ -371,13 +514,21 @@ function updateFiltered() {
   renderResourceStrip();
 }
 
+function setViewMode(mode) {
+  if (!["aid", "needs"].includes(mode)) return;
+  state.viewMode = mode;
+  state.selectedId = mode === "aid" ? "ask-izzy" : null;
+  updateFiltered();
+}
+
 function resetSearchAndFilters() {
+  state.viewMode = "aid";
   state.query = "";
   state.activeTypes = createInitialTypeSet();
-  state.selectedId = resources[0].id;
+  state.selectedId = "ask-izzy";
   document.getElementById("resourceSearch").value = "";
   updateFiltered();
-  focusGlobeOn(resources[0]);
+  focusGlobeOn(resources.find((resource) => resource.id === "ask-izzy"));
 }
 
 function focusGlobeOn(resource) {
@@ -581,6 +732,10 @@ function renderGlobe() {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-view-mode]").forEach((button) => {
+    button.addEventListener("click", () => setViewMode(button.dataset.viewMode));
+  });
+
   document.getElementById("resourceSearch").addEventListener("input", (event) => {
     state.query = event.target.value;
     updateFiltered();
@@ -621,7 +776,7 @@ function bindEvents() {
       },
       () => {
         button.disabled = false;
-        button.innerHTML = `${icon.locate}Find nearest listed resource`;
+        button.innerHTML = `${icon.locate}Use my location`;
         notify("Location was not available. Search by city or address instead.");
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
@@ -676,10 +831,33 @@ function bindEvents() {
     state.zoom = Math.max(0.72, state.zoom - 0.1);
   });
   document.getElementById("resetGlobe").addEventListener("click", () => {
-    state.rotationLon = -74;
-    state.rotationLat = 4;
+    state.rotationLon = 133.7751;
+    state.rotationLat = -10;
     state.zoom = 1;
   });
+
+  const launchDialog = document.getElementById("launchDialog");
+  document.querySelectorAll("[data-open-launch]").forEach((button) => {
+    if (button.disabled) return;
+    button.addEventListener("click", () => launchDialog.showModal());
+  });
+  launchDialog.addEventListener("click", (event) => {
+    if (event.target === launchDialog) launchDialog.close();
+  });
+
+  if (!reduceMotion && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll(".value-band, .section-heading, .support-rail, .control-layout, .ledger-wrap, .allocation-section, .standards-section, .source-standards").forEach((element) => {
+      element.classList.add("reveal");
+      observer.observe(element);
+    });
+  }
 }
 
 shell();
