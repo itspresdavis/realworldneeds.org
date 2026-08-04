@@ -11,28 +11,28 @@ export const platformStatus = {
 export const supportStages = [
   {
     id: "intake",
-    label: "Intake",
-    description: "Receive a need without exposing private details."
+    label: "Receive",
+    description: "Record the need without publishing private details."
   },
   {
     id: "verify",
-    label: "Verify",
-    description: "Confirm the organization, scope, urgency, and evidence."
+    label: "Review",
+    description: "Confirm who is asking, what is needed, how urgent it is, and what evidence exists."
   },
   {
     id: "allocate",
-    label: "Allocate",
-    description: "Assign restricted or flexible funds to an approved need."
+    label: "Approve",
+    description: "Document the decision, budget, restrictions, and responsible organization."
   },
   {
     id: "deliver",
     label: "Deliver",
-    description: "Record procurement, transfer, shipment, or service."
+    description: "Record the purchase, transfer, shipment, or service provided."
   },
   {
     id: "prove",
-    label: "Prove",
-    description: "Publish receipts, outcomes, remaining balance, and review."
+    label: "Report",
+    description: "Publish receipts, delivery evidence, remaining balance, outcomes, and corrections."
   }
 ];
 
@@ -69,4 +69,3 @@ export const ledgerColumns = [
   "Delivery evidence",
   "Last reviewed"
 ];
-

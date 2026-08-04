@@ -170,7 +170,7 @@ svg {
   font-weight: 750;
 }
 
-.site-header nav {
+.primary-nav {
   display: flex;
   align-items: center;
   gap: clamp(1.2rem, 2.7vw, 2.8rem);
@@ -179,12 +179,12 @@ svg {
   font-weight: 750;
 }
 
-.site-header nav a {
+.primary-nav a {
   position: relative;
   padding: 0.55rem 0;
 }
 
-.site-header nav a::after {
+.primary-nav a::after {
   position: absolute;
   right: 0;
   bottom: 0.2rem;
@@ -197,15 +197,83 @@ svg {
   transition: transform 180ms ease;
 }
 
-.site-header nav a:hover,
-.site-header nav a:focus-visible {
+.primary-nav a:hover,
+.primary-nav a:focus-visible,
+.primary-nav a[aria-current="location"] {
   color: #087a43;
   outline: none;
 }
 
-.site-header nav a:hover::after,
-.site-header nav a:focus-visible::after {
+.primary-nav a:hover::after,
+.primary-nav a:focus-visible::after,
+.primary-nav a[aria-current="location"]::after {
   transform: scaleX(1);
+}
+
+.site-menu {
+  position: relative;
+  display: none;
+  justify-self: end;
+}
+
+.site-menu > summary {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid #9aa7ac;
+  border-radius: 4px;
+  color: #243640;
+  cursor: pointer;
+  list-style: none;
+}
+
+.site-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.site-menu > summary svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.site-menu[open] > summary,
+.site-menu > summary:hover,
+.site-menu > summary:focus-visible {
+  border-color: #087a43;
+  background: #eef8f2;
+  color: #087a43;
+  outline: none;
+}
+
+.site-menu nav {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  z-index: 4;
+  display: grid;
+  width: min(17rem, calc(100vw - 1.5rem));
+  padding: 0.4rem;
+  border: 1px solid #c7d0d3;
+  border-radius: 4px;
+  background: var(--white);
+  box-shadow: 0 1rem 2.5rem rgba(7, 23, 35, 0.16);
+}
+
+.site-menu nav a {
+  padding: 0.72rem 0.8rem;
+  border-radius: 3px;
+  color: #233640;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.site-menu nav a:hover,
+.site-menu nav a:focus-visible,
+.site-menu nav a[aria-current="location"] {
+  background: #eef8f2;
+  color: #087a43;
+  outline: none;
 }
 
 .header-action {
@@ -2401,7 +2469,7 @@ svg {
     grid-template-columns: 1fr auto;
   }
 
-  .site-header nav {
+  .primary-nav {
     display: none;
   }
 
@@ -2485,7 +2553,12 @@ svg {
 
 @media (max-width: 900px) {
   .site-header {
+    grid-template-columns: minmax(0, 1fr) auto auto;
     min-height: 4rem;
+  }
+
+  .site-menu {
+    display: block;
   }
 
   .brand__name {
@@ -3470,7 +3543,7 @@ svg {
     gap: 1rem;
   }
 
-  .site-header nav {
+  .primary-nav {
     display: flex;
     gap: clamp(0.8rem, 1.8vw, 1.35rem);
     font-size: 0.72rem;
