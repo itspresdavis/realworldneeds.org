@@ -1,7 +1,73 @@
 import { resourceTypes } from "../data/resources.js";
 
+export const THREE_SPHERE_TEXTURE_OFFSET = 0.25;
+
 export function toRad(value) {
   return (value * Math.PI) / 180;
+}
+
+export function normalizeLongitude(value) {
+  return ((value + 180) % 360 + 360) % 360 - 180;
+}
+
+function coordinateVector(lat, lng) {
+  const latitude = toRad(lat);
+  const longitude = toRad(lng);
+  const cosLat = Math.cos(latitude);
+  return {
+    x: cosLat * Math.sin(longitude),
+    y: Math.sin(latitude),
+    z: cosLat * Math.cos(longitude)
+  };
+}
+
+function outerRings(geometry) {
+  if (!geometry) return [];
+  if (geometry.type === "Polygon") return geometry.coordinates.length ? [geometry.coordinates[0]] : [];
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.flatMap((polygon) => polygon.length ? [polygon[0]] : []);
+  return [];
+}
+
+export function featureGlobeView(feature, fallback = { lat: 0, lng: 0 }) {
+  const coordinates = outerRings(feature?.geometry).flatMap((ring) => {
+    if (ring.length < 2) return ring;
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    return first[0] === last[0] && first[1] === last[1] ? ring.slice(0, -1) : ring;
+  });
+  if (!coordinates.length) return { lat: fallback.lat, lng: fallback.lng, zoom: 1.06, angularRadius: 0 };
+
+  const average = coordinates.reduce((sum, [lng, lat]) => {
+    const vector = coordinateVector(lat, lng);
+    sum.x += vector.x;
+    sum.y += vector.y;
+    sum.z += vector.z;
+    return sum;
+  }, { x: 0, y: 0, z: 0 });
+  const length = Math.hypot(average.x, average.y, average.z) || 1;
+  const center = { x: average.x / length, y: average.y / length, z: average.z / length };
+  const lat = Math.asin(Math.max(-1, Math.min(1, center.y))) * 180 / Math.PI;
+  const lng = normalizeLongitude(Math.atan2(center.x, center.z) * 180 / Math.PI);
+  const angularRadius = coordinates.reduce((largest, [coordinateLng, coordinateLat]) => {
+    const vector = coordinateVector(coordinateLat, coordinateLng);
+    const dot = Math.max(-1, Math.min(1, center.x * vector.x + center.y * vector.y + center.z * vector.z));
+    return Math.max(largest, Math.acos(dot) * 180 / Math.PI);
+  }, 0);
+  const zoom = angularRadius > 55 ? 1.01
+    : angularRadius > 32 ? 1.04
+      : angularRadius > 18 ? 1.07
+        : angularRadius > 8 ? 1.1
+          : 1.13;
+
+  return { lat, lng, zoom, angularRadius };
+}
+
+export function cameraDistanceForSphere(verticalFovDegrees, aspect, radius = 1.05, padding = 1.06) {
+  const verticalFov = toRad(verticalFovDegrees);
+  const safeAspect = Math.max(0.1, aspect || 1);
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * safeAspect);
+  const limitingFov = Math.min(verticalFov, horizontalFov);
+  return (radius / Math.sin(limitingFov / 2)) * padding;
 }
 
 export function latLngToVector3(lat, lng, radius = 1) {

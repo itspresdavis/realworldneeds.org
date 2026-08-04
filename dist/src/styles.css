@@ -778,8 +778,8 @@ svg {
 }
 
 .globe-canvas:focus-visible {
-  outline: 2px solid var(--green-soft);
-  outline-offset: -4px;
+  outline: 2px solid rgba(66, 209, 132, 0.38);
+  outline-offset: -3px;
 }
 
 .globe-pin-layer {
@@ -832,8 +832,6 @@ svg {
   inset: -0.38rem;
   border: 1px solid var(--pin);
   border-radius: 50%;
-  animation: markerRing 2.3s ease-out infinite;
-  animation-delay: var(--delay);
   content: "";
 }
 
@@ -2455,11 +2453,6 @@ svg {
   font-weight: 800;
 }
 
-@keyframes markerRing {
-  0% { transform: scale(0.65); opacity: 0.9; }
-  75%, 100% { transform: scale(1.75); opacity: 0; }
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -3753,4 +3746,375 @@ svg {
     transition-duration: 0.001ms !important;
   }
 
+}
+
+/* Globe experience 2.0 — contained, quiet, and instrument-like. */
+@media screen {
+  .finder__grid {
+    grid-template-columns: minmax(16.5rem, 0.58fr) minmax(38rem, 1.82fr) minmax(19rem, 0.78fr);
+    min-height: clamp(44rem, calc(100svh - 4.5rem), 52rem);
+  }
+
+  .finder__grid.is-panel-collapsed {
+    grid-template-columns: minmax(16.5rem, 0.48fr) minmax(0, 2fr);
+  }
+
+  .finder__grid.is-panel-collapsed .globe-stage {
+    grid-column: 2;
+  }
+
+  .globe-stage {
+    height: clamp(44rem, calc(100svh - 4.5rem), 52rem);
+    min-height: 0;
+    background:
+      radial-gradient(circle at 50% 44%, rgba(14, 40, 55, 0.32), transparent 56%),
+      #020d16;
+  }
+
+  .globe-stage::after {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: radial-gradient(circle at 50% 46%, transparent 52%, rgba(0, 5, 10, 0.25) 100%);
+    content: "";
+    pointer-events: none;
+  }
+
+  .globe-meta {
+    top: 1rem;
+    right: 1rem;
+    left: 1rem;
+    min-height: 2.7rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid rgba(210, 231, 233, 0.13);
+    border-radius: 4px;
+    background: rgba(3, 17, 27, 0.9);
+    box-shadow: 0 0.7rem 1.8rem rgba(0, 0, 0, 0.16);
+  }
+
+  .globe-inspector-toggle {
+    min-height: 2rem;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid rgba(66, 209, 132, 0.42);
+    border-radius: 3px;
+    background: rgba(36, 173, 105, 0.08);
+    color: #c9f2dc;
+    font: 750 0.62rem/1 inherit;
+  }
+
+  .globe-inspector-toggle:hover,
+  .globe-inspector-toggle:focus-visible {
+    border-color: var(--green-bright);
+    background: rgba(36, 173, 105, 0.15);
+    outline: none;
+  }
+
+  .globe-canvas,
+  .globe-pin-layer {
+    top: 3.75rem;
+    bottom: auto;
+    height: calc(100% - 7rem);
+  }
+
+  .globe-controls {
+    top: 50%;
+    right: 1rem;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-42%);
+    background: rgba(3, 17, 27, 0.9);
+    box-shadow: 0 0.65rem 1.6rem rgba(0, 0, 0, 0.18);
+  }
+
+  .globe-controls button + button,
+  .globe-controls span + button {
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-left: 0;
+  }
+
+  .globe-controls .globe-compass {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 2.5rem;
+    height: 2.8rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .globe-controls .globe-compass:hover,
+  .globe-controls .globe-compass:focus-visible {
+    background: rgba(66, 209, 132, 0.14);
+  }
+
+  .globe-readout {
+    right: auto;
+    bottom: 1rem;
+    left: 1rem;
+    min-height: 1.8rem;
+    background: rgba(3, 17, 27, 0.9);
+  }
+
+  .globe-legend {
+    bottom: 1.05rem;
+    left: 50%;
+    max-width: calc(100% - 22rem);
+    flex-wrap: nowrap;
+    transform: translateX(-50%);
+  }
+
+  .globe-pin > span::after {
+    display: none;
+  }
+
+  .globe-pin > span {
+    width: 0.52rem;
+    height: 0.52rem;
+    border-width: 1.5px;
+    box-shadow: 0 0 0.45rem color-mix(in srgb, var(--pin), transparent 55%);
+  }
+
+  .globe-pin.is-selected > span {
+    width: 0.68rem;
+    height: 0.68rem;
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--pin), transparent 72%);
+  }
+
+  .globe-cluster > span {
+    width: 1.45rem;
+    height: 1.45rem;
+    border-width: 1px;
+    box-shadow: 0 0 0 0.14rem color-mix(in srgb, var(--pin), transparent 78%);
+  }
+
+  .globe-pin.is-selected strong {
+    display: none;
+  }
+
+  .globe-pin.is-selected:hover strong,
+  .globe-pin.is-selected:focus-visible strong {
+    display: block;
+  }
+
+  .resource-panel {
+    padding: clamp(1.35rem, 2.1vw, 2rem) clamp(1.15rem, 1.6vw, 1.65rem);
+  }
+
+  .panel-source__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .panel-source__actions a {
+    white-space: nowrap;
+  }
+
+  .panel-source__actions button {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 3px;
+    background: transparent;
+    color: #a8b9bd;
+  }
+
+  .panel-source__actions button:hover,
+  .panel-source__actions button:focus-visible {
+    border-color: var(--green-bright);
+    color: #e2f7eb;
+    outline: none;
+  }
+
+  .panel-source__actions button svg {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+}
+
+@media screen and (max-width: 1220px) {
+  .finder__grid,
+  .finder__grid.is-panel-collapsed {
+    grid-template-columns: minmax(17rem, 0.62fr) minmax(30rem, 1.38fr);
+  }
+
+  .finder__grid.is-panel-collapsed .globe-stage {
+    grid-column: auto;
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .finder__grid,
+  .finder__grid.is-panel-collapsed {
+    display: block;
+  }
+
+  .globe-stage {
+    height: min(36rem, calc(100vw + 7.5rem));
+    min-height: 30rem;
+  }
+
+  .resource-panel {
+    z-index: 5;
+    margin-top: -1rem;
+    border-top: 1px solid rgba(210, 231, 233, 0.18);
+    border-radius: 1rem 1rem 0 0;
+    box-shadow: 0 -1rem 2.5rem rgba(0, 0, 0, 0.22);
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .finder-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    padding: 1.25rem 1rem 1.15rem;
+  }
+
+  .finder-intro,
+  .mode-switch,
+  .location-button,
+  .location-privacy {
+    grid-column: 1 / -1;
+  }
+
+  .finder-intro h1 {
+    font-size: clamp(1.65rem, 8vw, 1.9rem);
+  }
+
+  .finder-intro p {
+    max-width: 34rem;
+  }
+
+  .mode-switch,
+  .finder-search,
+  .filter-disclosure,
+  .location-button {
+    margin-top: 0;
+  }
+
+  .search-box,
+  .filter-disclosure summary {
+    min-height: 2.9rem;
+  }
+
+  .filter-disclosure summary {
+    grid-template-columns: auto 1fr;
+  }
+
+  .filter-disclosure summary span {
+    display: none;
+  }
+
+  .location-privacy {
+    margin-top: -0.35rem;
+  }
+
+  .globe-stage {
+    height: min(32rem, calc(100vw + 6.5rem));
+    min-height: 28.5rem;
+  }
+
+  .globe-meta {
+    right: 0.65rem;
+    left: 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .globe-meta__tools {
+    gap: 0.35rem;
+  }
+
+  .globe-meta__tools > #globeCount {
+    display: inline;
+    white-space: nowrap;
+  }
+
+  .globe-meta strong,
+  .globe-meta__tools > #globeCount {
+    font-size: 0.59rem;
+  }
+
+  .region-menu select {
+    max-width: 7.5rem;
+    min-height: 2rem;
+  }
+
+  .globe-inspector-toggle {
+    max-width: 5.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .globe-canvas,
+  .globe-pin-layer {
+    top: 3.8rem;
+    bottom: auto;
+    height: calc(100% - 7.3rem);
+  }
+
+  .globe-controls {
+    top: 51%;
+    right: 0.55rem;
+  }
+
+  .globe-controls button,
+  .globe-controls .globe-compass {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .globe-readout {
+    display: none;
+  }
+
+  .globe-legend {
+    right: 0.7rem;
+    bottom: 0.85rem;
+    left: 0.7rem;
+    gap: 0.5rem 0.75rem;
+    max-width: none;
+    overflow-x: auto;
+    transform: none;
+    scrollbar-width: none;
+  }
+
+  .globe-legend::-webkit-scrollbar {
+    display: none;
+  }
+
+  .globe-legend span {
+    flex: 0 0 auto;
+    font-size: 0.56rem;
+  }
+
+  .globe-pin strong,
+  .globe-pin:hover strong,
+  .globe-pin:focus-visible strong,
+  .globe-pin.is-selected:hover strong,
+  .globe-pin.is-selected:focus-visible strong {
+    display: none;
+  }
+
+  .resource-panel {
+    padding: 1.4rem 1rem 1.75rem;
+  }
+}
+
+@media screen and (max-width: 360px) {
+  .finder-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .finder-intro,
+  .mode-switch,
+  .location-button,
+  .location-privacy {
+    grid-column: auto;
+  }
 }
