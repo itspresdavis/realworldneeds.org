@@ -10,6 +10,12 @@ import { createInitialTypeSet, distanceKm, matchesResource, toRad } from "./util
 const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+function initialResultCount() {
+  if (window.innerWidth <= 600) return 5;
+  if (window.innerWidth <= 900) return 6;
+  return 8;
+}
+
 function loadSavedResources() {
   try {
     const saved = JSON.parse(window.localStorage.getItem("rwn-saved-resources") || "[]");
@@ -44,7 +50,7 @@ const state = {
   autoRotate: !reduceMotion,
   interactionUntil: 0,
   landRings: [],
-  visibleResults: 8,
+  visibleResults: initialResultCount(),
   globeVisible: true,
   ambientZoom: 1,
   savedIds: loadSavedResources(),
@@ -305,10 +311,10 @@ function shell() {
           <article><span>${icon.pause}</span><div><small>Not live</small><h3>Needs and donations</h3><p>No public need intake, partner portal, donation processing, or managed funds.</p></div></article>
           <article><span>${icon.shield}</span><div><small>Required first</small><h3>Professional controls</h3><p>Legal identity, financial safeguards, program review, privacy, complaints, and public reporting.</p></div></article>
         </div>
-        <div class="future-process">
-          <div><span class="section-kicker">Future operating standard</span><h3>Every managed need must move through one accountable chain.</h3></div>
-          <ol class="support-rail" id="supportRail"></ol>
-        </div>
+        <details class="future-process">
+          <summary><span><small>Future operating standard</small><strong>Every managed need must move through one accountable chain.</strong></span><b>5 stages</b><i>${icon.plus}</i></summary>
+          <div class="future-process__content"><ol class="support-rail" id="supportRail"></ol></div>
+        </details>
       </section>
     </main>
 
@@ -379,7 +385,7 @@ function updateFilters() {
   state.filtered = state.userLocation
     ? [...accessFiltered].sort((a, b) => distanceKm(state.userLocation.lat, state.userLocation.lng, a.lat, a.lng) - distanceKm(state.userLocation.lat, state.userLocation.lng, b.lat, b.lng))
     : accessFiltered;
-  state.visibleResults = 8;
+  state.visibleResults = initialResultCount();
 
   if (!state.filtered.some((resource) => resource.id === state.selectedId)) {
     state.selectedId = state.filtered[0]?.id || null;
@@ -461,14 +467,19 @@ function renderResourcePanel() {
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${resource.city}, ${resource.country}</p></div></div>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
-    <dl class="panel-facts">
-      <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
-      <div><dt>Cost</dt><dd>${resource.costNote}</dd></div>
-      <div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
-      ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
-      ${state.userLocation ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
-    </dl>
-    <div class="panel-services"><h3>What they can help with</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
+    <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
+      <summary><strong>Access and service details</strong><span>Cost, contact and services</span><i>${icon.plus}</i></summary>
+      <div class="panel-detail-content">
+        <dl class="panel-facts">
+          <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
+          <div><dt>Cost</dt><dd>${resource.costNote}</dd></div>
+          <div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
+          ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
+          ${state.userLocation ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
+        </dl>
+        <div class="panel-services"><h3>What they can help with</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
+      </div>
+    </details>
     <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
     <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p><p>Reviewed <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
@@ -1476,7 +1487,7 @@ function bindEvents() {
   });
 
   document.getElementById("showMoreResults").addEventListener("click", () => {
-    state.visibleResults += 8;
+    state.visibleResults += initialResultCount();
     renderResults();
   });
 
@@ -1610,19 +1621,6 @@ function bindEvents() {
     globeObserver.observe(document.querySelector(".globe-stage"));
   }
 
-  if (!reduceMotion && "IntersectionObserver" in window) {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add("is-visible");
-        observer.unobserve(entry.target);
-      });
-    }, { threshold: 0.12 });
-    document.querySelectorAll(".about-rwn, .source-band, .accountability").forEach((element) => {
-      element.classList.add("reveal");
-      observer.observe(element);
-    });
-  }
 }
 
 shell();
