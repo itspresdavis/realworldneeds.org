@@ -1,11 +1,6 @@
 import * as THREE from "/vendor/three.module.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import {
-  launchGates,
-  platformStatus,
-  supportStages
-} from "./data/platform.js";
-import {
   cameraDistanceForSphere,
   createInitialTypeSet,
   distanceKm,
@@ -16,13 +11,19 @@ import {
   toRad
 } from "./utils/geo.js";
 import { pinchZoom, pointerDistance } from "./utils/gesture.js";
+import {
+  clearResourceFromUrl,
+  privateResourceUrl,
+  resourceIdFromUrl,
+  SAVED_RESOURCES_KEY
+} from "./utils/privacy.js";
 
 const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MIN_GLOBE_ZOOM = 0.82;
 
 function maxGlobeZoom() {
-  return window.innerWidth <= 600 ? 1.42 : 1.32;
+  return window.innerWidth <= 600 ? 2.35 : 2.25;
 }
 
 function initialResultCount() {
@@ -33,15 +34,19 @@ function initialResultCount() {
 
 function loadSavedResources() {
   try {
-    const saved = JSON.parse(window.localStorage.getItem("rwn-saved-resources") || "[]");
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_RESOURCES_KEY) || "[]");
     return new Set(saved.filter((id) => resources.some((resource) => resource.id === id)));
   } catch {
     return new Set();
   }
 }
 
-const requestedResource = new URL(window.location.href).searchParams.get("resource");
+const requestedResource = resourceIdFromUrl(window.location.href);
 const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : DEFAULT_RESOURCE;
+
+if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
+  window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
+}
 
 const state = {
   query: "",
@@ -99,6 +104,7 @@ let globeBorders = null;
 let globeCountryHighlight = null;
 let globeLight = null;
 let globeFocusLight = null;
+let globeBaseCameraDistance = 3.2;
 let earthTextureImage = null;
 let connectionGroup = null;
 let connectionSignature = "";
@@ -187,8 +193,25 @@ function distanceLabel(resource) {
   return distance < 10 ? `${distance.toFixed(1)} km away` : `${Math.round(distance).toLocaleString()} km away`;
 }
 
+function googleMapsUrl(resource, directions = false) {
+  const coordinate = `${resource.lat},${resource.lng}`;
+  return directions
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordinate)}`;
+}
+
+function appleMapsUrl(resource, directions = false) {
+  const coordinate = `${resource.lat},${resource.lng}`;
+  const params = directions
+    ? `daddr=${encodeURIComponent(coordinate)}&dirflg=d`
+    : `q=${encodeURIComponent(resource.name)}&ll=${encodeURIComponent(coordinate)}`;
+  return `https://maps.apple.com/?${params}`;
+}
+
 function directionsUrl(resource) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resource.address)}`;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    ? appleMapsUrl(resource, true)
+    : googleMapsUrl(resource, true);
 }
 
 function shell() {
@@ -201,7 +224,7 @@ function shell() {
       </a>
       <nav class="primary-nav" aria-label="Primary navigation">
         <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-        <a href="#about" data-section-link="about">About</a>
+        <a href="#about" data-section-link="about">How it works</a>
         <a href="#standards" data-section-link="standards">Standards</a>
         <a href="#accountability" data-section-link="accountability">Operating status</a>
       </nav>
@@ -209,7 +232,7 @@ function shell() {
         <summary aria-label="Open site navigation" title="Menu">${icon.menu}</summary>
         <nav aria-label="Mobile navigation">
           <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-          <a href="#about" data-section-link="about">About RWN</a>
+          <a href="#about" data-section-link="about">How it works</a>
           <a href="#standards" data-section-link="standards">Standards</a>
           <a href="#accountability" data-section-link="accountability">Operating status</a>
         </nav>
@@ -222,27 +245,26 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find help. Know what to do next.</h1>
-              <p>Search for food, shelter, healthcare, hygiene services, and more. Every result links to the organization behind it, so you can check the details before you go.</p>
-            </div>
-
-            <div class="mode-switch" aria-label="Map data mode">
-              <button class="is-active" type="button" data-view-mode="aid" aria-pressed="true">Find services</button>
-              <button type="button" data-view-mode="needs" aria-pressed="false">Verified needs <span>${platformStatus.managedNeedsPublished}</span></button>
+              <h1>Find real help, near you.</h1>
+              <p>Search verified services for food, shelter, healthcare, hygiene, clothing, water, and other essentials. Every listing links to the organization providing help.</p>
             </div>
 
             <div class="finder-search" role="search">
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" placeholder="${window.innerWidth <= 600 ? "Search resources" : "Place, service, or organization"}" autocomplete="off">
+                <input id="resourceSearch" type="search" placeholder="Search a place or service" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
             </div>
 
+            <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
+            <p class="location-privacy">Used only in this browser to sort nearby services. <a href="/privacy#location">Privacy details</a></p>
+            <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not emergency dispatch. <a href="/terms#urgent-help">Safety information</a></p>
+
             <details class="filter-disclosure">
-              <summary>${icon.filter}<strong>Filter services</strong><span id="filterSummary">All 7 aid types</span></summary>
+              <summary>${icon.filter}<strong>Filters</strong><span id="filterSummary">All 7 aid types</span></summary>
               <div class="finder-controls">
                 <div class="filter-heading"><span>Aid types</span><button type="button" id="toggleAll">Clear</button></div>
                 <div class="layer-list" id="layerList" aria-label="Aid category filters"></div>
@@ -256,13 +278,11 @@ function shell() {
               </div>
             </details>
 
-            <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
-            <p class="location-privacy">Used only in this browser to sort nearby services.</p>
           </aside>
 
           <section class="globe-stage" aria-label="Interactive global aid resource globe">
             <div class="globe-meta">
-              <div><span class="status-dot"></span><strong>Global service map</strong></div>
+              <div><span class="status-dot"></span><strong>Verified service map</strong></div>
               <div class="globe-meta__tools">
                 <span id="globeCount"></span>
                 <button class="globe-inspector-toggle" id="openInspector" type="button" hidden>Service details</button>
@@ -292,13 +312,14 @@ function shell() {
             </div>
             <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
             <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
+            <p class="globe-gesture-hint" aria-hidden="true">Drag to explore · Pinch or scroll to zoom</p>
           </section>
 
           <aside class="resource-panel" id="resourcePanel" aria-live="polite"></aside>
         </div>
 
         <div class="directory-strip">
-          <p><strong>${resources.length}</strong> source-backed resources <span>${directCount()} service sites</span> <span>Reviewed ${checkedDate(latestReviewDate())}</span></p>
+          <p><strong>${resources.length}</strong> source-backed resources <span>${directCount()} physical service sites</span> <span>Across ${new Set(resources.map((resource) => resource.country)).size} countries and global networks</span></p>
           <p role="note">${icon.info}<span>Not an emergency service. If someone is in immediate danger, contact local emergency services.</span></p>
         </div>
 
@@ -318,14 +339,14 @@ function shell() {
 
       <section class="about-rwn" id="about">
         <div class="about-rwn__heading">
-          <span class="section-kicker">About Real World Needs</span>
-          <h2>A useful place to start.</h2>
-          <p>Real World Needs begins with a problem people face every day: finding clear, trustworthy information. The directory is live today. The larger goal is to help communities share reviewed needs and make support easier to follow.</p>
+          <span class="section-kicker">How it works</span>
+          <h2>Clear information, with a human next step.</h2>
+          <p>Real World Needs brings practical service information into one calm place. Search by place or need, review the access details, then contact the organization or open directions.</p>
         </div>
         <div class="mission-steps">
-          <article><span>Today</span><h3>Find a service</h3><p>Search by need or location, then go straight to the provider.</p></article>
-          <article><span>Next</span><h3>Make needs visible</h3><p>Give communities a safe, reviewed way to show what is needed.</p></article>
-          <article><span>Future</span><h3>Follow the support</h3><p>Show what was approved, what was delivered, and what changed.</p></article>
+          <article><span>01</span><h3>Search</h3><p>Enter a place or service, or allow private distance sorting in your browser.</p></article>
+          <article><span>02</span><h3>Check</h3><p>Read the access, hours, cost, contact information, and date reviewed.</p></article>
+          <article><span>03</span><h3>Go</h3><p>Call the provider, open its official page, or launch Apple or Google Maps.</p></article>
         </div>
       </section>
 
@@ -340,36 +361,28 @@ function shell() {
 
       <section class="accountability" id="accountability">
         <div class="accountability__heading">
-          <span class="section-kicker">Current operating status</span>
-          <h2>We are building this in the open.</h2>
-          <p>Right now, RWN is a service directory. We are not collecting need requests or donations. Those features come later, after the right legal, financial, safeguarding, privacy, and reporting systems are in place.</p>
-          <button class="outline-button" type="button" data-open-launch>See what comes first ${icon.arrow}</button>
+          <span class="section-kicker">What RWN does</span>
+          <h2>A focused directory for finding help.</h2>
+          <p>RWN helps people discover services and reach the organizations behind them. It does not replace emergency services, decide eligibility, guarantee availability, or collect donations and personal requests.</p>
         </div>
         <div class="accountability-status">
-          <article class="is-live"><span>${icon.check}</span><div><small>Live now</small><h3>Find services</h3><p>Search the map or directory, save resources in your browser, and open the original source.</p></div></article>
-          <article><span>${icon.pause}</span><div><small>Not live</small><h3>Requests and donations</h3><p>RWN is not collecting personal requests, onboarding partners, or processing donations.</p></div></article>
-          <article><span>${icon.shield}</span><div><small>Before expansion</small><h3>The right controls</h3><p>Legal identity, financial safeguards, program review, privacy, complaints, and public reporting.</p></div></article>
+          <article class="is-live"><span>${icon.search}</span><div><small>Discover</small><h3>Search real services</h3><p>Explore physical service sites, official locators, and recognized support networks.</p></div></article>
+          <article><span>${icon.shield}</span><div><small>Verify</small><h3>Follow the source</h3><p>Every listing names its source, shows the review date, and links to current provider information.</p></div></article>
+          <article><span>${icon.info}</span><div><small>Stay safe</small><h3>Confirm before travel</h3><p>Hours, capacity, and eligibility can change. Contact the provider before making a long journey.</p></div></article>
         </div>
-        <details class="future-process">
-          <summary><span><small>Future operating standard</small><strong>Our standard: document every step from request to delivery.</strong></span><b>5 stages</b><i>${icon.plus}</i></summary>
-          <div class="future-process__content"><ol class="support-rail" id="supportRail"></ol></div>
-        </details>
       </section>
     </main>
 
     <footer class="site-footer">
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
-      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="#about">About RWN</a></nav>
-      <nav aria-label="Footer standards"><strong>Standards</strong><a href="#standards">Source policy</a><a href="#accountability">Accountability</a></nav>
-      <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://visibleearth.nasa.gov/images/73967/february-blue-marble-next-generation" target="_blank" rel="noopener noreferrer">NASA Earth Observatory</a></nav>
+      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="#about">How it works</a></nav>
+      <nav aria-label="Footer standards"><strong>Standards</strong><a href="/editorial-policy">Editorial policy</a><a href="#accountability">Operating boundaries</a></nav>
+      <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
+      <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
       <p><span class="status-dot"></span>${resources.length} source-backed resources · No donations or personal need requests are accepted through this site.</p>
     </footer>
 
     <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
-    <dialog class="launch-dialog" id="launchDialog" aria-labelledby="launchDialogTitle">
-      <button class="dialog-close" type="button" aria-label="Close launch requirements">${icon.close}</button>
-      <div><span class="section-kicker">Before RWN expands</span><h2 id="launchDialogTitle">What must be in place first</h2><p>These are requirements for future operations. They do not describe RWN's current legal or operating status.</p><div class="dialog-requirements" id="dialogRequirements"></div></div>
-    </dialog>
   `;
 }
 
@@ -395,13 +408,6 @@ function renderStatic() {
     <article><span>0${index + 1}</span><div><h3>${principle.title}</h3><p>${principle.text}</p></div></article>
   `).join("");
 
-  document.getElementById("supportRail").innerHTML = supportStages.map((stage, index) => `
-    <li><span>${index + 1}</span><div><h3>${stage.label}</h3><p>${stage.description}</p></div></li>
-  `).join("");
-
-  document.getElementById("dialogRequirements").innerHTML = launchGates.map(([label, description]) => `
-    <section><h3>${label}</h3><p>${description}</p><span>Required</span></section>
-  `).join("");
 }
 
 function kindLabel(resource) {
@@ -464,7 +470,7 @@ function renderControls() {
   document.getElementById("filterSummary").textContent = typeCount === resourceTypes.length
     ? `All ${resourceTypes.length} aid types`
     : `${typeCount} of ${resourceTypes.length} aid types`;
-  document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} visible` : "0 published";
+  document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} services` : "0 services";
   document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching services` : "No verified needs published";
   const savedToggle = document.getElementById("toggleSaved");
   savedToggle.classList.toggle("is-active", state.savedOnly);
@@ -510,7 +516,7 @@ function renderResourcePanel() {
   const saved = state.savedIds.has(resource.id);
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
-    <div class="panel-source"><span>${icon.check} Original source linked</span><span class="panel-source__actions"><a href="#standards">How sources work ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
+    <div class="panel-source"><span>${icon.check} Official source linked</span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${resource.city}, ${resource.country}</p></div></div>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
@@ -521,6 +527,7 @@ function renderResourcePanel() {
           <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
           <div><dt>Cost</dt><dd>${resource.costNote}</dd></div>
           <div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
+          ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
           ${state.userLocation ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
         </dl>
@@ -530,13 +537,13 @@ function renderResourcePanel() {
     <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
     <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p><p>Reviewed <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
-      <a class="primary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Visit official source ${icon.external}</a>
-      ${resource.kind === "direct" ? `<a class="secondary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+      ${resource.kind === "direct" ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+      <a class="secondary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Official source ${icon.external}</a>
     </div>
+    ${resource.kind === "direct" ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
       <button type="button" id="saveResource" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>
       <button type="button" id="shareResource">${icon.share}<span>Share</span></button>
-      <button type="button" id="printResource">${icon.print}<span>Print</span></button>
       <button type="button" id="copyAddress">${icon.copy}<span>Copy</span></button>
     </div>
   `;
@@ -547,7 +554,6 @@ function renderResourcePanel() {
   });
   document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
   document.getElementById("shareResource")?.addEventListener("click", () => shareResource(resource));
-  document.getElementById("printResource")?.addEventListener("click", () => window.print());
   document.getElementById("closeInspector")?.addEventListener("click", () => {
     state.inspectorOpen = false;
     renderResourcePanel();
@@ -593,9 +599,7 @@ function setSelected(id, focus = true, reveal = "panel") {
   renderResourcePanel();
   renderResults();
   pinSignature = "";
-  const url = new URL(window.location.href);
-  url.searchParams.set("resource", id);
-  window.history.replaceState({}, "", url);
+  window.history.replaceState({}, "", privateResourceUrl(window.location.href, id));
   if (reveal) {
     const target = reveal === "map" ? document.querySelector(".globe-stage") : document.getElementById("resourcePanel");
     const bounds = target?.getBoundingClientRect();
@@ -609,7 +613,7 @@ function setSelected(id, focus = true, reveal = "panel") {
 
 function persistSavedResources() {
   try {
-    window.localStorage.setItem("rwn-saved-resources", JSON.stringify([...state.savedIds]));
+    window.localStorage.setItem(SAVED_RESOURCES_KEY, JSON.stringify([...state.savedIds]));
   } catch {
     notify("Saved resources are unavailable in this browser");
   }
@@ -639,8 +643,7 @@ async function copyText(value) {
 }
 
 async function shareResource(resource) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("resource", resource.id);
+  const url = privateResourceUrl(window.location.href, resource.id);
   const data = { title: resource.name, text: `${resource.name} · ${resource.city}, ${resource.country}`, url: url.toString() };
   if (navigator.share) {
     try {
@@ -682,7 +685,8 @@ function focusGlobeOn(resource, immediate = false) {
   const view = featureGlobeView(countryFeatureByName(resource.country), { lat: resource.lat, lng: resource.lng });
   state.targetLon = view.lng;
   state.targetLat = Math.max(-70, Math.min(70, view.lat));
-  state.targetZoom = window.innerWidth <= 600 ? Math.min(1.06, view.zoom) : view.zoom;
+  const serviceZoom = resource.kind === "direct" ? 1.5 : 1.22;
+  state.targetZoom = Math.min(maxGlobeZoom(), Math.max(view.zoom, serviceZoom));
   if (immediate) {
     state.rotationLon = state.targetLon;
     state.rotationLat = state.targetLat;
@@ -747,10 +751,14 @@ function drawTextureRing(ctx, ring, width, height, fill, stroke) {
 
 function createGlobeTexture() {
   const canvas = document.createElement("canvas");
-  canvas.width = 2048;
-  canvas.height = 1024;
-  const ctx = canvas.getContext("2d");
   const hasEarthImagery = earthTextureImage?.complete && earthTextureImage.naturalWidth > 0;
+  const maximumTextureSize = globeRenderer?.capabilities.maxTextureSize || 4096;
+  const preferredWidth = 5400;
+  canvas.width = hasEarthImagery
+    ? Math.min(preferredWidth, maximumTextureSize, earthTextureImage.naturalWidth)
+    : 2048;
+  canvas.height = Math.round(canvas.width / 2);
+  const ctx = canvas.getContext("2d");
 
   if (hasEarthImagery) {
     ctx.drawImage(earthTextureImage, 0, 0, canvas.width, canvas.height);
@@ -965,7 +973,7 @@ function initThreeGlobe() {
   globeRenderer.setClearColor(0x02131f, 0);
 
   globeScene = new THREE.Scene();
-  globeCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  globeCamera = new THREE.PerspectiveCamera(42, 1, 0.015, 100);
   globeCamera.position.set(0, 0, 3.2);
 
   globeWorld = new THREE.Group();
@@ -975,7 +983,7 @@ function initThreeGlobe() {
 
   const surfaceTexture = createGlobeTexture();
   globeSurface = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 128, 96),
+    new THREE.SphereGeometry(1, window.innerWidth <= 600 ? 144 : 192, window.innerWidth <= 600 ? 96 : 128),
     new THREE.MeshStandardMaterial({
       map: surfaceTexture,
       emissiveMap: surfaceTexture,
@@ -1081,14 +1089,16 @@ function renderThreeGlobe(width, height, now) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
     globeCamera.aspect = width / height;
-    globeCamera.position.z = cameraDistanceForSphere(globeCamera.fov, globeCamera.aspect, 1.055, 1.07);
+    globeBaseCameraDistance = cameraDistanceForSphere(globeCamera.fov, globeCamera.aspect, 1.055, 1.07);
     globeCamera.updateProjectionMatrix();
   }
 
   globeWorld.rotation.y = -toRad(state.rotationLon);
   globeWorld.rotation.x = toRad(state.rotationLat);
-  globeWorld.scale.setScalar(state.zoom * state.ambientZoom);
+  globeWorld.scale.setScalar(1);
   globeWorld.updateMatrixWorld(true);
+  globeCamera.position.z = Math.max(1.075, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));
+  globeCamera.updateMatrixWorld(true);
 
   const sun = subsolarPoint(new Date());
   const sunPosition = latLngVector(sun.lat, sun.lng, 5).applyEuler(globeWorld.rotation);
@@ -1106,10 +1116,7 @@ function renderThreeGlobe(width, height, now) {
     globeFocusLight.intensity = 0;
   }
 
-  rebuildConnections();
-  connectionParticles.forEach(({ particle, curve, offset }) => {
-    particle.position.copy(curve.getPoint((now * 0.000055 + offset) % 1));
-  });
+  if (connectionGroup?.children.length) clearConnections();
   globeRenderer.render(globeScene, globeCamera);
   return true;
 }
@@ -1537,6 +1544,7 @@ function animateGlobe(now) {
   const width = Math.max(1, rect.width);
   const height = Math.max(1, rect.height);
   advanceGlobe(now);
+  document.querySelector(".globe-stage")?.classList.toggle("is-close-view", state.zoom > 1.72);
   if (!renderThreeGlobe(width, height, now)) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
@@ -1570,9 +1578,7 @@ function focusRegion(key, selectMatching = false) {
     renderResourcePanel();
     renderResults();
     pinSignature = "";
-    const url = new URL(window.location.href);
-    url.searchParams.delete("resource");
-    window.history.replaceState({}, "", url);
+    window.history.replaceState({}, "", clearResourceFromUrl(window.location.href));
   }
 }
 
@@ -1588,7 +1594,7 @@ function focusCluster(ids) {
   state.targetLon = Math.atan2(normalized.z, normalized.x) * 180 / Math.PI;
   const latitude = Math.asin(normalized.y) * 180 / Math.PI;
   state.targetLat = Math.max(-65, Math.min(65, latitude));
-  state.targetZoom = window.innerWidth <= 600 ? 1.06 : 1.1;
+  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.42 : 1.34);
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = { lat: latitude, lng: state.targetLon };
@@ -1681,9 +1687,7 @@ function selectCountryFromPointer(event) {
   renderResourcePanel();
   renderResults();
   pinSignature = "";
-  const url = new URL(window.location.href);
-  url.searchParams.delete("resource");
-  window.history.replaceState({}, "", url);
+  window.history.replaceState({}, "", clearResourceFromUrl(window.location.href));
   notify(`No listed services in ${displayName} match the current filters`);
 }
 
@@ -1743,15 +1747,6 @@ function bindEvents() {
     updateFilters();
   });
 
-  document.querySelector(".mode-switch").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-view-mode]");
-    if (!button) return;
-    state.viewMode = button.dataset.viewMode;
-    state.selectedId = state.viewMode === "aid" ? DEFAULT_RESOURCE : null;
-    state.inspectorOpen = state.viewMode === "aid";
-    updateFilters();
-  });
-
   document.getElementById("openInspector").addEventListener("click", () => {
     if (!selectedResource()) return;
     state.inspectorOpen = true;
@@ -1783,6 +1778,18 @@ function bindEvents() {
     updateFilters();
   });
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
+  document.getElementById("clearBrowserData").addEventListener("click", () => {
+    window.localStorage.removeItem(SAVED_RESOURCES_KEY);
+    state.savedIds.clear();
+    state.savedOnly = false;
+    state.userLocation = null;
+    const locationButton = document.getElementById("locateMe");
+    locationButton.classList.remove("has-location", "is-loading");
+    locationButton.innerHTML = `${icon.locate}<span>Use my location</span>`;
+    locationButton.setAttribute("aria-label", "Use my location");
+    updateFilters();
+    notify("Saved services and location sorting cleared");
+  });
 
   document.getElementById("locateMe").addEventListener("click", () => {
     if (state.userLocation) {
@@ -1964,11 +1971,11 @@ function bindEvents() {
 
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
-    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom - event.deltaY * 0.001));
+    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom * Math.exp(-event.deltaY * 0.00135)));
     state.interactionUntil = performance.now() + 5000;
   }, { passive: false });
   canvas.addEventListener("dblclick", () => {
-    state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom + 0.12);
+    state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.28);
     state.interactionUntil = performance.now() + 5000;
   });
   canvas.addEventListener("keydown", (event) => {
@@ -1977,8 +1984,8 @@ function bindEvents() {
     else if (event.key === "ArrowRight") state.rotationLon = normalizeLongitude(state.rotationLon + step);
     else if (event.key === "ArrowUp") state.rotationLat = Math.max(-58, state.rotationLat + step);
     else if (event.key === "ArrowDown") state.rotationLat = Math.min(58, state.rotationLat - step);
-    else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom + 0.1);
-    else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom - 0.1);
+    else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.2);
+    else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / 1.2);
     else if (event.key === "Home") {
       focusRegion("world");
       event.preventDefault();
@@ -2004,8 +2011,8 @@ function bindEvents() {
     event.preventDefault();
   });
 
-  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom + 0.1); state.interactionUntil = performance.now() + 5000; });
-  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom - 0.1); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.22); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / 1.22); state.interactionUntil = performance.now() + 5000; });
   document.getElementById("resetGlobe").addEventListener("click", () => {
     document.getElementById("regionFocus").value = "world";
     focusRegion("world");
@@ -2023,11 +2030,6 @@ function bindEvents() {
     event.currentTarget.setAttribute("aria-label", event.currentTarget.title);
     state.interactionUntil = 0;
   });
-
-  const dialog = document.getElementById("launchDialog");
-  document.querySelectorAll("[data-open-launch]").forEach((button) => button.addEventListener("click", () => dialog.showModal()));
-  dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
 
   const siteMenu = document.querySelector(".site-menu");
   siteMenu.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => siteMenu.removeAttribute("open")));
