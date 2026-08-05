@@ -31,6 +31,7 @@ test("production headers minimize referral and browser capability exposure", asy
   assert.equal(globalHeaders["Referrer-Policy"], "no-referrer");
   assert.equal(globalHeaders["X-Content-Type-Options"], "nosniff");
   assert.match(globalHeaders["Content-Security-Policy"], /default-src 'self'/);
+  assert.match(globalHeaders["Content-Security-Policy"], /connect-src 'self' https:\/\/services1\.arcgis\.com/);
   assert.match(globalHeaders["Permissions-Policy"], /geolocation=\(self\)/);
   assert.match(globalHeaders["Permissions-Policy"], /camera=\(\)/);
   assert.equal(config.rewrites, undefined);
@@ -42,6 +43,14 @@ test("production build has no mutable network download step", async () => {
   assert.match(build, /cp\("public", "dist"/);
   assert.match(build, /dist\/directory\.html/);
   assert.match(build, /dist\/data\/resources\.json/);
+  assert.match(build, /dist\/data\/sources\.json/);
+});
+
+test("privacy notice discloses the bounded official-source location query", async () => {
+  const html = await readFile("public/privacy.html", "utf8");
+  assert.match(html, /rounds latitude and longitude to one decimal degree/);
+  assert.match(html, /public USDA Food and Nutrition Service ArcGIS layer/);
+  assert.match(html, /This occurs only after you choose location/);
 });
 
 test("homepage provides a complete no-JavaScript route", async () => {

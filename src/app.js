@@ -1,5 +1,6 @@
 import * as THREE from "/vendor/three.module.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
+import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js";
 import {
   cameraDistanceForSphere,
   createInitialTypeSet,
@@ -60,6 +61,11 @@ const state = {
   activeTypes: createInitialTypeSet(),
   selectedId: initialResource,
   filtered: resources,
+  liveResources: [],
+  liveSourceStatus: "idle",
+  liveSourceError: "",
+  liveNearbyAvailable: 0,
+  liveNationalCount: null,
   userLocation: null,
   userLocationAccuracy: null,
   userCountry: null,
@@ -126,6 +132,7 @@ let earthDetailTextureReady = false;
 let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
+let liveSourceController = null;
 
 const icon = {
   globe: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
@@ -181,6 +188,18 @@ function allTypes(resource) {
   return [resource.category, ...(resource.secondaryCategories || [])];
 }
 
+function availableResources() {
+  return [...resources, ...state.liveResources];
+}
+
+function isLikelyUnitedStatesPoint(location) {
+  if (!location) return false;
+  const { lat, lng } = location;
+  return (lat >= 24 && lat <= 50 && lng >= -125 && lng <= -66)
+    || (lat >= 51 && lat <= 72 && lng >= -180 && lng <= -129)
+    || (lat >= 18 && lat <= 23 && lng >= -161 && lng <= -154);
+}
+
 function categoryCount(type) {
   return resources.filter((resource) => allTypes(resource).includes(type)).length;
 }
@@ -204,6 +223,10 @@ function directCount() {
 
 function selectedResource() {
   return state.filtered.find((resource) => resource.id === state.selectedId) || null;
+}
+
+function reviewLabel(resource) {
+  return resource.verificationMethod === "live-official-feed" ? `Live ${checkedDate(resource.lastChecked)}` : checkedDate(resource.lastChecked);
 }
 
 function distanceLabel(resource) {
@@ -292,7 +315,8 @@ function shell() {
               <button class="location-clear" id="clearLocation" type="button" hidden>Clear</button>
             </div>
             <p class="location-status" id="locationStatus" aria-live="polite">Show exact service sites first. Countrywide locators are clearly separated.</p>
-            <p class="location-privacy">Your coordinates stay in this browser session and are never submitted to RWN. <a href="/privacy#location">Privacy details</a></p>
+            <p class="live-source-status" id="liveSourceStatus">In the U.S., location search also loads current USDA summer meal sites.</p>
+            <p class="location-privacy">Exact coordinates stay in this browser session and are never submitted to RWN. For live U.S. results, the app sends USDA a rounded search point after you choose location. <a href="/privacy#location">Privacy details</a></p>
             <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not emergency dispatch. <a href="/terms#urgent-help">Safety information</a></p>
 
             <details class="filter-disclosure">
@@ -353,7 +377,7 @@ function shell() {
         </div>
 
         <div class="directory-strip">
-          <p><strong>${resources.length}</strong> source-backed resources <span>${directCount()} physical service sites</span> <span>Across ${new Set(resources.map((resource) => resource.country)).size} countries and global networks</span> <a href="/directory">Open resilient text directory</a></p>
+          <p id="catalogReach"><strong>${resources.length}</strong> reviewed records <span>${directCount()} physical service sites</span> <span>Plus 17,442 active USDA summer meal sites at the Aug. 5 audit</span> <a href="/directory">Open resilient text directory</a></p>
           <p role="note">${icon.info}<span>Not an emergency service. If someone is in immediate danger, contact local emergency services.</span></p>
         </div>
 
@@ -413,7 +437,7 @@ function shell() {
       <nav aria-label="Footer standards"><strong>Standards</strong><a href="/transparency">Transparency center</a><a href="/editorial-policy">Editorial policy</a><a href="#accountability">Operating boundaries</a></nav>
       <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
       <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
-      <p><span class="status-dot"></span>${resources.length} source-backed resources · No donations or personal need requests are accepted through this site.</p>
+      <p><span class="status-dot"></span>${resources.length} reviewed records plus bounded official live feeds · No donations or personal need requests are accepted through this site.</p>
     </footer>
 
     <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
@@ -452,7 +476,7 @@ function kindLabel(resource) {
 
 function updateFilters() {
   const base = state.viewMode === "aid"
-    ? resources.filter((resource) => matchesResource(resource, state.query, state.activeTypes))
+    ? availableResources().filter((resource) => matchesResource(resource, state.query, state.activeTypes))
     : [];
   let accessFiltered = base.filter((resource) => {
     if (state.accessMode === "direct") return resource.kind === "direct";
@@ -507,6 +531,31 @@ function renderLocationState() {
   status.textContent = `${nearbyExactCount()} exact service ${nearbyExactCount() === 1 ? "site" : "sites"} within 250 km. ${accuracy}${country}`.trim();
 }
 
+function renderLiveSourceState() {
+  const status = document.getElementById("liveSourceStatus");
+  const reach = document.getElementById("catalogReach");
+  if (!status) return;
+  if (state.liveSourceStatus === "loading") {
+    status.textContent = "Loading current USDA meal sites from an approximate 160 km search area…";
+  } else if (state.liveSourceStatus === "loaded") {
+    const visible = state.liveResources.length;
+    const available = state.liveNearbyAvailable;
+    const national = state.liveNationalCount ? ` · ${state.liveNationalCount.toLocaleString()} active nationally today` : "";
+    status.textContent = available > visible
+      ? `Loaded the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
+      : `Loaded ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
+  } else if (state.liveSourceStatus === "unavailable") {
+    status.textContent = state.liveSourceError || "The live USDA source is temporarily unavailable; reviewed directory records remain available.";
+  } else if (state.userLocation && state.userCountry !== "United States") {
+    status.textContent = "The USDA live feed covers the United States; reviewed global services and official locators remain available.";
+  } else {
+    status.textContent = "In the U.S., location search also loads current USDA summer meal sites with dates and meal times.";
+  }
+  if (reach && state.liveNationalCount) {
+    reach.innerHTML = `<strong>${resources.length.toLocaleString()}</strong> reviewed records <span>${directCount().toLocaleString()} reviewed physical sites</span> <span>${state.liveNationalCount.toLocaleString()} USDA meal sites active today</span> <a href="/directory">Open resilient text directory</a>`;
+  }
+}
+
 function renderControls() {
   const aidMode = state.viewMode === "aid";
   document.querySelectorAll("[data-view-mode]").forEach((button) => {
@@ -542,6 +591,7 @@ function renderControls() {
   savedToggle.classList.toggle("is-active", state.savedOnly);
   savedToggle.setAttribute("aria-pressed", String(state.savedOnly));
   document.getElementById("savedCount").textContent = String(state.savedIds.size);
+  renderLiveSourceState();
 
   document.getElementById("globeLegend").innerHTML = aidMode
     ? resourceTypes.filter((type) => state.activeTypes.has(type)).map((type) => `<span style="--legend:${categories[type].color}"><i></i>${categories[type].label}</span>`).join("")
@@ -584,10 +634,12 @@ function renderResourcePanel() {
   const resourceIndex = state.filtered.findIndex((item) => item.id === resource.id);
   const previous = resourceIndex > 0 ? state.filtered[resourceIndex - 1] : null;
   const next = resourceIndex >= 0 ? state.filtered[resourceIndex + 1] : null;
-  const sourceAction = exact ? "Open official service page" : "Search official locator";
+  const live = resource.verificationMethod === "live-official-feed";
+  const actionUrl = resource.providerUrl || resource.sourceUrl;
+  const sourceAction = resource.providerUrl ? "Open provider website" : exact ? "Open official service page" : "Search official locator";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
-    <div class="panel-source"><span>${icon.check} Official source linked</span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
+    <div class="panel-source"><span>${icon.check} ${live ? "Official live source" : "Official source linked"}</span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
     <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Exact service site</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Coverage locator</strong> — this marker represents an area, not a walk-in address.</span>`}</p>
@@ -602,6 +654,8 @@ function renderResourcePanel() {
           <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
+          ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${resource.eligibility}</dd></div>` : ""}
+          ${resource.validFrom && resource.validThrough ? `<div><dt>Active dates</dt><dd>${checkedDate(resource.validFrom)}–${checkedDate(resource.validThrough)}</dd></div>` : ""}
           ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
           ${!exact && resource.coverageNote ? `<div><dt>Map note</dt><dd>${resource.coverageNote}</dd></div>` : ""}
         </dl>
@@ -609,16 +663,16 @@ function renderResourcePanel() {
       </div>
     </details>
     <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
-    <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}<p>Reviewed <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
+    <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Open the official dataset source ${icon.external}</a></p>` : ""}<p>${live ? "Live source synced" : "Reviewed"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
       ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
-      <a class="secondary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
+      <a class="secondary-button" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
     </div>
     ${exact ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
-      <button type="button" id="saveResource" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>
-      <button type="button" id="shareResource">${icon.share}<span>Share</span></button>
-      <button type="button" id="copyAddress">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
+      ${live ? "" : `<button type="button" id="saveResource" aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>`}
+      <button type="button" id="shareResource" aria-label="Share service">${icon.share}<span>Share</span></button>
+      <button type="button" id="copyAddress" aria-label="${exact ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
     </div>
   `;
 
@@ -647,7 +701,7 @@ function resourceCard(resource) {
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>
-        <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time>
+        <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${reviewLabel(resource)}</time>
         <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
     </article>
@@ -723,7 +777,7 @@ async function copyText(value) {
 }
 
 async function shareResource(resource) {
-  const url = privateResourceUrl(window.location.href, resource.id);
+  const url = resource.verificationMethod === "live-official-feed" ? new URL(googleMapsUrl(resource)) : privateResourceUrl(window.location.href, resource.id);
   const data = { title: resource.name, text: `${resource.name} · ${formatResourcePlace(resource)}`, url: url.toString() };
   if (navigator.share) {
     try {
@@ -803,10 +857,51 @@ function focusGlobeNearUser() {
 }
 
 function clearUserLocation() {
+  liveSourceController?.abort();
+  liveSourceController = null;
   state.userLocation = null;
   state.userLocationAccuracy = null;
   state.userCountry = null;
+  state.liveResources = [];
+  state.liveNearbyAvailable = 0;
+  state.liveNationalCount = null;
+  state.liveSourceStatus = "idle";
+  state.liveSourceError = "";
   document.getElementById("locateMe")?.classList.remove("has-location", "is-loading");
+  updateFilters();
+}
+
+async function loadLiveResourcesNearUser() {
+  if (!state.userLocation || state.userCountry !== "United States") return;
+  liveSourceController?.abort();
+  liveSourceController = new AbortController();
+  state.liveSourceStatus = "loading";
+  state.liveSourceError = "";
+  renderLiveSourceState();
+  const options = { signal: liveSourceController.signal };
+  const [nearbyResult, countResult] = await Promise.allSettled([
+    fetchNearbyUsdaSites(state.userLocation, options),
+    fetchUsdaActiveCount(options)
+  ]);
+  if (liveSourceController?.signal.aborted) return;
+
+  if (countResult.status === "fulfilled") state.liveNationalCount = countResult.value;
+  if (nearbyResult.status === "rejected") {
+    state.liveResources = [];
+    state.liveNearbyAvailable = 0;
+    state.liveSourceStatus = "unavailable";
+    state.liveSourceError = "Current USDA meal sites could not be loaded; reviewed directory records remain available.";
+    updateFilters();
+    return;
+  }
+
+  const ranked = nearbyResult.value
+    .map((resource) => ({ resource, distance: resourceDistanceKm(state.userLocation, resource) }))
+    .filter(({ distance }) => distance !== null && distance <= 250)
+    .sort((a, b) => a.distance - b.distance || a.resource.name.localeCompare(b.resource.name));
+  state.liveNearbyAvailable = ranked.length;
+  state.liveResources = ranked.slice(0, 300).map(({ resource }) => resource);
+  state.liveSourceStatus = "loaded";
   updateFilters();
 }
 
@@ -2013,13 +2108,19 @@ function bindEvents() {
     const button = document.getElementById("locateMe");
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
-    navigator.geolocation.getCurrentPosition((position) => {
+    navigator.geolocation.getCurrentPosition(async (position) => {
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
-      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
-      button.classList.remove("is-loading");
+      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : isLikelyUnitedStatesPoint(state.userLocation) ? "United States" : null;
       updateFilters();
+      focusGlobeNearUser();
+      if (state.userCountry === "United States") {
+        button.innerHTML = `${icon.locate}<span>Loading current services…</span>`;
+        await loadLiveResourcesNearUser();
+      }
+      button.classList.remove("is-loading");
+      renderLocationState();
       const nearest = state.filtered.find((resource) => {
         const distance = resourceDistanceKm(state.userLocation, resource);
         return distance !== null && distance <= 250;
@@ -2027,7 +2128,7 @@ function bindEvents() {
       if (nearest) setSelected(nearest.id, false, false);
       focusGlobeNearUser();
       const nearby = nearbyExactCount();
-      notify(nearby ? `Found ${nearby} exact service ${nearby === 1 ? "site" : "sites"} within 250 km` : "No exact site is listed nearby yet; showing official coverage locators next");
+      notify(nearby ? `Found ${nearby.toLocaleString()} exact service ${nearby === 1 ? "site" : "sites"} within 250 km` : "No exact site is listed nearby yet; showing official coverage locators next");
     }, (error) => {
       button.classList.remove("is-loading");
       renderLocationState();

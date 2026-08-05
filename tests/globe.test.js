@@ -91,13 +91,16 @@ test("search tolerates diacritics and common help-language synonyms", () => {
 });
 
 test("expanded catalog preserves location precision and minimum coverage", () => {
-  const reviewedExpansion = resources.filter((resource) => resource.lastChecked === "2026-08-05");
-  assert.equal(resources.length, 207);
-  assert.ok(resources.filter(isExactServiceSite).length >= 57);
+  const reviewedExpansion = resources.filter((resource) => resource.lastChecked === "2026-08-05" && !resource.datasetId);
+  assert.equal(resources.length, 601);
+  assert.ok(resources.filter(isExactServiceSite).length >= 451);
   assert.ok(new Set(resources.map((resource) => resource.country)).size >= 109);
   assert.equal(reviewedExpansion.length, 114);
   assert.ok(reviewedExpansion.every((resource) => resource.locationPrecision === (resource.kind === "direct" ? "exact" : "coverage")));
   assert.ok(reviewedExpansion.every((resource) => resource.sourceUrl.startsWith("https://")));
+  assert.equal(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").length, 101);
+  assert.equal(resources.filter((resource) => resource.datasetId === "new-york-wic-sites").length, 293);
+  assert.ok(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").every((resource) => resource.hours));
 });
 
 test("progressive close-view geometry materially increases boundary detail", async () => {

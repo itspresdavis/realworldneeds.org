@@ -6,9 +6,12 @@
   "description": "Real World Needs global verified aid resource finder.",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check src/app.js && node --check src/data/resources.js && node --check src/data/platform.js && node --check src/utils/geo.js && node scripts/validate-data.mjs && node --test && npm run build",
+    "check": "node --check src/app.js && node --check src/data/resources.js && node --check src/data/live-sources.js && node --check src/data/platform.js && node --check src/utils/geo.js && node scripts/validate-data.mjs && node --test && npm run build",
     "dev": "node scripts/build.mjs && node scripts/serve.mjs 5173",
-    "preview": "node scripts/serve.mjs 4173"
+    "preview": "node scripts/serve.mjs 4173",
+    "refresh:data:ma-wic": "node scripts/refresh-massachusetts-wic.mjs",
+    "refresh:data:ny-wic": "node scripts/refresh-new-york-wic.mjs",
+    "refresh:data": "npm run refresh:data:ma-wic && npm run refresh:data:ny-wic"
   },
   "dependencies": {
     "three": "0.185.1"
