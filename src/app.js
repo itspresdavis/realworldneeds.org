@@ -5,6 +5,7 @@ import {
   createInitialTypeSet,
   distanceKm,
   featureGlobeView,
+  formatResourcePlace,
   matchesResource,
   normalizeLongitude,
   THREE_SPHERE_TEXTURE_OFFSET,
@@ -23,7 +24,7 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 const MIN_GLOBE_ZOOM = 0.82;
 
 function maxGlobeZoom() {
-  return window.innerWidth <= 600 ? 2.35 : 2.25;
+  return window.innerWidth <= 600 ? 2.55 : 3.05;
 }
 
 function initialResultCount() {
@@ -75,6 +76,10 @@ const state = {
   interactionUntil: 0,
   landRings: [],
   countryFeatures: [],
+  detailLandRings: [],
+  detailCountryFeatures: [],
+  detailGeometryRequested: false,
+  detailGeometryReady: false,
   focusedCountry: null,
   focusPoint: null,
   focusedRegion: null,
@@ -102,10 +107,15 @@ let globeWorld = null;
 let globeSurface = null;
 let globeBorders = null;
 let globeCountryHighlight = null;
+let globeGraticule = null;
+let globeAtmosphere = null;
 let globeLight = null;
 let globeFocusLight = null;
 let globeBaseCameraDistance = 3.2;
 let earthTextureImage = null;
+let earthDetailTextureImage = null;
+let earthDetailTextureRequested = false;
+let earthDetailTextureReady = false;
 let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
@@ -146,6 +156,8 @@ const regionViews = {
 };
 
 const countryNameAliases = {
+  "South Sudan": "S. Sudan",
+  "Türkiye": "Turkey",
   "United States": "United States of America"
 };
 
@@ -226,7 +238,7 @@ function shell() {
         <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
         <a href="#about" data-section-link="about">How it works</a>
         <a href="#standards" data-section-link="standards">Standards</a>
-        <a href="#accountability" data-section-link="accountability">Operating status</a>
+        <a href="/transparency">Transparency</a>
       </nav>
       <details class="site-menu">
         <summary aria-label="Open site navigation" title="Menu">${icon.menu}</summary>
@@ -234,7 +246,7 @@ function shell() {
           <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
           <a href="#about" data-section-link="about">How it works</a>
           <a href="#standards" data-section-link="standards">Standards</a>
-          <a href="#accountability" data-section-link="accountability">Operating status</a>
+          <a href="/transparency">Transparency</a>
         </nav>
       </details>
       <a class="header-action" href="#finder" data-section-link="finder">Search directory</a>
@@ -285,6 +297,7 @@ function shell() {
               <div><span class="status-dot"></span><strong>Verified service map</strong></div>
               <div class="globe-meta__tools">
                 <span id="globeCount"></span>
+                <span class="globe-detail-status" id="globeDetailStatus">Standard boundaries</span>
                 <button class="globe-inspector-toggle" id="openInspector" type="button" hidden>Service details</button>
                 <label class="region-menu">
                   <span class="sr-only">Focus globe region</span>
@@ -300,7 +313,7 @@ function shell() {
               </div>
             </div>
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
-            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details.</p>
+            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details. Higher-resolution national boundaries load automatically when you zoom closer.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-controls" aria-label="Globe controls">
@@ -319,7 +332,7 @@ function shell() {
         </div>
 
         <div class="directory-strip">
-          <p><strong>${resources.length}</strong> source-backed resources <span>${directCount()} physical service sites</span> <span>Across ${new Set(resources.map((resource) => resource.country)).size} countries and global networks</span></p>
+          <p><strong>${resources.length}</strong> source-backed resources <span>${directCount()} physical service sites</span> <span>Across ${new Set(resources.map((resource) => resource.country)).size} countries and global networks</span> <a href="/directory">Open resilient text directory</a></p>
           <p role="note">${icon.info}<span>Not an emergency service. If someone is in immediate danger, contact local emergency services.</span></p>
         </div>
 
@@ -375,8 +388,8 @@ function shell() {
 
     <footer class="site-footer">
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
-      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="#about">How it works</a></nav>
-      <nav aria-label="Footer standards"><strong>Standards</strong><a href="/editorial-policy">Editorial policy</a><a href="#accountability">Operating boundaries</a></nav>
+      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="/directory">Text directory</a><a href="#about">How it works</a></nav>
+      <nav aria-label="Footer standards"><strong>Standards</strong><a href="/transparency">Transparency center</a><a href="/editorial-policy">Editorial policy</a><a href="#accountability">Operating boundaries</a></nav>
       <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
       <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
       <p><span class="status-dot"></span>${resources.length} source-backed resources · No donations or personal need requests are accepted through this site.</p>
@@ -517,7 +530,7 @@ function renderResourcePanel() {
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
     <div class="panel-source"><span>${icon.check} Official source linked</span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
-    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${resource.city}, ${resource.country}</p></div></div>
+    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
@@ -568,7 +581,7 @@ function resourceCard(resource) {
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
         <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName}</small></span></span>
-        <span class="resource-row__place">${resource.city}, ${resource.country}</span>
+        <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${state.userLocation ? distanceLabel(resource) : resource.accessType}</span>
         <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time>
@@ -644,7 +657,7 @@ async function copyText(value) {
 
 async function shareResource(resource) {
   const url = privateResourceUrl(window.location.href, resource.id);
-  const data = { title: resource.name, text: `${resource.name} · ${resource.city}, ${resource.country}`, url: url.toString() };
+  const data = { title: resource.name, text: `${resource.name} · ${formatResourcePlace(resource)}`, url: url.toString() };
   if (navigator.share) {
     try {
       await navigator.share(data);
@@ -751,17 +764,20 @@ function drawTextureRing(ctx, ring, width, height, fill, stroke) {
 
 function createGlobeTexture() {
   const canvas = document.createElement("canvas");
-  const hasEarthImagery = earthTextureImage?.complete && earthTextureImage.naturalWidth > 0;
+  const activeEarthImage = earthDetailTextureImage?.complete && earthDetailTextureImage.naturalWidth > 0
+    ? earthDetailTextureImage
+    : earthTextureImage;
+  const hasEarthImagery = activeEarthImage?.complete && activeEarthImage.naturalWidth > 0;
   const maximumTextureSize = globeRenderer?.capabilities.maxTextureSize || 4096;
-  const preferredWidth = 5400;
+  const preferredWidth = earthDetailTextureReady ? 8192 : 5400;
   canvas.width = hasEarthImagery
-    ? Math.min(preferredWidth, maximumTextureSize, earthTextureImage.naturalWidth)
+    ? Math.min(preferredWidth, maximumTextureSize, activeEarthImage.naturalWidth)
     : 2048;
   canvas.height = Math.round(canvas.width / 2);
   const ctx = canvas.getContext("2d");
 
   if (hasEarthImagery) {
-    ctx.drawImage(earthTextureImage, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(activeEarthImage, 0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "rgba(1, 8, 14, 0.035)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   } else {
@@ -778,13 +794,6 @@ function createGlobeTexture() {
       const palette = ["#28514f", "#2d5854", "#244a4b", "#315b55"];
       drawTextureRing(ctx, ring, canvas.width, canvas.height, palette[index % palette.length], "rgba(176, 218, 203, 0.24)");
     });
-  }
-
-  const focusedFeature = state.focusedCountry ? countryFeatureByName(state.focusedCountry) : null;
-  if (focusedFeature) {
-    for (const ring of extractRings(focusedFeature.geometry)) {
-      drawTextureRing(ctx, ring, canvas.width, canvas.height, "rgba(63, 214, 139, 0.16)", "rgba(168, 255, 210, 0.72)");
-    }
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -811,6 +820,27 @@ function loadEarthImagery() {
     refreshGlobeSurface();
   };
   image.src = "/media/earth-blue-marble.jpg";
+}
+
+function loadDetailEarthImagery() {
+  if (earthDetailTextureRequested || window.innerWidth <= 900 || navigator.connection?.saveData) return;
+  if ((globeRenderer?.capabilities.maxTextureSize || 0) < 6144) return;
+  earthDetailTextureRequested = true;
+  const status = document.getElementById("globeDetailStatus");
+  if (status && state.detailGeometryReady) status.textContent = "1:10m · loading HD surface…";
+  const image = new Image();
+  image.decoding = "async";
+  image.onload = () => {
+    earthDetailTextureImage = image;
+    earthDetailTextureReady = true;
+    refreshGlobeSurface();
+    if (status) status.textContent = state.detailGeometryReady ? "1:10m · HD NASA" : "HD NASA surface";
+    updateGlobeReadout();
+  };
+  image.onerror = () => {
+    if (status && state.detailGeometryReady) status.textContent = "1:10m boundaries";
+  };
+  image.src = "/media/earth-blue-marble-detail.jpg";
 }
 
 function createStarField() {
@@ -867,14 +897,15 @@ function createGraticule() {
 }
 
 function rebuildCountryBorders() {
-  if (!globeWorld || !state.landRings.length) return;
+  const rings = state.detailGeometryReady ? state.detailLandRings : state.landRings;
+  if (!globeWorld || !rings.length) return;
   if (globeBorders) {
     globeBorders.geometry.dispose();
     globeBorders.material.dispose();
     globeWorld.remove(globeBorders);
   }
   const positions = [];
-  for (const ring of state.landRings) {
+  for (const ring of rings) {
     for (let index = 1; index < ring.length; index += 1) {
       const start = latLngVector(ring[index - 1][1], ring[index - 1][0], 1.006);
       const end = latLngVector(ring[index][1], ring[index][0], 1.006);
@@ -886,7 +917,7 @@ function rebuildCountryBorders() {
   globeBorders = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
     color: 0xd8e7e1,
     transparent: true,
-    opacity: 0.22,
+    opacity: state.detailGeometryReady ? 0.3 : 0.22,
     depthWrite: false
   }));
   globeWorld.add(globeBorders);
@@ -902,7 +933,8 @@ function resourceCountryForFeature(name) {
 
 function countryFeatureByName(name) {
   const featureName = featureNameForCountry(name);
-  return state.countryFeatures.find((feature) => feature.properties?.NAME === featureName) || null;
+  const features = state.detailGeometryReady ? state.detailCountryFeatures : state.countryFeatures;
+  return features.find((feature) => feature.properties?.NAME === featureName) || null;
 }
 
 function setCountryHighlight(name) {
@@ -916,10 +948,7 @@ function setCountryHighlight(name) {
   }
 
   const feature = name ? countryFeatureByName(name) : null;
-  if (!feature) {
-    updateGlobeTexture();
-    return;
-  }
+  if (!feature) return;
   const positions = [];
   for (const ring of extractRings(feature.geometry)) {
     for (let index = 1; index < ring.length; index += 1) {
@@ -938,7 +967,6 @@ function setCountryHighlight(name) {
   }));
   globeCountryHighlight.renderOrder = 4;
   globeWorld.add(globeCountryHighlight);
-  updateGlobeTexture();
 }
 
 function updateGlobeTexture() {
@@ -995,9 +1023,10 @@ function initThreeGlobe() {
     })
   );
   globeWorld.add(globeSurface);
-  globeWorld.add(createGraticule());
+  globeGraticule = createGraticule();
+  globeWorld.add(globeGraticule);
 
-  const atmosphere = new THREE.Mesh(
+  globeAtmosphere = new THREE.Mesh(
     new THREE.SphereGeometry(1.025, 96, 64),
     new THREE.ShaderMaterial({
       uniforms: { glowColor: { value: new THREE.Color(0x76b8cf) } },
@@ -1009,7 +1038,7 @@ function initThreeGlobe() {
       depthWrite: false
     })
   );
-  globeWorld.add(atmosphere);
+  globeWorld.add(globeAtmosphere);
 
   globeScene.add(new THREE.AmbientLight(0xb9c6ca, 0.88));
   globeScene.add(new THREE.HemisphereLight(0xbad5d8, 0x0a1b23, 0.82));
@@ -1097,8 +1126,20 @@ function renderThreeGlobe(width, height, now) {
   globeWorld.rotation.x = toRad(state.rotationLat);
   globeWorld.scale.setScalar(1);
   globeWorld.updateMatrixWorld(true);
-  globeCamera.position.z = Math.max(1.075, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));
+  globeCamera.position.z = Math.max(1.09, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));
   globeCamera.updateMatrixWorld(true);
+
+  if (globeBorders) {
+    const detailBoost = state.detailGeometryReady ? 0.12 : 0;
+    globeBorders.material.opacity = Math.min(0.52, 0.18 + detailBoost + Math.max(0, state.zoom - 1) * 0.12);
+  }
+  if (globeGraticule) {
+    globeGraticule.material.opacity = Math.min(0.12, 0.035 + Math.max(0, state.zoom - 1) * 0.025);
+  }
+  if (globeAtmosphere) {
+    const atmosphereScale = 1 + Math.min(0.006, Math.max(0, state.zoom - 1) * 0.002);
+    globeAtmosphere.scale.setScalar(atmosphereScale);
+  }
 
   const sun = subsolarPoint(new Date());
   const sunPosition = latLngVector(sun.lat, sun.lng, 5).applyEuler(globeWorld.rotation);
@@ -1116,7 +1157,6 @@ function renderThreeGlobe(width, height, now) {
     globeFocusLight.intensity = 0;
   }
 
-  if (connectionGroup?.children.length) clearConnections();
   globeRenderer.render(globeScene, globeCamera);
   return true;
 }
@@ -1487,13 +1527,17 @@ function updateGlobeReadout() {
   const resource = selectedResource();
   const readout = document.getElementById("globeReadout");
   if (!readout) return;
+  const zoomLabel = `${state.zoom.toFixed(state.zoom < 2 ? 1 : 2)}×`;
+  const detailLabel = earthDetailTextureReady
+    ? "1:10m + HD NASA"
+    : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
-    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.length} visible resources</span>`
+    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`
     : resource && state.focusPoint
-    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")}</span>`
+    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
     : state.focusedCountry && state.focusPoint
-      ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")}</span>`
-    : `<strong>World view</strong><span>${state.filtered.length} visible resources</span>`;
+      ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
+    : `<strong>World view</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
@@ -1544,6 +1588,8 @@ function animateGlobe(now) {
   const width = Math.max(1, rect.width);
   const height = Math.max(1, rect.height);
   advanceGlobe(now);
+  if (state.zoom > 1.28 || state.targetZoom > 1.28) loadDetailGeometry();
+  if (state.zoom > 1.55 || state.targetZoom > 1.55) loadDetailEarthImagery();
   document.querySelector(".globe-stage")?.classList.toggle("is-close-view", state.zoom > 1.72);
   if (!renderThreeGlobe(width, height, now)) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1635,7 +1681,8 @@ function geometryContainsCoordinate(geometry, lat, lng) {
 }
 
 function countryAtCoordinate(lat, lng) {
-  return state.countryFeatures.find((feature) => geometryContainsCoordinate(feature.geometry, lat, lng)) || null;
+  const features = state.detailGeometryReady ? state.detailCountryFeatures : state.countryFeatures;
+  return features.find((feature) => geometryContainsCoordinate(feature.geometry, lat, lng)) || null;
 }
 
 function selectCountryFromPointer(event) {
@@ -1689,6 +1736,32 @@ function selectCountryFromPointer(event) {
   pinSignature = "";
   window.history.replaceState({}, "", clearResourceFromUrl(window.location.href));
   notify(`No listed services in ${displayName} match the current filters`);
+}
+
+async function loadDetailGeometry() {
+  if (state.detailGeometryRequested) return;
+  state.detailGeometryRequested = true;
+  const status = document.getElementById("globeDetailStatus");
+  if (navigator.connection?.saveData) {
+    if (status) status.textContent = "Standard boundaries · Data Saver";
+    return;
+  }
+  if (status) status.textContent = "Loading 1:10m boundaries…";
+  try {
+    const response = await fetch("/data/countries-detail.geojson", { cache: "force-cache" });
+    if (!response.ok) throw new Error(`Detailed map data returned ${response.status}`);
+    const data = await response.json();
+    state.detailCountryFeatures = data.features;
+    state.detailLandRings = data.features.flatMap((feature) => extractRings(feature.geometry));
+    state.detailGeometryReady = true;
+    rebuildCountryBorders();
+    if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
+    if (status) status.textContent = earthDetailTextureReady ? "1:10m · HD NASA" : "1:10m boundaries";
+    updateGlobeReadout();
+  } catch (error) {
+    console.warn("High-detail Natural Earth geometry could not be loaded.", error);
+    if (status) status.textContent = "Standard boundaries";
+  }
 }
 
 async function loadLandGeometry() {
