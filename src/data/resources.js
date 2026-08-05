@@ -1,3 +1,5 @@
+import { expansionResources } from "./resource-expansion.js";
+
 export const categories = {
   food: {
     label: "Food",
@@ -1281,7 +1283,8 @@ export const resources = [
     sourceDetail: "The official site lists the Bogotá location and describes food recovery and distribution through social organizations."
   }),
   ...countryHelpDirectories,
-  ...expandedResources
+  ...expandedResources,
+  ...expansionResources
 ];
 
 export const trustPrinciples = [

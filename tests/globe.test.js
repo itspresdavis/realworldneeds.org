@@ -6,9 +6,14 @@ import {
   cameraDistanceForSphere,
   featureGlobeView,
   formatResourcePlace,
+  isExactServiceSite,
   normalizeLongitude,
+  rankResourcesForLocation,
+  resourceDistanceKm,
+  resourceSearchScore,
   THREE_SPHERE_TEXTURE_OFFSET
 } from "../src/utils/geo.js";
+import { resources } from "../src/data/resources.js";
 
 test("country framing remains stable across the antimeridian", () => {
   const feature = {
@@ -50,6 +55,49 @@ test("Three.js sphere UVs are aligned to standard equirectangular longitude", ()
 test("place labels do not repeat country-wide locator names", () => {
   assert.equal(formatResourcePlace({ city: "United States", country: "United States" }), "United States");
   assert.equal(formatResourcePlace({ city: "London", country: "United Kingdom" }), "London, United Kingdom");
+});
+
+test("coverage locators never display a fabricated nearby distance", () => {
+  const user = { lat: 42.36, lng: -71.06 };
+  const locator = { kind: "locator", locationPrecision: "coverage", lat: 42.36, lng: -71.06 };
+  const exact = { kind: "direct", locationPrecision: "exact", lat: 42.37, lng: -71.06 };
+  assert.equal(resourceDistanceKm(user, locator), null);
+  assert.ok(resourceDistanceKm(user, exact) > 0);
+  assert.equal(isExactServiceSite(locator), false);
+  assert.equal(isExactServiceSite(exact), true);
+});
+
+test("location ranking separates nearby sites, same-country locators, and distant sites", () => {
+  const resourcesToRank = [
+    { id: "far", name: "Far site", kind: "direct", locationPrecision: "exact", country: "United States", lat: 34.05, lng: -118.24 },
+    { id: "global", name: "Global locator", kind: "locator", locationPrecision: "coverage", country: "Global", lat: 0, lng: 0 },
+    { id: "national", name: "National locator", kind: "locator", locationPrecision: "coverage", country: "United States", lat: 38.9, lng: -77.03 },
+    { id: "near", name: "Nearby site", kind: "direct", locationPrecision: "exact", country: "United States", lat: 42.36, lng: -71.06 }
+  ];
+  assert.deepEqual(
+    rankResourcesForLocation(resourcesToRank, { lat: 42.35, lng: -71.06 }, "United States").map((resource) => resource.id),
+    ["near", "national", "far", "global"]
+  );
+});
+
+test("search tolerates diacritics and common help-language synonyms", () => {
+  const hygiene = {
+    name: "Centro Bogotá", city: "Bogotá", country: "Colombia", region: "South America", address: "", sourceName: "Provider",
+    category: "hygiene", secondaryCategories: [], summary: "Personal care", services: ["Laundry"], accessType: "Walk-in", costNote: "Free"
+  };
+  assert.ok(resourceSearchScore(hygiene, "Bogota") >= 0);
+  assert.ok(resourceSearchScore(hygiene, "showers") >= 0);
+  assert.equal(resourceSearchScore(hygiene, "veterinary"), -1);
+});
+
+test("expanded catalog preserves location precision and minimum coverage", () => {
+  const reviewedExpansion = resources.filter((resource) => resource.lastChecked === "2026-08-05");
+  assert.equal(resources.length, 207);
+  assert.ok(resources.filter(isExactServiceSite).length >= 57);
+  assert.ok(new Set(resources.map((resource) => resource.country)).size >= 109);
+  assert.equal(reviewedExpansion.length, 114);
+  assert.ok(reviewedExpansion.every((resource) => resource.locationPrecision === (resource.kind === "direct" ? "exact" : "coverage")));
+  assert.ok(reviewedExpansion.every((resource) => resource.sourceUrl.startsWith("https://")));
 });
 
 test("progressive close-view geometry materially increases boundary detail", async () => {

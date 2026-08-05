@@ -13,7 +13,7 @@ Real World Needs (RWN) is a static, privacy-minimizing humanitarian service dire
 
 ## Current release boundary
 
-The public finder is live with 93 source-backed records. Verified-needs publishing, public intake, partner accounts, donation processing, allocations, disbursements, and impact reporting remain disabled until RWN has the organizational and operational controls required to run them safely. The repository must not use placeholder transactions, invented availability, or unsupported impact claims.
+The public finder is live with 207 source-backed records, including 57 exact physical service sites and 150 official locators or service networks across 109 countries and global programs. Verified-needs publishing, public intake, partner accounts, donation processing, allocations, disbursements, and impact reporting remain disabled until RWN has the organizational and operational controls required to run them safely. The repository must not use placeholder transactions, invented availability, or unsupported impact claims.
 
 ## Operating documentation
 
@@ -44,7 +44,7 @@ Physical service-site markers should use the provider-published public location.
 ## Privacy and security model
 
 - Search and filtering run locally in the browser.
-- Location is requested only after an explicit click, held in memory, and used only for distance sorting.
+- Location is requested only after an explicit click, held in memory, and used to rank exact physical sites separately from countrywide and global coverage locators.
 - Saved records are service IDs in local storage; the footer provides a clear-data control.
 - Shared resource IDs use URL fragments so they are not sent in HTTP request paths.
 - Vercel provides static hosting and standard edge/security logs.

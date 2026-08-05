@@ -6,8 +6,12 @@ import {
   distanceKm,
   featureGlobeView,
   formatResourcePlace,
+  isExactServiceSite,
   matchesResource,
   normalizeLongitude,
+  rankResourcesForLocation,
+  resourceDistanceKm,
+  resourceSearchScore,
   THREE_SPHERE_TEXTURE_OFFSET,
   toRad
 } from "./utils/geo.js";
@@ -57,6 +61,8 @@ const state = {
   selectedId: initialResource,
   filtered: resources,
   userLocation: null,
+  userLocationAccuracy: null,
+  userCountry: null,
   rotationLon: -8,
   rotationLat: 12,
   targetLon: null,
@@ -88,7 +94,8 @@ const state = {
   ambientZoom: 1,
   savedIds: loadSavedResources(),
   savedOnly: false,
-  inspectorOpen: true
+  inspectorOpen: true,
+  clusterIds: []
 };
 
 const activeGlobePointers = new Map();
@@ -201,8 +208,17 @@ function selectedResource() {
 
 function distanceLabel(resource) {
   if (!state.userLocation) return "";
-  const distance = distanceKm(state.userLocation.lat, state.userLocation.lng, resource.lat, resource.lng);
+  const distance = resourceDistanceKm(state.userLocation, resource);
+  if (distance === null) return resource.coverageNote || "Coverage locator — not a service-site distance";
   return distance < 10 ? `${distance.toFixed(1)} km away` : `${Math.round(distance).toLocaleString()} km away`;
+}
+
+function locationResultLabel(resource) {
+  if (!state.userLocation) return resource.accessType;
+  if (isExactServiceSite(resource)) return distanceLabel(resource);
+  if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Global official locator";
+  if (state.userCountry && resource.country === state.userCountry) return `${state.userCountry} official locator`;
+  return "Coverage locator";
 }
 
 function googleMapsUrl(resource, directions = false) {
@@ -271,8 +287,12 @@ function shell() {
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
             </div>
 
-            <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
-            <p class="location-privacy">Used only in this browser to sort nearby services. <a href="/privacy#location">Privacy details</a></p>
+            <div class="location-actions">
+              <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
+              <button class="location-clear" id="clearLocation" type="button" hidden>Clear</button>
+            </div>
+            <p class="location-status" id="locationStatus" aria-live="polite">Show exact service sites first. Countrywide locators are clearly separated.</p>
+            <p class="location-privacy">Your coordinates stay in this browser session and are never submitted to RWN. <a href="/privacy#location">Privacy details</a></p>
             <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not emergency dispatch. <a href="/terms#urgent-help">Safety information</a></p>
 
             <details class="filter-disclosure">
@@ -315,6 +335,7 @@ function shell() {
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
             <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details. Higher-resolution national boundaries load automatically when you zoom closer.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
+            <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-controls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
@@ -441,9 +462,12 @@ function updateFilters() {
   if (state.savedOnly) accessFiltered = accessFiltered.filter((resource) => state.savedIds.has(resource.id));
 
   state.filtered = state.userLocation
-    ? [...accessFiltered].sort((a, b) => distanceKm(state.userLocation.lat, state.userLocation.lng, a.lat, a.lng) - distanceKm(state.userLocation.lat, state.userLocation.lng, b.lat, b.lng))
-    : accessFiltered;
+    ? rankResourcesForLocation(accessFiltered, state.userLocation, state.userCountry, state.query)
+    : state.query
+      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, state.query) - resourceSearchScore(a, state.query) || a.name.localeCompare(b.name))
+      : accessFiltered;
   state.visibleResults = initialResultCount();
+  state.clusterIds = [];
 
   if (!state.filtered.some((resource) => resource.id === state.selectedId)) {
     state.selectedId = state.filtered[0]?.id || null;
@@ -452,7 +476,35 @@ function updateFilters() {
   renderControls();
   renderResourcePanel();
   renderResults();
+  renderClusterTray();
   pinSignature = "";
+}
+
+function nearbyExactCount(maximumKm = 250) {
+  if (!state.userLocation) return 0;
+  return state.filtered.filter((resource) => {
+    const distance = resourceDistanceKm(state.userLocation, resource);
+    return distance !== null && distance <= maximumKm;
+  }).length;
+}
+
+function renderLocationState() {
+  const button = document.getElementById("locateMe");
+  const clear = document.getElementById("clearLocation");
+  const status = document.getElementById("locationStatus");
+  if (!button || !clear || !status) return;
+  const active = Boolean(state.userLocation);
+  button.classList.toggle("has-location", active);
+  button.innerHTML = active ? `${icon.locate}<span>Recenter near me</span>` : `${icon.locate}<span>Use my location</span>`;
+  button.setAttribute("aria-label", active ? "Recenter the globe near my location" : "Use my location to rank exact service sites");
+  clear.hidden = !active;
+  if (!active) {
+    status.textContent = "Show exact service sites first. Countrywide locators are clearly separated.";
+    return;
+  }
+  const accuracy = state.userLocationAccuracy ? `Location accuracy about ${Math.round(state.userLocationAccuracy).toLocaleString()} m.` : "";
+  const country = state.userCountry ? ` Official ${state.userCountry} locators follow nearby sites.` : "";
+  status.textContent = `${nearbyExactCount()} exact service ${nearbyExactCount() === 1 ? "site" : "sites"} within 250 km. ${accuracy}${country}`.trim();
 }
 
 function renderControls() {
@@ -477,6 +529,7 @@ function renderControls() {
   document.getElementById("resourceSearch").disabled = !aidMode;
   document.getElementById("clearSearch").hidden = !state.query;
   document.getElementById("locateMe").disabled = !aidMode;
+  renderLocationState();
   document.getElementById("toggleAll").disabled = !aidMode;
   document.getElementById("toggleAll").textContent = state.activeTypes.size === resourceTypes.length ? "Clear" : "Show all";
   const typeCount = state.activeTypes.size;
@@ -527,10 +580,17 @@ function renderResourcePanel() {
 
   const category = categories[resource.category];
   const saved = state.savedIds.has(resource.id);
+  const exact = isExactServiceSite(resource);
+  const resourceIndex = state.filtered.findIndex((item) => item.id === resource.id);
+  const previous = resourceIndex > 0 ? state.filtered[resourceIndex - 1] : null;
+  const next = resourceIndex >= 0 ? state.filtered[resourceIndex + 1] : null;
+  const sourceAction = exact ? "Open official service page" : "Search official locator";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
     <div class="panel-source"><span>${icon.check} Official source linked</span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
+    <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
+    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Exact service site</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Coverage locator</strong> — this marker represents an area, not a walk-in address.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
@@ -539,25 +599,26 @@ function renderResourcePanel() {
         <dl class="panel-facts">
           <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
           <div><dt>Cost</dt><dd>${resource.costNote}</dd></div>
-          <div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
+          <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
-          ${state.userLocation ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
+          ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
+          ${!exact && resource.coverageNote ? `<div><dt>Map note</dt><dd>${resource.coverageNote}</dd></div>` : ""}
         </dl>
         <div class="panel-services"><h3>What they can help with</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
       </div>
     </details>
     <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
-    <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p><p>Reviewed <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
+    <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}<p>Reviewed <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
-      ${resource.kind === "direct" ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
-      <a class="secondary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Official source ${icon.external}</a>
+      ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+      <a class="secondary-button" href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
     </div>
-    ${resource.kind === "direct" ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
+    ${exact ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
       <button type="button" id="saveResource" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>
       <button type="button" id="shareResource">${icon.share}<span>Share</span></button>
-      <button type="button" id="copyAddress">${icon.copy}<span>Copy</span></button>
+      <button type="button" id="copyAddress">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
     </div>
   `;
 
@@ -567,6 +628,8 @@ function renderResourcePanel() {
   });
   document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
   document.getElementById("shareResource")?.addEventListener("click", () => shareResource(resource));
+  document.getElementById("previousResource")?.addEventListener("click", () => previous && setSelected(previous.id));
+  document.getElementById("nextResource")?.addEventListener("click", () => next && setSelected(next.id));
   document.getElementById("closeInspector")?.addEventListener("click", () => {
     state.inspectorOpen = false;
     renderResourcePanel();
@@ -580,10 +643,10 @@ function resourceCard(resource) {
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName}</small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"}</small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
-        <span class="resource-row__access">${state.userLocation ? distanceLabel(resource) : resource.accessType}</span>
+        <span class="resource-row__access">${locationResultLabel(resource)}</span>
         <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time>
         <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
@@ -596,8 +659,10 @@ function renderResults() {
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
-  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : "Find a service";
-  count.textContent = state.viewMode === "aid" ? `Showing ${visibleResources.length} of ${state.filtered.length} services` : "No verified needs published";
+  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : state.userLocation ? "Help near you" : "Find a service";
+  count.textContent = state.viewMode === "aid"
+    ? `${state.userLocation ? `${nearbyExactCount()} exact sites within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} resources`
+    : "No verified needs published";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
     : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No records are published in this layer." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "Need intake and publication are not enabled in this release." : "Try another place, service, or access type."}</p></div>`;
@@ -607,10 +672,12 @@ function renderResults() {
 function setSelected(id, focus = true, reveal = "panel") {
   state.selectedId = id;
   state.inspectorOpen = true;
+  state.clusterIds = [];
   const resource = selectedResource();
   if (focus && resource) focusGlobeOn(resource, reveal === "map");
   renderResourcePanel();
   renderResults();
+  renderClusterTray();
   pinSignature = "";
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, id));
   if (reveal) {
@@ -695,10 +762,13 @@ function downloadDirectory() {
 }
 
 function focusGlobeOn(resource, immediate = false) {
-  const view = featureGlobeView(countryFeatureByName(resource.country), { lat: resource.lat, lng: resource.lng });
+  const exact = isExactServiceSite(resource);
+  const view = exact
+    ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 1.72 : 1.9 }
+    : featureGlobeView(countryFeatureByName(resource.country), { lat: resource.lat, lng: resource.lng });
   state.targetLon = view.lng;
   state.targetLat = Math.max(-70, Math.min(70, view.lat));
-  const serviceZoom = resource.kind === "direct" ? 1.5 : 1.22;
+  const serviceZoom = exact ? (window.innerWidth <= 600 ? 1.72 : 1.9) : 1.22;
   state.targetZoom = Math.min(maxGlobeZoom(), Math.max(view.zoom, serviceZoom));
   if (immediate) {
     state.rotationLon = state.targetLon;
@@ -715,6 +785,29 @@ function focusGlobeOn(resource, immediate = false) {
   const regionSelect = document.getElementById("regionFocus");
   if (regionSelect) regionSelect.value = "focus";
   state.interactionUntil = performance.now() + 7000;
+}
+
+function focusGlobeNearUser() {
+  if (!state.userLocation) return;
+  state.targetLon = state.userLocation.lng;
+  state.targetLat = Math.max(-70, Math.min(70, state.userLocation.lat));
+  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.72 : 1.9);
+  state.velocityLon = 0;
+  state.velocityLat = 0;
+  state.focusPoint = { ...state.userLocation };
+  state.focusedRegion = null;
+  setCountryHighlight(state.userCountry);
+  const regionSelect = document.getElementById("regionFocus");
+  if (regionSelect) regionSelect.value = "focus";
+  state.interactionUntil = performance.now() + 7000;
+}
+
+function clearUserLocation() {
+  state.userLocation = null;
+  state.userLocationAccuracy = null;
+  state.userCountry = null;
+  document.getElementById("locateMe")?.classList.remove("has-location", "is-loading");
+  updateFilters();
 }
 
 function latLngVector(lat, lng, radius = 1) {
@@ -1502,7 +1595,7 @@ function renderPins(width, height) {
         return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped resources"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} resources in this area<small>${kinds}</small></strong></button>`;
       }
       const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
-      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}"><span></span><strong>${resource.name}<small>${resource.city}, ${resource.country} · ${kindLabel(resource)}</small></strong></button>`;
+      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : kindLabel(resource)}</small></strong></button>`;
     }).join("");
     pinElements = new Map([...layer.querySelectorAll("[data-globe-key]")].map((button) => [button.dataset.globeKey, button]));
     pinSignature = signature;
@@ -1515,7 +1608,7 @@ function renderPins(width, height) {
     button.style.transform = `translate3d(${cluster.x}px, ${cluster.y}px, 0) scale(${0.74 + Math.max(0, cluster.z) * 0.28})`;
     button.style.opacity = String(0.5 + cluster.z * 0.5);
     button.style.pointerEvents = "auto";
-    button.style.zIndex = String(Math.round(cluster.z * 100));
+    button.style.zIndex = String(cluster.members.some((resource) => resource.id === selected?.id) ? 1000 : Math.round(cluster.z * 100));
   });
 }
 
@@ -1628,9 +1721,33 @@ function focusRegion(key, selectMatching = false) {
   }
 }
 
+function renderClusterTray() {
+  const tray = document.getElementById("globeClusterTray");
+  if (!tray) return;
+  const members = state.clusterIds
+    .map((id) => state.filtered.find((resource) => resource.id === id))
+    .filter(Boolean);
+  tray.hidden = !members.length;
+  if (!members.length) {
+    tray.innerHTML = "";
+    return;
+  }
+  const visible = members.slice(0, 12);
+  tray.innerHTML = `
+    <div class="globe-cluster-tray__heading"><div><strong>${members.length} resources here</strong><span>Select a service or locator</span></div><button type="button" data-close-cluster aria-label="Close grouped resources">${icon.close}</button></div>
+    <div class="globe-cluster-tray__list">${visible.map((resource) => `
+      <button type="button" data-cluster-resource="${resource.id}" style="--cluster-accent:${categories[resource.category].color}">
+        <i></i><span><strong>${resource.name}</strong><small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"}</small></span>${icon.arrow}
+      </button>
+    `).join("")}</div>
+    ${members.length > visible.length ? `<p>${members.length - visible.length} more become visible as you zoom closer.</p>` : ""}
+  `;
+}
+
 function focusCluster(ids) {
-  const members = ids.map((id) => resources.find((resource) => resource.id === id)).filter(Boolean);
+  const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(Boolean);
   if (!members.length) return;
+  state.clusterIds = members.map((resource) => resource.id);
   const vector = members.reduce((sum, resource) => {
     const point = vectorFor(resource);
     return { x: sum.x + point.x, y: sum.y + point.y, z: sum.z + point.z };
@@ -1648,6 +1765,7 @@ function focusCluster(ids) {
   setCountryHighlight(null);
   document.getElementById("regionFocus").value = "focus";
   state.interactionUntil = performance.now() + 6000;
+  renderClusterTray();
   notify(`Focused ${members.length} resources in this area`);
 }
 
@@ -1707,9 +1825,12 @@ function selectCountryFromPointer(event) {
 
   const featureName = country.properties.NAME;
   const displayName = resourceCountryForFeature(featureName);
-  const matches = state.filtered
-    .filter((resource) => featureNameForCountry(resource.country) === featureName)
-    .sort((a, b) => distanceKm(lat, lng, a.lat, a.lng) - distanceKm(lat, lng, b.lat, b.lng));
+  const matches = rankResourcesForLocation(
+    state.filtered.filter((resource) => featureNameForCountry(resource.country) === featureName),
+    { lat, lng },
+    displayName,
+    state.query
+  );
 
   document.getElementById("regionFocus").value = "focus";
   if (matches.length) {
@@ -1772,6 +1893,11 @@ async function loadLandGeometry() {
     state.countryFeatures = data.features;
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
     refreshGlobeSurface();
+    if (state.userLocation && !state.userCountry) {
+      const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
+      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
+      updateFilters();
+    }
     const resource = selectedResource();
     if (resource && state.focusPoint) focusGlobeOn(resource);
   } catch (error) {
@@ -1841,6 +1967,16 @@ function bindEvents() {
     if (button) setSelected(button.dataset.pinId);
   });
 
+  document.getElementById("globeClusterTray").addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-cluster]")) {
+      state.clusterIds = [];
+      renderClusterTray();
+      return;
+    }
+    const button = event.target.closest("[data-cluster-resource]");
+    if (button) setSelected(button.dataset.clusterResource);
+  });
+
   document.getElementById("showMoreResults").addEventListener("click", () => {
     state.visibleResults += initialResultCount();
     renderResults();
@@ -1855,24 +1991,19 @@ function bindEvents() {
     window.localStorage.removeItem(SAVED_RESOURCES_KEY);
     state.savedIds.clear();
     state.savedOnly = false;
-    state.userLocation = null;
-    const locationButton = document.getElementById("locateMe");
-    locationButton.classList.remove("has-location", "is-loading");
-    locationButton.innerHTML = `${icon.locate}<span>Use my location</span>`;
-    locationButton.setAttribute("aria-label", "Use my location");
-    updateFilters();
+    clearUserLocation();
     notify("Saved services and location sorting cleared");
+  });
+
+  document.getElementById("clearLocation").addEventListener("click", () => {
+    clearUserLocation();
+    notify("Location sorting cleared");
   });
 
   document.getElementById("locateMe").addEventListener("click", () => {
     if (state.userLocation) {
-      state.userLocation = null;
-      const button = document.getElementById("locateMe");
-      button.classList.remove("has-location");
-      button.innerHTML = `${icon.locate}<span>Use my location</span>`;
-      button.setAttribute("aria-label", "Use my location");
-      updateFilters();
-      notify("Location sorting cleared");
+      focusGlobeNearUser();
+      notify("Globe recentered on your approximate location");
       return;
     }
     if (!navigator.geolocation) {
@@ -1881,26 +2012,36 @@ function bindEvents() {
     }
     const button = document.getElementById("locateMe");
     button.classList.add("is-loading");
+    button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition((position) => {
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+      state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
+      const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
+      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
       button.classList.remove("is-loading");
-      button.classList.add("has-location");
-      button.innerHTML = `${icon.check}<span>Sorted by distance</span>`;
-      button.setAttribute("aria-label", "Clear location sorting");
       updateFilters();
-      if (state.filtered[0]) setSelected(state.filtered[0].id);
-      notify("Results sorted by approximate distance");
-    }, () => {
+      const nearest = state.filtered.find((resource) => {
+        const distance = resourceDistanceKm(state.userLocation, resource);
+        return distance !== null && distance <= 250;
+      }) || state.filtered.find((resource) => !isExactServiceSite(resource) && resource.country === state.userCountry) || state.filtered[0];
+      if (nearest) setSelected(nearest.id, false, false);
+      focusGlobeNearUser();
+      const nearby = nearbyExactCount();
+      notify(nearby ? `Found ${nearby} exact service ${nearby === 1 ? "site" : "sites"} within 250 km` : "No exact site is listed nearby yet; showing official coverage locators next");
+    }, (error) => {
       button.classList.remove("is-loading");
-      notify("Location permission was not available");
-    }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+      renderLocationState();
+      notify(error.code === 1 ? "Location permission was not granted" : "A precise location was not available; try again or check browser settings");
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   });
 
   const canvas = document.getElementById("globeCanvas");
   const globeStage = canvas.closest(".globe-stage");
-  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend"));
+  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .globe-cluster-tray"));
 
   const prepareGlobeInteraction = () => {
+    state.clusterIds = [];
+    renderClusterTray();
     state.targetLon = null;
     state.targetLat = null;
     state.velocityLon = 0;
