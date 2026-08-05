@@ -11,6 +11,12 @@ import {
   toRad
 } from "./utils/geo.js";
 import { pinchZoom, pointerDistance } from "./utils/gesture.js";
+import {
+  clearResourceFromUrl,
+  privateResourceUrl,
+  resourceIdFromUrl,
+  SAVED_RESOURCES_KEY
+} from "./utils/privacy.js";
 
 const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -28,15 +34,19 @@ function initialResultCount() {
 
 function loadSavedResources() {
   try {
-    const saved = JSON.parse(window.localStorage.getItem("rwn-saved-resources") || "[]");
+    const saved = JSON.parse(window.localStorage.getItem(SAVED_RESOURCES_KEY) || "[]");
     return new Set(saved.filter((id) => resources.some((resource) => resource.id === id)));
   } catch {
     return new Set();
   }
 }
 
-const requestedResource = new URL(window.location.href).searchParams.get("resource");
+const requestedResource = resourceIdFromUrl(window.location.href);
 const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : DEFAULT_RESOURCE;
+
+if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
+  window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
+}
 
 const state = {
   query: "",
@@ -250,7 +260,8 @@ function shell() {
             </div>
 
             <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
-            <p class="location-privacy">Used only in this browser to sort nearby services.</p>
+            <p class="location-privacy">Used only in this browser to sort nearby services. <a href="/privacy#location">Privacy details</a></p>
+            <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not emergency dispatch. <a href="/terms#urgent-help">Safety information</a></p>
 
             <details class="filter-disclosure">
               <summary>${icon.filter}<strong>Filters</strong><span id="filterSummary">All 7 aid types</span></summary>
@@ -365,8 +376,9 @@ function shell() {
     <footer class="site-footer">
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
       <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="#about">How it works</a></nav>
-      <nav aria-label="Footer standards"><strong>Standards</strong><a href="#standards">Source policy</a><a href="#accountability">Accountability</a></nav>
-      <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://visibleearth.nasa.gov/images/73967/february-blue-marble-next-generation" target="_blank" rel="noopener noreferrer">NASA Earth Observatory</a></nav>
+      <nav aria-label="Footer standards"><strong>Standards</strong><a href="/editorial-policy">Editorial policy</a><a href="#accountability">Operating boundaries</a></nav>
+      <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
+      <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
       <p><span class="status-dot"></span>${resources.length} source-backed resources · No donations or personal need requests are accepted through this site.</p>
     </footer>
 
@@ -587,9 +599,7 @@ function setSelected(id, focus = true, reveal = "panel") {
   renderResourcePanel();
   renderResults();
   pinSignature = "";
-  const url = new URL(window.location.href);
-  url.searchParams.set("resource", id);
-  window.history.replaceState({}, "", url);
+  window.history.replaceState({}, "", privateResourceUrl(window.location.href, id));
   if (reveal) {
     const target = reveal === "map" ? document.querySelector(".globe-stage") : document.getElementById("resourcePanel");
     const bounds = target?.getBoundingClientRect();
@@ -603,7 +613,7 @@ function setSelected(id, focus = true, reveal = "panel") {
 
 function persistSavedResources() {
   try {
-    window.localStorage.setItem("rwn-saved-resources", JSON.stringify([...state.savedIds]));
+    window.localStorage.setItem(SAVED_RESOURCES_KEY, JSON.stringify([...state.savedIds]));
   } catch {
     notify("Saved resources are unavailable in this browser");
   }
@@ -633,8 +643,7 @@ async function copyText(value) {
 }
 
 async function shareResource(resource) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("resource", resource.id);
+  const url = privateResourceUrl(window.location.href, resource.id);
   const data = { title: resource.name, text: `${resource.name} · ${resource.city}, ${resource.country}`, url: url.toString() };
   if (navigator.share) {
     try {
@@ -1569,9 +1578,7 @@ function focusRegion(key, selectMatching = false) {
     renderResourcePanel();
     renderResults();
     pinSignature = "";
-    const url = new URL(window.location.href);
-    url.searchParams.delete("resource");
-    window.history.replaceState({}, "", url);
+    window.history.replaceState({}, "", clearResourceFromUrl(window.location.href));
   }
 }
 
@@ -1680,9 +1687,7 @@ function selectCountryFromPointer(event) {
   renderResourcePanel();
   renderResults();
   pinSignature = "";
-  const url = new URL(window.location.href);
-  url.searchParams.delete("resource");
-  window.history.replaceState({}, "", url);
+  window.history.replaceState({}, "", clearResourceFromUrl(window.location.href));
   notify(`No listed services in ${displayName} match the current filters`);
 }
 
@@ -1773,6 +1778,18 @@ function bindEvents() {
     updateFilters();
   });
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
+  document.getElementById("clearBrowserData").addEventListener("click", () => {
+    window.localStorage.removeItem(SAVED_RESOURCES_KEY);
+    state.savedIds.clear();
+    state.savedOnly = false;
+    state.userLocation = null;
+    const locationButton = document.getElementById("locateMe");
+    locationButton.classList.remove("has-location", "is-loading");
+    locationButton.innerHTML = `${icon.locate}<span>Use my location</span>`;
+    locationButton.setAttribute("aria-label", "Use my location");
+    updateFilters();
+    notify("Saved services and location sorting cleared");
+  });
 
   document.getElementById("locateMe").addEventListener("click", () => {
     if (state.userLocation) {
