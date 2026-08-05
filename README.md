@@ -1,87 +1,48 @@
 # Real World Needs
 
-Vercel-ready website for Real World Needs: a source-backed global aid finder and public accountability model centered on an interactive globe.
+Real World Needs (RWN) is a static, privacy-minimizing humanitarian service directory. The production site is [realworldneeds.org](https://www.realworldneeds.org/).
 
-## What This Is
+## What this repository contains
 
-RWN's goal is simple: make real-world help easier to find and, over time, make the path from need to support easier to verify. Today, RWN helps people explore free or no-cost core aid from official provider, government, and network sources. The current directory contains 40 records and focuses on:
+- A browser-rendered 3D globe and accessible text directory.
+- Source-backed public resource records with review dates and map coordinates.
+- Browser-only search, filters, saved-service IDs, and optional location sorting.
+- Privacy, Terms, Accessibility, and Editorial Policy pages.
+- A deterministic static build for Vercel. No application server, database, account system, donation flow, analytics SDK, or form intake is present.
 
-- food banks and food relief
-- drinking-water and seasonal hydration support
-- shelter and housing navigation
-- showers, laundry, toilets, and hygiene items
-- clothing and everyday material aid
-- health, dental, mental-health, and recovery support
-- official referral tools and food-bank networks
+## Local development
 
-The site intentionally avoids invented impact numbers, unverified availability, or unsupported eligibility claims.
+Requires Node.js 24.
 
-The Three.js globe supports direct country selection, exact resource focus, inertial drag, keyboard navigation, zoom, regional views, geographic marker clustering, three-dimensional connection paths, seasonal daylight context, reduced motion, and an optional in-browser location marker. NASA Earth Observatory imagery, real-time lighting, selected-country outlines, detailed boundaries, and accessible HTML markers keep the experience legible without turning the aid finder into decoration. Its idle motion stops as soon as someone interacts.
-
-Directory results load progressively so the primary finder remains concise while all records stay available. People can save records locally, share a deep link, print one resource, or download the currently filtered directory as CSV. These tools do not require an account.
-
-## Current Release Boundary
-
-The public aid finder is live. Verified-needs publishing, public intake, partner accounts, donation processing, allocations, disbursements, and impact reporting remain disabled until RWN has the real organizational and operational controls to support them.
-
-The interface exposes those future workflows as a truthful operating model and an empty disclosure register. It does not use placeholder transactions or invented activity.
-
-## Operating Documentation
-
-- `docs/PLATFORM_DATA_MODEL.md` defines future need, organization, allocation, delivery, evidence, correction, and audit records.
-- `docs/DONATION_CONTROLS.md` defines payment, restricted-fund, authorization, reconciliation, and reporting controls required before accepting money.
-- `docs/PROFESSIONAL_LAUNCH_REQUIREMENTS.md` defines the legal, program, logistics, finance, privacy, security, and governance gates for professional operations.
-
-## Data Policy
-
-Every seed listing in `src/data/resources.js` includes:
-
-- organization name
-- address or national online-service scope
-- service categories
-- direct-site, locator, or partner-network type
-- access and cost notes
-- confirmation-before-travel guidance
-- official source URL
-- source note
-- last checked date
-
-Only add a listing when an official organization, government, or recognized referral source supports the claim.
-
-The globe uses a locally stored, simplified edition of the public-domain Natural Earth 1:50m country dataset in `public/data/countries.geojson`. Its locally optimized base image comes from NASA Earth Observatory's [February Blue Marble](https://visibleearth.nasa.gov/images/73967/february-blue-marble-next-generation). The interface does not depend on a third-party map or imagery request at runtime.
-
-The current release has no accounts, public forms, analytics, or marketing cookies. Optional geolocation is used only in the browser session to sort listed resources by approximate distance. Saved-resource IDs stay in local browser storage and are never sent to RWN.
-
-## Local Development
-
-```bash
+```sh
+npm ci
+npm run check
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+`npm run check` validates JavaScript syntax, resource data, unit tests, and the production build. The local site is served at `http://localhost:5173` by the development command.
 
-## Vercel Deployment
+## Data standard
 
-```bash
-npm run build
-```
+Resource records live in `src/data/resources.js`. Each record must have a stable ID, name, public place, coordinates, listing type, aid category, practical access information, original HTTPS source, source name, and ISO review date. `npm run check` rejects missing fields, unsafe URLs, duplicate IDs, invalid coordinates, and implausible dates.
 
-Vercel uses `vercel.json`, runs the static build, and serves `dist`.
+Physical service-site markers should use the provider-published public location. Official locators and networks use representative points and must never be described as walk-in sites. See the public [Editorial Policy](https://www.realworldneeds.org/editorial-policy).
 
-Production site: `https://www.realworldneeds.org`
+## Privacy and security model
 
-## Verification
+- Search and filtering run locally in the browser.
+- Location is requested only after an explicit click, held in memory, and used only for distance sorting.
+- Saved records are service IDs in local storage; the footer provides a clear-data control.
+- Shared resource IDs use URL fragments so they are not sent in HTTP request paths.
+- Vercel provides static hosting and standard edge/security logs.
+- Production responses use CSP, HSTS, no-referrer, clickjacking protection, MIME sniffing protection, origin isolation, and a restrictive Permissions Policy.
 
-```bash
-npm ci
-npm run check
-```
+## Deployment
 
-The check command validates JavaScript syntax, resource records, core filtering and distance behavior, and the production build.
+The Vercel project builds with `npm run build` and publishes `dist/`. The build copies reviewed first-party assets and the lockfile-pinned Three.js browser modules; it performs no network downloads.
 
-## Update Workflow
+Changes should pass the GitHub quality workflow and a production browser verification before merge. Do not add analytics, forms, accounts, donations, or personal-data collection without first updating the privacy architecture, public policies, retention rules, consent controls where required, and organizational contact details.
 
-1. Add or edit resources in `src/data/resources.js`.
-2. Keep the source URL and source note specific.
-3. Run `npm run check`.
-4. Deploy through Vercel.
+## Governance still required
+
+The code cannot establish the organization’s legal identity. Before representing RWN as a fully registered or legally reviewed nonprofit service, authorized leadership and counsel must confirm the legal entity name and status, jurisdiction, registered address, public privacy/accessibility/corrections contact, retention schedule, governing-law position, safeguarding process, and policy owner.
