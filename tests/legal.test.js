@@ -49,8 +49,8 @@ test("production build has no mutable network download step", async () => {
 test("privacy notice discloses the bounded official-source location query", async () => {
   const html = await readFile("public/privacy.html", "utf8");
   assert.match(html, /rounds latitude and longitude to one decimal degree/);
-  assert.match(html, /public USDA Food and Nutrition Service ArcGIS layer/);
-  assert.match(html, /This occurs only after you choose location/);
+  assert.match(html, /public USDA Food and Nutrition Service ArcGIS (?:map|layer)/);
+  assert.match(html, /happens only after you approve location/);
 });
 
 test("homepage provides a complete no-JavaScript route", async () => {
