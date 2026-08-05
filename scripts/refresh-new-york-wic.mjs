@@ -38,7 +38,7 @@ const records = rows.flatMap((row) => {
     lat,
     lng,
     category: "food",
-    secondaryCategories: ["health", "referral"],
+    secondaryCategories: ["referral"],
     kind: "direct",
     locationPrecision: "exact",
     accessType: temporary ? "Temporary WIC service site; call before visiting" : "Permanent WIC service site; call to apply or schedule",

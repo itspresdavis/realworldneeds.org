@@ -79,7 +79,7 @@ function recordFromMarker(marker, html) {
     lat,
     lng,
     category: "food",
-    secondaryCategories: ["health", "referral"],
+    secondaryCategories: ["referral"],
     kind: "direct",
     locationPrecision: "exact",
     accessType: militaryOnly ? "Military WIC office; call for eligibility and appointment" : "Local WIC office; call for eligibility and appointment",

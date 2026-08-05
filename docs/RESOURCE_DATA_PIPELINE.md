@@ -4,8 +4,8 @@ RWN expands by adding maintained sources, not by counting unverified links. A pu
 
 ## Current scale
 
-- 601 reviewed directory records.
-- 451 reviewed physical service sites.
+- 586 reviewed free-access directory records.
+- 442 reviewed physical service sites.
 - 17,442 USDA summer-meal sites active at the August 5, 2026 audit, queried live in bounded nearby searches.
 - 637 of those active USDA records were in Massachusetts.
 - 101 Massachusetts WIC offices carry official coordinates, phone numbers, and published hours.
@@ -20,13 +20,15 @@ Every reviewed or live physical record must provide:
 - a stable RWN ID and, for datasets, the source dataset ID and source record ID;
 - service name, written address, latitude, longitude, and an honest precision label;
 - primary and secondary need categories;
-- access type, cost or eligibility note, services provided, and phone when published;
+- access type, one of the four allowed free-access models, an exact cost or eligibility note, services provided, and phone when published;
 - published hours when present, or an explicit statement that the source does not supply hours;
 - active dates for seasonal programs when supplied;
 - original HTTPS source, source owner, source type, sync/review date, and transformation method;
 - a warning to confirm rapidly changing schedules or capacity before travel.
 
-The validator rejects duplicates, missing provenance, unsafe source URLs, invalid coordinates, reversed active dates, malformed review dates, and unknown source datasets.
+The allowed cost models are `free`, `free-eligible`, `free-navigation`, and `free-option`. A free-navigation record promises that the official search, guidance, or referral is free; it does not silently promise that every downstream provider is free. Category tags cover only the no-cost help supported by the source. Paid clinics, low-cost meals, administrative offices without a public access path, and services whose no-cost status cannot be verified are withheld.
+
+The validator rejects duplicates, missing provenance, unsafe source URLs, invalid coordinates, repeated or unknown categories, missing no-cost language, unsupported free-access models, reversed active dates, malformed review dates, and unknown source datasets.
 
 ## Refresh modes
 
@@ -50,9 +52,9 @@ Before an importer is published:
 
 1. Confirm that the source is first-party or authoritative and that access/reuse terms support the intended use.
 2. Record ownership, public URL, data endpoint, refresh frequency, license or reuse basis, and known limitations.
-3. Inspect sample records and define field mappings without inventing services, eligibility, hours, or precision.
+3. Inspect sample records and define field mappings without inventing services, eligibility, hours, precision, or no-cost status.
 4. Establish a stable source key and deduplication rule.
 5. Add minimum-count, required-field, date, coordinate, protocol, and duplicate guards.
-6. Label missing fields honestly and suppress expired records by default.
+6. Label missing fields honestly, suppress expired records by default, and withhold records when free access cannot be supported by the source.
 7. Test nearby ranking, mobile density, keyboard use, source links, and map links.
 8. Publish the source manifest and keep a correction/removal audit trail.

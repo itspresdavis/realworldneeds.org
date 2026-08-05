@@ -177,6 +177,7 @@ export function usdaFeatureToResource(feature, checkedAt = new Date()) {
     secondaryCategories: ["referral"],
     kind: "direct",
     locationPrecision: "exact",
+    costModel: "free-eligible",
     accessType: toGo ? "Free summer meals to go for children 18 and younger" : "Free summer meals served on site for children 18 and younger",
     costNote: "Free for children and teens age 18 and younger",
     address: [street, city, state, zip].filter(Boolean).join(", "),

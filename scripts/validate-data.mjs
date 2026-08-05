@@ -1,4 +1,5 @@
 import { categories, resources } from "../src/data/resources.js";
+import { freeAccessModels } from "../src/data/free-access.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { platformStatus, publicLedger } from "../src/data/platform.js";
 
@@ -16,6 +17,7 @@ const required = [
   "kind",
   "accessType",
   "costNote",
+  "costModel",
   "availabilityNote",
   "sourceKind",
   "services",
@@ -43,6 +45,22 @@ for (const resource of resources) {
   }
   for (const type of resource.secondaryCategories || []) {
     if (!categories[type]) throw new Error(`Unknown secondary category: ${type}`);
+  }
+  const secondary = resource.secondaryCategories || [];
+  if (new Set(secondary).size !== secondary.length || secondary.includes(resource.category)) {
+    throw new Error(`Resource categories must be unique and non-repeating: ${resource.id}`);
+  }
+  if (!freeAccessModels[resource.costModel]) {
+    throw new Error(`Unknown free-access model: ${resource.id}`);
+  }
+  if (!/\bfree\b|\bno[- ]cost\b|\bwithout (?:a )?fee\b|\bwithout paying\b|including nothing/i.test(resource.costNote)) {
+    throw new Error(`No-cost status is not explicit: ${resource.id}`);
+  }
+  if (resource.kind === "direct" && resource.costModel === "free-navigation") {
+    throw new Error(`Direct sites cannot be classified only as free navigation: ${resource.id}`);
+  }
+  if (resource.costModel !== "free-navigation" && /\blow[- ]cost\b|\bsliding fee\b|\bprices? apply\b|\bcharges? apply\b/i.test(resource.costNote)) {
+    throw new Error(`Paid-service language is not allowed in a free-service record: ${resource.id}`);
   }
 
   if (!resource.sourceUrl.startsWith("https://")) throw new Error(`Source must use HTTPS: ${resource.id}`);
