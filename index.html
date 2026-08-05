@@ -8,6 +8,7 @@
       content="Find free essential services from public and nonprofit providers worldwide. Every Real World Needs listing includes the original source and practical access details."
     />
     <meta name="theme-color" content="#071926" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="application-name" content="Real World Needs" />
     <meta name="apple-mobile-web-app-title" content="RWN" />
@@ -20,6 +21,8 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Real World Needs" />
     <meta property="og:url" content="https://www.realworldneeds.org/" />
+    <meta property="og:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
+    <meta property="og:image:alt" content="Satellite view of Earth used in the Real World Needs service finder" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Real World Needs" />
     <meta
@@ -29,6 +32,8 @@
     <link rel="stylesheet" href="/src/styles.css" />
     <link rel="preload" as="image" href="/media/earth-blue-marble.jpg" fetchpriority="high" />
     <link rel="canonical" href="https://www.realworldneeds.org/" />
+    <link rel="alternate" type="application/json" href="/data/resources.json" title="RWN resource data" />
+    <link rel="alternate" type="text/csv" href="/directory.csv" title="RWN resource directory CSV" />
     <link rel="manifest" href="/site.webmanifest" />
     <link
       rel="icon"
@@ -48,6 +53,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div class="noscript-notice">
+        <strong>The interactive globe needs JavaScript, but the help directory does not.</strong>
+        <a href="/directory">Open the complete text directory</a> to browse every source-backed resource, official link, phone number, and map location.
+      </div>
+    </noscript>
     <script type="module" src="/src/app.js"></script>
   </body>
 </html>

@@ -6,6 +6,7 @@ Real World Needs (RWN) is a static, privacy-minimizing humanitarian service dire
 
 - A browser-rendered 3D globe and accessible text directory.
 - Source-backed public resource records with review dates and map coordinates.
+- Progressive Natural Earth 1:10m close-view boundaries and an 8,192 px NASA surface for capable desktop GPUs.
 - Browser-only search, filters, saved-service IDs, and optional location sorting.
 - Privacy, Terms, Accessibility, and Editorial Policy pages.
 - A deterministic static build for Vercel. No application server, database, account system, donation flow, analytics SDK, or form intake is present.
@@ -35,6 +36,8 @@ npm run dev
 ## Data standard
 
 Resource records live in `src/data/resources.js`. Each record must have a stable ID, name, public place, coordinates, listing type, aid category, practical access information, original HTTPS source, source name, and ISO review date. `npm run check` rejects missing fields, unsafe URLs, duplicate IDs, invalid coordinates, and implausible dates.
+
+The production build also creates a no-JavaScript `/directory`, `/directory.csv`, and `/data/resources.json` from the same reviewed records. Globe close views progressively load a topology-preserving 1:10m Natural Earth derivative and an 8,192 × 4,096 derivative of NASA’s official February Blue Marble 21,600 × 10,800 image. The fast initial globe remains local and deterministic; higher-resolution imagery is skipped on small screens, Data Saver connections, or GPUs that cannot use it safely.
 
 Physical service-site markers should use the provider-published public location. Official locators and networks use representative points and must never be described as walk-in sites. See the public [Editorial Policy](https://www.realworldneeds.org/editorial-policy).
 

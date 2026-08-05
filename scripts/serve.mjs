@@ -7,6 +7,7 @@ const root = resolve("dist");
 const port = Number(process.argv[2] || 5173);
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
   ".geojson": "application/geo+json; charset=utf-8",
   ".html": "text/html; charset=utf-8",
   ".jpg": "image/jpeg",
@@ -50,8 +51,15 @@ const server = createServer(async (request, response) => {
     if (request.method === "HEAD") response.end();
     else createReadStream(candidate).pipe(response);
   } catch {
-    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    response.end("Not found");
+    const notFound = join(root, "404.html");
+    const info = await stat(notFound);
+    response.writeHead(404, {
+      "Cache-Control": "no-store",
+      "Content-Length": info.size,
+      "Content-Type": "text/html; charset=utf-8"
+    });
+    if (request.method === "HEAD") response.end();
+    else createReadStream(notFound).pipe(response);
   }
 });
 

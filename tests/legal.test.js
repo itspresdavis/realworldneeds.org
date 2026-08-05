@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const policies = ["privacy", "terms", "accessibility", "editorial-policy"];
+const policies = ["privacy", "terms", "accessibility", "editorial-policy", "transparency"];
 
 test("public policy pages are indexable, titled, and canonical", async () => {
   for (const policy of policies) {
@@ -20,6 +20,7 @@ test("sitemap publishes every policy route", async () => {
   for (const policy of policies) {
     assert.match(sitemap, new RegExp(`<loc>https://www\\.realworldneeds\\.org/${policy}</loc>`));
   }
+  assert.match(sitemap, /<loc>https:\/\/www\.realworldneeds\.org\/directory<\/loc>/);
 });
 
 test("production headers minimize referral and browser capability exposure", async () => {
@@ -32,12 +33,22 @@ test("production headers minimize referral and browser capability exposure", asy
   assert.match(globalHeaders["Content-Security-Policy"], /default-src 'self'/);
   assert.match(globalHeaders["Permissions-Policy"], /geolocation=\(self\)/);
   assert.match(globalHeaders["Permissions-Policy"], /camera=\(\)/);
+  assert.equal(config.rewrites, undefined);
 });
 
 test("production build has no mutable network download step", async () => {
   const build = await readFile("scripts/build.mjs", "utf8");
   assert.doesNotMatch(build, /\bfetch\s*\(/);
   assert.match(build, /cp\("public", "dist"/);
+  assert.match(build, /dist\/directory\.html/);
+  assert.match(build, /dist\/data\/resources\.json/);
+});
+
+test("homepage provides a complete no-JavaScript route", async () => {
+  const html = await readFile("index.html", "utf8");
+  assert.match(html, /<noscript>/);
+  assert.match(html, /href="\/directory"/);
+  assert.match(html, /href="\/data\/resources\.json"/);
 });
 
 test("local preview supports production clean URLs", async () => {
@@ -45,4 +56,12 @@ test("local preview supports production clean URLs", async () => {
   assert.match(server, /extname\(relative\) \? relative : `\$\{relative\}\.html`/);
   assert.match(server, /candidate\.startsWith/);
   assert.match(server, /127\.0\.0\.1/);
+  assert.match(server, /join\(root, "404\.html"\)/);
+});
+
+test("unknown routes have a useful, non-indexable recovery page", async () => {
+  const html = await readFile("public/404.html", "utf8");
+  assert.match(html, /<meta name="robots" content="noindex"/);
+  assert.match(html, /href="\/directory"/);
+  assert.match(html, /<main id="content">/);
 });

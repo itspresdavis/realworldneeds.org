@@ -4119,6 +4119,53 @@ svg {
   }
 }
 
+/* Progressive globe detail and resilient-access additions. */
+.globe-detail-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgba(173, 214, 216, 0.18);
+  border-radius: 999px;
+  color: #a8bec3;
+  font-size: 0.57rem;
+  font-weight: 720;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+}
+
+.directory-strip a {
+  color: #c9f8df;
+  font-weight: 760;
+  text-underline-offset: 0.18em;
+}
+
+.noscript-notice {
+  width: min(calc(100% - 2rem), 58rem);
+  margin: 2rem auto;
+  padding: 1.25rem;
+  border-left: 4px solid #25c878;
+  background: #edf8f2;
+  color: #10232f;
+  font: 1rem/1.6 "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.noscript-notice strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.noscript-notice a {
+  color: #0d6639;
+  font-weight: 800;
+}
+
+@media screen and (max-width: 900px) {
+  .globe-detail-status {
+    display: none;
+  }
+}
+
 @media screen and (max-width: 360px) {
   .finder-sidebar {
     grid-template-columns: 1fr;

@@ -89,6 +89,14 @@ export function distanceKm(fromLat, fromLng, toLat, toLng) {
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+export function formatResourcePlace(resource) {
+  const city = String(resource?.city || "").trim();
+  const country = String(resource?.country || "").trim();
+  if (!city) return country;
+  if (!country || city.toLocaleLowerCase() === country.toLocaleLowerCase()) return city;
+  return `${city}, ${country}`;
+}
+
 export function matchesResource(resource, query, activeTypes) {
   const serviceTypes = [resource.category, ...(resource.secondaryCategories || [])];
   const typeMatch = serviceTypes.some((type) => activeTypes.has(type));
