@@ -4599,3 +4599,128 @@ svg {
     line-height: 1.45;
   }
 }
+
+/* Public trust, privacy, and safety refinements. */
+@media screen {
+  .location-privacy a,
+  .finder-safety a {
+    color: #b9f2d3;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .location-privacy a:hover,
+  .location-privacy a:focus-visible,
+  .finder-safety a:hover,
+  .finder-safety a:focus-visible {
+    color: #fff;
+  }
+
+  .finder-safety {
+    margin: 0.85rem 0 0;
+    padding: 0.75rem 0.8rem;
+    border-left: 3px solid #f0b34b;
+    background: rgba(240, 179, 75, 0.08);
+    color: #b6c7cc;
+    font-size: 0.74rem;
+    line-height: 1.5;
+  }
+
+  .finder-safety strong {
+    color: #ffe2aa;
+  }
+
+  .filter-heading button {
+    min-height: 1.5rem;
+  }
+
+  .globe-pin:not(.globe-cluster) {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .site-footer {
+    grid-template-columns: minmax(12rem, 1.2fr) repeat(4, minmax(8rem, 0.8fr));
+    align-items: start;
+    gap: 2rem;
+    min-height: 0;
+    padding-top: 2.4rem;
+    padding-bottom: 2rem;
+  }
+
+  .site-footer nav {
+    display: grid;
+    justify-content: stretch;
+    gap: 0.5rem;
+    color: #a8b9be;
+    font-size: 0.74rem;
+    font-weight: 650;
+  }
+
+  .site-footer nav strong {
+    margin-bottom: 0.15rem;
+    color: #e2ebed;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .site-footer nav a {
+    width: fit-content;
+    min-height: 1.5rem;
+    padding-block: 0.18rem;
+  }
+
+  .footer-data-button {
+    width: fit-content;
+    min-height: 1.5rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #a8b9be;
+    font-size: inherit;
+    text-align: left;
+  }
+
+  .footer-data-button:hover,
+  .footer-data-button:focus-visible {
+    color: var(--green-soft);
+  }
+
+  .site-footer > p {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    text-align: left;
+  }
+}
+
+@media screen and (max-width: 1100px) {
+  .site-footer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer-brand,
+  .site-footer > p {
+    grid-column: 1 / -1;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .finder-safety {
+    margin-top: 0;
+    font-size: 0.78rem;
+  }
+
+  .site-footer {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 2rem 1rem;
+  }
+
+  .footer-brand,
+  .site-footer > p {
+    grid-column: auto;
+  }
+}
