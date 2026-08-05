@@ -1,6 +1,7 @@
 import { expansionResources } from "./resource-expansion.js";
 import { massachusettsWicResources } from "./generated/massachusetts-wic.js";
 import { newYorkWicResources } from "./generated/new-york-wic.js";
+import { withFreeAccess } from "./free-access.js";
 
 export const categories = {
   food: {
@@ -376,7 +377,7 @@ const expandedResources = [
   })
 ];
 
-export const resources = [
+const reviewedResources = [
   verified({
     id: "bowery-mission",
     name: "The Bowery Mission",
@@ -1291,7 +1292,109 @@ export const resources = [
   ...newYorkWicResources
 ];
 
+const FREE_ACCESS_EXCLUSIONS = new Set([
+  "banco-bogota",
+  "boston-health-homeless",
+  "buenos-aires-linea-108",
+  "foodforward-sa",
+  "goonj",
+  "hrsa-health-center-finder",
+  "mexico-dif-food-assistance",
+  "strazsa-tanya-hungary",
+  "uturn-claremont",
+  "uturn-hope-exchange",
+  "uturn-johannesburg",
+  "uturn-muizenberg",
+  "uturn-pretoria",
+  "uturn-strand",
+  "uturn-wynberg"
+]);
+
+const BOSTON_FREE_CORE_IDS = new Set([
+  "southampton-shelter",
+  "woods-mullen-shelter",
+  "pine-street-mens-inn",
+  "pine-street-yawkey",
+  "boston-night-center",
+  "st-francis-house-boston",
+  "rosies-place-boston",
+  "womens-lunch-place",
+  "bridge-over-troubled-waters",
+  "whittier-day-engagement",
+  "cardinal-medeiros-day"
+]);
+
+function auditedResource(resource) {
+  let next = { ...resource };
+
+  if (next.datasetId === "massachusetts-wic-locations" || next.datasetId === "new-york-wic-sites") {
+    next.secondaryCategories = ["referral"];
+  }
+
+  if (BOSTON_FREE_CORE_IDS.has(next.id)) {
+    next.costNote = "Free core homelessness services";
+    next.secondaryCategories = (next.secondaryCategories || []).filter((type) => type !== "health");
+  }
+
+  const refinements = {
+    "father-joes-day-center": { secondaryCategories: ["food", "hygiene", "referral"] },
+    "la-regional-food-bank": {
+      kind: "locator",
+      locationPrecision: "coverage",
+      costNote: "Free food-help locator; partner eligibility rules vary"
+    },
+    "global-foodbanking-network": { kind: "locator", locationPrecision: "coverage" },
+    "foodbank-nsw-act": {
+      kind: "locator",
+      locationPrecision: "coverage",
+      costNote: "Free food-help locator; partner eligibility and access rules vary"
+    },
+    "wayside-kings-cross": {
+      secondaryCategories: ["clothing", "shelter", "referral"],
+      costNote: "Free showers, toiletries, emergency clothing, and support"
+    },
+    "wayside-bondi": {
+      secondaryCategories: ["clothing", "referral"],
+      costNote: "Free showers, toiletries, emergency clothing, and support"
+    },
+    "third-space-brisbane": {
+      secondaryCategories: ["clothing", "shelter", "referral"],
+      costNote: "Free showers, clothing support, and service navigation",
+      summary: "A seven-day drop-in center with hot showers, clothing and emergency relief, a safe place to rest, and housing navigation.",
+      services: ["Hot showers and day rest", "Clothing and emergency relief", "Housing and tenancy support"]
+    },
+    "auckland-homeground": {
+      secondaryCategories: ["referral"],
+      costNote: "Free meals and food parcels",
+      summary: "Auckland City Mission's HomeGround provides free community meals, food parcels, and a route to wider social support.",
+      services: ["Free community meals", "Food parcels", "Social-service navigation"]
+    },
+    "willing-hearts": { secondaryCategories: ["referral"] },
+    "evelyne-saller-centre": {
+      secondaryCategories: ["referral"],
+      costNote: "Free showers and laundry",
+      summary: "A City of Vancouver centre for low-income and at-risk adults with free showers, laundry, and practical community support.",
+      services: ["Free showers", "Free laundry", "Practical community support"]
+    },
+    "vancouver-homeless-services": { secondaryCategories: ["shelter", "hygiene"] },
+    "nz-family-services-directory": { secondaryCategories: [] },
+    "tafel-germany-finder": { category: "referral", secondaryCategories: [] }
+  };
+
+  if (refinements[next.id]) next = { ...next, ...refinements[next.id] };
+  next.secondaryCategories = [...new Set(next.secondaryCategories || [])].filter((type) => type !== next.category);
+  return withFreeAccess(next);
+}
+
+export const resources = reviewedResources
+  .filter((resource) => !FREE_ACCESS_EXCLUSIONS.has(resource.id))
+  .map(auditedResource);
+
 export const trustPrinciples = [
+  {
+    title: "Free access, honestly scoped",
+    text: "Every published record has a verified no-cost service, a zero-dollar option, or free official navigation. Eligibility and provider rules stay visible."
+  },
   {
     title: "Go to the source",
     text: "Every listing links to the provider, government service, or official network behind the information."

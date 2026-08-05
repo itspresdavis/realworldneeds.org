@@ -57,6 +57,7 @@ test("USDA official features preserve address, service times, dates, eligibility
   assert.equal(resource.validFrom, "2026-06-15");
   assert.equal(resource.validThrough, "2026-08-21");
   assert.equal(resource.locationPrecision, "exact");
+  assert.equal(resource.costModel, "free-eligible");
   assert.equal(resource.verificationMethod, "live-official-feed");
   assert.match(resource.eligibility, /18 and younger/);
 });

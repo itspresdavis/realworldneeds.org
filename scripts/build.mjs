@@ -1,5 +1,6 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
+import { freeAccessLabel } from "../src/data/free-access.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 
@@ -34,7 +35,7 @@ function resourceRecord(resource) {
     <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>${escapeHtml(resource.name)}</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Reviewed ${escapeHtml(resource.lastChecked)}</time></header>
     <p>${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
-    <dl><div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div><div><dt>Cost</dt><dd>${escapeHtml(resource.costNote)}</dd></div><div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl>
+    <dl><div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div><div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div><div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl>
     <p class="directory-caution"><strong>Confirm before travel.</strong> ${escapeHtml(resource.availabilityNote)}</p>
     <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Open on interactive globe</a></div>
   </article>`;
@@ -58,7 +59,7 @@ const directoryHtml = `<!doctype html>
     <a class="skip-link" href="#directory">Skip to directory</a>
     <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Humanitarian service directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Interactive finder</a><a href="/transparency">Transparency</a><a href="/editorial-policy">Editorial policy</a><a href="/accessibility">Accessibility</a></nav></header>
     <main id="directory">
-      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Resilient text directory</p><h1>Every reviewed listing, without the globe.</h1><p class="legal-hero__lede">A complete, lightweight route to the reviewed directory. Live official feeds are loaded only in the interactive finder so a phone receives bounded nearby results instead of tens of thousands of map points.</p><div class="legal-meta"><span>${resources.length} reviewed records</span><span>${directCount} reviewed physical sites</span><span>${auditedLiveCount.toLocaleString()} active USDA sites at the Aug. 5 audit</span><span>Latest source review ${escapeHtml(latestReview)}</span></div></div></section>
+      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Resilient text directory</p><h1>Every reviewed listing, without the globe.</h1><p class="legal-hero__lede">A complete, lightweight route to free-access help. Each record is a no-cost service, a free option, or free official navigation with eligibility kept visible.</p><div class="legal-meta"><span>${resources.length} free-access records</span><span>${directCount} reviewed physical sites</span><span>${auditedLiveCount.toLocaleString()} active USDA sites at the Aug. 5 audit</span><span>Latest source review ${escapeHtml(latestReview)}</span></div></div></section>
       <div class="directory-shell">
         <div class="policy-note"><p><strong>Availability can change.</strong> Contact the provider or check the official source before travelling. Seasonal live-feed records are date-filtered when loaded near a user and are not silently counted as permanent services.</p></div>
         <div class="directory-downloads"><strong>Open data</strong><a href="/directory.csv" download>Download reviewed CSV</a><a href="/data/resources.json">Reviewed JSON</a><a href="/data/sources.json">Source registry</a><a href="/editorial-policy">Data standard</a></div>
@@ -69,7 +70,7 @@ const directoryHtml = `<!doctype html>
   </body>
 </html>`;
 
-const csvFields = ["ID", "Name", "Place", "Country", "Latitude", "Longitude", "Type", "Aid", "Access", "Cost", "Address or coverage", "Hours", "Phone", "Eligibility", "Active from", "Active through", "Dataset", "Reviewed", "Official source"];
+const csvFields = ["ID", "Name", "Place", "Country", "Latitude", "Longitude", "Type", "Aid", "Access", "Free access model", "Cost details", "Address or coverage", "Hours", "Phone", "Eligibility", "Active from", "Active through", "Dataset", "Reviewed", "Official source"];
 const csvRows = resources.map((resource) => [
   resource.id,
   resource.name,
@@ -80,6 +81,7 @@ const csvRows = resources.map((resource) => [
   kindLabel(resource),
   aidLabels(resource).join("; "),
   resource.accessType,
+  resource.costModel,
   resource.costNote,
   resource.address,
   resource.hours || "",
@@ -110,7 +112,7 @@ await writeFile("dist/transparency.html", transparencyHtml);
 await writeFile("dist/directory.html", directoryHtml);
 await writeFile("dist/directory.csv", `${directoryCsv}\n`);
 await writeFile("dist/data/resources.json", `${JSON.stringify({
-  schemaVersion: "1.1",
+  schemaVersion: "1.2",
   license: "Public service facts with source attribution; see https://www.realworldneeds.org/editorial-policy",
   resourceCount: resources.length,
   resources

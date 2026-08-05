@@ -1,5 +1,6 @@
 import * as THREE from "/vendor/three.module.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
+import { freeAccessLabel, freeAccessModels } from "./data/free-access.js";
 import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js";
 import {
   cameraDistanceForSphere,
@@ -377,7 +378,7 @@ function shell() {
         </div>
 
         <div class="directory-strip">
-          <p id="catalogReach"><strong>${resources.length}</strong> reviewed records <span>${directCount()} physical service sites</span> <span>Plus 17,442 active USDA summer meal sites at the Aug. 5 audit</span> <a href="/directory">Open resilient text directory</a></p>
+          <p id="catalogReach"><strong>${resources.length}</strong> free-access reviewed records <span>${directCount()} physical service sites</span> <span>Plus 17,442 active USDA summer meal sites at the Aug. 5 audit</span> <a href="/directory">Open resilient text directory</a></p>
           <p role="note">${icon.info}<span>Not an emergency service. If someone is in immediate danger, contact local emergency services.</span></p>
         </div>
 
@@ -399,11 +400,11 @@ function shell() {
         <div class="about-rwn__heading">
           <span class="section-kicker">How it works</span>
           <h2>Clear information, with a human next step.</h2>
-          <p>Real World Needs brings practical service information into one calm place. Search by place or need, review the access details, then contact the organization or open directions.</p>
+          <p>Real World Needs brings practical, no-cost help into one calm place. Search by place or need, review any eligibility or referral rules, then contact the organization or open directions.</p>
         </div>
         <div class="mission-steps">
           <article><span>01</span><h3>Search</h3><p>Enter a place or service, or allow private distance sorting in your browser.</p></article>
-          <article><span>02</span><h3>Check</h3><p>Read the access, hours, cost, contact information, and date reviewed.</p></article>
+          <article><span>02</span><h3>Check</h3><p>Read the hours, free-access status, eligibility, contact information, and date reviewed.</p></article>
           <article><span>03</span><h3>Go</h3><p>Call the provider, open its official page, or launch Apple or Google Maps.</p></article>
         </div>
       </section>
@@ -412,7 +413,7 @@ function shell() {
         <div class="source-band__heading">
           <span class="section-kicker">Directory standard</span>
           <h2>No mystery about where the information came from.</h2>
-          <p>Open the source. See how the service works. Check when we last reviewed it. Then confirm with the provider before you go.</p>
+          <p>Every published record has a free service, a free option, or free official navigation. Open the source, read the exact eligibility scope, and confirm with the provider before you go.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
       </section>
@@ -635,11 +636,12 @@ function renderResourcePanel() {
   const previous = resourceIndex > 0 ? state.filtered[resourceIndex - 1] : null;
   const next = resourceIndex >= 0 ? state.filtered[resourceIndex + 1] : null;
   const live = resource.verificationMethod === "live-official-feed";
+  const freeModel = freeAccessModels[resource.costModel];
   const actionUrl = resource.providerUrl || resource.sourceUrl;
   const sourceAction = resource.providerUrl ? "Open provider website" : exact ? "Open official service page" : "Search official locator";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
-    <div class="panel-source"><span>${icon.check} ${live ? "Official live source" : "Official source linked"}</span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
+    <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Official live source" : "Official source linked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
     <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Exact service site</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Coverage locator</strong> — this marker represents an area, not a walk-in address.</span>`}</p>
@@ -650,7 +652,7 @@ function renderResourcePanel() {
       <div class="panel-detail-content">
         <dl class="panel-facts">
           <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
-          <div><dt>Cost</dt><dd>${resource.costNote}</dd></div>
+          <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${resource.costNote}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
           <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
@@ -697,7 +699,7 @@ function resourceCard(resource) {
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"}</small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"} · <b>${freeAccessLabel(resource, true)}</b></small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>
@@ -715,7 +717,7 @@ function renderResults() {
   const visibleResources = state.filtered.slice(0, state.visibleResults);
   document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : state.userLocation ? "Help near you" : "Find a service";
   count.textContent = state.viewMode === "aid"
-    ? `${state.userLocation ? `${nearbyExactCount()} exact sites within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} resources`
+    ? `${state.userLocation ? `${nearbyExactCount()} exact sites within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} free-access resources`
     : "No verified needs published";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
