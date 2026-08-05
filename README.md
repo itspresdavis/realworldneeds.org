@@ -10,6 +10,16 @@ Real World Needs (RWN) is a static, privacy-minimizing humanitarian service dire
 - Privacy, Terms, Accessibility, and Editorial Policy pages.
 - A deterministic static build for Vercel. No application server, database, account system, donation flow, analytics SDK, or form intake is present.
 
+## Current release boundary
+
+The public finder is live with 93 source-backed records. Verified-needs publishing, public intake, partner accounts, donation processing, allocations, disbursements, and impact reporting remain disabled until RWN has the organizational and operational controls required to run them safely. The repository must not use placeholder transactions, invented availability, or unsupported impact claims.
+
+## Operating documentation
+
+- `docs/PLATFORM_DATA_MODEL.md` defines future need, organization, allocation, delivery, evidence, correction, and audit records.
+- `docs/DONATION_CONTROLS.md` defines payment, restricted-fund, authorization, reconciliation, and reporting controls required before accepting money.
+- `docs/PROFESSIONAL_LAUNCH_REQUIREMENTS.md` defines the legal, program, logistics, finance, privacy, security, and governance gates for expanded operations.
+
 ## Local development
 
 Requires Node.js 24.
