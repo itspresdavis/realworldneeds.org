@@ -771,6 +771,10 @@ svg {
   z-index: 1;
   cursor: grab;
   touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .globe-canvas:active {
@@ -3750,6 +3754,15 @@ svg {
 
 /* Globe experience 2.0 — contained, quiet, and instrument-like. */
 @media screen {
+  .globe-stage {
+    touch-action: pan-y;
+  }
+
+  .globe-pin,
+  .globe-cluster {
+    touch-action: none;
+  }
+
   .finder__grid {
     grid-template-columns: minmax(16.5rem, 0.58fr) minmax(38rem, 1.82fr) minmax(19rem, 0.78fr);
     min-height: clamp(44rem, calc(100svh - 4.5rem), 52rem);

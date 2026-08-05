@@ -15,13 +15,14 @@ import {
   THREE_SPHERE_TEXTURE_OFFSET,
   toRad
 } from "./utils/geo.js";
+import { pinchZoom, pointerDistance } from "./utils/gesture.js";
 
 const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const MIN_GLOBE_ZOOM = 0.9;
+const MIN_GLOBE_ZOOM = 0.82;
 
 function maxGlobeZoom() {
-  return window.innerWidth <= 600 ? 1.12 : 1.2;
+  return window.innerWidth <= 600 ? 1.42 : 1.32;
 }
 
 function initialResultCount() {
@@ -62,6 +63,7 @@ const state = {
   pointerStartX: 0,
   pointerStartY: 0,
   pointerMoved: false,
+  pinching: false,
   velocityLon: 0,
   velocityLat: 0,
   autoRotate: !reduceMotion,
@@ -78,6 +80,11 @@ const state = {
   savedOnly: false,
   inspectorOpen: true
 };
+
+const activeGlobePointers = new Map();
+let pinchStartDistance = 0;
+let pinchStartZoom = 1;
+let globeGestureHadMultiplePointers = false;
 
 const root = document.getElementById("root");
 let pinSignature = "";
@@ -273,7 +280,7 @@ function shell() {
               </div>
             </div>
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
-            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Use plus and minus to zoom. Select a country or any colored location marker for details.</p>
+            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-controls" aria-label="Globe controls">
@@ -1502,7 +1509,7 @@ function advanceGlobe(now) {
       state.targetLon = null;
       state.targetLat = null;
     }
-  } else if (!state.dragging) {
+  } else if (!state.dragging && !state.pinching) {
     state.rotationLon = normalizeLongitude(state.rotationLon + state.velocityLon * dt);
     state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + state.velocityLat * dt));
     const friction = Math.pow(0.055, dt);
@@ -1810,15 +1817,12 @@ function bindEvents() {
   });
 
   const canvas = document.getElementById("globeCanvas");
-  canvas.addEventListener("pointerdown", (event) => {
-    state.dragging = true;
+  const globeStage = canvas.closest(".globe-stage");
+  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend"));
+
+  const prepareGlobeInteraction = () => {
     state.targetLon = null;
     state.targetLat = null;
-    state.pointerX = event.clientX;
-    state.pointerY = event.clientY;
-    state.pointerStartX = event.clientX;
-    state.pointerStartY = event.clientY;
-    state.pointerMoved = false;
     state.velocityLon = 0;
     state.velocityLat = 0;
     state.focusPoint = null;
@@ -1826,9 +1830,72 @@ function bindEvents() {
     setCountryHighlight(null);
     document.getElementById("regionFocus").value = "focus";
     state.interactionUntil = performance.now() + 6000;
-    canvas.setPointerCapture(event.pointerId);
+  };
+
+  const beginPinch = () => {
+    if (activeGlobePointers.size < 2) return;
+    state.dragging = false;
+    state.pinching = true;
+    state.pointerMoved = true;
+    globeGestureHadMultiplePointers = true;
+    pinchStartDistance = pointerDistance(activeGlobePointers.values());
+    pinchStartZoom = state.targetZoom;
+    prepareGlobeInteraction();
+  };
+
+  globeStage.addEventListener("pointerdown", (event) => {
+    const startedOnCanvas = event.target === canvas;
+    const shouldTrack = event.pointerType === "touch" ? !isGlobeChrome(event.target) : startedOnCanvas;
+    if (!shouldTrack) return;
+
+    activeGlobePointers.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+      startedOnCanvas
+    });
+    try { globeStage.setPointerCapture(event.pointerId); } catch {}
+
+    if (activeGlobePointers.size >= 2) {
+      beginPinch();
+      event.preventDefault();
+      return;
+    }
+
+    if (!startedOnCanvas) return;
+    state.dragging = true;
+    state.pinching = false;
+    state.pointerX = event.clientX;
+    state.pointerY = event.clientY;
+    state.pointerStartX = event.clientX;
+    state.pointerStartY = event.clientY;
+    state.pointerMoved = false;
+    globeGestureHadMultiplePointers = false;
+    prepareGlobeInteraction();
+    if (event.pointerType === "touch") event.preventDefault();
   });
-  canvas.addEventListener("pointermove", (event) => {
+
+  globeStage.addEventListener("pointermove", (event) => {
+    const pointer = activeGlobePointers.get(event.pointerId);
+    if (!pointer) return;
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+
+    if (activeGlobePointers.size >= 2) {
+      if (!state.pinching) beginPinch();
+      state.targetZoom = pinchZoom(
+        pinchStartZoom,
+        pinchStartDistance,
+        pointerDistance(activeGlobePointers.values()),
+        MIN_GLOBE_ZOOM,
+        maxGlobeZoom()
+      );
+      state.velocityLon = 0;
+      state.velocityLat = 0;
+      state.interactionUntil = performance.now() + 5000;
+      event.preventDefault();
+      return;
+    }
+
     if (!state.dragging) return;
     if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
     const dx = event.clientX - state.pointerX;
@@ -1841,13 +1908,60 @@ function bindEvents() {
     state.velocityLat = latDelta * 35;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
+    if (event.pointerType === "touch") event.preventDefault();
   });
-  canvas.addEventListener("pointerup", (event) => {
-    const shouldSelectCountry = state.dragging && !state.pointerMoved;
+
+  const finishGlobePointer = (event, cancelled = false) => {
+    const pointer = activeGlobePointers.get(event.pointerId);
+    const shouldSelectCountry = !cancelled
+      && activeGlobePointers.size === 1
+      && state.dragging
+      && !state.pointerMoved
+      && pointer?.startedOnCanvas
+      && !globeGestureHadMultiplePointers;
+
+    activeGlobePointers.delete(event.pointerId);
+    try { globeStage.releasePointerCapture(event.pointerId); } catch {}
+
+    if (activeGlobePointers.size >= 2) {
+      beginPinch();
+      return;
+    }
+
+    state.pinching = false;
+    if (activeGlobePointers.size === 1) {
+      const remaining = activeGlobePointers.values().next().value;
+      state.dragging = Boolean(remaining?.startedOnCanvas);
+      state.pointerX = remaining?.x || 0;
+      state.pointerY = remaining?.y || 0;
+      state.pointerStartX = state.pointerX;
+      state.pointerStartY = state.pointerY;
+      state.pointerMoved = true;
+      return;
+    }
+
     state.dragging = false;
+    state.pointerMoved = false;
+    globeGestureHadMultiplePointers = false;
     if (shouldSelectCountry) selectCountryFromPointer(event);
-  });
-  canvas.addEventListener("pointercancel", () => { state.dragging = false; });
+  };
+
+  globeStage.addEventListener("pointerup", (event) => finishGlobePointer(event));
+  globeStage.addEventListener("pointercancel", (event) => finishGlobePointer(event, true));
+
+  const preventNativePagePinch = (event) => {
+    if (!isGlobeChrome(event.target)) event.preventDefault();
+  };
+  globeStage.addEventListener("gesturestart", preventNativePagePinch, { passive: false });
+  globeStage.addEventListener("gesturechange", preventNativePagePinch, { passive: false });
+  globeStage.addEventListener("gestureend", preventNativePagePinch, { passive: false });
+  globeStage.addEventListener("touchstart", (event) => {
+    if (event.touches.length > 1 && !isGlobeChrome(event.target)) event.preventDefault();
+  }, { passive: false });
+  globeStage.addEventListener("touchmove", (event) => {
+    if (event.touches.length > 1 && !isGlobeChrome(event.target)) event.preventDefault();
+  }, { passive: false });
+
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
     state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom - event.deltaY * 0.001));
