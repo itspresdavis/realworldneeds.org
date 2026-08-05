@@ -4131,3 +4131,471 @@ svg {
     grid-column: auto;
   }
 }
+
+/* Professional humanitarian directory — calmer hierarchy and readable type. */
+@media screen {
+  body {
+    font-size: 16px;
+  }
+
+  .site-header {
+    min-height: 4.75rem;
+  }
+
+  .primary-nav {
+    font-size: 0.92rem;
+  }
+
+  .header-action {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.88rem;
+  }
+
+  .finder-intro {
+    padding-left: 1.15rem;
+  }
+
+  .finder-intro h1 {
+    max-width: 17rem;
+    font-size: clamp(2.2rem, 2.8vw, 3rem);
+    line-height: 1.02;
+  }
+
+  .finder-intro p {
+    max-width: 27rem;
+    font-size: 1rem;
+    line-height: 1.58;
+  }
+
+  .finder-search {
+    margin-top: 1.65rem;
+  }
+
+  .search-box {
+    min-height: 3.5rem;
+    padding-inline: 0.95rem;
+    background: #fff;
+    color: #24343e;
+  }
+
+  .search-box input {
+    color: #0a1b27;
+    font-size: 0.98rem;
+  }
+
+  .search-box input::placeholder {
+    color: #65757d;
+  }
+
+  .location-button {
+    min-height: 3.35rem;
+    margin-top: 0.8rem;
+    background: #15834b;
+    border-color: #39b875;
+    font-size: 0.95rem;
+  }
+
+  .location-button:hover:not(:disabled),
+  .location-button:focus-visible {
+    background: #116f40;
+  }
+
+  .location-privacy {
+    margin-top: 0.48rem;
+    font-size: 0.72rem;
+  }
+
+  .filter-disclosure summary {
+    min-height: 3.15rem;
+  }
+
+  .filter-disclosure summary strong {
+    font-size: 0.9rem;
+  }
+
+  .filter-disclosure summary span,
+  .filter-heading,
+  .filter-heading button {
+    font-size: 0.72rem;
+  }
+
+  .layer-toggle {
+    min-height: 2.85rem;
+  }
+
+  .layer-toggle > span:nth-child(2) {
+    font-size: 0.88rem;
+  }
+
+  .access-switch button {
+    min-height: 2.65rem;
+    font-size: 0.76rem;
+  }
+
+  .globe-meta {
+    min-height: 3rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .globe-meta strong {
+    font-size: 0.84rem;
+  }
+
+  .region-menu select {
+    min-height: 2.25rem;
+    font-size: 0.76rem;
+  }
+
+  .globe-legend,
+  .globe-readout {
+    display: none;
+  }
+
+  .globe-gesture-hint {
+    position: absolute;
+    z-index: 7;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    margin: 0;
+    color: #b9c7cb;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .globe-controls button,
+  .globe-controls .globe-compass {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+
+  .globe-pin strong {
+    font-size: 0.76rem;
+  }
+
+  .globe-stage.is-close-view .globe-pin.is-direct strong {
+    display: block;
+    top: 0.55rem;
+    max-width: 11rem;
+    padding: 0.3rem 0.42rem;
+    background: rgba(2, 15, 28, 0.9);
+    font-size: 0.68rem;
+    pointer-events: none;
+  }
+
+  .globe-stage.is-close-view .globe-pin.is-direct strong small {
+    display: none;
+  }
+
+  .panel-source {
+    font-size: 0.74rem;
+  }
+
+  .panel-title {
+    margin-top: 1.15rem;
+  }
+
+  .panel-title h2 {
+    font-size: clamp(1.8rem, 2.2vw, 2.35rem);
+  }
+
+  .panel-title p {
+    font-size: 0.86rem;
+  }
+
+  .panel-summary {
+    font-size: 0.96rem;
+    line-height: 1.58;
+  }
+
+  .service-tags b {
+    font-size: 0.65rem;
+  }
+
+  .panel-facts dt {
+    font-size: 0.7rem;
+  }
+
+  .panel-facts dd {
+    font-size: 0.84rem;
+  }
+
+  .panel-services h3,
+  .panel-source-note > span {
+    font-size: 0.7rem;
+  }
+
+  .panel-services li {
+    font-size: 0.84rem;
+  }
+
+  .availability-note p,
+  .panel-source-note p,
+  .panel-source-note summary {
+    font-size: 0.76rem;
+  }
+
+  .primary-button,
+  .secondary-button {
+    min-height: 3.05rem;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .panel-map-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 0.55rem;
+    border: 1px solid var(--line-dark);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .panel-map-actions a {
+    display: grid;
+    place-items: center;
+    min-height: 2.7rem;
+    color: #c4d2d5;
+    font-size: 0.77rem;
+    font-weight: 750;
+  }
+
+  .panel-map-actions a + a {
+    border-left: 1px solid var(--line-dark);
+  }
+
+  .panel-map-actions a:hover,
+  .panel-map-actions a:focus-visible {
+    background: rgba(66, 209, 132, 0.1);
+    color: var(--green-soft);
+    outline: none;
+  }
+
+  .panel-utilities {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .panel-utilities button {
+    min-height: 2.65rem;
+    font-size: 0.72rem;
+  }
+
+  .directory-strip p {
+    font-size: 0.76rem;
+  }
+
+  .resource-row__service strong {
+    font-size: 0.88rem;
+  }
+
+  .resource-row__service small,
+  .resource-row__place,
+  .resource-row__access,
+  .resource-row__reviewed {
+    font-size: 0.74rem;
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .resource-panel {
+    position: relative;
+    margin-top: -4.75rem;
+    padding-top: 1.8rem;
+    border-radius: 1.1rem 1.1rem 0 0;
+  }
+
+  .resource-panel::after {
+    position: absolute;
+    top: 0.65rem;
+    left: 50%;
+    width: 3.25rem;
+    height: 0.28rem;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.34);
+    content: "";
+  }
+}
+
+@media screen and (max-width: 600px) {
+  html {
+    scroll-padding-top: 4.25rem;
+  }
+
+  .site-header {
+    min-height: 4.25rem;
+    padding: 0.6rem 0.8rem;
+  }
+
+  .brand strong {
+    font-size: 1.2rem;
+  }
+
+  .brand small {
+    font-size: 0.65rem;
+  }
+
+  .site-menu > summary,
+  .header-action {
+    min-height: 2.75rem;
+  }
+
+  .header-action {
+    display: none;
+  }
+
+  .finder-sidebar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 1.55rem 1rem 1.35rem;
+  }
+
+  .finder-sidebar > * {
+    grid-column: auto;
+  }
+
+  .finder-intro {
+    padding-left: 0.95rem;
+  }
+
+  .finder-intro h1 {
+    max-width: 19rem;
+    font-size: clamp(2.35rem, 12vw, 3rem);
+    line-height: 1.01;
+  }
+
+  .finder-intro p {
+    margin-top: 0.85rem;
+    font-size: 1.02rem;
+    line-height: 1.52;
+  }
+
+  .finder-search {
+    margin-top: 0.75rem;
+  }
+
+  .search-box,
+  .location-button,
+  .filter-disclosure summary {
+    min-height: 3.35rem;
+  }
+
+  .location-button,
+  .filter-disclosure {
+    margin-top: 0;
+  }
+
+  .location-privacy {
+    margin: -0.25rem 0 0;
+    font-size: 0.72rem;
+  }
+
+  .globe-stage {
+    height: min(35rem, calc(100vw + 9rem));
+    min-height: 31rem;
+  }
+
+  .globe-meta {
+    right: 0.65rem;
+    left: 0.65rem;
+    min-height: 3rem;
+  }
+
+  .globe-meta strong,
+  .globe-meta__tools > #globeCount {
+    font-size: 0.7rem;
+  }
+
+  .globe-meta__tools > #globeCount {
+    display: none;
+  }
+
+  .region-menu select {
+    max-width: 7.7rem;
+    min-height: 2.25rem;
+    font-size: 0.7rem;
+  }
+
+  .globe-canvas,
+  .globe-pin-layer {
+    top: 4rem;
+    height: calc(100% - 7.8rem);
+  }
+
+  .globe-controls {
+    top: 50%;
+    right: 0.65rem;
+  }
+
+  .globe-controls button,
+  .globe-controls .globe-compass {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .globe-gesture-hint {
+    bottom: 0.8rem;
+    font-size: 0.75rem;
+  }
+
+  .globe-stage.is-close-view .globe-pin.is-direct strong {
+    display: none;
+  }
+
+  .resource-panel {
+    margin-top: -5.5rem;
+    padding: 1.9rem 1rem 1.75rem;
+  }
+
+  .panel-source {
+    font-size: 0.72rem;
+  }
+
+  .panel-source__actions a {
+    display: none;
+  }
+
+  .panel-title h2 {
+    font-size: 1.8rem;
+  }
+
+  .panel-title p,
+  .panel-summary {
+    font-size: 0.96rem;
+  }
+
+  .panel-detail-disclosure > summary {
+    min-height: 3.35rem;
+  }
+
+  .panel-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+  }
+
+  .primary-button,
+  .secondary-button {
+    width: 100%;
+    min-height: 3.2rem;
+  }
+
+  .panel-map-actions a {
+    min-height: 3rem;
+    font-size: 0.8rem;
+  }
+
+  .directory-strip {
+    gap: 0.45rem;
+  }
+
+  .directory-strip p {
+    font-size: 0.73rem;
+    line-height: 1.45;
+  }
+}
