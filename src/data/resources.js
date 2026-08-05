@@ -8,43 +8,43 @@ export const categories = {
     label: "Food",
     color: "#38c878",
     glow: "rgba(56, 200, 120, 0.42)",
-    description: "Free meals, food parcels, pantries, and food-assistance locators."
+    description: "Meals, groceries, food pantries, and places to find food assistance."
   },
   water: {
     label: "Water",
     color: "#48b8ff",
     glow: "rgba(72, 184, 255, 0.42)",
-    description: "Drinking-water access or seasonal hydration support."
+    description: "Drinking water and seasonal heat-relief services."
   },
   shelter: {
     label: "Shelter",
     color: "#9f83ff",
     glow: "rgba(159, 131, 255, 0.42)",
-    description: "Emergency shelter, temporary housing, and housing navigation."
+    description: "Emergency shelter, temporary housing, and help finding a safe place to stay."
   },
   hygiene: {
     label: "Hygiene",
     color: "#2fd2c7",
     glow: "rgba(47, 210, 199, 0.42)",
-    description: "Showers, laundry, toilets, toiletries, and personal-care support."
+    description: "Showers, laundry, toilets, toiletries, and personal care."
   },
   clothing: {
     label: "Clothing",
     color: "#5d91ff",
     glow: "rgba(93, 145, 255, 0.42)",
-    description: "Free clothing, shoes, blankets, and everyday essentials."
+    description: "Clothing, shoes, blankets, and other essentials."
   },
   health: {
     label: "Health",
     color: "#ff6f7f",
     glow: "rgba(255, 111, 127, 0.42)",
-    description: "Medical, dental, mental-health, and recovery support."
+    description: "Medical, dental, mental health, and recovery services."
   },
   referral: {
     label: "Navigation",
     color: "#ffb548",
     glow: "rgba(255, 181, 72, 0.42)",
-    description: "Official search tools, casework, and referrals to nearby help."
+    description: "Resource finders, caseworkers, and referrals to local services."
   }
 };
 
@@ -1392,23 +1392,23 @@ export const resources = reviewedResources
 
 export const trustPrinciples = [
   {
-    title: "Free access, honestly scoped",
-    text: "Every published record has a verified no-cost service, a zero-dollar option, or free official navigation. Eligibility and provider rules stay visible."
+    title: "No hidden cost claims",
+    text: "We publish a listing only when the source shows a free service, a free option, or a free way to find help. Eligibility is always shown."
   },
   {
-    title: "Go to the source",
-    text: "Every listing links to the provider, government service, or official network behind the information."
+    title: "Original sources",
+    text: "Every listing links to the provider, public agency, or recognized network that published the information."
   },
   {
-    title: "See how to access it",
-    text: "Walk-in, appointment, referral, voucher, locator, and partner-network services are clearly labeled."
+    title: "Clear next steps",
+    text: "We tell you whether to walk in, call, make an appointment, get a referral, or use an official resource finder."
   },
   {
-    title: "Know when it was checked",
-    text: "Every listing shows when RWN reviewed the source and reminds you to confirm details before visiting."
+    title: "Dates you can see",
+    text: "Every listing shows when we last checked the source. Because services change, we recommend confirming before you travel."
   },
   {
-    title: "Your location stays private",
-    text: "There are no accounts, intake forms, analytics, or marketing cookies. Exact location stays in this browser session; a rounded point is used only when you ask an official live source for nearby sites."
+    title: "Privacy comes first",
+    text: "You do not need an account. Your exact location stays on your device, and we do not use advertising trackers or marketing cookies."
   }
 ];

@@ -13,8 +13,8 @@ const escapeHtml = (value) => String(value ?? "")
 
 const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 const kindLabel = (resource) => resource.kind === "direct"
-  ? "Direct service site"
-  : resource.kind === "locator" ? "Official locator" : "Partner network";
+  ? "Service location"
+  : resource.kind === "locator" ? "Resource finder" : "Service network";
 const aidLabels = (resource) => [resource.category, ...(resource.secondaryCategories || [])]
   .map((type) => categories[type].label);
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
@@ -32,12 +32,12 @@ function resourceRecord(resource) {
     ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>`
     : "";
   return `<article class="directory-record" id="${escapeHtml(resource.id)}">
-    <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>${escapeHtml(resource.name)}</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Reviewed ${escapeHtml(resource.lastChecked)}</time></header>
+    <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>${escapeHtml(resource.name)}</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
     <p>${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
     <dl><div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div><div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div><div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl>
-    <p class="directory-caution"><strong>Confirm before travel.</strong> ${escapeHtml(resource.availabilityNote)}</p>
-    <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Open on interactive globe</a></div>
+    <p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p>
+    <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></div>
   </article>`;
 }
 
@@ -46,27 +46,27 @@ const directoryHtml = `<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Complete text-only Real World Needs directory of source-backed essential services." />
+    <meta name="description" content="Browse the complete Real World Needs directory of free essential services without using the interactive globe." />
     <meta name="theme-color" content="#071926" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.realworldneeds.org/directory" />
     <link rel="alternate" type="application/json" href="/data/resources.json" title="RWN resource data" />
     <link rel="alternate" type="text/csv" href="/directory.csv" title="RWN resource directory CSV" />
     <link rel="stylesheet" href="/legal.css" />
-    <title>Text Directory | Real World Needs</title>
+    <title>Service Directory | Real World Needs</title>
   </head>
   <body>
     <a class="skip-link" href="#directory">Skip to directory</a>
-    <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Humanitarian service directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Interactive finder</a><a href="/transparency">Transparency</a><a href="/editorial-policy">Editorial policy</a><a href="/accessibility">Accessibility</a></nav></header>
+    <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
     <main id="directory">
-      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Resilient text directory</p><h1>Every reviewed listing, without the globe.</h1><p class="legal-hero__lede">A complete, lightweight route to free-access help. Each record is a no-cost service, a free option, or free official navigation with eligibility kept visible.</p><div class="legal-meta"><span>${resources.length} free-access records</span><span>${directCount} reviewed physical sites</span><span>${auditedLiveCount.toLocaleString()} active USDA sites at the Aug. 5 audit</span><span>Latest source review ${escapeHtml(latestReview)}</span></div></div></section>
+      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>Find services without using the globe.</h1><p class="legal-hero__lede">Browse every listing in a simple text format. Cost, eligibility, contact details, and the original source are included.</p><div class="legal-meta"><span>${resources.length} listings checked</span><span>${directCount} service locations</span><span>${auditedLiveCount.toLocaleString()} active USDA sites in the latest review</span><span>Sources last checked through ${escapeHtml(latestReview)}</span></div></div></section>
       <div class="directory-shell">
-        <div class="policy-note"><p><strong>Availability can change.</strong> Contact the provider or check the official source before travelling. Seasonal live-feed records are date-filtered when loaded near a user and are not silently counted as permanent services.</p></div>
-        <div class="directory-downloads"><strong>Open data</strong><a href="/directory.csv" download>Download reviewed CSV</a><a href="/data/resources.json">Reviewed JSON</a><a href="/data/sources.json">Source registry</a><a href="/editorial-policy">Data standard</a></div>
+        <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. Seasonal USDA meal sites are shown only for their published dates and are counted separately from the directory below.</p></div>
+        <div class="directory-downloads"><strong>Download the directory</strong><a href="/directory.csv" download>CSV</a><a href="/data/resources.json">JSON</a><a href="/data/sources.json">Data sources</a><a href="/editorial-policy">How listings are checked</a></div>
         <div class="directory-records">${resources.map(resourceRecord).join("\n")}</div>
       </div>
     </main>
-    <footer class="legal-footer"><p>Real World Needs · Public humanitarian service directory</p><nav aria-label="Footer policies"><a href="/">Interactive finder</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>
+    <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>
   </body>
 </html>`;
 
@@ -120,7 +120,7 @@ await writeFile("dist/data/resources.json", `${JSON.stringify({
 await writeFile("dist/data/sources.json", `${JSON.stringify({
   schemaVersion: "1.0",
   generatedAt: new Date().toISOString(),
-  note: "Active counts are dated audits, not lifetime impact claims. Live sources are queried with bounded results in the interactive finder.",
+  note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
 

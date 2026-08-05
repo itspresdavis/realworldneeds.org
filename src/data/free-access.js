@@ -1,23 +1,23 @@
 export const freeAccessModels = Object.freeze({
   free: {
-    label: "Free service",
+    label: "Free",
     shortLabel: "Free",
-    description: "The listed core help is provided without a fee."
+    description: "The services listed here are provided at no cost."
   },
   "free-eligible": {
-    label: "Free if eligible",
-    shortLabel: "Free if eligible",
-    description: "There is no fee for approved participants, but eligibility, referral, or program rules apply."
+    label: "Free with eligibility",
+    shortLabel: "Eligibility applies",
+    description: "There is no fee for people who qualify. Check the eligibility or referral requirements before you go."
   },
   "free-navigation": {
-    label: "Free official navigation",
-    shortLabel: "Free locator",
-    description: "The official search, guidance, or referral is free. A linked provider may have separate eligibility or cost rules."
+    label: "Free resource finder",
+    shortLabel: "Resource finder",
+    description: "This official search or referral service is free to use. Programs it lists may have their own eligibility or cost rules."
   },
   "free-option": {
-    label: "Free option available",
+    label: "Free option",
     shortLabel: "Free option",
-    description: "A person can receive the listed help without paying, even when voluntary contributions are welcomed."
+    description: "The listed help is available without payment, although voluntary contributions may be welcome."
   }
 });
 
@@ -44,5 +44,5 @@ export function withFreeAccess(resource) {
 
 export function freeAccessLabel(resource, compact = false) {
   const model = freeAccessModels[resource.costModel];
-  return model ? (compact ? model.shortLabel : model.label) : "Free access not verified";
+  return model ? (compact ? model.shortLabel : model.label) : "Cost not confirmed";
 }

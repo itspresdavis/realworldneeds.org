@@ -233,16 +233,16 @@ function reviewLabel(resource) {
 function distanceLabel(resource) {
   if (!state.userLocation) return "";
   const distance = resourceDistanceKm(state.userLocation, resource);
-  if (distance === null) return resource.coverageNote || "Coverage locator — not a service-site distance";
+  if (distance === null) return resource.coverageNote || "Area-wide resource finder — not a service location";
   return distance < 10 ? `${distance.toFixed(1)} km away` : `${Math.round(distance).toLocaleString()} km away`;
 }
 
 function locationResultLabel(resource) {
   if (!state.userLocation) return resource.accessType;
   if (isExactServiceSite(resource)) return distanceLabel(resource);
-  if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Global official locator";
-  if (state.userCountry && resource.country === state.userCountry) return `${state.userCountry} official locator`;
-  return "Coverage locator";
+  if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Worldwide resource finder";
+  if (state.userCountry && resource.country === state.userCountry) return `${state.userCountry} resource finder`;
+  return "Resource finder for this area";
 }
 
 function googleMapsUrl(resource, directions = false) {
@@ -277,7 +277,7 @@ function shell() {
       <nav class="primary-nav" aria-label="Primary navigation">
         <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
         <a href="#about" data-section-link="about">How it works</a>
-        <a href="#standards" data-section-link="standards">Standards</a>
+        <a href="#standards" data-section-link="standards">How we check</a>
         <a href="/transparency">Transparency</a>
       </nav>
       <details class="site-menu">
@@ -285,11 +285,11 @@ function shell() {
         <nav aria-label="Mobile navigation">
           <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
           <a href="#about" data-section-link="about">How it works</a>
-          <a href="#standards" data-section-link="standards">Standards</a>
+          <a href="#standards" data-section-link="standards">How we check</a>
           <a href="/transparency">Transparency</a>
         </nav>
       </details>
-      <a class="header-action" href="#finder" data-section-link="finder">Search directory</a>
+      <a class="header-action" href="#finder" data-section-link="finder">Find help</a>
     </header>
 
     <main>
@@ -297,8 +297,8 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find real help, near you.</h1>
-              <p>Search verified services for food, shelter, healthcare, hygiene, clothing, water, and other essentials. Every listing links to the organization providing help.</p>
+              <h1>Find free help near you.</h1>
+              <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
             </div>
 
             <div class="finder-search" role="search">
@@ -315,31 +315,31 @@ function shell() {
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
               <button class="location-clear" id="clearLocation" type="button" hidden>Clear</button>
             </div>
-            <p class="location-status" id="locationStatus" aria-live="polite">Show exact service sites first. Countrywide locators are clearly separated.</p>
-            <p class="live-source-status" id="liveSourceStatus">In the U.S., location search also loads current USDA summer meal sites.</p>
-            <p class="location-privacy">Exact coordinates stay in this browser session and are never submitted to RWN. For live U.S. results, the app sends USDA a rounded search point after you choose location. <a href="/privacy#location">Privacy details</a></p>
-            <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not emergency dispatch. <a href="/terms#urgent-help">Safety information</a></p>
+            <p class="location-status" id="locationStatus" aria-live="polite">Nearby service locations appear first. Regional resource finders appear after them.</p>
+            <p class="live-source-status" id="liveSourceStatus">In the United States, location search also includes current USDA summer meal sites.</p>
+            <p class="location-privacy">Your exact location stays on your device. For U.S. meal searches, the USDA receives only an approximate area. <a href="/privacy#location">How location works</a></p>
+            <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN does not provide emergency response. <a href="/terms#urgent-help">Safety notice</a></p>
 
             <details class="filter-disclosure">
-              <summary>${icon.filter}<strong>Filters</strong><span id="filterSummary">All 7 aid types</span></summary>
+              <summary>${icon.filter}<strong>Filters</strong><span id="filterSummary">All 7 types of help</span></summary>
               <div class="finder-controls">
-                <div class="filter-heading"><span>Aid types</span><button type="button" id="toggleAll">Clear</button></div>
+                <div class="filter-heading"><span>Types of help</span><button type="button" id="toggleAll">Clear</button></div>
                 <div class="layer-list" id="layerList" aria-label="Aid category filters"></div>
 
                 <div class="filter-heading"><span>Listing type</span></div>
                 <div class="access-switch" aria-label="Resource type filter">
                   <button class="is-active" type="button" data-access="all" aria-pressed="true">All</button>
                   <button type="button" data-access="direct" aria-pressed="false">Service sites</button>
-                  <button type="button" data-access="discovery" aria-pressed="false">Directories</button>
+                  <button type="button" data-access="discovery" aria-pressed="false">Resource finders</button>
                 </div>
               </div>
             </details>
 
           </aside>
 
-          <section class="globe-stage" aria-label="Interactive global aid resource globe">
+          <section class="globe-stage" aria-label="Interactive globe of free essential services">
             <div class="globe-meta">
-              <div><span class="status-dot"></span><strong>Verified service map</strong></div>
+              <div><span class="status-dot"></span><strong>Service map</strong></div>
               <div class="globe-meta__tools">
                 <span id="globeCount"></span>
                 <span class="globe-detail-status" id="globeDetailStatus">Standard boundaries</span>
@@ -357,7 +357,7 @@ function shell() {
                 </label>
               </div>
             </div>
-            <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing official-source aid resources"></canvas>
+            <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
             <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details. Higher-resolution national boundaries load automatically when you zoom closer.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
@@ -378,19 +378,19 @@ function shell() {
         </div>
 
         <div class="directory-strip">
-          <p id="catalogReach"><strong>${resources.length}</strong> free-access reviewed records <span>${directCount()} physical service sites</span> <span>Plus 17,442 active USDA summer meal sites at the Aug. 5 audit</span> <a href="/directory">Open resilient text directory</a></p>
-          <p role="note">${icon.info}<span>Not an emergency service. If someone is in immediate danger, contact local emergency services.</span></p>
+          <p id="catalogReach"><strong>${resources.length}</strong> listings checked against original sources <span>${directCount()} service locations</span> <span>17,442 active USDA summer meal sites in the latest data review</span> <a href="/directory">Use the text directory</a></p>
+          <p role="note">${icon.info}<span>If someone is in immediate danger, contact local emergency services. RWN does not provide emergency response.</span></p>
         </div>
 
         <div class="results-section">
           <div class="results-heading">
-            <div><span class="section-kicker">Browse the directory</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
+            <div><span class="section-kicker">Search results</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
             <div class="results-tools">
               <button class="directory-tool" type="button" id="toggleSaved" aria-pressed="false">${icon.bookmark}<span>Saved</span><b id="savedCount">0</b></button>
               <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
             </div>
           </div>
-          <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Aid</span><span>Access</span><span>Reviewed</span><span></span></div>
+          <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Help offered</span><span>Access</span><span>Checked</span><span></span></div>
           <div class="resource-grid resource-list" id="resourceGrid" aria-label="Available aid directory"></div>
           <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
         </div>
@@ -399,35 +399,35 @@ function shell() {
       <section class="about-rwn" id="about">
         <div class="about-rwn__heading">
           <span class="section-kicker">How it works</span>
-          <h2>Clear information, with a human next step.</h2>
-          <p>Real World Needs brings practical, no-cost help into one calm place. Search by place or need, review any eligibility or referral rules, then contact the organization or open directions.</p>
+          <h2>One place to find the basics.</h2>
+          <p>Real World Needs brings together public information about free essential services. Find a service, check the details, and contact the organization directly.</p>
         </div>
         <div class="mission-steps">
-          <article><span>01</span><h3>Search</h3><p>Enter a place or service, or allow private distance sorting in your browser.</p></article>
-          <article><span>02</span><h3>Check</h3><p>Read the hours, free-access status, eligibility, contact information, and date reviewed.</p></article>
-          <article><span>03</span><h3>Go</h3><p>Call the provider, open its official page, or launch Apple or Google Maps.</p></article>
+          <article><span>01</span><h3>Find</h3><p>Search by place or need. You can also use your location to see nearby services first.</p></article>
+          <article><span>02</span><h3>Check</h3><p>Review the hours, cost, eligibility, contact details, and the date we last checked the source.</p></article>
+          <article><span>03</span><h3>Contact</h3><p>Call the organization, visit its website, or open directions in Apple Maps or Google Maps.</p></article>
         </div>
       </section>
 
       <section class="source-band" id="standards">
         <div class="source-band__heading">
-          <span class="section-kicker">Directory standard</span>
-          <h2>No mystery about where the information came from.</h2>
-          <p>Every published record has a free service, a free option, or free official navigation. Open the source, read the exact eligibility scope, and confirm with the provider before you go.</p>
+          <span class="section-kicker">How we check listings</span>
+          <h2>Information you can check for yourself.</h2>
+          <p>Each listing links to its original source and shows when we last checked it. We include cost and eligibility details whenever they apply.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
       </section>
 
       <section class="accountability" id="accountability">
         <div class="accountability__heading">
-          <span class="section-kicker">What RWN does</span>
-          <h2>A focused directory for finding help.</h2>
-          <p>RWN helps people discover services and reach the organizations behind them. It does not replace emergency services, decide eligibility, guarantee availability, or collect donations and personal requests.</p>
+          <span class="section-kicker">About the directory</span>
+          <h2>Made to help you take the next step.</h2>
+          <p>RWN helps people find essential services and contact the organizations that provide them. We do not decide eligibility, reserve services, or accept donations or personal requests through this website.</p>
         </div>
         <div class="accountability-status">
-          <article class="is-live"><span>${icon.search}</span><div><small>Discover</small><h3>Search real services</h3><p>Explore physical service sites, official locators, and recognized support networks.</p></div></article>
-          <article><span>${icon.shield}</span><div><small>Verify</small><h3>Follow the source</h3><p>Every listing names its source, shows the review date, and links to current provider information.</p></div></article>
-          <article><span>${icon.info}</span><div><small>Stay safe</small><h3>Confirm before travel</h3><p>Hours, capacity, and eligibility can change. Contact the provider before making a long journey.</p></div></article>
+          <article class="is-live"><span>${icon.search}</span><div><small>Find</small><h3>Search by need or place</h3><p>Browse service locations, regional resource finders, and recognized support networks.</p></div></article>
+          <article><span>${icon.shield}</span><div><small>Check</small><h3>See the original source</h3><p>Every listing names its source, shows when it was checked, and links to the organization’s current information.</p></div></article>
+          <article><span>${icon.info}</span><div><small>Contact</small><h3>Confirm before you go</h3><p>Hours, availability, and eligibility can change. Contact the organization before making a long trip.</p></div></article>
         </div>
       </section>
     </main>
@@ -435,10 +435,10 @@ function shell() {
     <footer class="site-footer">
       <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
       <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="/directory">Text directory</a><a href="#about">How it works</a></nav>
-      <nav aria-label="Footer standards"><strong>Standards</strong><a href="/transparency">Transparency center</a><a href="/editorial-policy">Editorial policy</a><a href="#accountability">Operating boundaries</a></nav>
+      <nav aria-label="Footer standards"><strong>About RWN</strong><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="#accountability">About the directory</a></nav>
       <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
       <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
-      <p><span class="status-dot"></span>${resources.length} reviewed records plus bounded official live feeds · No donations or personal need requests are accepted through this site.</p>
+      <p><span class="status-dot"></span>${resources.length} listings checked against original sources · This website does not accept donations or personal requests.</p>
     </footer>
 
     <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
@@ -470,9 +470,9 @@ function renderStatic() {
 }
 
 function kindLabel(resource) {
-  if (resource.kind === "direct") return "Direct service site";
-  if (resource.kind === "locator") return "Official locator";
-  return "Partner network";
+  if (resource.kind === "direct") return "Service location";
+  if (resource.kind === "locator") return "Resource finder";
+  return "Service network";
 }
 
 function updateFilters() {
@@ -521,15 +521,15 @@ function renderLocationState() {
   const active = Boolean(state.userLocation);
   button.classList.toggle("has-location", active);
   button.innerHTML = active ? `${icon.locate}<span>Recenter near me</span>` : `${icon.locate}<span>Use my location</span>`;
-  button.setAttribute("aria-label", active ? "Recenter the globe near my location" : "Use my location to rank exact service sites");
+  button.setAttribute("aria-label", active ? "Recenter the globe near my location" : "Use my location to show nearby service locations first");
   clear.hidden = !active;
   if (!active) {
-    status.textContent = "Show exact service sites first. Countrywide locators are clearly separated.";
+    status.textContent = "Nearby service locations appear first. Regional resource finders appear after them.";
     return;
   }
   const accuracy = state.userLocationAccuracy ? `Location accuracy about ${Math.round(state.userLocationAccuracy).toLocaleString()} m.` : "";
-  const country = state.userCountry ? ` Official ${state.userCountry} locators follow nearby sites.` : "";
-  status.textContent = `${nearbyExactCount()} exact service ${nearbyExactCount() === 1 ? "site" : "sites"} within 250 km. ${accuracy}${country}`.trim();
+  const country = state.userCountry ? ` Resource finders for ${state.userCountry} appear after nearby locations.` : "";
+  status.textContent = `${nearbyExactCount()} service ${nearbyExactCount() === 1 ? "location" : "locations"} listed within 250 km. ${accuracy}${country}`.trim();
 }
 
 function renderLiveSourceState() {
@@ -537,23 +537,23 @@ function renderLiveSourceState() {
   const reach = document.getElementById("catalogReach");
   if (!status) return;
   if (state.liveSourceStatus === "loading") {
-    status.textContent = "Loading current USDA meal sites from an approximate 160 km search area…";
+    status.textContent = "Checking USDA for current summer meal sites in an approximate 160 km search area…";
   } else if (state.liveSourceStatus === "loaded") {
     const visible = state.liveResources.length;
     const available = state.liveNearbyAvailable;
     const national = state.liveNationalCount ? ` · ${state.liveNationalCount.toLocaleString()} active nationally today` : "";
     status.textContent = available > visible
-      ? `Loaded the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
-      : `Loaded ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
+      ? `Showing the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
+      : `Showing ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
   } else if (state.liveSourceStatus === "unavailable") {
-    status.textContent = state.liveSourceError || "The live USDA source is temporarily unavailable; reviewed directory records remain available.";
+    status.textContent = state.liveSourceError || "USDA meal-site information is temporarily unavailable. The rest of the directory is still available.";
   } else if (state.userLocation && state.userCountry !== "United States") {
-    status.textContent = "The USDA live feed covers the United States; reviewed global services and official locators remain available.";
+    status.textContent = "USDA meal-site information covers the United States. Other services and resource finders remain available.";
   } else {
-    status.textContent = "In the U.S., location search also loads current USDA summer meal sites with dates and meal times.";
+    status.textContent = "In the United States, location search also includes current USDA summer meal sites, dates, and meal times.";
   }
   if (reach && state.liveNationalCount) {
-    reach.innerHTML = `<strong>${resources.length.toLocaleString()}</strong> reviewed records <span>${directCount().toLocaleString()} reviewed physical sites</span> <span>${state.liveNationalCount.toLocaleString()} USDA meal sites active today</span> <a href="/directory">Open resilient text directory</a>`;
+    reach.innerHTML = `<strong>${resources.length.toLocaleString()}</strong> listings checked against original sources <span>${directCount().toLocaleString()} service locations</span> <span>${state.liveNationalCount.toLocaleString()} USDA meal sites active today</span> <a href="/directory">Use the text directory</a>`;
   }
 }
 
@@ -584,10 +584,10 @@ function renderControls() {
   document.getElementById("toggleAll").textContent = state.activeTypes.size === resourceTypes.length ? "Clear" : "Show all";
   const typeCount = state.activeTypes.size;
   document.getElementById("filterSummary").textContent = typeCount === resourceTypes.length
-    ? `All ${resourceTypes.length} aid types`
-    : `${typeCount} of ${resourceTypes.length} aid types`;
-  document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} services` : "0 services";
-  document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching services` : "No verified needs published";
+    ? `All ${resourceTypes.length} types of help`
+    : `${typeCount} of ${resourceTypes.length} types of help`;
+  document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} listings` : "0 listings";
+  document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching services` : "No public requests are listed";
   const savedToggle = document.getElementById("toggleSaved");
   savedToggle.classList.toggle("is-active", state.savedOnly);
   savedToggle.setAttribute("aria-pressed", String(state.savedOnly));
@@ -596,12 +596,12 @@ function renderControls() {
 
   document.getElementById("globeLegend").innerHTML = aidMode
     ? resourceTypes.filter((type) => state.activeTypes.has(type)).map((type) => `<span style="--legend:${categories[type].color}"><i></i>${categories[type].label}</span>`).join("")
-    : `<span><i></i>Verified needs</span>`;
+    : `<span><i></i>Public requests</span>`;
 
   const empty = document.getElementById("globeEmpty");
   empty.hidden = state.filtered.length > 0;
   empty.innerHTML = state.viewMode === "needs"
-    ? `<strong>No verified needs published</strong><p>RWN does not infer need locations or publish unreviewed requests.</p>`
+    ? `<strong>No public requests are listed</strong><p>RWN does not guess where help is needed or publish requests that have not been reviewed.</p>`
     : state.savedOnly
       ? `<strong>No saved services match</strong><p>Turn off Saved or adjust the current filters.</p>`
       : `<strong>No matching services</strong><p>Adjust the search, layers, or resource type.</p>`;
@@ -638,17 +638,17 @@ function renderResourcePanel() {
   const live = resource.verificationMethod === "live-official-feed";
   const freeModel = freeAccessModels[resource.costModel];
   const actionUrl = resource.providerUrl || resource.sourceUrl;
-  const sourceAction = resource.providerUrl ? "Open provider website" : exact ? "Open official service page" : "Search official locator";
+  const sourceAction = resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
-    <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Official live source" : "Official source linked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">How we check ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
+    <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
-    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Exact service site</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Coverage locator</strong> — this marker represents an area, not a walk-in address.</span>`}</p>
+    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
-      <summary><strong>Access and service details</strong><span>Cost, contact and services</span><i>${icon.plus}</i></summary>
+      <summary><strong>Service details</strong><span>Cost, contact, and eligibility</span><i>${icon.plus}</i></summary>
       <div class="panel-detail-content">
         <dl class="panel-facts">
           <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
@@ -661,11 +661,11 @@ function renderResourcePanel() {
           ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
           ${!exact && resource.coverageNote ? `<div><dt>Map note</dt><dd>${resource.coverageNote}</dd></div>` : ""}
         </dl>
-        <div class="panel-services"><h3>What they can help with</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
+        <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
       </div>
     </details>
-    <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before travel</strong>${resource.availabilityNote}</p></div>
-    <details class="panel-source-note"><summary>Source and review details</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">Open the official dataset source ${icon.external}</a></p>` : ""}<p>${live ? "Live source synced" : "Reviewed"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
+    <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before you go</strong>${resource.availabilityNote}</p></div>
+    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
       ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
       <a class="secondary-button" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
@@ -699,7 +699,7 @@ function resourceCard(resource) {
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"} · <b>${freeAccessLabel(resource, true)}</b></small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b></small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>
@@ -715,13 +715,13 @@ function renderResults() {
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
-  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Verified needs" : state.savedOnly ? "Saved resources" : state.userLocation ? "Help near you" : "Find a service";
+  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Public requests" : state.savedOnly ? "Saved services" : state.userLocation ? "Help near you" : "Find a service";
   count.textContent = state.viewMode === "aid"
-    ? `${state.userLocation ? `${nearbyExactCount()} exact sites within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} free-access resources`
-    : "No verified needs published";
+    ? `${state.userLocation ? `${nearbyExactCount()} service locations within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} listings`
+    : "No public requests are listed";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
-    : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No records are published in this layer." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "Need intake and publication are not enabled in this release." : "Try another place, service, or access type."}</p></div>`;
+    : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type."}</p></div>`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
 }
 
@@ -751,7 +751,7 @@ function persistSavedResources() {
   try {
     window.localStorage.setItem(SAVED_RESOURCES_KEY, JSON.stringify([...state.savedIds]));
   } catch {
-    notify("Saved resources are unavailable in this browser");
+    notify("Saved services are unavailable in this browser");
   }
 }
 
@@ -765,7 +765,7 @@ function toggleSavedResource(id) {
     renderResourcePanel();
     renderResults();
   }
-  notify(state.savedIds.has(id) ? "Resource saved in this browser" : "Resource removed from saved");
+  notify(state.savedIds.has(id) ? "Service saved in this browser" : "Service removed from saved");
 }
 
 async function copyText(value) {
@@ -790,7 +790,7 @@ async function shareResource(resource) {
     }
   }
   await copyText(data.url);
-  notify("Resource link copied");
+  notify("Service link copied");
 }
 
 function downloadDirectory() {
@@ -811,10 +811,10 @@ function downloadDirectory() {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "rwn-source-backed-directory.csv";
+  anchor.download = "rwn-service-directory.csv";
   anchor.click();
   URL.revokeObjectURL(url);
-  notify(`Downloaded ${state.filtered.length} directory records`);
+  notify(`Downloaded ${state.filtered.length} listings`);
 }
 
 function focusGlobeOn(resource, immediate = false) {
@@ -892,7 +892,7 @@ async function loadLiveResourcesNearUser() {
     state.liveResources = [];
     state.liveNearbyAvailable = 0;
     state.liveSourceStatus = "unavailable";
-    state.liveSourceError = "Current USDA meal sites could not be loaded; reviewed directory records remain available.";
+    state.liveSourceError = "USDA meal-site information could not be loaded. The rest of the directory is still available.";
     updateFilters();
     return;
   }
@@ -1689,7 +1689,7 @@ function renderPins(width, height) {
       const key = cluster.members.map((item) => item.id).sort().join(",");
       const kinds = [...new Set(cluster.members.map(kindLabel))].join(" and ");
       if (clustered) {
-        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped resources"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} resources in this area<small>${kinds}</small></strong></button>`;
+        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped listings"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} listings in this area<small>${kinds}</small></strong></button>`;
       }
       const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
       return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : kindLabel(resource)}</small></strong></button>`;
@@ -1831,7 +1831,7 @@ function renderClusterTray() {
   }
   const visible = members.slice(0, 12);
   tray.innerHTML = `
-    <div class="globe-cluster-tray__heading"><div><strong>${members.length} resources here</strong><span>Select a service or locator</span></div><button type="button" data-close-cluster aria-label="Close grouped resources">${icon.close}</button></div>
+    <div class="globe-cluster-tray__heading"><div><strong>${members.length} listings here</strong><span>Choose a service or resource finder</span></div><button type="button" data-close-cluster aria-label="Close grouped listings">${icon.close}</button></div>
     <div class="globe-cluster-tray__list">${visible.map((resource) => `
       <button type="button" data-cluster-resource="${resource.id}" style="--cluster-accent:${categories[resource.category].color}">
         <i></i><span><strong>${resource.name}</strong><small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"}</small></span>${icon.arrow}
@@ -1863,7 +1863,7 @@ function focusCluster(ids) {
   document.getElementById("regionFocus").value = "focus";
   state.interactionUntil = performance.now() + 6000;
   renderClusterTray();
-  notify(`Focused ${members.length} resources in this area`);
+  notify(`Showing ${members.length} listings in this area`);
 }
 
 function extractRings(geometry) {
@@ -2130,7 +2130,7 @@ function bindEvents() {
       if (nearest) setSelected(nearest.id, false, false);
       focusGlobeNearUser();
       const nearby = nearbyExactCount();
-      notify(nearby ? `Found ${nearby.toLocaleString()} exact service ${nearby === 1 ? "site" : "sites"} within 250 km` : "No exact site is listed nearby yet; showing official coverage locators next");
+      notify(nearby ? `Found ${nearby.toLocaleString()} service ${nearby === 1 ? "location" : "locations"} within 250 km` : "No service location is listed nearby yet. Showing regional resource finders next.");
     }, (error) => {
       button.classList.remove("is-loading");
       renderLocationState();
