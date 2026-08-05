@@ -7,11 +7,11 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "node --check src/app.js && node --check src/data/resources.js && node --check src/data/platform.js && node --check src/utils/geo.js && node scripts/validate-data.mjs && node --test && npm run build",
-    "dev": "node scripts/build.mjs && python3 -m http.server 5173 -d dist",
-    "preview": "python3 -m http.server 4173 -d dist"
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs 5173",
+    "preview": "node scripts/serve.mjs 4173"
   },
   "dependencies": {
-    "three": "^0.185.1"
+    "three": "0.185.1"
   },
   "engines": {
     "node": "24.x"
