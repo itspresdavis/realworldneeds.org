@@ -59,6 +59,15 @@
     text-align: left;
   }
 
+  .live-source-status {
+    margin: 0.35rem 0 0;
+    padding-left: 0.65rem;
+    border-left: 2px solid rgba(66, 209, 132, 0.62);
+    color: #c3d7d8;
+    font-size: 0.66rem;
+    line-height: 1.45;
+  }
+
   .panel-navigation {
     display: grid;
     grid-template-columns: 2.2rem 1fr 2.2rem;

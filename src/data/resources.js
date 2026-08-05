@@ -1,4 +1,6 @@
 import { expansionResources } from "./resource-expansion.js";
+import { massachusettsWicResources } from "./generated/massachusetts-wic.js";
+import { newYorkWicResources } from "./generated/new-york-wic.js";
 
 export const categories = {
   food: {
@@ -1284,7 +1286,9 @@ export const resources = [
   }),
   ...countryHelpDirectories,
   ...expandedResources,
-  ...expansionResources
+  ...expansionResources,
+  ...massachusettsWicResources,
+  ...newYorkWicResources
 ];
 
 export const trustPrinciples = [
@@ -1302,6 +1306,6 @@ export const trustPrinciples = [
   },
   {
     title: "Your location stays private",
-    text: "There are no accounts, intake forms, analytics, or marketing cookies. Optional location stays in this browser session."
+    text: "There are no accounts, intake forms, analytics, or marketing cookies. Exact location stays in this browser session; a rounded point is used only when you ask an official live source for nearby sites."
   }
 ];

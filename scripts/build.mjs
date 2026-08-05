@@ -1,5 +1,6 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
+import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 
 const escapeHtml = (value) => String(value ?? "")
@@ -18,6 +19,7 @@ const aidLabels = (resource) => [resource.category, ...(resource.secondaryCatego
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
 const coverageCount = new Set(resources.map((resource) => resource.country)).size;
 const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked || "";
+const auditedLiveCount = sourceRegistry.reduce((sum, source) => sum + (source.activeRecordsAtAudit || 0), 0);
 
 function resourceRecord(resource) {
   const place = formatResourcePlace(resource);
@@ -56,10 +58,10 @@ const directoryHtml = `<!doctype html>
     <a class="skip-link" href="#directory">Skip to directory</a>
     <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Humanitarian service directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Interactive finder</a><a href="/transparency">Transparency</a><a href="/editorial-policy">Editorial policy</a><a href="/accessibility">Accessibility</a></nav></header>
     <main id="directory">
-      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Resilient text directory</p><h1>Every listing, without the globe.</h1><p class="legal-hero__lede">A complete, lightweight route to the same source-backed services. It works without the interactive application and keeps official sources, practical access details, review dates, and map links visible.</p><div class="legal-meta"><span>${resources.length} records</span><span>${directCount} physical service sites</span><span>${coverageCount} countries and global networks</span><span>Latest source review ${escapeHtml(latestReview)}</span></div></div></section>
+      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Resilient text directory</p><h1>Every reviewed listing, without the globe.</h1><p class="legal-hero__lede">A complete, lightweight route to the reviewed directory. Live official feeds are loaded only in the interactive finder so a phone receives bounded nearby results instead of tens of thousands of map points.</p><div class="legal-meta"><span>${resources.length} reviewed records</span><span>${directCount} reviewed physical sites</span><span>${auditedLiveCount.toLocaleString()} active USDA sites at the Aug. 5 audit</span><span>Latest source review ${escapeHtml(latestReview)}</span></div></div></section>
       <div class="directory-shell">
-        <div class="policy-note"><p><strong>Availability can change.</strong> Contact the provider or check the official source before travelling. RWN is not emergency dispatch and does not decide eligibility.</p></div>
-        <div class="directory-downloads"><strong>Open data</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">View JSON</a><a href="/editorial-policy">Read the data standard</a></div>
+        <div class="policy-note"><p><strong>Availability can change.</strong> Contact the provider or check the official source before travelling. Seasonal live-feed records are date-filtered when loaded near a user and are not silently counted as permanent services.</p></div>
+        <div class="directory-downloads"><strong>Open data</strong><a href="/directory.csv" download>Download reviewed CSV</a><a href="/data/resources.json">Reviewed JSON</a><a href="/data/sources.json">Source registry</a><a href="/editorial-policy">Data standard</a></div>
         <div class="directory-records">${resources.map(resourceRecord).join("\n")}</div>
       </div>
     </main>
@@ -67,7 +69,7 @@ const directoryHtml = `<!doctype html>
   </body>
 </html>`;
 
-const csvFields = ["ID", "Name", "Place", "Country", "Latitude", "Longitude", "Type", "Aid", "Access", "Cost", "Address or coverage", "Hours", "Phone", "Reviewed", "Official source"];
+const csvFields = ["ID", "Name", "Place", "Country", "Latitude", "Longitude", "Type", "Aid", "Access", "Cost", "Address or coverage", "Hours", "Phone", "Eligibility", "Active from", "Active through", "Dataset", "Reviewed", "Official source"];
 const csvRows = resources.map((resource) => [
   resource.id,
   resource.name,
@@ -82,6 +84,10 @@ const csvRows = resources.map((resource) => [
   resource.address,
   resource.hours || "",
   resource.phone || "",
+  resource.eligibility || "",
+  resource.validFrom || "",
+  resource.validThrough || "",
+  resource.datasetId || "curated-provider-record",
   resource.lastChecked,
   resource.sourceUrl
 ]);
@@ -104,10 +110,16 @@ await writeFile("dist/transparency.html", transparencyHtml);
 await writeFile("dist/directory.html", directoryHtml);
 await writeFile("dist/directory.csv", `${directoryCsv}\n`);
 await writeFile("dist/data/resources.json", `${JSON.stringify({
-  schemaVersion: "1.0",
+  schemaVersion: "1.1",
   license: "Public service facts with source attribution; see https://www.realworldneeds.org/editorial-policy",
   resourceCount: resources.length,
   resources
+}, null, 2)}\n`);
+await writeFile("dist/data/sources.json", `${JSON.stringify({
+  schemaVersion: "1.0",
+  generatedAt: new Date().toISOString(),
+  note: "Active counts are dated audits, not lifetime impact claims. Live sources are queried with bounded results in the interactive finder.",
+  sources: sourceRegistry
 }, null, 2)}\n`);
 
 await mkdir("dist/vendor", { recursive: true });
