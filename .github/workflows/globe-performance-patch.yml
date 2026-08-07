@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/globe-super-smooth
+      - name: Install dependencies
+        run: npm ci
       - name: Apply globe optimization
         run: python scripts/apply-globe-performance.py
       - name: Verify syntax and tests
