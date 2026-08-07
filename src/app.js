@@ -2114,17 +2114,35 @@ async function loadLandGeometry() {
 
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
-  searchInput.addEventListener("input", (event) => {
-    state.query = event.target.value;
+  let pendingSearchValue = state.query;
+  let searchFilterFrame = null;
+  const flushSearchFilter = () => {
+    searchFilterFrame = null;
+    if (pendingSearchValue === state.query) return;
+    state.query = pendingSearchValue;
     updateFilters();
+  };
+  const scheduleSearchFilter = (value) => {
+    pendingSearchValue = value;
+    if (searchFilterFrame !== null) return;
+    searchFilterFrame = requestAnimationFrame(flushSearchFilter);
+  };
+  searchInput.addEventListener("input", (event) => {
+    scheduleSearchFilter(event.target.value);
   });
   searchInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !state.query) return;
+    if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
+    if (searchFilterFrame !== null) cancelAnimationFrame(searchFilterFrame);
+    searchFilterFrame = null;
+    pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
     updateFilters();
   });
   document.getElementById("clearSearch").addEventListener("click", () => {
+    if (searchFilterFrame !== null) cancelAnimationFrame(searchFilterFrame);
+    searchFilterFrame = null;
+    pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
     searchInput.focus();
