@@ -1,5 +1,10 @@
 const pinStyle = document.createElement("style");
 pinStyle.textContent = `
+  .globe-canvas {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+
   .globe-pin > span,
   .globe-pin.is-discovery > span,
   .globe-cluster > span {
@@ -43,9 +48,9 @@ pinStyle.textContent = `
 `;
 document.head.append(pinStyle);
 
-await import("./app.js?v=rwn-20260807-1");
+await import("./app.js?v=rwn-20260807-2");
 
-const loadExperience = () => import("./experience.js?v=rwn-20260807-1").catch(() => {});
+const loadExperience = () => import("./experience.js?v=rwn-20260807-2").catch(() => {});
 
 if ("requestIdleCallback" in window) {
   window.requestIdleCallback(loadExperience, { timeout: 1400 });
