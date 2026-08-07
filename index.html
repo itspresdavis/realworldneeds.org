@@ -30,7 +30,15 @@
       content="Find free essential services worldwide and contact the organizations that provide them."
     />
     <link rel="stylesheet" href="/src/styles.css" />
-    <link rel="stylesheet" href="/src/performance.css" />
+    <style>
+      @media screen {
+        .globe-stage { contain: paint; }
+        .globe-cluster-tray { overscroll-behavior: contain; }
+      }
+      @media (prefers-reduced-transparency: reduce) {
+        .site-header, .globe-cluster-tray { -webkit-backdrop-filter: none; backdrop-filter: none; }
+      }
+    </style>
     <link rel="modulepreload" href="/src/app.js" />
     <link rel="preload" as="image" href="/media/earth-blue-marble.jpg" fetchpriority="high" />
     <link rel="canonical" href="https://www.realworldneeds.org/" />
