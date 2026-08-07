@@ -1,0 +1,183 @@
+/* Production refinement layer: keep urgent tasks obvious and the globe visually quiet. */
+
+.finder-sidebar {
+  gap: 1rem;
+}
+
+.finder-intro {
+  max-width: 29rem;
+}
+
+.finder-intro p {
+  max-width: 27rem;
+}
+
+.quick-needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .48rem;
+  margin-top: -.2rem;
+}
+
+.quick-needs__label {
+  width: 100%;
+  margin: 0 0 .05rem;
+  color: rgba(224, 239, 237, .7);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.quick-need {
+  min-height: 2.2rem;
+  padding: .52rem .72rem;
+  border: 1px solid rgba(206, 231, 226, .18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .035);
+  color: #edf7f5;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 780;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.quick-need:hover {
+  border-color: rgba(185, 242, 211, .42);
+  background: rgba(15, 159, 96, .1);
+}
+
+.quick-need:active {
+  transform: translateY(1px);
+}
+
+.quick-need[aria-pressed="true"] {
+  border-color: rgba(185, 242, 211, .58);
+  background: rgba(15, 159, 96, .16);
+  color: #fff;
+}
+
+.quick-need:focus-visible {
+  outline: 3px solid rgba(185, 242, 211, .42);
+  outline-offset: 2px;
+}
+
+.finder-notes {
+  margin: -.15rem 0 0;
+  border-top: 1px solid rgba(206, 231, 226, .12);
+  border-bottom: 1px solid rgba(206, 231, 226, .12);
+}
+
+.finder-notes > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.7rem;
+  color: rgba(229, 241, 239, .82);
+  cursor: pointer;
+  font-size: .76rem;
+  font-weight: 760;
+  list-style: none;
+}
+
+.finder-notes > summary::-webkit-details-marker {
+  display: none;
+}
+
+.finder-notes > summary::after {
+  content: "+";
+  color: #b9f2d3;
+  font-size: 1rem;
+}
+
+.finder-notes[open] > summary::after {
+  content: "–";
+}
+
+.finder-notes__body {
+  display: grid;
+  gap: .65rem;
+  padding: 0 0 .85rem;
+}
+
+.finder-notes__body > * {
+  margin: 0;
+}
+
+.finder-safety {
+  padding: .72rem .8rem;
+  border: 1px solid rgba(255, 181, 72, .18);
+  border-radius: 10px;
+  background: rgba(255, 181, 72, .05);
+}
+
+.filter-disclosure {
+  margin-top: 0;
+}
+
+/* The GPU point cloud is the visual marker system. HTML cluster buttons remain as
+   large, accessible hit targets, but never render numeric badges. */
+.globe-stage.has-gpu-points .globe-cluster {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.globe-stage.has-gpu-points .globe-cluster > span,
+.globe-stage.has-gpu-points .globe-cluster > span b {
+  display: none !important;
+}
+
+.globe-stage.has-gpu-points .globe-cluster:focus-visible {
+  outline: 2px solid rgba(185, 242, 211, .88);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.globe-stage.has-gpu-points .globe-pin:not(.is-selected):not(.globe-cluster) > span {
+  opacity: 0;
+  box-shadow: none;
+}
+
+.globe-stage.has-gpu-points .globe-pin.is-selected > span {
+  width: .82rem;
+  height: .82rem;
+  border: 1.5px solid rgba(255, 255, 255, .88);
+  background: var(--pin);
+  box-shadow: 0 0 .6rem var(--pin-glow), 0 0 1.15rem color-mix(in srgb, var(--pin), transparent 52%);
+}
+
+/* Give the map more room without removing the useful service inspector. */
+@media (min-width: 1100px) {
+  .finder__grid {
+    grid-template-columns: minmax(15.5rem, .8fr) minmax(0, 2.45fr) minmax(15.5rem, .8fr);
+  }
+
+  .resource-panel {
+    font-size: .96em;
+  }
+}
+
+@media (max-width: 760px) {
+  .quick-needs {
+    gap: .42rem;
+  }
+
+  .quick-need {
+    min-height: 2.35rem;
+    padding-inline: .68rem;
+  }
+
+  .finder-notes > summary {
+    min-height: 2.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-need {
+    transition: none;
+  }
+}

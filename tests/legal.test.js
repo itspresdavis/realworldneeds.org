@@ -41,8 +41,9 @@ test("production build has no mutable network download step", async () => {
   const build = await readFile("scripts/build.mjs", "utf8");
   assert.doesNotMatch(build, /\bfetch\s*\(/);
   assert.match(build, /cp\("public", "dist"/);
-  assert.match(build, /dist\/directory\.html/);
+  assert.match(build, /writePagedDirectory\("dist\/directory", "\/directory"/);
   assert.match(build, /dist\/data\/resources\.json/);
+  assert.match(build, /dist\/data\/map-index\.json/);
   assert.match(build, /dist\/data\/sources\.json/);
 });
 
@@ -62,8 +63,9 @@ test("homepage provides a complete no-JavaScript route", async () => {
 
 test("local preview supports production clean URLs", async () => {
   const server = await readFile("scripts/serve.mjs", "utf8");
-  assert.match(server, /extname\(relative\) \? relative : `\$\{relative\}\.html`/);
-  assert.match(server, /candidate\.startsWith/);
+  assert.match(server, /resolve\(join\(root, `\$\{relative\}\.html`\)\)/);
+  assert.match(server, /resolve\(join\(root, relative, "index\.html"\)\)/);
+  assert.match(server, /resolved\.startsWith/);
   assert.match(server, /127\.0\.0\.1/);
   assert.match(server, /join\(root, "404\.html"\)/);
 });

@@ -17,7 +17,7 @@ const contentTypes = {
   ".xml": "application/xml; charset=utf-8"
 };
 
-function candidatePath(requestUrl) {
+function safeRelativePath(requestUrl) {
   let pathname;
   try {
     pathname = decodeURIComponent(new URL(requestUrl, "http://127.0.0.1").pathname);
@@ -27,40 +27,61 @@ function candidatePath(requestUrl) {
 
   const normalized = normalize(pathname).replace(/^[/\\]+/, "");
   const relative = normalized || "index.html";
-  const withExtension = extname(relative) ? relative : `${relative}.html`;
-  const candidate = resolve(join(root, withExtension));
-  return candidate === root || candidate.startsWith(`${root}${sep}`) ? candidate : null;
+  const resolved = resolve(join(root, relative));
+  return resolved === root || resolved.startsWith(`${root}${sep}`) ? relative : null;
+}
+
+function candidatePaths(requestUrl) {
+  const relative = safeRelativePath(requestUrl);
+  if (!relative) return [];
+  if (extname(relative)) return [resolve(join(root, relative))];
+  return [
+    resolve(join(root, `${relative}.html`)),
+    resolve(join(root, relative, "index.html"))
+  ];
+}
+
+async function existingFile(candidates) {
+  for (const candidate of candidates) {
+    try {
+      const info = await stat(candidate);
+      if (info.isFile()) return { candidate, info };
+    } catch {
+      // Try the next clean-URL candidate.
+    }
+  }
+  return null;
 }
 
 const server = createServer(async (request, response) => {
-  const candidate = candidatePath(request.url || "/");
-  if (!candidate) {
+  const candidates = candidatePaths(request.url || "/");
+  if (!candidates.length) {
     response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Bad request");
     return;
   }
 
-  try {
-    const info = await stat(candidate);
-    if (!info.isFile()) throw new Error("Not a file");
+  const match = await existingFile(candidates);
+  if (match) {
     response.writeHead(200, {
       "Cache-Control": "no-store",
-      "Content-Length": info.size,
-      "Content-Type": contentTypes[extname(candidate)] || "application/octet-stream"
+      "Content-Length": match.info.size,
+      "Content-Type": contentTypes[extname(match.candidate)] || "application/octet-stream"
     });
     if (request.method === "HEAD") response.end();
-    else createReadStream(candidate).pipe(response);
-  } catch {
-    const notFound = join(root, "404.html");
-    const info = await stat(notFound);
-    response.writeHead(404, {
-      "Cache-Control": "no-store",
-      "Content-Length": info.size,
-      "Content-Type": "text/html; charset=utf-8"
-    });
-    if (request.method === "HEAD") response.end();
-    else createReadStream(notFound).pipe(response);
+    else createReadStream(match.candidate).pipe(response);
+    return;
   }
+
+  const notFound = join(root, "404.html");
+  const info = await stat(notFound);
+  response.writeHead(404, {
+    "Cache-Control": "no-store",
+    "Content-Length": info.size,
+    "Content-Type": "text/html; charset=utf-8"
+  });
+  if (request.method === "HEAD") response.end();
+  else createReadStream(notFound).pipe(response);
 });
 
 server.listen(port, "127.0.0.1", () => {
