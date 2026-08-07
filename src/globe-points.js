@@ -71,7 +71,8 @@ function buildGeometry(resources, categories) {
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("pointColor", new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute("pointScale", new THREE.BufferAttribute(scales, 1));
-  geometry.computeBoundingSphere();
+  if (resources.length) geometry.computeBoundingSphere();
+  else geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0);
   return geometry;
 }
 
