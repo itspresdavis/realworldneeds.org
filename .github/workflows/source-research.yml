@@ -12,47 +12,51 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Food Banks Canada locator contract
+      - name: Query Food Banks Canada official location feed
         shell: bash
         run: |
           set -euo pipefail
-          base='https://foodbankscanada.ca'
-          js='/tmp/fbc.js'
-          curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS \
-            "$base/app/themes/fbc-theme/public/build/assets/locator-DXlaNwHI.js" -o "$js"
-          python - <<'PY'
-          text=open('/tmp/fbc.js').read()
-          needle='/wp-json/fbc/v1/locations'
-          i=text.find(needle)
-          print('endpoint-index', i)
-          print(text[max(0,i-1800):i+2800])
-          PY
+          node --input-type=module <<'NODE'
+          const url = new URL('https://foodbankscanada.ca/wp-json/fbc/v1/locations');
+          Object.entries({ sw_lat: 40, sw_lng: -142, ne_lat: 85, ne_lng: -50, user_lat: 56, user_lng: -96 }).forEach(([k,v]) => url.searchParams.set(k,v));
+          const response = await fetch(url, { headers: { 'user-agent': 'RealWorldNeeds source research' } });
+          console.log('status', response.status, 'url', url.toString());
+          const data = await response.json();
+          console.log('isArray', Array.isArray(data), 'count', Array.isArray(data) ? data.length : Object.keys(data));
+          if (Array.isArray(data)) {
+            const sample = data.slice(0, 3).map(x => ({
+              id: x.id, name: x.name, lat: x.lat, lng: x.lng, address1: x.address1, address2: x.address2,
+              city: x.city, province: x.province, postalCode: x.postalCode, website: x.website,
+              description: x.description, instructions: x.instructions, contacts: x.contacts, operatingHours: x.operatingHours
+            }));
+            console.log('sample', JSON.stringify(sample, null, 2));
+            console.log('keys', Object.keys(data[0] || {}));
+            console.log('coordinateValid', data.filter(x => Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng))).length);
+            console.log('withAddress', data.filter(x => x.address1 && x.city && x.province).length);
+            console.log('withWebsite', data.filter(x => x.website).length);
+          }
+          NODE
 
-          echo '===== finder free-access wording ====='
-          curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS \
-            "$base/find-a-food-bank/" -o /tmp/finder.html
-          python - <<'PY'
+          echo '===== Food Banks Canada FAQ / free-access evidence ====='
+          for url in \
+            'https://foodbankscanada.ca/resources/frequently-asked-questions/' \
+            'https://foodbankscanada.ca/find-a-food-bank/'; do
+            echo "PAGE $url"
+            curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o /tmp/page.html
+            python - <<'PY'
           import re
-          text=re.sub(r'<[^>]+>', ' ', open('/tmp/finder.html').read())
+          raw=open('/tmp/page.html', encoding='utf-8', errors='ignore').read()
+          text=re.sub(r'<script[\s\S]*?</script>', ' ', raw, flags=re.I)
+          text=re.sub(r'<style[\s\S]*?</style>', ' ', text, flags=re.I)
+          text=re.sub(r'<[^>]+>', ' ', text)
+          text=re.sub(r'&nbsp;|&#160;', ' ', text)
           text=re.sub(r'\s+', ' ', text)
-          for term in ['free','cost','pay','emergency food','food bank']:
-            print('\n--', term, '--')
-            for m in list(re.finditer(term, text, re.I))[:12]:
-              print(text[max(0,m.start()-180):m.end()+260])
+          patterns=[r'free', r'cost', r'pay', r'fee', r'emergency food', r'need food']
+          for pat in patterns:
+              matches=list(re.finditer(pat, text, re.I))[:8]
+              if matches:
+                  print('--', pat, '--')
+              for m in matches:
+                  print(text[max(0,m.start()-180):m.end()+260])
           PY
-
-          echo '===== API probes ====='
-          for qs in \
-            'sw_lat=40&sw_lng=-142&ne_lat=85&ne_lng=-50&user_lat=56&user_lng=-96' \
-            'sw_lat=40&sw_lng=-142&ne_lat=85&ne_lng=-50&user_lat=56&user_lng=-96&limit=500' \
-            'sw_lat=40&sw_lng=-142&ne_lat=85&ne_lng=-50&user_lat=56&user_lng=-96&page=1&limit=500'; do
-            url="$base/wp-json/fbc/v1/locations?$qs"
-            echo "URL $url"
-            curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS -w '\nHTTP=%{http_code} bytes=%{size_download}\n' "$url" -o /tmp/fbc.json
-            head -c 1200 /tmp/fbc.json; echo
-            node - <<'NODE' || true
-            const fs=require('fs');
-            const raw=fs.readFileSync('/tmp/fbc.json','utf8');
-            try { const d=JSON.parse(raw); console.log('TYPE',Array.isArray(d)?'array':typeof d,'COUNT',Array.isArray(d)?d.length:Object.keys(d),'SAMPLE',JSON.stringify(Array.isArray(d)?d[0]:d,null,2).slice(0,2500)); } catch(e){ console.log('parse-error',e.message); }
-            NODE
           done
