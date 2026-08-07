@@ -2155,25 +2155,34 @@ function bindEvents() {
     updateFilters();
   });
 
+  let catalogFilterFrame = null;
+  const scheduleCatalogFilterUpdate = () => {
+    if (catalogFilterFrame !== null) return;
+    catalogFilterFrame = requestAnimationFrame(() => {
+      catalogFilterFrame = null;
+      updateFilters();
+    });
+  };
+
   document.getElementById("layerList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-type]");
     if (!button) return;
     const type = button.dataset.type;
     if (state.activeTypes.has(type)) state.activeTypes.delete(type);
     else state.activeTypes.add(type);
-    updateFilters();
+    scheduleCatalogFilterUpdate();
   });
 
   document.getElementById("toggleAll").addEventListener("click", () => {
     state.activeTypes = state.activeTypes.size === resourceTypes.length ? new Set() : createInitialTypeSet();
-    updateFilters();
+    scheduleCatalogFilterUpdate();
   });
 
   document.querySelector(".access-switch").addEventListener("click", (event) => {
     const button = event.target.closest("[data-access]");
     if (!button) return;
     state.accessMode = button.dataset.access;
-    updateFilters();
+    scheduleCatalogFilterUpdate();
   });
 
   document.getElementById("openInspector").addEventListener("click", () => {
