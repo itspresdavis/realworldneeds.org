@@ -187,7 +187,7 @@ async function run() {
     ], { stdio: ["ignore", "pipe", "pipe"] });
 
     await waitFor(`${CDP_HOST}/json/version`);
-    const targetResponse = await fetch(`${CDP_HOST}/json/new?${encodeURIComponent(`${HOST}/`)}`, { method: "PUT" });
+    const targetResponse = await fetch(`${CDP_HOST}/json/new?${encodeURIComponent("about:blank")}`, { method: "PUT" });
     if (!targetResponse.ok) throw new Error(`Could not create a browser target: ${targetResponse.status}`);
     const target = await targetResponse.json();
 
@@ -210,15 +210,21 @@ async function run() {
       title: document.title,
       rootChildren: document.getElementById("root")?.children.length || 0,
       quickNeeds: document.querySelectorAll(".quick-need").length,
+      refined: document.documentElement.classList.contains("rwn-refined"),
+      finderSearch: Boolean(document.querySelector(".finder-search")),
+      layerList: Boolean(document.getElementById("layerList")),
       clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length,
       canvas: Boolean(document.getElementById("globeCanvas")),
-      filters: document.querySelectorAll(".layer-toggle[data-type]").length
+      filters: document.querySelectorAll(".layer-toggle[data-type]").length,
+      refinementResources: performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => name.includes("refinement.js"))
     }))()`);
 
     if (!initial.title.includes("Real World Needs") || initial.rootChildren < 1 || !initial.canvas) {
-      throw new Error(`Homepage did not initialize correctly: ${JSON.stringify(initial)}`);
+      throw new Error(`Homepage did not initialize correctly: ${JSON.stringify(initial)}; exceptions=${browserExceptions.slice(0, 3).join(" | ")}`);
     }
-    if (initial.quickNeeds !== 5) throw new Error(`Expected five quick service filters; found ${initial.quickNeeds}.`);
+    if (initial.quickNeeds !== 5 || !initial.refined) {
+      throw new Error(`Finder refinements did not initialize: ${JSON.stringify(initial)}; exceptions=${browserExceptions.slice(0, 3).join(" | ")}`);
+    }
     if (initial.clusterNumbers !== 0) throw new Error(`Numeric cluster markup is present in production output (${initial.clusterNumbers}).`);
     if (initial.filters < 7) throw new Error(`Detailed filters did not initialize (${initial.filters}).`);
 
