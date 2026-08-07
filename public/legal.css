@@ -159,6 +159,13 @@ a:hover { color: #084e2b; }
   html { scroll-behavior: auto; }
 }
 
+@media (prefers-reduced-transparency: reduce) {
+  .legal-header {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 @media print {
   .legal-header, .legal-toc, .legal-footer { display: none; }
   .legal-hero { padding: 1rem 0; background: white; color: black; }
@@ -216,6 +223,16 @@ a:hover { color: #084e2b; }
 .directory-record dt { color: var(--muted); font-size: 0.7rem; font-weight: 850; letter-spacing: 0.03em; text-transform: uppercase; }
 .directory-record dd { margin: 0; color: var(--ink); font-size: 0.84rem; }
 .directory-record .directory-caution { padding: 0.75rem; border-left: 3px solid #d58c13; background: #fff8e9; font-size: 0.82rem; }
+
+@media screen {
+  /* The directory contains hundreds of complete records. Browsers that support
+     content-visibility can skip layout and paint for distant cards while the
+     full HTML remains present for search, links, printing, and no-JS access. */
+  .directory-record {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 24rem;
+  }
+}
 
 @media (max-width: 700px) {
   .transparency-metrics, .directory-record dl { grid-template-columns: 1fr; }
