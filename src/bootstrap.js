@@ -20,9 +20,33 @@ runtimeStyle.textContent = `
 `;
 document.head.append(runtimeStyle);
 
-await import("./app.js");
-const { installRefinements } = await import("./refinement.js");
-installRefinements();
+const appReady = import("./app.js");
+const refinementReady = import("./refinement.js");
+const { installRefinements } = await refinementReady;
+
+let refinementsInstalled = false;
+let refinementFrames = 0;
+const installFinderRefinements = () => {
+  if (refinementsInstalled) return;
+  const finderReady = document.querySelector(".finder-search")
+    && document.querySelectorAll(".layer-toggle[data-type]").length >= 7;
+
+  if (finderReady) {
+    installRefinements();
+    refinementsInstalled = true;
+    return;
+  }
+
+  refinementFrames += 1;
+  if (refinementFrames < 180) requestAnimationFrame(installFinderRefinements);
+};
+installFinderRefinements();
+
+await appReady;
+if (!refinementsInstalled) {
+  installRefinements();
+  refinementsInstalled = true;
+}
 
 import("./telemetry.js")
   .then(({ startTelemetry }) => startTelemetry())
