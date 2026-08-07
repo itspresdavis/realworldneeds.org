@@ -25,6 +25,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app.js src/data/resources.js src/data/live-sources.js
+          git add src/app.js src/data/resources.js src/data/live-sources.js tests/globe.test.js tests/live-sources.test.js
           git commit -m "Integrate verified UK food-bank network at scale"
           git push origin HEAD:agent/scale-globe-directory-1000
