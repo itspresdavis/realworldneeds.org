@@ -12,51 +12,37 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Query Food Banks Canada official location feed
+      - name: Inspect Trussell food-bank centre source data
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
-          const url = new URL('https://foodbankscanada.ca/wp-json/fbc/v1/locations');
-          Object.entries({ sw_lat: 40, sw_lng: -142, ne_lat: 85, ne_lng: -50, user_lat: 56, user_lng: -96 }).forEach(([k,v]) => url.searchParams.set(k,v));
-          const response = await fetch(url, { headers: { 'user-agent': 'RealWorldNeeds source research' } });
-          console.log('status', response.status, 'url', url.toString());
-          const data = await response.json();
-          console.log('isArray', Array.isArray(data), 'count', Array.isArray(data) ? data.length : Object.keys(data));
-          if (Array.isArray(data)) {
-            const sample = data.slice(0, 3).map(x => ({
-              id: x.id, name: x.name, lat: x.lat, lng: x.lng, address1: x.address1, address2: x.address2,
-              city: x.city, province: x.province, postalCode: x.postalCode, website: x.website,
-              description: x.description, instructions: x.instructions, contacts: x.contacts, operatingHours: x.operatingHours
-            }));
-            console.log('sample', JSON.stringify(sample, null, 2));
-            console.log('keys', Object.keys(data[0] || {}));
-            console.log('coordinateValid', data.filter(x => Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng))).length);
-            console.log('withAddress', data.filter(x => x.address1 && x.city && x.province).length);
-            console.log('withWebsite', data.filter(x => x.website).length);
-          }
-          NODE
-
-          echo '===== Food Banks Canada FAQ / free-access evidence ====='
-          for url in \
-            'https://foodbankscanada.ca/resources/frequently-asked-questions/' \
-            'https://foodbankscanada.ca/find-a-food-bank/'; do
-            echo "PAGE $url"
-            curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o /tmp/page.html
-            python - <<'PY'
-          import re
-          raw=open('/tmp/page.html', encoding='utf-8', errors='ignore').read()
-          text=re.sub(r'<script[\s\S]*?</script>', ' ', raw, flags=re.I)
-          text=re.sub(r'<style[\s\S]*?</style>', ' ', text, flags=re.I)
-          text=re.sub(r'<[^>]+>', ' ', text)
-          text=re.sub(r'&nbsp;|&#160;', ' ', text)
-          text=re.sub(r'\s+', ' ', text)
-          patterns=[r'free', r'cost', r'pay', r'fee', r'emergency food', r'need food']
-          for pat in patterns:
-              matches=list(re.finditer(pat, text, re.I))[:8]
-              if matches:
-                  print('--', pat, '--')
-              for m in matches:
-                  print(text[max(0,m.start()-180):m.end()+260])
+          url='https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank?lat=&lng=&page=1'
+          curl -L --compressed --max-time 40 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o /tmp/trussell.html
+          echo "bytes=$(wc -c < /tmp/trussell.html)"
+          python - <<'PY'
+          import re, html
+          raw=open('/tmp/trussell.html',encoding='utf-8',errors='ignore').read()
+          for term in ['119 University Street','latitude','longitude','__next_f.push','results','foodbank']:
+              i=raw.lower().find(term.lower())
+              print('\n===== TERM',term,'INDEX',i,'=====')
+              if i >= 0:
+                  print(html.unescape(raw[max(0,i-2500):i+5000]))
+          print('\n===== script sources =====')
+          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)', raw, flags=re.I):
+              print(src)
           PY
-          done
+
+          echo '===== endpoint-like strings from all Next chunks ====='
+          python - <<'PY'
+          import re, urllib.parse
+          raw=open('/tmp/trussell.html',encoding='utf-8',errors='ignore').read()
+          srcs=re.findall(r'<script[^>]+src=["\']([^"\']+)',raw,flags=re.I)
+          open('/tmp/chunks.txt','w').write('\n'.join(urllib.parse.urljoin('https://www.trussell.org.uk/',x) for x in srcs))
+          PY
+          while IFS= read -r src; do
+            curl -L --compressed --max-time 30 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$src" || true
+          done < /tmp/chunks.txt > /tmp/allchunks.js
+          grep -Eo "https?://[^\"' ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|graphql|foodbank|location|search|postcode)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*" /tmp/allchunks.js \
+            | sort -u | head -n 240 || true
+          echo '===== context ====='
+          grep -Eo '.{0,200}(foodbank|foodBank|postcode|latitude|longitude|searchParams|graphql|api/).{0,350}' /tmp/allchunks.js | head -n 180 || true
