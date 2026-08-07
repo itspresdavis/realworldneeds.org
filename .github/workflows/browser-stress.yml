@@ -1,0 +1,44 @@
+name: Browser Stress
+
+on:
+  push:
+    branches: [agent/scale-globe-directory-1000]
+    paths: [.github/workflows/browser-stress.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/scale-globe-directory-1000
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install isolated stress browser
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start production-like static server
+        run: |
+          node scripts/serve.mjs 4173 > /tmp/rwn-server.log 2>&1 &
+          echo $! > /tmp/rwn-server.pid
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+            sleep 0.25
+          done
+          cat /tmp/rwn-server.log
+          exit 1
+      - name: Abuse desktop and mobile interaction paths
+        env:
+          STRESS_BASE_URL: http://127.0.0.1:4173
+        run: node scripts/stress-browser.mjs
+      - name: Server log
+        if: always()
+        run: cat /tmp/rwn-server.log || true
