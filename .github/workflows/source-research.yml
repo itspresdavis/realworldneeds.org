@@ -12,28 +12,47 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Trace authoritative locator endpoints
+      - name: Inspect Food Banks Canada locator contract
         shell: bash
         run: |
-          set -u
-          inspect_js() {
-            name="$1"; url="$2"; file="/tmp/${name}.js"
-            echo "===== ${name} ====="
-            code=$(curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS -w '%{http_code}' -o "$file" "$url" || true)
-            echo "status=$code bytes=$(wc -c < "$file" 2>/dev/null || echo 0) url=$url"
-            echo '-- endpoint-like strings --'
-            grep -Eo "https?://[^\"' ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|graphql|locations?|foodbanks?|search)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*" "$file" 2>/dev/null \
-              | sed 's/\\u0026/\&/g' | sort -u | head -n 160 || true
-            echo '-- fetch/axios context --'
-            grep -Eo '.{0,120}(fetch\(|axios|api\.foodbankscanada|foodbank|postcode|postal|latitude|longitude|lat|lng).{0,180}' "$file" 2>/dev/null | head -n 120 || true
-          }
+          set -euo pipefail
+          base='https://foodbankscanada.ca'
+          js='/tmp/fbc.js'
+          curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS \
+            "$base/app/themes/fbc-theme/public/build/assets/locator-DXlaNwHI.js" -o "$js"
+          python - <<'PY'
+          text=open('/tmp/fbc.js').read()
+          needle='/wp-json/fbc/v1/locations'
+          i=text.find(needle)
+          print('endpoint-index', i)
+          print(text[max(0,i-1800):i+2800])
+          PY
 
-          inspect_js fbc-locator 'https://foodbankscanada.ca/app/themes/fbc-theme/public/build/assets/locator-DXlaNwHI.js'
-          inspect_js trussell-finder 'https://www.trussell.org.uk/_next/static/chunks/app/%5Bdomain%5D/emergency-food/find-a-foodbank/page-83caaac496e058d1.js'
+          echo '===== finder free-access wording ====='
+          curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS \
+            "$base/find-a-food-bank/" -o /tmp/finder.html
+          python - <<'PY'
+          import re
+          text=re.sub(r'<[^>]+>', ' ', open('/tmp/finder.html').read())
+          text=re.sub(r'\s+', ' ', text)
+          for term in ['free','cost','pay','emergency food','food bank']:
+            print('\n--', term, '--')
+            for m in list(re.finditer(term, text, re.I))[:12]:
+              print(text[max(0,m.start()-180):m.end()+260])
+          PY
 
-          echo '===== california WIC page (insecure cert workaround for research only) ====='
-          curl -k -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS \
-            'https://www.cdph.ca.gov/Programs/CFH/DWICSN/Pages/Find-a-WIC-Local-Agency.aspx' -o /tmp/ca-wic.html || true
-          echo "bytes=$(wc -c < /tmp/ca-wic.html 2>/dev/null || echo 0)"
-          grep -Eoi 'https?://[^"'"'"'<> ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|json|wic|location|locator|map|arcgis)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*' /tmp/ca-wic.html 2>/dev/null \
-            | sed 's/&amp;/\&/g' | sort -u | head -n 180 || true
+          echo '===== API probes ====='
+          for qs in \
+            'sw_lat=40&sw_lng=-142&ne_lat=85&ne_lng=-50&user_lat=56&user_lng=-96' \
+            'sw_lat=40&sw_lng=-142&ne_lat=85&ne_lng=-50&user_lat=56&user_lng=-96&limit=500' \
+            'sw_lat=40&sw_lng=-142&ne_lat=85&ne_lng=-50&user_lat=56&user_lng=-96&page=1&limit=500'; do
+            url="$base/wp-json/fbc/v1/locations?$qs"
+            echo "URL $url"
+            curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS -w '\nHTTP=%{http_code} bytes=%{size_download}\n' "$url" -o /tmp/fbc.json
+            head -c 1200 /tmp/fbc.json; echo
+            node - <<'NODE' || true
+            const fs=require('fs');
+            const raw=fs.readFileSync('/tmp/fbc.json','utf8');
+            try { const d=JSON.parse(raw); console.log('TYPE',Array.isArray(d)?'array':typeof d,'COUNT',Array.isArray(d)?d.length:Object.keys(d),'SAMPLE',JSON.stringify(Array.isArray(d)?d[0]:d,null,2).slice(0,2500)); } catch(e){ console.log('parse-error',e.message); }
+            NODE
+          done
