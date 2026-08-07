@@ -12,23 +12,28 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe authoritative location directories
+      - name: Trace authoritative locator endpoints
         shell: bash
         run: |
           set -u
-          probe() {
-            name="$1"; url="$2"; file="/tmp/${name}.html"
+          inspect_js() {
+            name="$1"; url="$2"; file="/tmp/${name}.js"
             echo "===== ${name} ====="
             code=$(curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS -w '%{http_code}' -o "$file" "$url" || true)
             echo "status=$code bytes=$(wc -c < "$file" 2>/dev/null || echo 0) url=$url"
-            echo '-- title / hints --'
-            grep -Eoi '<title>[^<]+|https?://[^"'"'"'<> ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|json|graphql|location|locator|foodbank|wic|map)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*' "$file" 2>/dev/null \
-              | sed 's/&amp;/\&/g' | sort -u | head -n 120 || true
-            echo '-- script src --'
-            grep -Eoi '<script[^>]+src=["'"'][^"'"']+' "$file" 2>/dev/null | sed -E 's/.*src=["'"']//' | head -n 80 || true
+            echo '-- endpoint-like strings --'
+            grep -Eo "https?://[^\"' ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|graphql|locations?|foodbanks?|search)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*" "$file" 2>/dev/null \
+              | sed 's/\\u0026/\&/g' | sort -u | head -n 160 || true
+            echo '-- fetch/axios context --'
+            grep -Eo '.{0,120}(fetch\(|axios|api\.foodbankscanada|foodbank|postcode|postal|latitude|longitude|lat|lng).{0,180}' "$file" 2>/dev/null | head -n 120 || true
           }
 
-          probe trussell 'https://www.trussell.org.uk/emergency-food/find-a-foodbank'
-          probe foodbankscanada 'https://foodbankscanada.ca/find-a-food-bank/'
-          probe bahnhofsmission 'https://www.bahnhofsmission.de/index.php?id=99'
-          probe californiawic 'https://www.cdph.ca.gov/Programs/CFH/DWICSN/Pages/Find-a-WIC-Local-Agency.aspx'
+          inspect_js fbc-locator 'https://foodbankscanada.ca/app/themes/fbc-theme/public/build/assets/locator-DXlaNwHI.js'
+          inspect_js trussell-finder 'https://www.trussell.org.uk/_next/static/chunks/app/%5Bdomain%5D/emergency-food/find-a-foodbank/page-83caaac496e058d1.js'
+
+          echo '===== california WIC page (insecure cert workaround for research only) ====='
+          curl -k -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS \
+            'https://www.cdph.ca.gov/Programs/CFH/DWICSN/Pages/Find-a-WIC-Local-Agency.aspx' -o /tmp/ca-wic.html || true
+          echo "bytes=$(wc -c < /tmp/ca-wic.html 2>/dev/null || echo 0)"
+          grep -Eoi 'https?://[^"'"'"'<> ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|json|wic|location|locator|map|arcgis)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*' /tmp/ca-wic.html 2>/dev/null \
+            | sed 's/&amp;/\&/g' | sort -u | head -n 180 || true
