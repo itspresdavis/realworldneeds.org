@@ -19,7 +19,7 @@ jobs:
         run: npm ci
       - name: Integrate generated data and rapid-input protection
         run: python scripts/apply-data-and-input-hardening.py
-      - name: Validate full catalog and production build
+      - name: Validate full catalog, scale invariants, and production build
         run: npm run check
       - name: Commit integrated scale hardening
         run: |
