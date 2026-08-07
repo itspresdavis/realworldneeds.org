@@ -123,7 +123,13 @@ function searchTokens(value) {
   return normalizedText(value).split(/\s+/).filter(Boolean).map((token) => searchAliases.get(token) || token);
 }
 
+const resourceSearchFieldCache = new WeakMap();
+const queryTokenCache = new Map();
+const QUERY_TOKEN_CACHE_LIMIT = 64;
+
 function resourceSearchFields(resource) {
+  const cached = resourceSearchFieldCache.get(resource);
+  if (cached) return cached;
   const types = [resource.category, ...(resource.secondaryCategories || [])];
   const services = Array.isArray(resource.services) ? resource.services : [];
   const fields = {
@@ -143,11 +149,24 @@ function resourceSearchFields(resource) {
   };
   fields.all = `${fields.name} ${fields.place} ${fields.source} ${fields.detail}`;
   fields.tokens = new Set(searchTokens(fields.all));
+  resourceSearchFieldCache.set(resource, fields);
   return fields;
 }
 
+function cachedQueryTokens(query) {
+  const key = normalizedText(query);
+  const cached = queryTokenCache.get(key);
+  if (cached) return cached;
+  const tokens = searchTokens(key);
+  if (queryTokenCache.size >= QUERY_TOKEN_CACHE_LIMIT) {
+    queryTokenCache.delete(queryTokenCache.keys().next().value);
+  }
+  queryTokenCache.set(key, tokens);
+  return tokens;
+}
+
 export function resourceSearchScore(resource, query) {
-  const tokens = searchTokens(query);
+  const tokens = cachedQueryTokens(query);
   if (!tokens.length) return 0;
   const fields = resourceSearchFields(resource);
   if (!tokens.every((token) => fields.tokens.has(token) || fields.all.includes(token))) return -1;
@@ -164,7 +183,7 @@ export function resourceSearchScore(resource, query) {
 
 export function rankResourcesForLocation(resourceList, userLocation, userCountry = "", query = "") {
   const country = normalizedText(userCountry);
-  const rank = (resource) => {
+  const ranked = resourceList.map((resource) => {
     const exact = isExactServiceSite(resource);
     const distance = resourceDistanceKm(userLocation, resource);
     const sameCountry = Boolean(country && normalizedText(resource.country) === country);
@@ -175,17 +194,19 @@ export function rankResourcesForLocation(resourceList, userLocation, userCountry
     else if (exact && sameCountry) tier = 2;
     else if (globalCoverage) tier = 3;
     else if (exact) tier = 4;
-    return { tier, distance: distance ?? Number.POSITIVE_INFINITY, score: resourceSearchScore(resource, query) };
-  };
-
-  return [...resourceList].sort((left, right) => {
-    const a = rank(left);
-    const b = rank(right);
-    return a.tier - b.tier
-      || b.score - a.score
-      || a.distance - b.distance
-      || left.name.localeCompare(right.name);
+    return {
+      resource,
+      tier,
+      distance: distance ?? Number.POSITIVE_INFINITY,
+      score: resourceSearchScore(resource, query)
+    };
   });
+
+  ranked.sort((left, right) => left.tier - right.tier
+    || right.score - left.score
+    || left.distance - right.distance
+    || left.resource.name.localeCompare(right.resource.name));
+  return ranked.map((entry) => entry.resource);
 }
 
 export function formatResourcePlace(resource) {
