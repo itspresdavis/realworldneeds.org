@@ -12,8 +12,8 @@ const VERTEX_SHADER = `
     vPointColor = pointColor;
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * viewPosition;
-    float perspective = clamp(2.8 / max(1.45, -viewPosition.z), 0.72, 1.3);
-    float zoomBoost = clamp(0.82 + max(0.0, uZoom - 1.0) * 0.16, 0.82, 1.18);
+    float perspective = clamp(2.8 / max(1.45, -viewPosition.z), 0.7, 1.28);
+    float zoomBoost = clamp(0.72 + max(0.0, uZoom - 1.0) * 0.30, 0.72, 1.34);
     gl_PointSize = uPointSize * pointScale * perspective * zoomBoost * uPixelRatio;
   }
 `;
@@ -26,10 +26,10 @@ const FRAGMENT_SHADER = `
     float distanceFromCenter = distance(gl_PointCoord, vec2(0.5));
     if (distanceFromCenter > 0.5) discard;
 
-    float halo = 1.0 - smoothstep(0.16, 0.5, distanceFromCenter);
-    float core = 1.0 - smoothstep(0.03, 0.2, distanceFromCenter);
-    float alpha = min(1.0, halo * 0.34 + core * 0.82) * uOpacity;
-    vec3 color = mix(vPointColor, vec3(1.0), core * 0.24);
+    float halo = 1.0 - smoothstep(0.12, 0.5, distanceFromCenter);
+    float core = 1.0 - smoothstep(0.035, 0.18, distanceFromCenter);
+    float alpha = min(1.0, halo * 0.26 + core * 0.88) * uOpacity;
+    vec3 color = mix(vPointColor, vec3(1.0), core * 0.28);
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -47,8 +47,8 @@ function resourceVector(resource, radius = 1.018) {
 
 function resourcePointScale(resource) {
   if (resource.kind === "direct") return 1;
-  if (resource.kind === "locator") return 0.78;
-  return 0.68;
+  if (resource.kind === "locator") return 0.82;
+  return 0.72;
 }
 
 function buildGeometry(resources, categories) {
@@ -81,10 +81,10 @@ export function createGlobePointLayer(resources, categories, { pixelRatio = 1 } 
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     uniforms: {
-      uPointSize: { value: window.innerWidth <= 600 ? 5.8 : 5.3 },
+      uPointSize: { value: window.innerWidth <= 600 ? 4.8 : 4.45 },
       uPixelRatio: { value: Math.min(1.5, Math.max(1, pixelRatio)) },
       uZoom: { value: 1 },
-      uOpacity: { value: 0.96 }
+      uOpacity: { value: 0.94 }
     },
     transparent: true,
     depthTest: true,
@@ -107,7 +107,7 @@ export function replaceGlobePointResources(points, resources, categories) {
   previousGeometry?.dispose();
 }
 
-export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.96 } = {}) {
+export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.94 } = {}) {
   if (!points?.material?.uniforms) return;
   points.material.uniforms.uZoom.value = zoom;
   points.material.uniforms.uPixelRatio.value = Math.min(1.5, Math.max(1, pixelRatio));
