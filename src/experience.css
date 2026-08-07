@@ -1,11 +1,9 @@
-/* RWN experience layer: motion, interaction polish, and globe depth without changing content or IA. */
+/* RWN experience layer: lightweight motion and editorial brand polish. */
 
 :root {
   --experience-ease: cubic-bezier(.2, .72, .2, 1);
-  --experience-ease-spring: cubic-bezier(.18, .89, .32, 1.16);
-  --experience-fast: 160ms;
-  --experience-medium: 320ms;
-  --experience-slow: 640ms;
+  --experience-fast: 140ms;
+  --experience-medium: 260ms;
 }
 
 html {
@@ -18,105 +16,44 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-.experience-progress {
-  position: fixed;
-  inset: 0 0 auto 0;
-  z-index: 9999;
-  height: 2px;
-  pointer-events: none;
-  transform: scaleX(0);
-  transform-origin: left center;
-  background: linear-gradient(90deg, rgba(100, 244, 198, .72), rgba(76, 208, 205, .92));
-  box-shadow: 0 0 14px rgba(76, 208, 205, .26);
-  will-change: transform;
-}
-
-.site-header {
-  transition:
-    background-color var(--experience-medium) var(--experience-ease),
-    border-color var(--experience-medium) var(--experience-ease),
-    box-shadow var(--experience-medium) var(--experience-ease),
-    transform var(--experience-medium) var(--experience-ease);
-}
-
-.site-header.is-scrolled {
-  box-shadow: 0 12px 38px rgba(0, 8, 14, .12);
-}
-
 .primary-nav a,
 .header-action,
 .site-menu summary,
 .site-menu a,
 .footer-data-button,
-.site-footer a {
+.site-footer a,
+.primary-button,
+.secondary-button,
+.outline-button,
+.directory-tool,
+.globe-controls button,
+.globe-inspector-toggle,
+.globe-cluster-tray__list > button {
   transition:
     color var(--experience-fast) ease,
     border-color var(--experience-fast) ease,
     background-color var(--experience-fast) ease,
+    box-shadow var(--experience-fast) ease,
     opacity var(--experience-fast) ease,
     transform var(--experience-fast) var(--experience-ease);
 }
 
-.primary-nav a {
-  position: relative;
-}
-
-.primary-nav a::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  right: 50%;
-  bottom: -7px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: .7;
-  transition: left 220ms var(--experience-ease), right 220ms var(--experience-ease), opacity 220ms ease;
-}
-
-.primary-nav a[aria-current="location"]::after,
-.primary-nav a:hover::after {
-  left: 12%;
-  right: 12%;
-}
-
-button,
-[role="button"],
-.primary-button,
-.secondary-button,
-.outline-button,
-.header-action,
-.directory-tool {
-  -webkit-tap-highlight-color: transparent;
-  transform: translateZ(0);
-  transition:
-    transform var(--experience-fast) var(--experience-ease),
-    box-shadow var(--experience-fast) ease,
-    border-color var(--experience-fast) ease,
-    background-color var(--experience-fast) ease,
-    color var(--experience-fast) ease,
-    opacity var(--experience-fast) ease,
-    filter var(--experience-fast) ease;
-}
-
-button:active:not(:disabled),
-[role="button"]:active,
 .primary-button:active,
 .secondary-button:active,
 .outline-button:active,
 .header-action:active,
-.directory-tool:active {
-  transform: translate3d(0, 1px, 0) scale(.985);
-  transition-duration: 70ms;
+.directory-tool:active,
+.globe-controls button:active,
+.globe-inspector-toggle:active {
+  transform: translateY(1px) scale(.988);
 }
 
-.fine-pointer button:hover:not(:disabled),
 .fine-pointer .primary-button:hover,
 .fine-pointer .secondary-button:hover,
 .fine-pointer .outline-button:hover,
 .fine-pointer .header-action:hover,
 .fine-pointer .directory-tool:hover {
-  transform: translate3d(0, -1px, 0);
+  transform: translateY(-1px);
 }
 
 .search-box,
@@ -125,295 +62,264 @@ button:active:not(:disabled),
 .access-switch,
 .resource-panel,
 .directory-strip,
-.resource-row,
-.mission-steps > article,
-.principle-grid > article,
-.accountability-status > article {
+.resource-row {
   transition:
     border-color var(--experience-medium) var(--experience-ease),
     box-shadow var(--experience-medium) var(--experience-ease),
-    background-color var(--experience-medium) var(--experience-ease),
-    transform var(--experience-medium) var(--experience-ease);
+    background-color var(--experience-medium) var(--experience-ease);
 }
 
 .search-box:focus-within {
-  transform: translate3d(0, -1px, 0);
-  box-shadow: 0 12px 34px rgba(0, 10, 18, .12);
+  box-shadow: 0 10px 28px rgba(0, 10, 18, .1);
 }
 
-.fine-pointer .resource-row:hover {
-  transform: translate3d(0, -2px, 0);
-}
-
-.resource-row.is-selected {
-  transform: translate3d(2px, 0, 0);
-}
-
-/* Globe stage: preserve the existing globe while increasing spatial depth around it. */
+/* Keep globe polish compositor-cheap: no WebGL shader hooks, canvas filters, animated
+   star fields, or pointer-driven repaints. */
 .globe-stage {
-  --globe-pointer-x: 50%;
-  --globe-pointer-y: 45%;
   isolation: isolate;
   overflow: hidden;
-  transform: translateZ(0);
   background-image:
-    radial-gradient(circle at var(--globe-pointer-x) var(--globe-pointer-y), rgba(71, 224, 194, .075), transparent 27%),
-    radial-gradient(circle at 50% 47%, rgba(40, 148, 161, .115), transparent 38%),
-    radial-gradient(circle at 50% 50%, rgba(3, 22, 35, .02), rgba(0, 8, 16, .16) 76%);
-  transition:
-    border-color var(--experience-medium) ease,
-    box-shadow var(--experience-slow) var(--experience-ease),
-    background-position var(--experience-medium) ease;
+    radial-gradient(circle at 50% 46%, rgba(61, 190, 183, .08), transparent 38%),
+    radial-gradient(circle at 50% 50%, rgba(3, 22, 35, .01), rgba(0, 8, 16, .12) 80%);
 }
 
-.globe-stage::before,
 .globe-stage::after {
   content: "";
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-
-.globe-stage::before {
-  z-index: 0;
-  opacity: .42;
-  background-image:
-    radial-gradient(circle, rgba(215, 246, 243, .6) 0 1px, transparent 1.4px),
-    radial-gradient(circle, rgba(117, 213, 211, .35) 0 .8px, transparent 1.2px),
-    radial-gradient(circle, rgba(255, 255, 255, .25) 0 .7px, transparent 1.1px);
-  background-size: 163px 163px, 229px 229px, 307px 307px;
-  background-position: 17px 31px, 73px 19px, 111px 101px;
-  mask-image: radial-gradient(circle at 50% 50%, #000 0, rgba(0, 0, 0, .96) 56%, transparent 100%);
-}
-
-.globe-stage::after {
   z-index: 1;
-  background:
-    radial-gradient(circle at 50% 46%, transparent 43%, rgba(0, 12, 22, .08) 65%, rgba(0, 5, 12, .27) 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, .015), transparent 24%, transparent 74%, rgba(0, 0, 0, .08));
-  box-shadow: inset 0 0 100px rgba(0, 0, 0, .08);
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 47%, transparent 48%, rgba(0, 8, 16, .06) 72%, rgba(0, 5, 12, .18) 100%);
 }
 
 .globe-canvas {
   z-index: 1;
   backface-visibility: hidden;
-  transform: translateZ(0);
-  will-change: transform;
-  filter: saturate(1.055) contrast(1.025);
-}
-
-.globe-canvas[data-globe-enhanced="true"] {
-  filter: saturate(1.075) contrast(1.035);
 }
 
 .globe-pin-layer {
   z-index: 5;
-  transform: translateZ(0);
-}
-
-.globe-pin {
-  backface-visibility: hidden;
-  will-change: transform;
 }
 
 .globe-pin > span,
 .globe-pin > strong {
-  transition:
-    filter var(--experience-fast) ease,
-    opacity var(--experience-fast) ease,
-    box-shadow var(--experience-fast) ease;
-}
-
-.fine-pointer .globe-pin:hover > span {
-  filter: brightness(1.12) saturate(1.08);
-}
-
-.fine-pointer .globe-pin:hover > strong {
-  filter: brightness(1.06);
-}
-
-.globe-pin.is-selected > span {
-  animation: experience-pin-focus 2.6s ease-in-out infinite;
-}
-
-.globe-meta,
-.globe-controls,
-.globe-readout,
-.globe-legend,
-.globe-cluster-tray {
-  transition:
-    opacity var(--experience-medium) ease,
-    transform var(--experience-medium) var(--experience-ease),
-    border-color var(--experience-medium) ease,
-    background-color var(--experience-medium) ease,
-    box-shadow var(--experience-medium) ease;
-}
-
-.globe-controls button,
-.globe-inspector-toggle,
-.region-menu select {
-  transition:
-    transform var(--experience-fast) var(--experience-ease),
-    background-color var(--experience-fast) ease,
-    border-color var(--experience-fast) ease,
-    color var(--experience-fast) ease,
-    box-shadow var(--experience-fast) ease;
-}
-
-.fine-pointer .globe-controls button:hover,
-.fine-pointer .globe-inspector-toggle:hover {
-  transform: translate3d(0, -1px, 0) scale(1.035);
-}
-
-.globe-cluster-tray:not([hidden]) {
-  box-shadow: 0 26px 70px rgba(0, 7, 14, .3);
-}
-
-.globe-cluster-tray__list > button {
-  transition:
-    background-color var(--experience-fast) ease,
-    transform var(--experience-fast) var(--experience-ease),
-    border-color var(--experience-fast) ease;
+  transition: opacity var(--experience-fast) ease, box-shadow var(--experience-fast) ease;
 }
 
 .fine-pointer .globe-cluster-tray__list > button:hover {
-  transform: translate3d(3px, 0, 0);
+  background-color: rgba(255, 255, 255, .08);
 }
 
-.globe-gesture-hint {
-  transition: opacity var(--experience-medium) ease, transform var(--experience-medium) var(--experience-ease);
+/* Editorial brand section: persuasive without fake metrics, loud gradients, or card clutter. */
+.rwn-story {
+  padding: clamp(4.75rem, 8vw, 8.5rem) var(--gutter);
+  background: #071926;
+  color: #f5fbfa;
 }
 
-.globe-stage:focus-within .globe-gesture-hint,
-.fine-pointer .globe-stage:hover .globe-gesture-hint {
-  opacity: .92;
-  transform: translate3d(0, -2px, 0);
+.rwn-story__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(22rem, .9fr);
+  gap: clamp(3rem, 7vw, 8rem);
+  align-items: start;
+  max-width: var(--content);
+  margin: 0 auto;
 }
 
-/* Dynamic content changes feel deliberate instead of snapping. */
-.experience-panel-swap {
-  animation: experience-panel-enter 280ms var(--experience-ease) both;
+.rwn-story .section-kicker {
+  color: #7edbab;
 }
 
-.experience-results-swap > * {
-  animation: experience-row-enter 340ms var(--experience-ease) both;
+.rwn-story__lead h2 {
+  max-width: 12ch;
+  margin: .75rem 0 1.2rem;
+  color: #fff;
+  font-size: clamp(2.5rem, 5vw, 5.25rem);
+  line-height: .98;
+  letter-spacing: -.05em;
 }
 
-.experience-results-swap > *:nth-child(2) { animation-delay: 24ms; }
-.experience-results-swap > *:nth-child(3) { animation-delay: 48ms; }
-.experience-results-swap > *:nth-child(4) { animation-delay: 72ms; }
-.experience-results-swap > *:nth-child(5) { animation-delay: 96ms; }
-.experience-results-swap > *:nth-child(n+6) { animation-delay: 112ms; }
-
-.experience-tray-swap {
-  animation: experience-tray-enter 260ms var(--experience-ease-spring) both;
+.rwn-story__lead > p {
+  max-width: 44rem;
+  margin: 0;
+  color: #b9c9cc;
+  font-size: clamp(1rem, 1.25vw, 1.2rem);
+  line-height: 1.7;
 }
 
-/* Scroll reveal: small movement only; no parallax that fights readability. */
+.rwn-story__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem 1.25rem;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+.rwn-story__actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: .82rem;
+  font-weight: 800;
+  transition: color var(--experience-fast) ease, border-color var(--experience-fast) ease, background-color var(--experience-fast) ease, transform var(--experience-fast) var(--experience-ease);
+}
+
+.rwn-story__primary {
+  padding: .72rem 1rem;
+  border: 1px solid #72d8a4;
+  border-radius: 4px;
+  background: #72d8a4;
+  color: #041827;
+}
+
+.rwn-story__secondary {
+  padding: .72rem 0;
+  border-bottom: 1px solid rgba(185, 242, 211, .42);
+  color: #dce8e8;
+}
+
+.fine-pointer .rwn-story__actions a:hover {
+  transform: translateY(-1px);
+}
+
+.rwn-story__proof {
+  border-top: 1px solid rgba(184, 215, 213, .2);
+}
+
+.rwn-story__proof article {
+  display: grid;
+  grid-template-columns: 2.8rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1.45rem 0 1.55rem;
+  border-bottom: 1px solid rgba(184, 215, 213, .16);
+}
+
+.rwn-story__proof article > span {
+  padding-top: .18rem;
+  color: #72d8a4;
+  font-size: .68rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+}
+
+.rwn-story__proof h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.rwn-story__proof p {
+  max-width: 34rem;
+  margin: .42rem 0 0;
+  color: #9fb3b7;
+  font-size: .82rem;
+  line-height: 1.6;
+}
+
+/* Only lower-page sections reveal, once. The globe and first interactive viewport never
+   wait for animation or carry persistent will-change layers. */
 .experience-reveal {
   opacity: 0;
-  transform: translate3d(0, 18px, 0);
-  transition:
-    opacity 600ms var(--experience-ease),
-    transform 700ms var(--experience-ease);
-  transition-delay: calc(var(--reveal-order, 0) * 45ms);
-  will-change: opacity, transform;
+  transform: translateY(12px);
+  transition: opacity 440ms var(--experience-ease), transform 500ms var(--experience-ease);
 }
 
-.experience-reveal.is-visible {
+.experience-reveal.experience-visible {
   opacity: 1;
-  transform: translate3d(0, 0, 0);
-  will-change: auto;
+  transform: none;
 }
 
-.experience-enabled .finder__grid {
-  opacity: 0;
-  transform: translate3d(0, 10px, 0);
+@supports (content-visibility: auto) {
+  .about-rwn,
+  .rwn-story,
+  .source-band,
+  .accountability {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 720px;
+  }
 }
 
-.experience-entered .finder__grid {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  transition: opacity 520ms var(--experience-ease), transform 620ms var(--experience-ease);
-}
-
-/* Better keyboard focus without changing the design language. */
 :where(button, a, input, select, summary):focus-visible {
   outline: 2px solid rgba(119, 244, 201, .92);
   outline-offset: 3px;
 }
 
-.using-pointer :where(button, a, input, select, summary):focus:not(:focus-visible) {
-  outline: none;
-}
-
-@keyframes experience-panel-enter {
-  from { opacity: .35; transform: translate3d(7px, 0, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-@keyframes experience-row-enter {
-  from { opacity: 0; transform: translate3d(0, 7px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-@keyframes experience-tray-enter {
-  from { opacity: 0; transform: translate3d(0, 8px, 0) scale(.985); }
-  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-}
-
-@keyframes experience-pin-focus {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.14); }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .mission-steps > article:hover,
-  .principle-grid > article:hover,
-  .accountability-status > article:hover {
-    transform: translate3d(0, -3px, 0);
-  }
-}
-
 @media (max-width: 900px) {
   html { scroll-padding-top: 74px; }
-  .experience-progress { height: 1.5px; }
-  .globe-stage::before { opacity: .28; }
-  .globe-stage { background-image:
-    radial-gradient(circle at 50% 44%, rgba(53, 184, 177, .085), transparent 34%),
-    radial-gradient(circle at 50% 50%, rgba(3, 22, 35, .02), rgba(0, 8, 16, .14) 78%);
+
+  .rwn-story__inner {
+    grid-template-columns: 1fr;
+    gap: 3rem;
   }
-  .experience-reveal {
-    transform: translate3d(0, 12px, 0);
-    transition-duration: 500ms, 560ms;
+
+  .rwn-story__lead h2 {
+    max-width: 15ch;
+  }
+}
+
+@media (max-width: 760px) {
+  .experience-reveal,
+  .experience-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
 @media (max-width: 600px) {
-  .globe-stage::before { opacity: .2; }
-  .globe-stage::after { box-shadow: inset 0 0 58px rgba(0, 0, 0, .06); }
-  .globe-canvas,
-  .globe-canvas[data-globe-enhanced="true"] { filter: saturate(1.035) contrast(1.015); }
-  .experience-results-swap > * { animation-duration: 260ms; animation-delay: 0ms !important; }
+  .globe-stage {
+    background-image: radial-gradient(circle at 50% 45%, rgba(53, 184, 177, .065), transparent 42%);
+  }
+
+  .globe-stage::after {
+    background: radial-gradient(circle at 50% 47%, transparent 55%, rgba(0, 5, 12, .12) 100%);
+  }
+
+  .rwn-story {
+    padding-top: 4.25rem;
+    padding-bottom: 4.5rem;
+  }
+
+  .rwn-story__lead h2 {
+    font-size: clamp(2.3rem, 12vw, 3.6rem);
+  }
+
+  .rwn-story__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rwn-story__primary,
+  .rwn-story__secondary {
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+  }
+
+  .rwn-story__secondary {
+    border: 1px solid rgba(185, 242, 211, .25);
+    border-radius: 4px;
+    padding: .72rem 1rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+
   *, *::before, *::after {
     scroll-behavior: auto !important;
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .001ms !important;
   }
-  .experience-reveal,
-  .experience-enabled .finder__grid {
+
+  .experience-reveal {
     opacity: 1 !important;
     transform: none !important;
   }
-  .experience-progress { display: none; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .globe-stage::before,
-  .globe-stage::after { opacity: .12; }
+  .globe-stage::after { display: none; }
 }
