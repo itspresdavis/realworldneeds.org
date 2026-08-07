@@ -1,0 +1,44 @@
+name: Final Browser Chaos
+
+on:
+  push:
+    branches: [agent/rwn-final-chaos-test]
+    paths: [.github/workflows/chaos-smoke.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/rwn-final-chaos-test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Chromium harness
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start production-like server
+        run: |
+          node scripts/serve.mjs 4173 > /tmp/rwn-server.log 2>&1 &
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then exit 0; fi
+            sleep 0.25
+          done
+          cat /tmp/rwn-server.log
+          exit 1
+      - name: Run desktop and mobile chaos
+        env:
+          STRESS_BASE_URL: http://127.0.0.1:4173
+        run: node scripts/chaos-smoke.mjs
+      - name: Server log
+        if: always()
+        run: cat /tmp/rwn-server.log || true
