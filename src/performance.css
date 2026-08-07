@@ -1,0 +1,37 @@
+/*
+ * Rendering refinements that preserve the existing RWN visual design.
+ * Keep this file limited to low-risk performance and accessibility wins.
+ */
+
+@media screen {
+  /* Globe pins move every animation frame. Promote only these small moving
+     elements instead of forcing the entire finder into a composited layer. */
+  .globe-pin {
+    will-change: transform, opacity;
+  }
+
+  /* The globe already clips its contents; paint containment prevents work
+     inside the map from invalidating unrelated sections of the page. */
+  .globe-stage {
+    contain: paint;
+  }
+
+  /* Keep the temporary status layer ready for its translate animation. */
+  .status-toast {
+    will-change: transform;
+  }
+
+  /* Prevent an open result tray from handing scroll momentum to the page. */
+  .globe-cluster-tray {
+    overscroll-behavior: contain;
+  }
+}
+
+/* Users asking for less transparency should also avoid expensive live blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .site-header,
+  .globe-cluster-tray {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
