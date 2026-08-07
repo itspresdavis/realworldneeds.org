@@ -32,7 +32,8 @@ function syncQuickNeeds(container) {
 function installQuickNeeds() {
   const search = document.querySelector(".finder-search");
   const layerList = document.getElementById("layerList");
-  if (!search || !layerList || document.querySelector(".quick-needs")) return;
+  if (!search || !layerList) throw new Error("Finder refinement prerequisites are missing.");
+  if (document.querySelector(".quick-needs")) return;
 
   const container = document.createElement("div");
   container.className = "quick-needs";
@@ -61,7 +62,10 @@ function compactFinderNotes() {
   const liveSourceStatus = document.getElementById("liveSourceStatus");
   const privacy = document.querySelector(".location-privacy");
   const safety = document.querySelector(".finder-safety");
-  if (!locationStatus || !liveSourceStatus || !privacy || !safety || document.querySelector(".finder-notes")) return;
+  if (!locationStatus || !liveSourceStatus || !privacy || !safety) {
+    throw new Error("Finder note refinement prerequisites are missing.");
+  }
+  if (document.querySelector(".finder-notes")) return;
 
   const details = document.createElement("details");
   details.className = "finder-notes";
@@ -74,19 +78,13 @@ function compactFinderNotes() {
 function improveFilterSummary() {
   const disclosure = document.querySelector(".filter-disclosure");
   const summary = disclosure?.querySelector("summary");
-  if (!disclosure || !summary) return;
+  if (!disclosure || !summary) throw new Error("Detailed filter disclosure is missing.");
   summary.setAttribute("aria-label", "Open detailed service filters");
 }
 
-function installRefinements() {
+export function installRefinements() {
   installQuickNeeds();
   compactFinderNotes();
   improveFilterSummary();
   document.documentElement.classList.add("rwn-refined");
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", installRefinements, { once: true });
-} else {
-  installRefinements();
 }
