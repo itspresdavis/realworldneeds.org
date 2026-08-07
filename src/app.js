@@ -134,6 +134,15 @@ let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
 let liveSourceController = null;
+let globeCanvasElement = null;
+let globeStageElement = null;
+let globePinLayerElement = null;
+let globeReadoutElement = null;
+let globeViewportWidth = 1;
+let globeViewportHeight = 1;
+let globeLastPinUpdate = 0;
+let globeLastReadoutUpdate = 0;
+let globeCloseViewActive = false;
 
 const icon = {
   globe: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
@@ -1177,6 +1186,26 @@ function refreshGlobeSurface() {
 
 function initThreeGlobe() {
   const canvas = document.getElementById("globeCanvas");
+  globeCanvasElement = canvas;
+  globeStageElement = canvas?.closest(".globe-stage") || null;
+  globePinLayerElement = document.getElementById("pinLayer");
+  globeReadoutElement = document.getElementById("globeReadout");
+  const updateGlobeViewport = () => {
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect) return;
+    globeViewportWidth = Math.max(1, rect.width);
+    globeViewportHeight = Math.max(1, rect.height);
+  };
+  updateGlobeViewport();
+  if ("ResizeObserver" in window && canvas) {
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (!box) return;
+      globeViewportWidth = Math.max(1, box.width);
+      globeViewportHeight = Math.max(1, box.height);
+    });
+    observer.observe(canvas);
+  }
   try {
     globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   } catch (error) {
@@ -1201,7 +1230,7 @@ function initThreeGlobe() {
 
   const surfaceTexture = createGlobeTexture();
   globeSurface = new THREE.Mesh(
-    new THREE.SphereGeometry(1, window.innerWidth <= 600 ? 144 : 192, window.innerWidth <= 600 ? 96 : 128),
+    new THREE.SphereGeometry(1, window.innerWidth <= 600 ? 96 : 128, window.innerWidth <= 600 ? 64 : 80),
     new THREE.MeshStandardMaterial({
       map: surfaceTexture,
       emissiveMap: surfaceTexture,
@@ -1217,7 +1246,7 @@ function initThreeGlobe() {
   globeWorld.add(globeGraticule);
 
   globeAtmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1.025, 96, 64),
+    new THREE.SphereGeometry(1.025, window.innerWidth <= 600 ? 48 : 64, window.innerWidth <= 600 ? 32 : 40),
     new THREE.ShaderMaterial({
       uniforms: { glowColor: { value: new THREE.Color(0x76b8cf) } },
       vertexShader: `varying vec3 vNormal; varying vec3 vEye; void main(){vec4 viewPosition=modelViewMatrix*vec4(position,1.0);vNormal=normalize(normalMatrix*normal);vEye=normalize(-viewPosition.xyz);gl_Position=projectionMatrix*viewPosition;}`,
@@ -1303,7 +1332,7 @@ function rebuildConnections() {
 function renderThreeGlobe(width, height, now) {
   if (!globeRenderer) return false;
   const canvas = globeRenderer.domElement;
-  const dpr = Math.min(window.devicePixelRatio || 1, width < 640 ? 1.65 : 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, width < 720 ? 1.25 : 1.5);
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
@@ -1353,14 +1382,14 @@ function renderThreeGlobe(width, height, now) {
 
 function projectGlobePoint(lat, lng, width, height) {
   if (!globeWorld || !globeCamera) return projectPoint(lat, lng, width, height);
-  globeWorld.updateMatrixWorld(true);
   const worldPoint = latLngVector(lat, lng, 1.035).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
-  const projected = worldPoint.clone().project(globeCamera);
+  const depth = worldPoint.z / scale;
+  worldPoint.project(globeCamera);
   return {
-    x: (projected.x * 0.5 + 0.5) * width,
-    y: (-projected.y * 0.5 + 0.5) * height,
-    z: worldPoint.z / scale
+    x: (worldPoint.x * 0.5 + 0.5) * width,
+    y: (-worldPoint.y * 0.5 + 0.5) * height,
+    z: depth
   };
 }
 
@@ -1650,12 +1679,19 @@ function drawGlobe(ctx, width, height, now) {
 function clusterVisibleResources(width, height) {
   const selected = selectedResource();
   const threshold = (width < 600 ? 54 : 44) - (state.zoom - 0.86) * 16;
-  const entries = state.filtered
-    .map((resource) => ({ resource, point: projectGlobePoint(resource.lat, resource.lng, width, height) }))
-    .filter((entry) => entry.point.z > 0.03 && entry.point.x > 12 && entry.point.x < width - 12 && entry.point.y > 12 && entry.point.y < height - 12)
-    .sort((a, b) => Number(b.resource.id === selected?.id) - Number(a.resource.id === selected?.id));
-  const clusters = [];
+  const entries = [];
+  let selectedEntry = null;
 
+  for (const resource of state.filtered) {
+    const point = projectGlobePoint(resource.lat, resource.lng, width, height);
+    if (point.z <= 0.03 || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
+    const entry = { resource, point };
+    if (resource.id === selected?.id) selectedEntry = entry;
+    else entries.push(entry);
+  }
+  if (selectedEntry) entries.unshift(selectedEntry);
+
+  const clusters = [];
   for (const entry of entries) {
     const keepSeparate = entry.resource.id === selected?.id;
     const target = keepSeparate ? null : clusters.find((cluster) =>
@@ -1663,21 +1699,35 @@ function clusterVisibleResources(width, height) {
     );
     if (target) {
       target.members.push(entry.resource);
-      target.x = target.members.reduce((sum, resource) => sum + projectGlobePoint(resource.lat, resource.lng, width, height).x, 0) / target.members.length;
-      target.y = target.members.reduce((sum, resource) => sum + projectGlobePoint(resource.lat, resource.lng, width, height).y, 0) / target.members.length;
+      target.sumX += entry.point.x;
+      target.sumY += entry.point.y;
+      target.x = target.sumX / target.members.length;
+      target.y = target.sumY / target.members.length;
       target.z = Math.max(target.z, entry.point.z);
     } else {
-      clusters.push({ members: [entry.resource], x: entry.point.x, y: entry.point.y, z: entry.point.z, selected: keepSeparate });
+      clusters.push({
+        members: [entry.resource],
+        x: entry.point.x,
+        y: entry.point.y,
+        z: entry.point.z,
+        sumX: entry.point.x,
+        sumY: entry.point.y,
+        selected: keepSeparate
+      });
     }
   }
   return clusters;
 }
 
-function renderPins(width, height) {
-  const layer = document.getElementById("pinLayer");
+function renderPins(width, height, now = performance.now()) {
+  const moving = state.dragging || state.pinching || Math.abs(state.velocityLon) > 0.18 || Math.abs(state.velocityLat) > 0.18 || Math.abs(state.targetZoom - state.zoom) > 0.008 || state.targetLon !== null;
+  const minInterval = moving ? 42 : 70;
+  if (now - globeLastPinUpdate < minInterval) return;
+  globeLastPinUpdate = now;
+  const layer = globePinLayerElement || document.getElementById("pinLayer");
   const selected = selectedResource();
   const clusters = clusterVisibleResources(width, height);
-  const clusterKeys = clusters.map((cluster) => cluster.members.map((resource) => resource.id).sort().join(","));
+  const clusterKeys = clusters.map((cluster) => cluster.members.map((resource) => resource.id).join(","));
   const signature = `${state.viewMode}:${clusterKeys.join("|")}:${state.selectedId}`;
   if (pinSignature !== signature) {
     layer.innerHTML = clusters.map((cluster) => {
@@ -1686,7 +1736,7 @@ function renderPins(width, height) {
       const oneCategory = cluster.members.every((item) => item.category === resource.category);
       const color = oneCategory ? categories[resource.category].color : "#f5c45b";
       const glow = oneCategory ? categories[resource.category].glow : "rgba(245, 196, 91, 0.4)";
-      const key = cluster.members.map((item) => item.id).sort().join(",");
+      const key = cluster.members.map((item) => item.id).join(",");
       const kinds = [...new Set(cluster.members.map(kindLabel))].join(" and ");
       if (clustered) {
         return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped listings"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} listings in this area<small>${kinds}</small></strong></button>`;
@@ -1699,7 +1749,7 @@ function renderPins(width, height) {
   }
 
   clusters.forEach((cluster) => {
-    const key = cluster.members.map((resource) => resource.id).sort().join(",");
+    const key = cluster.members.map((resource) => resource.id).join(",");
     const button = pinElements.get(key);
     if (!button) return;
     button.style.transform = `translate3d(${cluster.x}px, ${cluster.y}px, 0) scale(${0.74 + Math.max(0, cluster.z) * 0.28})`;
@@ -1713,9 +1763,11 @@ function formatCoordinate(value, positive, negative) {
   return `${Math.abs(value).toFixed(2)}°${value >= 0 ? positive : negative}`;
 }
 
-function updateGlobeReadout() {
+function updateGlobeReadout(now = performance.now()) {
+  if (now - globeLastReadoutUpdate < 110) return;
+  globeLastReadoutUpdate = now;
   const resource = selectedResource();
-  const readout = document.getElementById("globeReadout");
+  const readout = globeReadoutElement || document.getElementById("globeReadout");
   if (!readout) return;
   const zoomLabel = `${state.zoom.toFixed(state.zoom < 2 ? 1 : 2)}×`;
   const detailLabel = earthDetailTextureReady
@@ -1742,8 +1794,9 @@ function advanceGlobe(now) {
   if (state.targetLon !== null) {
     const lonGap = shortestLongitude(state.rotationLon, state.targetLon);
     const latGap = state.targetLat - state.rotationLat;
-    state.rotationLon = normalizeLongitude(state.rotationLon + lonGap * Math.min(1, dt * 4.8));
-    state.rotationLat += latGap * Math.min(1, dt * 4.8);
+    const focusEase = 1 - Math.exp(-dt * 6.2);
+    state.rotationLon = normalizeLongitude(state.rotationLon + lonGap * focusEase);
+    state.rotationLat += latGap * focusEase;
     if (Math.abs(lonGap) < 0.08 && Math.abs(latGap) < 0.08) {
       state.rotationLon = state.targetLon;
       state.rotationLat = state.targetLat;
@@ -1763,8 +1816,8 @@ function advanceGlobe(now) {
       state.ambientZoom = 1;
     }
   }
-  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * Math.min(1, dt * 3);
-  state.zoom += (state.targetZoom - state.zoom) * Math.min(1, dt * 6);
+  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-dt * 4));
+  state.zoom += (state.targetZoom - state.zoom) * (1 - Math.exp(-dt * 8));
 }
 
 function animateGlobe(now) {
@@ -1773,16 +1826,28 @@ function animateGlobe(now) {
     requestAnimationFrame(animateGlobe);
     return;
   }
-  const canvas = document.getElementById("globeCanvas");
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, rect.width);
-  const height = Math.max(1, rect.height);
+  const canvas = globeCanvasElement || document.getElementById("globeCanvas");
+  const width = globeViewportWidth;
+  const height = globeViewportHeight;
   advanceGlobe(now);
-  if (state.zoom > 1.28 || state.targetZoom > 1.28) loadDetailGeometry();
-  if (state.zoom > 1.55 || state.targetZoom > 1.55) loadDetailEarthImagery();
-  document.querySelector(".globe-stage")?.classList.toggle("is-close-view", state.zoom > 1.72);
+
+  const interactionSettled = !state.dragging
+    && !state.pinching
+    && Math.abs(state.velocityLon) < 0.22
+    && Math.abs(state.velocityLat) < 0.22
+    && Math.abs(state.targetZoom - state.zoom) < 0.025
+    && state.targetLon === null;
+  if (interactionSettled && (state.zoom > 1.28 || state.targetZoom > 1.28)) loadDetailGeometry();
+  if (interactionSettled && (state.zoom > 1.55 || state.targetZoom > 1.55)) loadDetailEarthImagery();
+
+  const closeView = state.zoom > 1.72;
+  if (closeView !== globeCloseViewActive) {
+    globeCloseViewActive = closeView;
+    (globeStageElement || document.querySelector(".globe-stage"))?.classList.toggle("is-close-view", closeView);
+  }
+
   if (!renderThreeGlobe(width, height, now)) {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, width < 720 ? 1.25 : 1.5);
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
@@ -1791,8 +1856,8 @@ function animateGlobe(now) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawGlobe(ctx, width, height, now);
   }
-  renderPins(width, height);
-  updateGlobeReadout();
+  renderPins(width, height, now);
+  updateGlobeReadout(now);
   requestAnimationFrame(animateGlobe);
 }
 
@@ -2193,6 +2258,7 @@ function bindEvents() {
     state.pointerStartX = event.clientX;
     state.pointerStartY = event.clientY;
     state.pointerMoved = false;
+    state.pointerTime = event.timeStamp || performance.now();
     globeGestureHadMultiplePointers = false;
     prepareGlobeInteraction();
     if (event.pointerType === "touch") event.preventDefault();
@@ -2224,12 +2290,17 @@ function bindEvents() {
     if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
     const dx = event.clientX - state.pointerX;
     const dy = event.clientY - state.pointerY;
-    const lonDelta = -dx * 0.32 / state.zoom;
-    const latDelta = dy * 0.24 / state.zoom;
+    const lonDelta = -dx * 0.30 / state.zoom;
+    const latDelta = dy * 0.22 / state.zoom;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
     state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + latDelta));
-    state.velocityLon = lonDelta * 35;
-    state.velocityLat = latDelta * 35;
+    const pointerNow = event.timeStamp || performance.now();
+    const pointerDt = Math.max(8, Math.min(40, pointerNow - (state.pointerTime || pointerNow - 16))) / 1000;
+    const sampledVelocityLon = lonDelta / pointerDt;
+    const sampledVelocityLat = latDelta / pointerDt;
+    state.velocityLon = state.velocityLon * 0.58 + sampledVelocityLon * 0.42;
+    state.velocityLat = state.velocityLat * 0.58 + sampledVelocityLat * 0.42;
+    state.pointerTime = pointerNow;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
     if (event.pointerType === "touch") event.preventDefault();
