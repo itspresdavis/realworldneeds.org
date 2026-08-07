@@ -143,6 +143,8 @@ let globeViewportHeight = 1;
 let globeLastPinUpdate = 0;
 let globeLastReadoutUpdate = 0;
 let globeCloseViewActive = false;
+let globePageScrollUntil = 0;
+let globeLastScrollFrame = 0;
 
 const icon = {
   globe: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
@@ -1829,6 +1831,13 @@ function animateGlobe(now) {
   const canvas = globeCanvasElement || document.getElementById("globeCanvas");
   const width = globeViewportWidth;
   const height = globeViewportHeight;
+  const pageScrolling = now < globePageScrollUntil && !state.dragging && !state.pinching;
+  if (pageScrolling && now - globeLastScrollFrame < 52) {
+    lastFrame = now;
+    requestAnimationFrame(animateGlobe);
+    return;
+  }
+  if (pageScrolling) globeLastScrollFrame = now;
   advanceGlobe(now);
 
   const interactionSettled = !state.dragging
@@ -2441,6 +2450,7 @@ function bindEvents() {
     });
   };
   window.addEventListener("scroll", () => {
+    globePageScrollUntil = performance.now() + 140;
     if (!navigationFrame) navigationFrame = window.requestAnimationFrame(updateCurrentSection);
   }, { passive: true });
   updateCurrentSection();
