@@ -20,48 +20,14 @@ function installBrandStory() {
         </div>
       </div>
       <div class="rwn-story__proof" aria-label="What Real World Needs is built around">
-        <article>
-          <span>01</span>
-          <div><h3>Clear from the start</h3><p>Food, shelter, health care, clothing, hygiene support, and other essentials can be searched in one place.</p></div>
-        </article>
-        <article>
-          <span>02</span>
-          <div><h3>Sources stay visible</h3><p>Every listing stays connected to the organization or public source behind the information.</p></div>
-        </article>
-        <article>
-          <span>03</span>
-          <div><h3>Built for the next step</h3><p>Move from a listing to a call, provider website, or map without starting the search over again.</p></div>
-        </article>
+        <article><span>01</span><div><h3>Clear from the start</h3><p>Food, shelter, health care, clothing, hygiene support, and other essentials can be searched in one place.</p></div></article>
+        <article><span>02</span><div><h3>Sources stay visible</h3><p>Every listing stays connected to the organization or public source behind the information.</p></div></article>
+        <article><span>03</span><div><h3>Built for the next step</h3><p>Move from a listing to a call, provider website, or map without starting the search over again.</p></div></article>
       </div>
     </div>
   `;
   standards.before(section);
 }
 
-function setupInputModality() {
-  if (finePointer) document.documentElement.classList.add("fine-pointer");
-}
-
-function initializeExperience() {
-  if (document.documentElement.dataset.rwnExperienceReady) return;
-  if (!document.querySelector(".globe-stage")) return;
-  document.documentElement.dataset.rwnExperienceReady = "true";
-  setupInputModality();
-  installBrandStory();
-}
-
-function watchForApp() {
-  if (document.querySelector(".globe-stage")) {
-    initializeExperience();
-    return;
-  }
-
-  const observer = new MutationObserver(() => {
-    if (!document.querySelector(".globe-stage")) return;
-    observer.disconnect();
-    initializeExperience();
-  });
-  observer.observe(document.getElementById("root") || document.documentElement, { childList: true, subtree: true });
-}
-
-watchForApp();
+if (finePointer) document.documentElement.classList.add("fine-pointer");
+installBrandStory();
