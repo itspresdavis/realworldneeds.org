@@ -20,6 +20,14 @@ test("built homepage uses one content-derived release version for every source a
   assert.doesNotMatch(html, /rwn-2026\d+/);
 });
 
+test("built bootstrap explicitly installs the release-versioned finder refinement", async () => {
+  const bootstrap = await text("dist/src/bootstrap.js");
+  const { release } = JSON.parse(await text("dist/data/release.json"));
+  assert.match(bootstrap, new RegExp(`import\\(\"\\./app\\.js\\?v=${release}\"\\)`));
+  assert.match(bootstrap, new RegExp(`import\\(\"\\./refinement\\.js\\?v=${release}\"\\)`));
+  assert.match(bootstrap, /installRefinements\(\);/);
+});
+
 test("production app output cannot render numeric cluster badges", async () => {
   const app = await text("dist/src/app.js");
   assert.doesNotMatch(app, /<span><b>\$\{cluster\.members\.length\}<\/b><\/span>/);
