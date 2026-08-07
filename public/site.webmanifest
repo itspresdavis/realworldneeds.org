@@ -8,8 +8,8 @@
   "lang": "en",
   "dir": "ltr",
   "display": "standalone",
-  "background_color": "#071926",
-  "theme_color": "#071926",
+  "background_color": "#061824",
+  "theme_color": "#061824",
   "categories": ["health", "medical", "navigation"],
   "shortcuts": [
     { "name": "Find help", "short_name": "Find help", "url": "/#finder" },
