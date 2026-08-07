@@ -1,0 +1,55 @@
+name: Search Scale Gate
+
+on:
+  push:
+    branches: [agent/scale-globe-directory-1000]
+    paths: [.github/workflows/search-scale.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/scale-globe-directory-1000
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply search scale optimization
+        run: python scripts/apply-search-scale.py
+      - name: Validate search correctness and full build
+        run: npm run check
+      - name: Measure repeated full-catalog search
+        run: |
+          node --input-type=module <<'NODE'
+          import { performance } from 'node:perf_hooks';
+          import { resources } from './src/data/resources.js';
+          import { createInitialTypeSet, matchesResource, rankResourcesForLocation } from './src/utils/geo.js';
+          const active = createInitialTypeSet();
+          const queries = ['food','London','voucher','shelter','Boston','Manchester','water','health','Belfast','clothing'];
+          const start = performance.now();
+          let hits = 0;
+          for (let round = 0; round < 20; round += 1) {
+            const query = queries[round % queries.length];
+            hits += resources.filter((resource) => matchesResource(resource, query, active)).length;
+          }
+          const searchMs = performance.now() - start;
+          const rankStart = performance.now();
+          rankResourcesForLocation(resources, { lat: 51.5074, lng: -0.1278 }, 'United Kingdom', 'food');
+          const rankMs = performance.now() - rankStart;
+          console.log(JSON.stringify({ resources: resources.length, searches: 20, hits, searchMs, rankMs }, null, 2));
+          if (searchMs > 1200) throw new Error(`Repeated search budget exceeded: ${searchMs.toFixed(1)}ms`);
+          if (rankMs > 300) throw new Error(`Location ranking budget exceeded: ${rankMs.toFixed(1)}ms`);
+          NODE
+      - name: Commit optimized search path
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/utils/geo.js
+          git commit -m "Cache full-catalog search fields and location ranks"
+          git push origin HEAD:agent/scale-globe-directory-1000
