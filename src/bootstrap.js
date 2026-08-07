@@ -43,9 +43,9 @@ pinStyle.textContent = `
 `;
 document.head.append(pinStyle);
 
-await import("./app.js");
+await import("./app.js?v=rwn-20260807-1");
 
-const loadExperience = () => import("./experience.js").catch(() => {});
+const loadExperience = () => import("./experience.js?v=rwn-20260807-1").catch(() => {});
 
 if ("requestIdleCallback" in window) {
   window.requestIdleCallback(loadExperience, { timeout: 1400 });
