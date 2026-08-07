@@ -21,7 +21,8 @@ runtimeStyle.textContent = `
 document.head.append(runtimeStyle);
 
 await import("./app.js");
-await import("./refinement.js").catch(() => {});
+const { installRefinements } = await import("./refinement.js");
+installRefinements();
 
 import("./telemetry.js")
   .then(({ startTelemetry }) => startTelemetry())
