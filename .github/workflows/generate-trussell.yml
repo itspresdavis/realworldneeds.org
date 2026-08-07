@@ -1,0 +1,41 @@
+name: Generate Trussell Snapshot
+
+on:
+  push:
+    branches: [agent/scale-globe-directory-1000]
+    paths: [.github/workflows/generate-trussell.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/scale-globe-directory-1000
+      - name: Generate official Trussell snapshot
+        run: node scripts/refresh-trussell-foodbanks.mjs
+      - name: Validate generated snapshot semantics
+        run: |
+          node --check src/data/generated/trussell-foodbanks.js
+          node --input-type=module <<'NODE'
+          import { trussellFoodbankResources, trussellFoodbankMetadata } from './src/data/generated/trussell-foodbanks.js';
+          console.log('metadata', trussellFoodbankMetadata);
+          console.log('published', trussellFoodbankResources.length);
+          if (trussellFoodbankResources.length < 1250) throw new Error('Generated snapshot did not clear the minimum publishable count');
+          if (new Set(trussellFoodbankResources.map((item) => item.id)).size !== trussellFoodbankResources.length) throw new Error('Generated duplicate IDs');
+          for (const resource of trussellFoodbankResources) {
+            if (resource.kind !== 'direct' || resource.locationPrecision !== 'exact') throw new Error(`Bad direct-site semantics: ${resource.id}`);
+            if (resource.costModel !== 'free-eligible') throw new Error(`Bad free-access model: ${resource.id}`);
+            if (!resource.address || !resource.sourceRecordId || !Number.isFinite(resource.lat) || !Number.isFinite(resource.lng)) throw new Error(`Incomplete generated record: ${resource.id}`);
+          }
+          NODE
+      - name: Commit generated snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/generated/trussell-foodbanks.js
+          git commit -m "Add audited Trussell food-bank centre snapshot"
+          git push origin HEAD:agent/scale-globe-directory-1000
