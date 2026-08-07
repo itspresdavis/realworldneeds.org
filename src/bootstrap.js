@@ -90,9 +90,9 @@ pinStyle.textContent = `
 `;
 document.head.append(pinStyle);
 
-await import("./app.js?v=rwn-20260807-3");
+await import("./app.js?v=rwn-20260807-4");
 
-const loadExperience = () => import("./experience.js?v=rwn-20260807-3").catch(() => {});
+const loadExperience = () => import("./experience.js?v=rwn-20260807-4").catch(() => {});
 
 if ("requestIdleCallback" in window) {
   window.requestIdleCallback(loadExperience, { timeout: 1400 });
