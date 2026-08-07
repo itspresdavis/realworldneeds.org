@@ -15,10 +15,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/scale-globe-directory-1000
+      - name: Compact refresh output format
+        run: python scripts/compact-trussell-generator.py
       - name: Generate official Trussell snapshot
         run: node scripts/refresh-trussell-foodbanks.mjs
       - name: Validate generated snapshot semantics
         run: |
+          node --check scripts/refresh-trussell-foodbanks.mjs
           node --check src/data/generated/trussell-foodbanks.js
           node --input-type=module <<'NODE'
           import { trussellFoodbankResources, trussellFoodbankMetadata } from './src/data/generated/trussell-foodbanks.js';
@@ -32,10 +35,12 @@ jobs:
             if (!resource.address || !resource.sourceRecordId || !Number.isFinite(resource.lat) || !Number.isFinite(resource.lng)) throw new Error(`Incomplete generated record: ${resource.id}`);
           }
           NODE
-      - name: Commit generated snapshot
+          echo "generated_bytes=$(wc -c < src/data/generated/trussell-foodbanks.js)"
+          echo "generated_lines=$(wc -l < src/data/generated/trussell-foodbanks.js)"
+      - name: Commit compact generator and snapshot
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/data/generated/trussell-foodbanks.js
-          git commit -m "Add audited Trussell food-bank centre snapshot"
+          git add scripts/refresh-trussell-foodbanks.mjs src/data/generated/trussell-foodbanks.js
+          git commit -m "Compact the verified Trussell snapshot for faster delivery"
           git push origin HEAD:agent/scale-globe-directory-1000
