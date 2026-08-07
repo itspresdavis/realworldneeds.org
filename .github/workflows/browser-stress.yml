@@ -11,6 +11,7 @@ permissions:
 jobs:
   stress:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,7 +36,7 @@ jobs:
           done
           cat /tmp/rwn-server.log
           exit 1
-      - name: Abuse desktop and mobile interaction paths
+      - name: Abuse desktop and touch interaction paths
         env:
           STRESS_BASE_URL: http://127.0.0.1:4173
         run: node scripts/stress-browser.mjs
