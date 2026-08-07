@@ -1,6 +1,7 @@
 import { expansionResources } from "./resource-expansion.js";
 import { massachusettsWicResources } from "./generated/massachusetts-wic.js";
 import { newYorkWicResources } from "./generated/new-york-wic.js";
+import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js";
 import { withFreeAccess } from "./free-access.js";
 
 export const categories = {
@@ -1289,7 +1290,8 @@ const reviewedResources = [
   ...expandedResources,
   ...expansionResources,
   ...massachusettsWicResources,
-  ...newYorkWicResources
+  ...newYorkWicResources,
+  ...trussellFoodbankResources
 ];
 
 const FREE_ACCESS_EXCLUSIONS = new Set([

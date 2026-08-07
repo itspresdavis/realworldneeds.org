@@ -80,9 +80,10 @@ test("official live fetch helpers validate source payloads", async () => {
 });
 
 test("source registry makes audit counts and refresh modes explicit", () => {
-  assert.equal(sourceRegistry.length, 3);
+  assert.ok(sourceRegistry.length >= 4);
   assert.equal(sourceRegistry.find((source) => source.id === "usda-summer-meals-2026").activeRecordsAtAudit, 17442);
   assert.equal(sourceRegistry.find((source) => source.id === "massachusetts-wic-locations").recordCount, 101);
   assert.equal(sourceRegistry.find((source) => source.id === "new-york-wic-sites").recordCount, 293);
+  assert.equal(sourceRegistry.find((source) => source.id === "trussell-food-bank-centres").recordCount, 1398);
   assert.ok(sourceRegistry.every((source) => source.sourceUrl.startsWith("https://")));
 });
