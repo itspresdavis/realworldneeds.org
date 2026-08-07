@@ -1,4 +1,6 @@
 import * as THREE from "/vendor/three.module.js";
+import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
+import { clusterProjectedEntries } from "./utils/globe-clustering.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import { freeAccessLabel, freeAccessModels } from "./data/free-access.js";
 import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js";
@@ -145,6 +147,12 @@ let globeLastReadoutUpdate = 0;
 let globeCloseViewActive = false;
 let globePageScrollUntil = 0;
 let globeLastScrollFrame = 0;
+let globeServicePoints = null;
+const globeRaycaster = new THREE.Raycaster();
+const globePointerNdc = new THREE.Vector2();
+const globeProjectionVector = new THREE.Vector3();
+const globeInverseWorldMatrix = new THREE.Matrix4();
+const globeResourceVectorCache = new WeakMap();
 
 const icon = {
   globe: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>`,
@@ -509,6 +517,7 @@ function updateFilters() {
     state.selectedId = state.filtered[0]?.id || null;
   }
 
+  syncGlobePointLayer();
   renderControls();
   renderResourcePanel();
   renderResults();
@@ -929,6 +938,40 @@ function latLngVector(lat, lng, radius = 1) {
   );
 }
 
+function cachedResourceVector(resource) {
+  let vector = globeResourceVectorCache.get(resource);
+  if (vector) return vector;
+  vector = latLngVector(resource.lat, resource.lng, 1.035);
+  globeResourceVectorCache.set(resource, vector);
+  return vector;
+}
+
+function projectResourceGlobePoint(resource, width, height) {
+  if (!globeWorld || !globeCamera) return projectPoint(resource.lat, resource.lng, width, height);
+  globeProjectionVector.copy(cachedResourceVector(resource)).applyMatrix4(globeWorld.matrixWorld);
+  const scale = globeWorld.scale.x || 1;
+  const depth = globeProjectionVector.z / scale;
+  globeProjectionVector.project(globeCamera);
+  return {
+    x: (globeProjectionVector.x * 0.5 + 0.5) * width,
+    y: (-globeProjectionVector.y * 0.5 + 0.5) * height,
+    z: depth
+  };
+}
+
+function syncGlobePointLayer() {
+  if (!globeWorld || !globeRenderer) return;
+  if (!globeServicePoints) {
+    globeServicePoints = createGlobePointLayer(state.filtered, categories, {
+      pixelRatio: globeRenderer.getPixelRatio?.() || 1
+    });
+    globeWorld.add(globeServicePoints);
+    globeStageElement?.classList.add("has-gpu-points");
+    return;
+  }
+  replaceGlobePointResources(globeServicePoints, state.filtered, categories);
+}
+
 function texturePoint(lng, lat, width, height) {
   return {
     x: ((lng + 180) / 360) * width,
@@ -1244,6 +1287,7 @@ function initThreeGlobe() {
     })
   );
   globeWorld.add(globeSurface);
+  syncGlobePointLayer();
   globeGraticule = createGraticule();
   globeWorld.add(globeGraticule);
 
@@ -1335,6 +1379,7 @@ function renderThreeGlobe(width, height, now) {
   if (!globeRenderer) return false;
   const canvas = globeRenderer.domElement;
   const dpr = Math.min(window.devicePixelRatio || 1, width < 720 ? 1.25 : 1.5);
+  updateGlobePointLayer(globeServicePoints, { zoom: state.zoom, pixelRatio: dpr, opacity: 0.96 });
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
@@ -1680,50 +1725,27 @@ function drawGlobe(ctx, width, height, now) {
 
 function clusterVisibleResources(width, height) {
   const selected = selectedResource();
-  const threshold = (width < 600 ? 54 : 44) - (state.zoom - 0.86) * 16;
+  const threshold = Math.max(22, (width < 600 ? 54 : 44) - (state.zoom - 0.86) * 16);
   const entries = [];
   let selectedEntry = null;
 
   for (const resource of state.filtered) {
-    const point = projectGlobePoint(resource.lat, resource.lng, width, height);
+    const point = projectResourceGlobePoint(resource, width, height);
     if (point.z <= 0.03 || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
     const entry = { resource, point };
     if (resource.id === selected?.id) selectedEntry = entry;
     else entries.push(entry);
   }
   if (selectedEntry) entries.unshift(selectedEntry);
-
-  const clusters = [];
-  for (const entry of entries) {
-    const keepSeparate = entry.resource.id === selected?.id;
-    const target = keepSeparate ? null : clusters.find((cluster) =>
-      !cluster.selected && Math.hypot(cluster.x - entry.point.x, cluster.y - entry.point.y) < threshold
-    );
-    if (target) {
-      target.members.push(entry.resource);
-      target.sumX += entry.point.x;
-      target.sumY += entry.point.y;
-      target.x = target.sumX / target.members.length;
-      target.y = target.sumY / target.members.length;
-      target.z = Math.max(target.z, entry.point.z);
-    } else {
-      clusters.push({
-        members: [entry.resource],
-        x: entry.point.x,
-        y: entry.point.y,
-        z: entry.point.z,
-        sumX: entry.point.x,
-        sumY: entry.point.y,
-        selected: keepSeparate
-      });
-    }
-  }
-  return clusters;
+  return clusterProjectedEntries(entries, threshold, selected?.id || null);
 }
 
 function renderPins(width, height, now = performance.now()) {
   const moving = state.dragging || state.pinching || Math.abs(state.velocityLon) > 0.18 || Math.abs(state.velocityLat) > 0.18 || Math.abs(state.targetZoom - state.zoom) > 0.008 || state.targetLon !== null;
-  const minInterval = moving ? 42 : 70;
+  const gpuPointsActive = Boolean(globeServicePoints);
+  globeStageElement?.classList.toggle("is-globe-moving", gpuPointsActive && moving);
+  if (gpuPointsActive && moving) return;
+  const minInterval = gpuPointsActive ? 90 : moving ? 42 : 70;
   if (now - globeLastPinUpdate < minInterval) return;
   globeLastPinUpdate = now;
   const layer = globePinLayerElement || document.getElementById("pinLayer");
@@ -1977,20 +1999,33 @@ function countryAtCoordinate(lat, lng) {
 function selectCountryFromPointer(event) {
   if (!globeRenderer || !globeCamera || !globeWorld || !globeSurface || !state.countryFeatures.length) return;
   const rect = globeRenderer.domElement.getBoundingClientRect();
-  const pointer = new THREE.Vector2(
+  globePointerNdc.set(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
     -((event.clientY - rect.top) / rect.height) * 2 + 1
   );
   globeWorld.updateMatrixWorld(true);
   globeCamera.updateMatrixWorld(true);
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(pointer, globeCamera);
-  const hit = raycaster.intersectObject(globeSurface, false)[0];
-  if (!hit) return;
+  globeRaycaster.params.Points.threshold = event.pointerType === "touch" ? 0.034 : 0.022;
+  globeRaycaster.setFromCamera(globePointerNdc, globeCamera);
+  const surfaceHit = globeRaycaster.intersectObject(globeSurface, false)[0];
+  const pointHit = globeServicePoints ? globeRaycaster.intersectObject(globeServicePoints, false)[0] : null;
 
-  const localPoint = hit.point.clone().applyMatrix4(new THREE.Matrix4().copy(globeWorld.matrixWorld).invert()).normalize();
-  const lat = Math.asin(THREE.MathUtils.clamp(localPoint.y, -1, 1)) * 180 / Math.PI;
-  const lng = Math.atan2(localPoint.x, localPoint.z) * 180 / Math.PI;
+  if (pointHit && (!surfaceHit || pointHit.distance <= surfaceHit.distance + 0.06)) {
+    const resource = globeServicePoints.userData.resources?.[pointHit.index];
+    if (resource) {
+      const cluster = clusterVisibleResources(globeViewportWidth, globeViewportHeight)
+        .find((candidate) => candidate.members.some((member) => member.id === resource.id));
+      if (cluster?.members.length > 1) focusCluster(cluster.members.map((member) => member.id));
+      else setSelected(resource.id, true, "panel");
+      return;
+    }
+  }
+
+  if (!surfaceHit) return;
+  globeInverseWorldMatrix.copy(globeWorld.matrixWorld).invert();
+  globeProjectionVector.copy(surfaceHit.point).applyMatrix4(globeInverseWorldMatrix).normalize();
+  const lat = Math.asin(THREE.MathUtils.clamp(globeProjectionVector.y, -1, 1)) * 180 / Math.PI;
+  const lng = Math.atan2(globeProjectionVector.x, globeProjectionVector.z) * 180 / Math.PI;
   const country = countryAtCoordinate(lat, lng);
   if (!country) return;
 
