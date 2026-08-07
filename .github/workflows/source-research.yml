@@ -12,37 +12,27 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Trussell food-bank centre source data
+      - name: Inspect Trussell result markup for safe ingestion
         shell: bash
         run: |
           set -euo pipefail
-          url='https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank?lat=&lng=&page=1'
-          curl -L --compressed --max-time 40 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o /tmp/trussell.html
-          echo "bytes=$(wc -c < /tmp/trussell.html)"
-          python - <<'PY'
-          import re, html
-          raw=open('/tmp/trussell.html',encoding='utf-8',errors='ignore').read()
-          for term in ['119 University Street','latitude','longitude','__next_f.push','results','foodbank']:
-              i=raw.lower().find(term.lower())
-              print('\n===== TERM',term,'INDEX',i,'=====')
+          for page in 1 2 140 141 142; do
+            url="https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank?lat=&lng=&page=${page}"
+            file="/tmp/trussell-${page}.html"
+            curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o "$file"
+            echo "===== PAGE ${page} bytes=$(wc -c < "$file") ====="
+            python - "$file" <<'PY'
+          import sys, re, html
+          raw=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          plain=html.unescape(raw)
+          terms=['119 University Street','Get Directions','Choose food bank','food banks','postcode','__next_f.push']
+          for term in terms:
+              i=plain.lower().find(term.lower())
               if i >= 0:
-                  print(html.unescape(raw[max(0,i-2500):i+5000]))
-          print('\n===== script sources =====')
-          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)', raw, flags=re.I):
-              print(src)
+                  print('\nTERM',term,'INDEX',i)
+                  print(plain[max(0,i-1600):i+3600])
+          # Show candidate address / phone blocks without dumping the page.
+          print('\nCANDIDATE POSTCODES', re.findall(r'\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b', plain, flags=re.I)[:30])
+          print('PHONE-LIKE', re.findall(r'(?:\+44\s?\(0\)|0)\d[\d\s()-]{7,}', plain)[:20])
           PY
-
-          echo '===== endpoint-like strings from all Next chunks ====='
-          python - <<'PY'
-          import re, urllib.parse
-          raw=open('/tmp/trussell.html',encoding='utf-8',errors='ignore').read()
-          srcs=re.findall(r'<script[^>]+src=["\']([^"\']+)',raw,flags=re.I)
-          open('/tmp/chunks.txt','w').write('\n'.join(urllib.parse.urljoin('https://www.trussell.org.uk/',x) for x in srcs))
-          PY
-          while IFS= read -r src; do
-            curl -L --compressed --max-time 30 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$src" || true
-          done < /tmp/chunks.txt > /tmp/allchunks.js
-          grep -Eo "https?://[^\"' ]+|/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*(api|graphql|foodbank|location|search|postcode)[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*" /tmp/allchunks.js \
-            | sort -u | head -n 240 || true
-          echo '===== context ====='
-          grep -Eo '.{0,200}(foodbank|foodBank|postcode|latitude|longitude|searchParams|graphql|api/).{0,350}' /tmp/allchunks.js | head -n 180 || true
+          done
