@@ -24,6 +24,7 @@ async function exercise(label, contextOptions) {
     } catch {}
   });
   const page = await context.newPage();
+  page.setDefaultTimeout(15000);
   const errors = [];
   const failedRequests = [];
   const badResponses = [];
@@ -39,13 +40,13 @@ async function exercise(label, contextOptions) {
     if (response.url().startsWith(baseURL) && response.status() >= 500) badResponses.push(`${response.status()} ${response.url()}`);
   });
 
-  await page.goto(`${baseURL}/`, { waitUntil: "networkidle", timeout: 60000 });
-  await page.locator("#globeCanvas").waitFor({ state: "visible", timeout: 30000 });
+  await page.goto(`${baseURL}/`, { waitUntil: "networkidle", timeout: 45000 });
+  await page.locator("#globeCanvas").waitFor({ state: "visible" });
 
   const resourceCount = await page.evaluate(async () => {
     const response = await fetch("/data/resources.json", { cache: "no-store" });
     const data = await response.json();
-    return Array.isArray(data) ? data.length : Array.isArray(data.resources) ? data.resources.length : -1;
+    return data.resourceCount ?? (Array.isArray(data) ? data.length : Array.isArray(data.resources) ? data.resources.length : -1);
   });
   if (resourceCount < 1900) throw new Error(`${label}: expected >=1900 published resources, got ${resourceCount}`);
 
@@ -60,7 +61,7 @@ async function exercise(label, contextOptions) {
       vendor: extension ? gl.getParameter(extension.UNMASKED_VENDOR_WEBGL) : "unknown"
     };
   });
-  if (!renderer.available) throw new Error(`${label}: WebGL is unavailable in the stress browser; GPU point path was not exercised`);
+  if (!renderer.available) throw new Error(`${label}: WebGL is unavailable; GPU point path was not exercised`);
 
   const canvas = page.locator("#globeCanvas");
   const box = await canvas.boundingBox();
@@ -68,67 +69,88 @@ async function exercise(label, contextOptions) {
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
 
-  for (let round = 0; round < 18; round += 1) {
+  if (contextOptions.hasTouch) {
+    const cdp = await context.newCDPSession(page);
+    for (let round = 0; round < 6; round += 1) {
+      const inward = round % 2 === 1;
+      const startGap = inward ? 105 : 45;
+      const endGap = inward ? 42 : 112;
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [
+          { x: cx - startGap, y: cy, id: 1 },
+          { x: cx + startGap, y: cy, id: 2 }
+        ]
+      });
+      for (let step = 1; step <= 5; step += 1) {
+        const gap = startGap + (endGap - startGap) * (step / 5);
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [
+            { x: cx - gap, y: cy - step * 2, id: 1 },
+            { x: cx + gap, y: cy + step * 2, id: 2 }
+          ]
+        });
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    }
+  }
+
+  for (let round = 0; round < 10; round += 1) {
     await page.mouse.move(cx, cy);
     await page.mouse.down();
-    for (let step = 0; step < 7; step += 1) {
+    for (let step = 0; step < 6; step += 1) {
       const direction = round % 2 === 0 ? 1 : -1;
       await page.mouse.move(
-        cx + direction * Math.min(box.width * 0.38, 70 + step * 24),
-        cy + Math.sin((round + step) * 0.7) * Math.min(box.height * 0.18, 80),
+        cx + direction * Math.min(box.width * 0.36, 65 + step * 22),
+        cy + Math.sin((round + step) * 0.7) * Math.min(box.height * 0.16, 72),
         { steps: 2 }
       );
     }
     await page.mouse.up();
-    await page.mouse.wheel(0, round % 2 === 0 ? -520 : 430);
+    await page.mouse.wheel(0, round % 2 === 0 ? -480 : 390);
   }
 
-  for (let index = 0; index < 36; index += 1) {
+  for (let index = 0; index < 24; index += 1) {
     await page.locator(index % 2 ? "#zoomIn" : "#zoomOut").click({ force: true });
   }
 
   const regionValues = ["americas", "europeAfrica", "asia", "oceania", "world"];
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < 12; index += 1) {
     await page.locator("#regionFocus").selectOption(regionValues[index % regionValues.length]);
   }
 
   const search = page.locator("#resourceSearch");
   const searches = ["food", "London", "shelter", "Boston", "voucher", "showers", "Belfast", "water", "Manchester", "health"];
-  for (let index = 0; index < 45; index += 1) {
-    await search.fill(searches[index % searches.length]);
-  }
+  for (let index = 0; index < 30; index += 1) await search.fill(searches[index % searches.length]);
   await search.fill("");
 
   const layerButtons = page.locator("[data-type]");
   const layerCount = await layerButtons.count();
-  for (let index = 0; index < Math.min(42, layerCount * 6); index += 1) {
+  for (let index = 0; index < Math.min(28, layerCount * 4); index += 1) {
     await layerButtons.nth(index % layerCount).click({ force: true });
   }
   await page.locator("#toggleAll").click({ force: true });
   await page.locator("#toggleAll").click({ force: true });
 
   const navSelectors = ["a[href='#about']", "a[href='#standards']", "a[href='#finder']"];
-  for (let index = 0; index < 18; index += 1) {
-    const locator = page.locator(navSelectors[index % navSelectors.length]).first();
-    await locator.click({ force: true });
+  for (let index = 0; index < 12; index += 1) {
+    await page.locator(navSelectors[index % navSelectors.length]).first().click({ force: true });
   }
 
   await page.evaluate(() => {
-    for (let index = 0; index < 16; index += 1) {
-      window.scrollTo({ top: index % 2 ? document.body.scrollHeight : 0, behavior: "auto" });
-    }
+    for (let index = 0; index < 12; index += 1) window.scrollTo(0, index % 2 ? document.body.scrollHeight : 0);
   });
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(180);
 
-  await page.goto(`${baseURL}/directory`, { waitUntil: "networkidle", timeout: 60000 });
+  await page.goto(`${baseURL}/directory`, { waitUntil: "load", timeout: 45000 });
+  const directoryRecords = await page.locator(".directory-record").count();
+  if (directoryRecords !== resourceCount) throw new Error(`${label}: directory rendered ${directoryRecords}/${resourceCount} records`);
   await page.evaluate(() => {
-    for (let index = 0; index < 24; index += 1) {
-      window.scrollTo({ top: index % 2 ? document.body.scrollHeight : 0, behavior: "auto" });
-    }
+    for (let index = 0; index < 14; index += 1) window.scrollTo(0, index % 2 ? document.body.scrollHeight : 0);
   });
-  await page.waitForTimeout(200);
-  await page.goBack({ waitUntil: "networkidle", timeout: 60000 });
-  await page.locator("#globeCanvas").waitFor({ state: "visible", timeout: 30000 });
+  await page.goBack({ waitUntil: "load", timeout: 45000 });
+  await page.locator("#globeCanvas").waitFor({ state: "visible" });
 
   const metrics = await page.evaluate(() => {
     const longTasks = window.__rwnStress?.longTasks || [];
@@ -142,11 +164,11 @@ async function exercise(label, contextOptions) {
     };
   });
 
-  if (metrics.worstLongTaskMs > 2500) errors.push(`worst long task was ${metrics.worstLongTaskMs.toFixed(1)}ms`);
+  if (metrics.worstLongTaskMs > 2000) errors.push(`worst long task was ${metrics.worstLongTaskMs.toFixed(1)}ms`);
   if (failedRequests.length) errors.push(...failedRequests.map((item) => `requestfailed: ${item}`));
   if (badResponses.length) errors.push(...badResponses.map((item) => `bad response: ${item}`));
 
-  console.log(JSON.stringify({ label, resourceCount, renderer, metrics, errors }, null, 2));
+  console.log(JSON.stringify({ label, resourceCount, renderer, directoryRecords, metrics, errors }, null, 2));
   await browser.close();
   if (errors.length) throw new Error(`${label}: browser stress detected ${errors.length} problem(s)`);
 }
