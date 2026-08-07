@@ -25,6 +25,9 @@ jobs:
       - name: Validate and build
         run: npm run check
       - name: Install Chrome
+        id: chrome
         uses: browser-actions/setup-chrome@v1
       - name: Crash-test built site
         run: npm run test:browser:chaos
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
