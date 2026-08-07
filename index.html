@@ -30,6 +30,7 @@
       content="Find free essential services worldwide and contact the organizations that provide them."
     />
     <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/experience.css" />
     <style>
       @media screen {
         .globe-stage { contain: paint; }
@@ -39,6 +40,8 @@
         .site-header, .globe-cluster-tray { -webkit-backdrop-filter: none; backdrop-filter: none; }
       }
     </style>
+    <link rel="modulepreload" href="/src/bootstrap.js" />
+    <link rel="modulepreload" href="/src/experience.js" />
     <link rel="modulepreload" href="/src/app.js" />
     <link rel="preload" as="image" href="/media/earth-blue-marble.jpg" fetchpriority="high" />
     <link rel="canonical" href="https://www.realworldneeds.org/" />
@@ -70,6 +73,6 @@
         <a href="/directory">Use the text directory</a> to browse every listing, phone number, source, and map location.
       </div>
     </noscript>
-    <script type="module" src="/src/app.js"></script>
+    <script type="module" src="/src/bootstrap.js"></script>
   </body>
 </html>
