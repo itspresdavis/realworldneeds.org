@@ -194,11 +194,6 @@ button:active:not(:disabled),
   box-shadow: inset 0 0 100px rgba(0, 0, 0, .08);
 }
 
-.globe-stage > * {
-  position: relative;
-  z-index: 2;
-}
-
 .globe-canvas {
   z-index: 1;
   backface-visibility: hidden;
@@ -328,9 +323,6 @@ button:active:not(:disabled),
 .experience-reveal.is-visible {
   opacity: 1;
   transform: translate3d(0, 0, 0);
-}
-
-.experience-reveal.is-visible {
   will-change: auto;
 }
 
