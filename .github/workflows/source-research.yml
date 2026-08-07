@@ -12,27 +12,32 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Trussell result markup for safe ingestion
+      - name: Inspect Trussell embedded record fields
         shell: bash
         run: |
           set -euo pipefail
-          for page in 1 2 140 141 142; do
-            url="https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank?lat=&lng=&page=${page}"
-            file="/tmp/trussell-${page}.html"
-            curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o "$file"
-            echo "===== PAGE ${page} bytes=$(wc -c < "$file") ====="
-            python - "$file" <<'PY'
-          import sys, re, html
-          raw=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          plain=html.unescape(raw)
-          terms=['119 University Street','Get Directions','Choose food bank','food banks','postcode','__next_f.push']
-          for term in terms:
-              i=plain.lower().find(term.lower())
-              if i >= 0:
-                  print('\nTERM',term,'INDEX',i)
-                  print(plain[max(0,i-1600):i+3600])
-          # Show candidate address / phone blocks without dumping the page.
-          print('\nCANDIDATE POSTCODES', re.findall(r'\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b', plain, flags=re.I)[:30])
-          print('PHONE-LIKE', re.findall(r'(?:\+44\s?\(0\)|0)\d[\d\s()-]{7,}', plain)[:20])
+          url='https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank?lat=&lng=&page=1'
+          curl -L --compressed --max-time 35 -A 'Mozilla/5.0 RealWorldNeeds source research' -sS "$url" -o /tmp/trussell.html
+          python - <<'PY'
+          import html, re
+          raw=html.unescape(open('/tmp/trussell.html',encoding='utf-8',errors='ignore').read())
+          needles=[
+            'a5fea9a0-ecea-4e3e-a43b-185d64bb80b0',
+            '\\"heading\\":\\"119 University Street\\"',
+            '\\"address\\"', '\\"postcode\\"', '\\"postalCode\\"',
+            '\\"addressLine', '\\"distance\\"', '\\"foodBank',
+            'm-help-card__heading\\"><h4>119 University Street'
+          ]
+          for needle in needles:
+              print('\n===== NEEDLE',needle,'=====')
+              positions=[m.start() for m in re.finditer(re.escape(needle),raw,re.I)]
+              print('count',len(positions),'positions',positions[:12])
+              for i in positions[:3]:
+                  print(raw[max(0,i-1000):i+5000])
+          # List JSON-like property names near the first title in the streamed payload.
+          i=raw.find('119 University Street')
+          if i >= 0:
+              chunk=raw[max(0,i-4000):i+20000]
+              props=sorted(set(re.findall(r'\\"([A-Za-z][A-Za-z0-9_]*)\\"\s*:',chunk)))
+              print('\nPROPS',props)
           PY
-          done
