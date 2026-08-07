@@ -47,4 +47,32 @@ replace_once(
     "search clear",
 )
 
-print("Integrated Trussell data and coalesced rapid search input.")
+globe_test = Path("tests/globe.test.js")
+replace_once(
+    globe_test,
+    '''  assert.equal(resources.length, 586);\n  assert.ok(resources.filter(isExactServiceSite).length >= 442);''',
+    '''  assert.ok(resources.length >= 1900);\n  assert.ok(resources.filter(isExactServiceSite).length >= 1800);''',
+    "catalog growth assertions",
+)
+replace_once(
+    globe_test,
+    '''  assert.equal(resources.filter((resource) => resource.datasetId === "new-york-wic-sites").length, 293);\n  assert.ok(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").every((resource) => resource.hours));''',
+    '''  assert.equal(resources.filter((resource) => resource.datasetId === "new-york-wic-sites").length, 293);\n  assert.equal(resources.filter((resource) => resource.datasetId === "trussell-food-bank-centres").length, 1398);\n  assert.ok(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").every((resource) => resource.hours));''',
+    "Trussell catalog assertion",
+)
+
+live_test = Path("tests/live-sources.test.js")
+replace_once(
+    live_test,
+    '''  assert.equal(sourceRegistry.length, 3);\n  assert.equal(sourceRegistry.find((source) => source.id === "usda-summer-meals-2026").activeRecordsAtAudit, 17442);''',
+    '''  assert.ok(sourceRegistry.length >= 4);\n  assert.equal(sourceRegistry.find((source) => source.id === "usda-summer-meals-2026").activeRecordsAtAudit, 17442);''',
+    "registry growth assertion",
+)
+replace_once(
+    live_test,
+    '''  assert.equal(sourceRegistry.find((source) => source.id === "new-york-wic-sites").recordCount, 293);\n  assert.ok(sourceRegistry.every((source) => source.sourceUrl.startsWith("https://")));''',
+    '''  assert.equal(sourceRegistry.find((source) => source.id === "new-york-wic-sites").recordCount, 293);\n  assert.equal(sourceRegistry.find((source) => source.id === "trussell-food-bank-centres").recordCount, 1398);\n  assert.ok(sourceRegistry.every((source) => source.sourceUrl.startsWith("https://")));''',
+    "Trussell registry assertion",
+)
+
+print("Integrated Trussell data, coalesced rapid search input, and updated scale invariants.")
