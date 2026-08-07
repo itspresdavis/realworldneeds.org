@@ -1,5 +1,14 @@
 const USDA_LAYER_URL = "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/Summer_Meals_Site_Finder_2026_(Testing)/FeatureServer/0/query";
 const USDA_PUBLIC_URL = "https://www.fns.usda.gov/summer/sitefinder";
+const SOURCE_TIMEOUT_MS = 7000;
+const SOURCE_RETRY_DELAYS_MS = [250, 750];
+const CIRCUIT_FAILURE_THRESHOLD = 3;
+const CIRCUIT_OPEN_MS = 60000;
+
+const usdaCircuit = {
+  failures: 0,
+  openUntil: 0
+};
 
 export const sourceRegistry = [
   {
@@ -216,12 +225,92 @@ export function usdaFeatureToResource(feature, checkedAt = new Date()) {
   };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function circuitError() {
+  const error = new Error("The official USDA source is temporarily unavailable. RWN's reviewed directory remains available.");
+  error.code = "RWN_SOURCE_CIRCUIT_OPEN";
+  return error;
+}
+
+function registerSourceSuccess() {
+  usdaCircuit.failures = 0;
+  usdaCircuit.openUntil = 0;
+}
+
+function registerSourceFailure() {
+  usdaCircuit.failures += 1;
+  if (usdaCircuit.failures >= CIRCUIT_FAILURE_THRESHOLD) {
+    usdaCircuit.openUntil = Date.now() + CIRCUIT_OPEN_MS;
+  }
+}
+
+export function resetUsdaCircuitForTests() {
+  usdaCircuit.failures = 0;
+  usdaCircuit.openUntil = 0;
+}
+
+async function fetchAttempt(url, fetchImpl, signal) {
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(signal?.reason);
+  if (signal?.aborted) controller.abort(signal.reason);
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
+
+  const timeout = setTimeout(() => controller.abort(), SOURCE_TIMEOUT_MS);
+  try {
+    return await fetchImpl(url, { signal: controller.signal, referrerPolicy: "no-referrer" });
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
 async function jsonResponse(url, fetchImpl, signal) {
-  const response = await fetchImpl(url, { signal, referrerPolicy: "no-referrer" });
-  if (!response.ok) throw new Error(`Official source returned ${response.status}.`);
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message || "Official source query failed.");
-  return data;
+  if (Date.now() < usdaCircuit.openUntil) throw circuitError();
+
+  let finalError = null;
+  for (let attempt = 0; attempt <= SOURCE_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (signal?.aborted) throw signal.reason || new DOMException("Aborted", "AbortError");
+
+    try {
+      const response = await fetchAttempt(url, fetchImpl, signal);
+      if (!response.ok) {
+        const status = Number(response.status || 0);
+        const error = new Error(`Official source returned ${status || "an error"}.`);
+        error.status = status;
+        if (!isRetryableStatus(status) || attempt === SOURCE_RETRY_DELAYS_MS.length) throw error;
+        finalError = error;
+      } else {
+        const data = await response.json();
+        if (data.error) {
+          const error = new Error(data.error.message || "Official source query failed.");
+          error.status = Number(data.error.code || 500);
+          if (!isRetryableStatus(error.status) || attempt === SOURCE_RETRY_DELAYS_MS.length) throw error;
+          finalError = error;
+        } else {
+          registerSourceSuccess();
+          return data;
+        }
+      }
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason || error;
+      finalError = error;
+      const status = Number(error?.status || 0);
+      const retryable = !status || isRetryableStatus(status) || error?.name === "AbortError";
+      if (!retryable || attempt === SOURCE_RETRY_DELAYS_MS.length) break;
+    }
+
+    await sleep(SOURCE_RETRY_DELAYS_MS[attempt]);
+  }
+
+  registerSourceFailure();
+  throw finalError || new Error("Official source query failed.");
 }
 
 export async function fetchUsdaActiveCount({ date = new Date(), fetchImpl = fetch, signal } = {}) {
