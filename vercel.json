@@ -4,6 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
+  "ignoreCommand": "if [ \"$VERCEL_PROJECT_ID\" = \"prj_HEVILzuiHPxyO49zHlpjftMBlU9u\" ]; then exit 0; else exit 1; fi",
   "functions": {
     "api/rum.js": {
       "maxDuration": 5,
