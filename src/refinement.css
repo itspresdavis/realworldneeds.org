@@ -1,4 +1,4 @@
-/* Production refinement layer: keep urgent tasks obvious and the globe visually quiet. */
+/* Production refinement layer: urgent tasks stay obvious, the globe stays calm, and details appear only when useful. */
 
 .finder-sidebar {
   gap: 1rem;
@@ -12,40 +12,56 @@
   max-width: 27rem;
 }
 
+.finder-search {
+  margin-top: 1.25rem;
+}
+
+.search-box {
+  min-height: 3.65rem;
+  padding-inline: 1rem;
+  border-color: rgba(206, 231, 226, .2);
+  background: rgba(255, 255, 255, .055);
+}
+
+.search-box input {
+  font-size: .9rem;
+  letter-spacing: -.01em;
+}
+
 .quick-needs {
   display: flex;
   flex-wrap: wrap;
   gap: .48rem;
-  margin-top: -.2rem;
+  margin-top: -.08rem;
 }
 
 .quick-needs__label {
   width: 100%;
   margin: 0 0 .05rem;
-  color: rgba(224, 239, 237, .7);
-  font-size: .7rem;
-  font-weight: 800;
-  letter-spacing: .08em;
+  color: rgba(224, 239, 237, .68);
+  font-size: .68rem;
+  font-weight: 820;
+  letter-spacing: .075em;
   text-transform: uppercase;
 }
 
 .quick-need {
-  min-height: 2.2rem;
-  padding: .52rem .72rem;
-  border: 1px solid rgba(206, 231, 226, .18);
+  min-height: 2.18rem;
+  padding: .5rem .72rem;
+  border: 1px solid rgba(206, 231, 226, .16);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .035);
-  color: #edf7f5;
+  background: rgba(255, 255, 255, .025);
+  color: #e7f0ef;
   font: inherit;
-  font-size: .8rem;
-  font-weight: 780;
+  font-size: .79rem;
+  font-weight: 760;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
 .quick-need:hover {
-  border-color: rgba(185, 242, 211, .42);
-  background: rgba(15, 159, 96, .1);
+  border-color: rgba(185, 242, 211, .38);
+  background: rgba(15, 159, 96, .085);
 }
 
 .quick-need:active {
@@ -53,31 +69,31 @@
 }
 
 .quick-need[aria-pressed="true"] {
-  border-color: rgba(185, 242, 211, .58);
-  background: rgba(15, 159, 96, .16);
+  border-color: rgba(185, 242, 211, .5);
+  background: rgba(15, 159, 96, .135);
   color: #fff;
 }
 
 .quick-need:focus-visible {
-  outline: 3px solid rgba(185, 242, 211, .42);
+  outline: 3px solid rgba(185, 242, 211, .4);
   outline-offset: 2px;
 }
 
 .finder-notes {
   margin: -.15rem 0 0;
-  border-top: 1px solid rgba(206, 231, 226, .12);
-  border-bottom: 1px solid rgba(206, 231, 226, .12);
+  border-top: 1px solid rgba(206, 231, 226, .1);
+  border-bottom: 1px solid rgba(206, 231, 226, .1);
 }
 
 .finder-notes > summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 2.7rem;
-  color: rgba(229, 241, 239, .82);
+  min-height: 2.6rem;
+  color: rgba(229, 241, 239, .78);
   cursor: pointer;
-  font-size: .76rem;
-  font-weight: 760;
+  font-size: .75rem;
+  font-weight: 740;
   list-style: none;
 }
 
@@ -88,7 +104,7 @@
 .finder-notes > summary::after {
   content: "+";
   color: #b9f2d3;
-  font-size: 1rem;
+  font-size: .98rem;
 }
 
 .finder-notes[open] > summary::after {
@@ -107,17 +123,22 @@
 
 .finder-safety {
   padding: .72rem .8rem;
-  border: 1px solid rgba(255, 181, 72, .18);
+  border: 1px solid rgba(255, 181, 72, .16);
   border-radius: 10px;
-  background: rgba(255, 181, 72, .05);
+  background: rgba(255, 181, 72, .045);
 }
 
 .filter-disclosure {
   margin-top: 0;
+  background: rgba(255, 255, 255, .012);
 }
 
-/* The GPU point cloud is the visual marker system. HTML cluster buttons remain as
-   large, accessible hit targets, but never render numeric badges. */
+/* Start with a neutral finder instead of an arbitrary preselected resource. */
+.finder__grid.rwn-initial-calm.is-panel-collapsed {
+  grid-template-columns: minmax(15.5rem, .8fr) minmax(0, 3.2fr);
+}
+
+/* The GPU point cloud is the visual marker system. HTML pins remain as accessible hit targets only. */
 .globe-stage.has-gpu-points .globe-cluster {
   width: 2rem;
   height: 2rem;
@@ -143,41 +164,210 @@
 }
 
 .globe-stage.has-gpu-points .globe-pin.is-selected > span {
-  width: .82rem;
-  height: .82rem;
-  border: 1.5px solid rgba(255, 255, 255, .88);
+  width: .76rem;
+  height: .76rem;
+  border: 1.5px solid rgba(255, 255, 255, .9);
   background: var(--pin);
-  box-shadow: 0 0 .6rem var(--pin-glow), 0 0 1.15rem color-mix(in srgb, var(--pin), transparent 52%);
+  box-shadow: 0 0 .52rem var(--pin-glow), 0 0 1rem color-mix(in srgb, var(--pin), transparent 58%);
 }
 
-/* Give the map more room without removing the useful service inspector. */
+/* Remove GIS-dashboard noise from the default experience. */
+.globe-detail-status,
+.globe-readout {
+  display: none !important;
+}
+
+.globe-compass {
+  opacity: .52;
+  transform: scale(.9);
+  transform-origin: top right;
+}
+
+.globe-meta {
+  min-height: 2.72rem;
+  border-color: rgba(255, 255, 255, .1);
+  background: rgba(3, 19, 31, .76);
+}
+
+.globe-meta__tools {
+  gap: .42rem;
+}
+
+.globe-guide {
+  position: absolute;
+  top: 4.15rem;
+  left: 1rem;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  max-width: calc(100% - 5.5rem);
+  padding: .48rem .64rem;
+  border: 1px solid rgba(205, 235, 228, .12);
+  border-radius: 999px;
+  background: rgba(3, 19, 31, .72);
+  color: rgba(231, 242, 240, .78);
+  font-size: .68rem;
+  font-weight: 720;
+  letter-spacing: .005em;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.globe-guide i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #7ad8a8;
+  opacity: .72;
+}
+
+.globe-guide a {
+  color: #bcefd3;
+  text-decoration: none;
+}
+
+.globe-stage.has-used-globe .globe-guide {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.globe-cluster-tray {
+  max-width: min(23rem, calc(100% - 1.4rem));
+  max-height: min(22rem, 44%);
+  border: 1px solid rgba(206, 231, 226, .13);
+  background: rgba(4, 23, 35, .97);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .24);
+}
+
+.globe-cluster-tray__list {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Give the globe more room while the inspector is open without squeezing the search column. */
 @media (min-width: 1100px) {
   .finder__grid {
-    grid-template-columns: minmax(15.5rem, .8fr) minmax(0, 2.45fr) minmax(15.5rem, .8fr);
+    grid-template-columns: minmax(15.5rem, .78fr) minmax(0, 2.55fr) minmax(15rem, .78fr);
+  }
+
+  .finder__grid.is-panel-collapsed {
+    grid-template-columns: minmax(15.5rem, .78fr) minmax(0, 3.35fr);
   }
 
   .resource-panel {
-    font-size: .96em;
+    font-size: .95em;
   }
+}
+
+/* Subtle editorial reveal: enough movement to create rhythm, never enough to compete with the mission. */
+.rwn-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 440ms cubic-bezier(.2, .72, .2, 1), transform 440ms cubic-bezier(.2, .72, .2, 1);
+}
+
+.rwn-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.rwn-story__trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem 1rem;
+  margin-top: 1.35rem;
+  color: #9fb5b7;
+  font-size: .72rem;
+  font-weight: 730;
+}
+
+.rwn-story__trust span {
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
+}
+
+.rwn-story__trust span::before {
+  content: "";
+  width: .38rem;
+  height: .38rem;
+  border-radius: 50%;
+  background: #68d098;
+  box-shadow: 0 0 .7rem rgba(104, 208, 152, .3);
+}
+
+.return-to-finder {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.7rem;
+  margin-top: 1.6rem;
+  padding: .65rem .88rem;
+  border: 1px solid #bfd0cc;
+  border-radius: 10px;
+  color: #0a6f3f;
+  font-size: .79rem;
+  font-weight: 820;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.return-to-finder:hover,
+.return-to-finder:focus-visible {
+  border-color: #15985e;
+  background: #f1faf5;
 }
 
 @media (max-width: 760px) {
   .quick-needs {
-    gap: .42rem;
+    gap: .4rem;
   }
 
   .quick-need {
-    min-height: 2.35rem;
-    padding-inline: .68rem;
+    min-height: 2.32rem;
+    padding-inline: .66rem;
   }
 
   .finder-notes > summary {
-    min-height: 2.9rem;
+    min-height: 2.85rem;
+  }
+
+  .globe-compass {
+    display: none;
+  }
+
+  .globe-guide {
+    top: 4rem;
+    left: .7rem;
+    gap: .42rem;
+    max-width: calc(100% - 1.4rem);
+    font-size: .64rem;
+  }
+
+  .globe-guide span:first-child,
+  .globe-guide i:first-of-type {
+    display: none;
+  }
+
+  .globe-cluster-tray {
+    right: .55rem;
+    bottom: .55rem;
+    left: .55rem;
+    max-width: none;
+    max-height: 42%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .quick-need {
+  .quick-need,
+  .globe-guide,
+  .rwn-reveal,
+  .return-to-finder {
     transition: none;
+  }
+
+  .rwn-reveal {
+    opacity: 1;
+    transform: none;
   }
 }

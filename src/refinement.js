@@ -18,15 +18,24 @@ function setLayerSelection(type) {
 }
 
 function syncQuickNeeds(container) {
-  const active = layerButtons().filter((button) => button.getAttribute("aria-pressed") === "true");
+  const buttons = layerButtons();
+  const active = buttons.filter((button) => button.getAttribute("aria-pressed") === "true");
   const activeTypes = new Set(active.map((button) => button.dataset.type));
-  const allActive = active.length > 0 && active.length === layerButtons().length;
+  const allActive = active.length > 0 && active.length === buttons.length;
 
   for (const button of container.querySelectorAll(".quick-need")) {
     const type = button.dataset.quickType;
     const pressed = type === "all" ? allActive : activeTypes.size === 1 && activeTypes.has(type);
     button.setAttribute("aria-pressed", String(pressed));
   }
+}
+
+function improveSearch() {
+  const input = document.getElementById("resourceSearch");
+  if (!input) throw new Error("Finder search input is missing.");
+  input.placeholder = "Search food, shelter, city or organization";
+  input.setAttribute("aria-label", "Search by service, place, or organization");
+  input.setAttribute("enterkeyhint", "search");
 }
 
 function installQuickNeeds() {
@@ -40,7 +49,7 @@ function installQuickNeeds() {
   container.setAttribute("role", "group");
   container.setAttribute("aria-label", "Quick service filters");
   container.innerHTML = `
-    <p class="quick-needs__label">Quick needs</p>
+    <p class="quick-needs__label">Start with a need</p>
     ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
     <button class="quick-need" type="button" data-quick-type="all" aria-pressed="true">All services</button>
   `;
@@ -82,9 +91,50 @@ function improveFilterSummary() {
   summary.setAttribute("aria-label", "Open detailed service filters");
 }
 
+function hasRequestedResource() {
+  const url = new URL(window.location.href);
+  return url.searchParams.has("resource") || /(?:^|[&#])resource=/.test(url.hash);
+}
+
+function startFinderCalm() {
+  if (hasRequestedResource()) return;
+  const panel = document.getElementById("resourcePanel");
+  const grid = document.querySelector(".finder__grid");
+  const inspectorToggle = document.getElementById("openInspector");
+  if (!panel || !grid) throw new Error("Finder panel prerequisites are missing.");
+
+  panel.hidden = true;
+  grid.classList.add("is-panel-collapsed", "rwn-initial-calm");
+  if (inspectorToggle) inspectorToggle.hidden = true;
+}
+
+function installGlobeGuide() {
+  const stage = document.querySelector(".globe-stage");
+  const results = document.querySelector(".results-section");
+  if (!stage || !results) throw new Error("Globe guidance prerequisites are missing.");
+  if (stage.querySelector(".globe-guide")) return;
+
+  results.id ||= "results";
+  const guide = document.createElement("div");
+  guide.className = "globe-guide";
+  guide.setAttribute("aria-hidden", "true");
+  guide.innerHTML = `<span>Drag to explore</span><i></i><span>Tap a glow for details</span><a href="#results" tabindex="-1">List view</a>`;
+  stage.append(guide);
+
+  const dismiss = () => stage.classList.add("has-used-globe");
+  stage.addEventListener("pointerdown", dismiss, { once: true, passive: true });
+  stage.addEventListener("wheel", dismiss, { once: true, passive: true });
+  stage.addEventListener("click", (event) => {
+    if (event.target.closest(".globe-pin, .globe-cluster, canvas")) dismiss();
+  }, { once: true });
+}
+
 export function installRefinements() {
+  improveSearch();
   installQuickNeeds();
   compactFinderNotes();
   improveFilterSummary();
+  startFinderCalm();
+  installGlobeGuide();
   document.documentElement.classList.add("rwn-refined");
 }
