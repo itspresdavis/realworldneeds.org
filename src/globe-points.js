@@ -3,33 +3,38 @@ import * as THREE from "/vendor/three.module.js";
 const VERTEX_SHADER = `
   attribute vec3 pointColor;
   attribute float pointScale;
+  attribute float pointOpacity;
   varying vec3 vPointColor;
+  varying float vPointOpacity;
   uniform float uPointSize;
   uniform float uPixelRatio;
   uniform float uZoom;
 
   void main() {
     vPointColor = pointColor;
+    vPointOpacity = pointOpacity;
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * viewPosition;
-    float perspective = clamp(2.8 / max(1.45, -viewPosition.z), 0.7, 1.28);
-    float zoomBoost = clamp(0.72 + max(0.0, uZoom - 1.0) * 0.30, 0.72, 1.34);
-    gl_PointSize = uPointSize * pointScale * perspective * zoomBoost * uPixelRatio;
+
+    float perspective = clamp(2.8 / max(1.45, -viewPosition.z), 0.7, 1.24);
+    float closeViewCalm = clamp(0.92 - max(0.0, uZoom - 1.0) * 0.085, 0.72, 0.92);
+    gl_PointSize = uPointSize * pointScale * perspective * closeViewCalm * uPixelRatio;
   }
 `;
 
 const FRAGMENT_SHADER = `
   varying vec3 vPointColor;
+  varying float vPointOpacity;
   uniform float uOpacity;
 
   void main() {
     float distanceFromCenter = distance(gl_PointCoord, vec2(0.5));
     if (distanceFromCenter > 0.5) discard;
 
-    float halo = 1.0 - smoothstep(0.12, 0.5, distanceFromCenter);
-    float core = 1.0 - smoothstep(0.035, 0.18, distanceFromCenter);
-    float alpha = min(1.0, halo * 0.26 + core * 0.88) * uOpacity;
-    vec3 color = mix(vPointColor, vec3(1.0), core * 0.28);
+    float halo = 1.0 - smoothstep(0.16, 0.5, distanceFromCenter);
+    float core = 1.0 - smoothstep(0.035, 0.17, distanceFromCenter);
+    float alpha = min(1.0, halo * 0.17 + core * 0.9) * uOpacity * vPointOpacity;
+    vec3 color = mix(vPointColor, vec3(1.0), core * 0.18);
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -47,14 +52,21 @@ function resourceVector(resource, radius = 1.018) {
 
 function resourcePointScale(resource) {
   if (resource.kind === "direct") return 1;
-  if (resource.kind === "locator") return 0.82;
-  return 0.72;
+  if (resource.kind === "locator") return 0.76;
+  return 0.62;
+}
+
+function resourcePointOpacity(resource) {
+  if (resource.kind === "direct") return 1;
+  if (resource.kind === "locator") return 0.72;
+  return 0.58;
 }
 
 function buildGeometry(resources, categories) {
   const positions = new Float32Array(resources.length * 3);
   const colors = new Float32Array(resources.length * 3);
   const scales = new Float32Array(resources.length);
+  const opacities = new Float32Array(resources.length);
   const color = new THREE.Color();
 
   resources.forEach((resource, index) => {
@@ -65,12 +77,14 @@ function buildGeometry(resources, categories) {
     colors[index * 3 + 1] = color.g;
     colors[index * 3 + 2] = color.b;
     scales[index] = resourcePointScale(resource);
+    opacities[index] = resourcePointOpacity(resource);
   });
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("pointColor", new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute("pointScale", new THREE.BufferAttribute(scales, 1));
+  geometry.setAttribute("pointOpacity", new THREE.BufferAttribute(opacities, 1));
   if (resources.length) geometry.computeBoundingSphere();
   else geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0);
   return geometry;
@@ -81,10 +95,10 @@ export function createGlobePointLayer(resources, categories, { pixelRatio = 1 } 
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     uniforms: {
-      uPointSize: { value: window.innerWidth <= 600 ? 4.8 : 4.45 },
+      uPointSize: { value: window.innerWidth <= 600 ? 4.45 : 4.1 },
       uPixelRatio: { value: Math.min(1.5, Math.max(1, pixelRatio)) },
       uZoom: { value: 1 },
-      uOpacity: { value: 0.94 }
+      uOpacity: { value: 0.9 }
     },
     transparent: true,
     depthTest: true,
@@ -107,7 +121,7 @@ export function replaceGlobePointResources(points, resources, categories) {
   previousGeometry?.dispose();
 }
 
-export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.94 } = {}) {
+export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.9 } = {}) {
   if (!points?.material?.uniforms) return;
   points.material.uniforms.uZoom.value = zoom;
   points.material.uniforms.uPixelRatio.value = Math.min(1.5, Math.max(1, pixelRatio));
