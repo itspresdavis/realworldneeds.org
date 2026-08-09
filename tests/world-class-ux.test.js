@@ -49,10 +49,12 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
   assert.ok(searchIndex.scopes && typeof searchIndex.scopes === "object");
-  assert.match(client, /fetch\("\/data\/search-index\.json"/);
+  assert.match(client, /new URL\(import\.meta\.url\)\.searchParams\.get\("v"\)/);
+  assert.match(client, /searchIndexUrl = `\/data\/search-index\.json\$\{releaseVersion/);
+  assert.match(client, /fetch\(searchIndexUrl/);
   assert.match(client, /payload\.scopes\[currentScope\]/);
   assert.doesNotMatch(client, /XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
-  assert.doesNotMatch(client, /search-index\.json\?[^"']|fetch\(`[^`]*\$\{/);
+  assert.doesNotMatch(client, /input\?\.value.*searchIndexUrl|searchIndexUrl.*input\?\.value/);
   assert.match(client, /MAX_RESULTS = 60/);
   assert.match(client, /Escape/);
   for (const record of searchIndex.records.slice(0, 10)) {
