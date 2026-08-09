@@ -35,7 +35,6 @@ try {
 
 function scopesFor(resource, types) {
   const scopes = new Set([
-    "/directory",
     `/directory/${slugify(resource.country)}`,
     ...types.map((type) => `/directory/help/${slugify(type)}`)
   ]);
@@ -50,10 +49,11 @@ function scopesFor(resource, types) {
       if (types.includes(category.type)) scopes.add(category.path);
     }
   }
-  return [...scopes];
+  return scopes;
 }
 
-const records = resources.map((resource) => {
+const scopes = Object.create(null);
+const records = resources.map((resource, index) => {
   const types = allTypes(resource);
   const labels = types.map((type) => categories[type]?.label || type);
   const place = formatResourcePlace(resource);
@@ -64,11 +64,14 @@ const records = resources.map((resource) => {
     resource.region,
     resource.address,
     resource.sourceName,
-    resource.summary,
     ...(resource.services || []),
     ...types,
     ...labels
   ].join(" "));
+
+  for (const scope of scopesFor(resource, types)) {
+    (scopes[scope] ||= []).push(index);
+  }
 
   return {
     id: resource.id,
@@ -80,15 +83,15 @@ const records = resources.map((resource) => {
     categoryLabels: labels,
     kind: resource.kind,
     checked: resource.lastChecked,
-    scopes: scopesFor(resource, types),
     search
   };
 });
 
 await mkdir("dist/data", { recursive: true });
 await writeFile("dist/data/search-index.json", `${JSON.stringify({
-  schemaVersion: "1.1",
+  schemaVersion: "1.2",
   resourceCount: records.length,
   privacy: "Static search index. Search terms remain in the visitor's browser and are not included in requests.",
-  records
+  records,
+  scopes
 })}\n`);
