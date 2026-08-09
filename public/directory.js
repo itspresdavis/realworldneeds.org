@@ -52,7 +52,7 @@ if (root) {
         return response.json();
       })
       .then((payload) => {
-        if (!Array.isArray(payload.records)) throw new Error("Search index is invalid");
+        if (!Array.isArray(payload.records) || !payload.scopes) throw new Error("Search index is invalid");
         return payload;
       });
     return catalogPromise;
@@ -96,6 +96,11 @@ if (root) {
     return link;
   };
 
+  const scopedRecords = (payload) => {
+    if (currentScope === "/directory") return payload.records;
+    return (payload.scopes[currentScope] || []).map((index) => payload.records[index]).filter(Boolean);
+  };
+
   const apply = async () => {
     const query = input?.value || "";
     const tokens = queryTokens(query);
@@ -112,7 +117,7 @@ if (root) {
     try {
       const payload = await loadCatalog();
       if (currentGeneration !== generation) return;
-      const scoped = payload.records.filter((record) => record.scopes?.includes(currentScope));
+      const scoped = scopedRecords(payload);
       const matches = scoped
         .filter((record) => !activeCategory || record.categoryLabels.some((label) => normalize(label) === activeCategory))
         .map((record) => ({ record, score: scoreRecord(record, tokens) }))
