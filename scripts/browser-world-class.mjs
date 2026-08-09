@@ -192,7 +192,6 @@ async function run() {
     await capture(client, "finder-desktop.png");
 
     await navigate(client, `${HOST}/directory`);
-    await capture(client, "directory-desktop.png");
     const directory = await evaluate(client, `(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const waitUntil = async (predicate, attempts = 60) => {
@@ -202,11 +201,14 @@ async function run() {
         }
         return false;
       };
+      const searchTools = document.querySelector("[data-directory-search]");
       const input = document.querySelector("[data-directory-query]");
       const chips = [...document.querySelectorAll("[data-directory-category]")];
       const results = document.querySelector(".directory-global-results");
       const list = document.querySelector("[data-global-list]");
-      if (!input || chips.length < 2 || !results || !list) return { ok: false, reason: "directory controls missing" };
+      if (!searchTools || !input || chips.length < 2 || !results || !list) return { ok: false, reason: "directory controls missing" };
+      const searchRect = searchTools.getBoundingClientRect();
+      const searchAboveFold = searchRect.top < innerHeight - 70 && searchRect.bottom > 0;
 
       input.value = "zzzz-no-real-service-should-match";
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -227,11 +229,14 @@ async function run() {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
       await sleep(40);
       const categoryChip = chips.find((chip) => chip.dataset.directoryCategory);
+      categoryChip?.focus();
       categoryChip?.click();
       const categoryReady = await waitUntil(() => !results.hidden && list.children.length > 0);
-      return { ok: true, noMatchReady, noMatchRows, reset, targetReady, categoryReady, categoryRows: list.children.length, catalogSize: catalog.resourceCount };
+      const categoryFocusStable = Boolean(categoryChip?.isConnected && document.activeElement === categoryChip && categoryChip.getAttribute("aria-pressed") === "true");
+      return { ok: true, searchAboveFold, searchTop: Math.round(searchRect.top), noMatchReady, noMatchRows, reset, targetReady, categoryReady, categoryFocusStable, categoryRows: list.children.length, catalogSize: catalog.resourceCount };
     })()`);
-    if (!directory.ok || !directory.noMatchReady || directory.noMatchRows !== 0 || !directory.reset || !directory.targetReady || !directory.categoryReady || directory.categoryRows < 1 || directory.catalogSize < 1000) {
+    await capture(client, "directory-desktop.png");
+    if (!directory.ok || !directory.searchAboveFold || !directory.noMatchReady || directory.noMatchRows !== 0 || !directory.reset || !directory.targetReady || !directory.categoryReady || !directory.categoryFocusStable || directory.categoryRows < 1 || directory.catalogSize < 1000) {
       throw new Error(`Whole-directory interaction failed: ${JSON.stringify(directory)}`);
     }
 
@@ -264,7 +269,7 @@ async function run() {
     }
 
     if (exceptions.length) throw new Error(`Browser emitted ${exceptions.length} exception(s): ${exceptions.slice(0, 3).join(" | ")}`);
-    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private whole-catalog directory search, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, touch targets, and visual QA capture.");
+    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, above-fold private whole-catalog directory search, stable filter focus, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, touch targets, and visual QA capture.");
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
