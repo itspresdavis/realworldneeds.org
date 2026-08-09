@@ -10,6 +10,14 @@
   "display": "standalone",
   "background_color": "#061824",
   "theme_color": "#061824",
+  "icons": [
+    {
+      "src": "/rwn-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
   "categories": ["health", "medical", "navigation"],
   "shortcuts": [
     { "name": "Find help", "short_name": "Find help", "url": "/#finder" },
