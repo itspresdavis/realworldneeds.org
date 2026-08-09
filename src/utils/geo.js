@@ -111,16 +111,39 @@ function normalizedText(value) {
 
 const searchAliases = new Map(Object.entries({
   meal: "food", meals: "food", pantry: "food", pantries: "food", groceries: "food", grocery: "food", hunger: "food",
-  drink: "water", drinking: "water", refill: "water", hydration: "water",
+  comida: "food", comidas: "food", alimento: "food", alimentos: "food", nourriture: "food", repas: "food",
+  drink: "water", drinking: "water", refill: "water", hydration: "water", agua: "water", eau: "water",
   housing: "shelter", homeless: "shelter", homelessness: "shelter", bed: "shelter", refuge: "shelter",
+  albergue: "shelter", refugio: "shelter", alojamiento: "shelter", abrigo: "shelter", abri: "shelter",
   shower: "hygiene", showers: "hygiene", laundry: "hygiene", toilet: "hygiene", toilets: "hygiene", toiletries: "hygiene",
+  ducha: "hygiene", duchas: "hygiene", bano: "hygiene", banos: "hygiene", lavanderia: "hygiene", banho: "hygiene", douche: "hygiene", douches: "hygiene",
   clothes: "clothing", coat: "clothing", coats: "clothing", shoes: "clothing", blanket: "clothing", blankets: "clothing",
-  doctor: "health", doctors: "health", clinic: "health", clinics: "health", dental: "health", medical: "health", mental: "health",
+  ropa: "clothing", roupas: "clothing", vetement: "clothing", vetements: "clothing",
+  doctor: "health", doctors: "health", clinic: "health", clinics: "health", dental: "health", dentist: "health", medical: "health", mental: "health", healthcare: "health",
+  salud: "health", saude: "health", sante: "health", medico: "health", medica: "health", clinica: "health", clinique: "health",
   directory: "referral", directories: "referral", locator: "referral", navigation: "referral", benefits: "referral", advice: "referral", casework: "referral"
 }));
 
+const queryNoise = new Set([
+  "a", "an", "the", "for", "to", "of", "please", "find", "finding", "need", "needs", "help", "free",
+  "near", "nearby", "me", "my", "local", "around",
+  "ayuda", "gratis", "cerca", "mi",
+  "aide", "gratuit", "gratuite", "pres",
+  "ajuda", "gratuito", "gratuita", "perto"
+]);
+
+function rawTokens(value) {
+  return normalizedText(value).split(/\s+/).filter(Boolean);
+}
+
 function searchTokens(value) {
-  return normalizedText(value).split(/\s+/).filter(Boolean).map((token) => searchAliases.get(token) || token);
+  return rawTokens(value).map((token) => searchAliases.get(token) || token);
+}
+
+function querySearchTokens(value) {
+  return rawTokens(value)
+    .filter((token) => !queryNoise.has(token))
+    .map((token) => searchAliases.get(token) || token);
 }
 
 const resourceSearchFieldCache = new WeakMap();
@@ -157,7 +180,7 @@ function cachedQueryTokens(query) {
   const key = normalizedText(query);
   const cached = queryTokenCache.get(key);
   if (cached) return cached;
-  const tokens = searchTokens(key);
+  const tokens = querySearchTokens(key);
   if (queryTokenCache.size >= QUERY_TOKEN_CACHE_LIMIT) {
     queryTokenCache.delete(queryTokenCache.keys().next().value);
   }
