@@ -5,29 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Find free food, shelter, health care, clothing, hygiene support, and other essential services in one searchable place. Every RWN listing stays connected to its original source."
+      content="Real World Needs (RWN) helps people find free food, shelter, health care, clothing, hygiene support, and other essential services from trusted organizations in one searchable global directory."
     />
+    <meta
+      name="keywords"
+      content="free food near me, homeless shelters, free health care, clothing assistance, hygiene assistance, community resources, nonprofit resources, essential services, mutual aid, Real World Needs, RWN"
+    />
+    <meta name="author" content="Real World Needs" />
     <meta name="theme-color" content="#071926" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="application-name" content="Real World Needs" />
     <meta name="apple-mobile-web-app-title" content="RWN" />
     <meta name="format-detection" content="telephone=no" />
-    <meta property="og:title" content="Real World Needs | Essential Help, Easier to Find" />
+    <meta property="og:title" content="Real World Needs | Find Free Food, Shelter, Health Care & Essential Help" />
     <meta
       property="og:description"
-      content="Help exists. Finding it shouldn’t be the hard part. Search essential services and go directly to the organizations providing them."
+      content="Search free and essential services from trusted organizations. Find food, shelter, health care, clothing, hygiene support, and more through Real World Needs."
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Real World Needs" />
     <meta property="og:url" content="https://www.realworldneeds.org/" />
     <meta property="og:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
-    <meta property="og:image:alt" content="Satellite view of Earth used in the Real World Needs service finder" />
+    <meta property="og:image:alt" content="Real World Needs global essential services finder" />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Real World Needs | Essential Help, Easier to Find" />
+    <meta name="twitter:title" content="Real World Needs | Find Free Food, Shelter, Health Care & Essential Help" />
     <meta
       name="twitter:description"
-      content="Help exists. Finding it shouldn’t be the hard part. Search essential services and go directly to the organizations providing them."
+      content="Search free and essential services from trusted organizations. Find food, shelter, health care, clothing, hygiene support, and more through Real World Needs."
     />
     <meta name="twitter:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
     <link rel="stylesheet" href="/src/styles.css" />
@@ -57,14 +64,40 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Real World Needs",
-        "alternateName": "RWN",
-        "url": "https://www.realworldneeds.org/",
-        "description": "Find essential services in one searchable place and check each listing against its original source."
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.realworldneeds.org/#organization",
+            "name": "Real World Needs",
+            "alternateName": "RWN",
+            "url": "https://www.realworldneeds.org/",
+            "logo": "https://www.realworldneeds.org/media/earth-blue-marble.jpg",
+            "description": "Real World Needs helps people discover free and essential services including food, shelter, health care, clothing, hygiene support, and other community resources."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.realworldneeds.org/#website",
+            "url": "https://www.realworldneeds.org/",
+            "name": "Real World Needs",
+            "alternateName": "RWN",
+            "publisher": { "@id": "https://www.realworldneeds.org/#organization" },
+            "description": "A searchable directory for free and essential services from trusted organizations.",
+            "inLanguage": "en-US"
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://www.realworldneeds.org/#webpage",
+            "url": "https://www.realworldneeds.org/",
+            "name": "Real World Needs | Find Free Food, Shelter, Health Care & Essential Help",
+            "isPartOf": { "@id": "https://www.realworldneeds.org/#website" },
+            "about": { "@id": "https://www.realworldneeds.org/#organization" },
+            "description": "Find free food, shelter, health care, clothing, hygiene support, and other essential services in one searchable directory.",
+            "inLanguage": "en-US"
+          }
+        ]
       }
     </script>
-    <title>Real World Needs | Essential Help, Easier to Find</title>
+    <title>Real World Needs | Find Free Food, Shelter, Health Care & Essential Help</title>
   </head>
   <body>
     <div id="root"></div>
