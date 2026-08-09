@@ -22,6 +22,7 @@ document.head.append(runtimeStyle);
 
 const appReady = import("./app.js");
 const refinementReady = import("./refinement.js");
+const worldClassReady = import("./world-class.js");
 const { installRefinements } = await refinementReady;
 
 let refinementsInstalled = false;
@@ -47,6 +48,10 @@ if (!refinementsInstalled) {
   installRefinements();
   refinementsInstalled = true;
 }
+
+worldClassReady
+  .then(({ installWorldClassUX }) => installWorldClassUX())
+  .catch(() => {});
 
 import("./telemetry.js")
   .then(({ startTelemetry }) => startTelemetry())
