@@ -31,7 +31,7 @@ if (root) {
   const noise = new Set(["a", "an", "the", "for", "to", "of", "please", "find", "finding", "need", "needs", "help", "free", "near", "nearby", "me", "my", "local", "around", "ayuda", "gratis", "cerca", "aide", "gratuit", "ajuda", "perto"]);
   const queryTokens = (value) => normalize(value).split(/\s+/).filter((token) => token && !noise.has(token)).map((token) => aliases.get(token) || token);
 
-  const categoryLabels = [...new Set(pageRecords.flatMap((record) => [...record.querySelectorAll(".directory-aid li")].map((item) => item.textContent.trim())).filter(Boolean))]
+  let categoryLabels = [...new Set(pageRecords.flatMap((record) => [...record.querySelectorAll(".directory-aid li")].map((item) => item.textContent.trim())).filter(Boolean))]
     .sort((a, b) => collator.compare(a, b));
 
   const results = document.createElement("section");
@@ -47,6 +47,43 @@ if (root) {
   let catalogPromise;
   let generation = 0;
 
+  const scopedRecords = (payload) => {
+    if (currentScope === "/directory") return payload.records;
+    return (payload.scopes[currentScope] || []).map((index) => payload.records[index]).filter(Boolean);
+  };
+
+  const renderChips = () => {
+    if (!chips) return;
+    const expected = [["All help", ""], ...categoryLabels.map((label) => [label, label])];
+    const current = [...chips.querySelectorAll("[data-directory-category]")];
+    const matchesExpected = current.length === expected.length
+      && current.every((button, index) => button.dataset.directoryCategory === expected[index][1]);
+
+    if (!matchesExpected) {
+      const fragment = document.createDocumentFragment();
+      for (const [label, value] of expected) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.directoryCategory = value;
+        button.textContent = label;
+        fragment.append(button);
+      }
+      chips.replaceChildren(fragment);
+    }
+
+    for (const button of chips.querySelectorAll("[data-directory-category]")) {
+      button.setAttribute("aria-pressed", String(normalize(button.dataset.directoryCategory) === activeCategory));
+    }
+  };
+
+  const syncCategoryLabels = (payload) => {
+    const fullLabels = [...new Set(scopedRecords(payload).flatMap((record) => record.categoryLabels || []).filter(Boolean))]
+      .sort((a, b) => collator.compare(a, b));
+    if (fullLabels.length === categoryLabels.length && fullLabels.every((label, index) => label === categoryLabels[index])) return;
+    categoryLabels = fullLabels;
+    renderChips();
+  };
+
   const loadCatalog = () => {
     catalogPromise ||= fetch(searchIndexUrl, { credentials: "same-origin", cache: "force-cache" })
       .then((response) => {
@@ -58,24 +95,6 @@ if (root) {
         return payload;
       });
     return catalogPromise;
-  };
-
-  const renderChips = () => {
-    if (!chips) return;
-    if (!chips.children.length) {
-      const fragment = document.createDocumentFragment();
-      for (const [label, value] of [["All help", ""], ...categoryLabels.map((label) => [label, label])]) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.directoryCategory = value;
-        button.textContent = label;
-        fragment.append(button);
-      }
-      chips.append(fragment);
-    }
-    for (const button of chips.querySelectorAll("[data-directory-category]")) {
-      button.setAttribute("aria-pressed", String(normalize(button.dataset.directoryCategory) === activeCategory));
-    }
   };
 
   const clearGlobalResults = () => {
@@ -108,11 +127,6 @@ if (root) {
     return link;
   };
 
-  const scopedRecords = (payload) => {
-    if (currentScope === "/directory") return payload.records;
-    return (payload.scopes[currentScope] || []).map((index) => payload.records[index]).filter(Boolean);
-  };
-
   const apply = async () => {
     const query = input?.value || "";
     const tokens = queryTokens(query);
@@ -129,6 +143,7 @@ if (root) {
     try {
       const payload = await loadCatalog();
       if (currentGeneration !== generation) return;
+      syncCategoryLabels(payload);
       const scoped = scopedRecords(payload);
       const matches = scoped
         .filter((record) => !activeCategory || record.categoryLabels.some((label) => normalize(label) === activeCategory))
@@ -161,7 +176,9 @@ if (root) {
   };
 
   let inputTimer;
-  input?.addEventListener("focus", () => { loadCatalog().catch(() => {}); }, { once: true });
+  input?.addEventListener("focus", () => {
+    loadCatalog().then(syncCategoryLabels).catch(() => {});
+  }, { once: true });
   input?.addEventListener("input", () => {
     clearTimeout(inputTimer);
     inputTimer = setTimeout(apply, 80);
