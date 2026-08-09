@@ -24,6 +24,29 @@
   margin-top: 1.05rem;
 }
 
+/* Service pages have the same urgency: name, context and the real next step should fit early. */
+#service > .legal-hero {
+  padding: clamp(2.35rem, 4.5vw, 3.8rem) clamp(1rem, 4vw, 4rem) clamp(2rem, 3.5vw, 2.9rem);
+}
+
+#service > .legal-hero .legal-hero__inner {
+  width: min(100%, 1080px);
+}
+
+#service > .legal-hero h1 {
+  max-width: 18ch;
+  font-size: clamp(2.45rem, 5vw, 4.1rem);
+}
+
+#service > .legal-hero .legal-hero__lede {
+  max-width: 55rem;
+  margin-top: .9rem;
+}
+
+#service > .legal-hero .legal-meta {
+  margin-top: 1rem;
+}
+
 .directory-shell {
   padding-top: clamp(1.45rem, 3vw, 2.35rem);
 }
@@ -331,6 +354,90 @@
   min-height: 2.25rem;
 }
 
+.service-next-steps {
+  display: grid;
+  grid-template-columns: minmax(11rem, .28fr) minmax(0, 1fr);
+  gap: .8rem 1rem;
+  align-items: stretch;
+  margin: .9rem 0 1.15rem;
+  padding: .9rem;
+  border: 1px solid rgba(16, 109, 68, .18);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f0f9f4, #f8fcfa);
+}
+
+.service-next-steps > div:first-child {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: .25rem .35rem;
+}
+
+.service-next-steps > div:first-child span {
+  color: #0c7c4b;
+  font-size: .64rem;
+  font-weight: 850;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.service-next-steps > div:first-child strong {
+  margin-top: .15rem;
+  color: #09242c;
+  font-size: .9rem;
+  line-height: 1.3;
+}
+
+.service-next-steps > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: .48rem;
+}
+
+.service-next-steps a {
+  display: grid;
+  align-content: center;
+  min-height: 4rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgba(15, 116, 70, .15);
+  border-radius: 11px;
+  background: #fff;
+  color: #0b683f;
+  text-decoration: none;
+}
+
+.service-next-steps a strong {
+  font-size: .78rem;
+  line-height: 1.25;
+}
+
+.service-next-steps a span {
+  margin-top: .16rem;
+  overflow: hidden;
+  color: #66797b;
+  font-size: .66rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-next-steps a.is-primary {
+  border-color: #087a43;
+  background: #087a43;
+  color: #fff;
+}
+
+.service-next-steps a.is-primary span {
+  color: rgba(255, 255, 255, .8);
+}
+
+.service-next-steps a:hover,
+.service-next-steps a:focus-visible {
+  border-color: #168c58;
+  box-shadow: 0 8px 22px rgba(7, 68, 42, .08);
+  transform: translateY(-1px);
+}
+
 .service-accessibility {
   display: grid;
   gap: .3rem;
@@ -429,6 +536,7 @@
 .directory-search-tools :where(button, input):focus-visible,
 .directory-local-links a:focus-visible,
 .directory-global-result:focus-visible,
+.service-next-steps a:focus-visible,
 .related-services a:focus-visible,
 .directory-record a:focus-visible {
   outline: 3px solid #177f53;
@@ -436,18 +544,24 @@
 }
 
 @media (max-width: 840px) {
+  .service-next-steps {
+    grid-template-columns: 1fr;
+  }
+
   .related-services__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 620px) {
-  #directory > .legal-hero {
+  #directory > .legal-hero,
+  #service > .legal-hero {
     padding-top: 2rem;
     padding-bottom: 1.7rem;
   }
 
-  #directory > .legal-hero h1 {
+  #directory > .legal-hero h1,
+  #service > .legal-hero h1 {
     max-width: none;
     font-size: clamp(2.25rem, 12vw, 3.2rem);
   }
@@ -465,11 +579,22 @@
     grid-template-columns: 1fr;
   }
 
+  .service-next-steps {
+    margin-inline: -.15rem;
+    padding: .75rem;
+    border-radius: 13px;
+  }
+
+  .service-next-steps > div:last-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .directory-search-tools__clear,
   .directory-category-chips button,
   .directory-local-links a,
   .directory-links a,
   .directory-global-result,
+  .service-next-steps a,
   .related-services__grid > a {
     min-height: 44px;
   }
@@ -495,7 +620,8 @@
     text-align: left;
   }
 
-  .directory-global-result strong {
+  .directory-global-result strong,
+  .service-next-steps a span {
     white-space: normal;
   }
 
@@ -510,7 +636,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .directory-record {
+  .directory-record,
+  .service-next-steps a {
     transition: none;
   }
 }
@@ -521,6 +648,7 @@
   .directory-search-field,
   .directory-global-results,
   .directory-record,
+  .service-next-steps,
   .service-accessibility,
   .related-services,
   .related-services__grid > a {
@@ -533,6 +661,7 @@
   .directory-search-tools,
   .directory-global-results,
   .directory-record,
+  .service-next-steps,
   .service-accessibility,
   .related-services__grid > a {
     border: 1px solid CanvasText;
