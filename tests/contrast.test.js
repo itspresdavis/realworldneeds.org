@@ -2,9 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
+function normalizeHex(hex) {
+  const value = String(hex || "").replace("#", "");
+  if (value.length === 3) return `#${[...value].map((channel) => channel.repeat(2)).join("")}`;
+  return `#${value}`;
+}
+
 function parseVariables(css) {
   const root = css.match(/:root\s*\{([\s\S]*?)\}/)?.[1] || "";
-  return Object.fromEntries([...root.matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;/g)].map((match) => [match[1], match[2]]));
+  return Object.fromEntries(
+    [...root.matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\s*;/g)]
+      .map((match) => [match[1], normalizeHex(match[2])])
+  );
 }
 
 function channel(value) {
@@ -13,7 +22,8 @@ function channel(value) {
 }
 
 function luminance(hex) {
-  const value = hex.replace("#", "");
+  assert.match(hex || "", /^#[0-9a-fA-F]{6}$/, `expected a six-digit hex color, received ${String(hex)}`);
+  const value = hex.slice(1);
   const [r, g, b] = [0, 2, 4].map((offset) => channel(Number.parseInt(value.slice(offset, offset + 2), 16)));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
