@@ -104,6 +104,11 @@ async function capture(client, name) {
 
 async function verifyStaticEnhancements() {
   const resources = await (await fetch(`${HOST}/data/resources.json`)).json();
+  const searchIndex = await (await fetch(`${HOST}/data/search-index.json`)).json();
+  if (searchIndex.resourceCount !== resources.resourceCount || searchIndex.records.length !== resources.resourceCount) {
+    throw new Error("Whole-directory search index does not cover the reviewed catalog.");
+  }
+
   const accessible = resources.resources.find((resource) => resource.accessibilityNote);
   if (!accessible) throw new Error("No source-backed accessibility note exists to verify.");
   const service = await fetch(`${HOST}/service/${encodeURIComponent(accessible.id)}`);
@@ -190,24 +195,44 @@ async function run() {
     await capture(client, "directory-desktop.png");
     const directory = await evaluate(client, `(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const waitUntil = async (predicate, attempts = 60) => {
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          if (predicate()) return true;
+          await sleep(25);
+        }
+        return false;
+      };
       const input = document.querySelector("[data-directory-query]");
-      const records = [...document.querySelectorAll(".directory-record")];
       const chips = [...document.querySelectorAll("[data-directory-category]")];
-      if (!input || !records.length || chips.length < 2) return { ok: false, reason: "directory controls missing" };
+      const results = document.querySelector(".directory-global-results");
+      const list = document.querySelector("[data-global-list]");
+      if (!input || chips.length < 2 || !results || !list) return { ok: false, reason: "directory controls missing" };
+
       input.value = "zzzz-no-real-service-should-match";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      await sleep(20);
-      const hiddenAfterSearch = records.filter((record) => record.hidden).length;
+      const noMatchReady = await waitUntil(() => !results.hidden && document.querySelector("[data-directory-count]")?.textContent.includes("No matching"));
+      const noMatchRows = list.children.length;
+
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-      await sleep(20);
-      const visibleAfterEscape = records.filter((record) => !record.hidden).length;
-      chips.find((chip) => chip.dataset.directoryCategory)?.click();
-      await sleep(20);
-      const visibleAfterCategory = records.filter((record) => !record.hidden).length;
-      return { ok: true, total: records.length, hiddenAfterSearch, visibleAfterEscape, visibleAfterCategory };
+      await sleep(40);
+      const reset = results.hidden && !document.querySelector(".directory-shell")?.classList.contains("has-global-search");
+
+      const catalog = await fetch("/data/search-index.json").then((response) => response.json());
+      const target = catalog.records.at(-1);
+      input.value = target.name;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      const targetHref = "/service/" + encodeURIComponent(target.id);
+      const targetReady = await waitUntil(() => [...list.querySelectorAll("a")].some((link) => new URL(link.href).pathname === targetHref));
+
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      await sleep(40);
+      const categoryChip = chips.find((chip) => chip.dataset.directoryCategory);
+      categoryChip?.click();
+      const categoryReady = await waitUntil(() => !results.hidden && list.children.length > 0);
+      return { ok: true, noMatchReady, noMatchRows, reset, targetReady, categoryReady, categoryRows: list.children.length, catalogSize: catalog.resourceCount };
     })()`);
-    if (!directory.ok || directory.hiddenAfterSearch !== directory.total || directory.visibleAfterEscape !== directory.total || directory.visibleAfterCategory < 1 || directory.visibleAfterCategory > directory.total) {
-      throw new Error(`Directory interaction failed: ${JSON.stringify(directory)}`);
+    if (!directory.ok || !directory.noMatchReady || directory.noMatchRows !== 0 || !directory.reset || !directory.targetReady || !directory.categoryReady || directory.categoryRows < 1 || directory.catalogSize < 1000) {
+      throw new Error(`Whole-directory interaction failed: ${JSON.stringify(directory)}`);
     }
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -239,7 +264,7 @@ async function run() {
     }
 
     if (exceptions.length) throw new Error(`Browser emitted ${exceptions.length} exception(s): ${exceptions.slice(0, 3).join(" | ")}`);
-    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private directory filtering, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, touch targets, and visual QA capture.");
+    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private whole-catalog directory search, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, touch targets, and visual QA capture.");
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
