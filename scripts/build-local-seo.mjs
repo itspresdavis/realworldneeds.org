@@ -7,6 +7,7 @@ import { formatResourcePlace } from "../src/utils/geo.js";
 
 const SITE_ORIGIN = "https://www.realworldneeds.org";
 const MIN_CITY_LISTINGS = 3;
+const MIN_LOCAL_CATEGORY_LISTINGS = 3;
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -50,6 +51,23 @@ function locality(resource) {
   return { city, country, administrativeArea: administrativeArea(resource) };
 }
 
+function displayLocation({ city, country, administrativeArea }) {
+  return [city, administrativeArea, country].filter(Boolean).join(", ");
+}
+
+function placeSchema({ city, country, administrativeArea }) {
+  return {
+    "@type": "Place",
+    name: displayLocation({ city, country, administrativeArea }),
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: city,
+      addressCountry: country,
+      ...(administrativeArea ? { addressRegion: administrativeArea } : {})
+    }
+  };
+}
+
 function resourceCard(resource) {
   return `<article class="directory-record">
     <header><div><p>${escapeHtml(resource.kind === "direct" ? "Service location" : "Resource finder")}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(formatResourcePlace(resource))}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
@@ -89,8 +107,6 @@ function allocateLocalityPath(info, ambiguousBase, usedPaths) {
     }
   }
 
-  // Distinct Unicode/punctuation locality names can normalize to the same readable slug.
-  // Preserve the readable prefix and add a short deterministic suffix only for that rare collision.
   const suffix = createHash("sha256").update(signature).digest("hex").slice(0, 8);
   let candidate = `/directory/local/${countrySlug}/${citySlug}-${suffix}`;
   let attempt = 1;
@@ -102,31 +118,18 @@ function allocateLocalityPath(info, ambiguousBase, usedPaths) {
   return candidate;
 }
 
-function cityPage(localityInfo, items, canonicalPath) {
-  const { city, country, administrativeArea } = localityInfo;
-  const canonical = `${SITE_ORIGIN}${canonicalPath}`;
-  const countrySlug = slugify(country);
-  const displayLocation = [city, administrativeArea, country].filter(Boolean).join(", ");
-  const categoriesPresent = [...new Set(items.flatMap(aidTypes))].filter((type) => categories[type]);
-  const categoryText = categoriesPresent.slice(0, 5).map((type) => categories[type].label.toLowerCase()).join(", ") || "essential help";
-  const description = `Find free essential services in ${displayLocation}, including ${categoryText}. Browse ${items.length} reviewed listings connected to their original sources.`;
-  const placeAddress = {
-    "@type": "PostalAddress",
-    addressLocality: city,
-    addressCountry: country,
-    ...(administrativeArea ? { addressRegion: administrativeArea } : {})
-  };
-  const schema = {
+function collectionSchema({ canonical, name, description, info, items, breadcrumbs }) {
+  return {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "CollectionPage",
         "@id": `${canonical}#page`,
         url: canonical,
-        name: `Free essential services in ${displayLocation}`,
+        name,
         description,
         isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
-        about: { "@type": "Place", name: displayLocation, address: placeAddress },
+        about: placeSchema(info),
         mainEntity: { "@id": `${canonical}#list` },
         dateModified: latestReview(items)
       },
@@ -143,15 +146,64 @@ function cityPage(localityInfo, items, canonicalPath) {
       },
       {
         "@type": "BreadcrumbList",
-        itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_ORIGIN}/` },
-          { "@type": "ListItem", position: 2, name: "Directory", item: `${SITE_ORIGIN}/directory` },
-          { "@type": "ListItem", position: 3, name: country, item: `${SITE_ORIGIN}/directory/${countrySlug}` },
-          { "@type": "ListItem", position: 4, name: displayLocation }
-        ]
+        itemListElement: breadcrumbs.map((item, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: item.name,
+          ...(item.item ? { item: item.item } : {})
+        }))
       }
     ]
   };
+}
+
+function localCategoryGroups(items, localityCanonicalPath) {
+  return Object.keys(categories)
+    .map((type) => {
+      const matching = items.filter((resource) => aidTypes(resource).includes(type));
+      return {
+        type,
+        label: categories[type].label,
+        items: matching,
+        count: matching.length,
+        lastmod: latestReview(matching),
+        path: `${localityCanonicalPath}/help/${slugify(type)}`
+      };
+    })
+    .filter((entry) => entry.count >= MIN_LOCAL_CATEGORY_LISTINGS)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function localBrowseMarkup(info, parentPath, localCategories, allTypesPresent) {
+  const localTypes = new Set(localCategories.map((entry) => entry.type));
+  const localLinks = localCategories.map((entry) => `<a href="${escapeHtml(entry.path)}">${escapeHtml(entry.label)} in ${escapeHtml(info.city)} (${entry.count})</a>`).join("");
+  const broaderLinks = allTypesPresent
+    .filter((type) => !localTypes.has(type))
+    .map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type].label)} directory</a>`)
+    .join("");
+  return `<div class="directory-downloads"><strong>Browse this area</strong>${localLinks}${broaderLinks}<a href="${escapeHtml(parentPath)}">All help in ${escapeHtml(displayLocation(info))}</a><a href="/directory/${slugify(info.country)}">All services in ${escapeHtml(info.country)}</a><a href="/directory">Full directory</a></div>`;
+}
+
+function cityPage(info, items, canonicalPath, localCategories) {
+  const canonical = `${SITE_ORIGIN}${canonicalPath}`;
+  const countrySlug = slugify(info.country);
+  const display = displayLocation(info);
+  const typesPresent = [...new Set(items.flatMap(aidTypes))].filter((type) => categories[type]);
+  const categoryText = typesPresent.slice(0, 5).map((type) => categories[type].label.toLowerCase()).join(", ") || "essential help";
+  const description = `Find free essential services in ${display}, including ${categoryText}. Browse ${items.length} reviewed listings connected to their original sources.`;
+  const schema = collectionSchema({
+    canonical,
+    name: `Free essential services in ${display}`,
+    description,
+    info,
+    items,
+    breadcrumbs: [
+      { name: "Home", item: `${SITE_ORIGIN}/` },
+      { name: "Directory", item: `${SITE_ORIGIN}/directory` },
+      { name: info.country, item: `${SITE_ORIGIN}/directory/${countrySlug}` },
+      { name: display }
+    ]
+  });
 
   return `<!doctype html>
 <html lang="en">
@@ -165,21 +217,84 @@ function cityPage(localityInfo, items, canonicalPath) {
   <link rel="stylesheet" href="/legal.css" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Real World Needs" />
-  <meta property="og:title" content="Free Essential Services in ${escapeHtml(displayLocation)} | Real World Needs" />
+  <meta property="og:title" content="Free Essential Services in ${escapeHtml(display)} | Real World Needs" />
   <meta property="og:description" content="${escapeHtml(description)}" />
   <meta property="og:url" content="${canonical}" />
   ${jsonLd(schema)}
-  <title>Free Essential Services in ${escapeHtml(displayLocation)} | Real World Needs</title>
+  <title>Free Essential Services in ${escapeHtml(display)} | Real World Needs</title>
 </head>
 <body>
   <a class="skip-link" href="#directory">Skip to local services</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
   <main id="directory">
-    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local directory</p><h1>Free essential services in ${escapeHtml(displayLocation)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Checked through ${escapeHtml(latestReview(items))}</span></div></div></section>
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local directory</p><h1>Free essential services in ${escapeHtml(display)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Checked through ${escapeHtml(latestReview(items))}</span></div></div></section>
     <div class="directory-shell">
-      <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(country)}</a><span aria-current="page">${escapeHtml(displayLocation)}</span></nav>
+      <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(info.country)}</a><span aria-current="page">${escapeHtml(display)}</span></nav>
       <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
-      <div class="directory-downloads"><strong>Browse this area</strong>${categoriesPresent.map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type].label)}</a>`).join("")}<a href="/directory/${countrySlug}">All services in ${escapeHtml(country)}</a><a href="/directory">Full directory</a></div>
+      ${localBrowseMarkup(info, canonicalPath, localCategories, typesPresent)}
+      <div class="directory-records">${items.map(resourceCard).join("\n")}</div>
+    </div>
+  </main>
+  <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>
+</body>
+</html>`;
+}
+
+function cityCategoryPage(info, items, type, canonicalPath, parentPath, siblingCategories) {
+  const category = categories[type];
+  const canonical = `${SITE_ORIGIN}${canonicalPath}`;
+  const parentCanonical = `${SITE_ORIGIN}${parentPath}`;
+  const countrySlug = slugify(info.country);
+  const display = displayLocation(info);
+  const labelLower = category.label.toLowerCase();
+  const description = `${category.description} Browse ${items.length} reviewed ${labelLower} listings in ${display}, with original sources, access details, and review dates.`;
+  const pageName = `${category.label} assistance in ${display}`;
+  const schema = collectionSchema({
+    canonical,
+    name: pageName,
+    description,
+    info,
+    items,
+    breadcrumbs: [
+      { name: "Home", item: `${SITE_ORIGIN}/` },
+      { name: "Directory", item: `${SITE_ORIGIN}/directory` },
+      { name: info.country, item: `${SITE_ORIGIN}/directory/${countrySlug}` },
+      { name: display, item: parentCanonical },
+      { name: category.label }
+    ]
+  });
+  const siblingLinks = siblingCategories
+    .filter((entry) => entry.type !== type)
+    .map((entry) => `<a href="${escapeHtml(entry.path)}">${escapeHtml(entry.label)} (${entry.count})</a>`)
+    .join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="${escapeHtml(description)}" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <meta name="theme-color" content="#071926" />
+  <link rel="canonical" href="${canonical}" />
+  <link rel="stylesheet" href="/legal.css" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Real World Needs" />
+  <meta property="og:title" content="${escapeHtml(category.label)} Help in ${escapeHtml(display)} | Real World Needs" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  <meta property="og:url" content="${canonical}" />
+  ${jsonLd(schema)}
+  <title>${escapeHtml(category.label)} Help in ${escapeHtml(display)} | Real World Needs</title>
+</head>
+<body>
+  <a class="skip-link" href="#directory">Skip to ${escapeHtml(labelLower)} services</a>
+  <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
+  <main id="directory">
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local ${escapeHtml(labelLower)} directory</p><h1>Find free ${escapeHtml(labelLower)} help in ${escapeHtml(display)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Checked through ${escapeHtml(latestReview(items))}</span></div></div></section>
+    <div class="directory-shell">
+      <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(info.country)}</a><a href="${escapeHtml(parentPath)}">${escapeHtml(display)}</a><span aria-current="page">${escapeHtml(category.label)}</span></nav>
+      <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
+      <div class="directory-downloads"><strong>Browse nearby needs</strong><a href="${escapeHtml(parentPath)}">All help in ${escapeHtml(display)}</a>${siblingLinks}<a href="/directory/help/${slugify(type)}">Global ${escapeHtml(labelLower)} directory</a></div>
       <div class="directory-records">${items.map(resourceCard).join("\n")}</div>
     </div>
   </main>
@@ -226,25 +341,43 @@ const manifest = [];
 const usedPaths = new Map();
 for (const { info, items, ambiguousBase } of eligible) {
   const path = allocateLocalityPath(info, ambiguousBase, usedPaths);
+  const localCategories = localCategoryGroups(items, path);
   const output = join("dist", path);
   await mkdir(output, { recursive: true });
-  await writeFile(join(output, "index.html"), cityPage(info, items, path));
+  await writeFile(join(output, "index.html"), cityPage(info, items, path, localCategories));
   sitemapEntries.push({ path, lastmod: latestReview(items) });
+
+  for (const entry of localCategories) {
+    const categoryOutput = join("dist", entry.path);
+    await mkdir(categoryOutput, { recursive: true });
+    await writeFile(join(categoryOutput, "index.html"), cityCategoryPage(info, entry.items, entry.type, entry.path, path, localCategories));
+    sitemapEntries.push({ path: entry.path, lastmod: entry.lastmod });
+  }
+
   manifest.push({
     city: info.city,
     country: info.country,
     administrativeArea: info.administrativeArea || null,
     count: items.length,
     lastmod: latestReview(items),
-    path
+    path,
+    categories: localCategories.map(({ type, label, count, lastmod, path: categoryPath }) => ({
+      type,
+      label,
+      count,
+      lastmod,
+      path: categoryPath
+    }))
   });
 }
 
 await mkdir("dist/data/resources", { recursive: true });
 await writeFile("dist/data/resources/local-index.json", `${JSON.stringify({
-  schemaVersion: "1.1",
+  schemaVersion: "1.2",
   minimumListings: MIN_CITY_LISTINGS,
+  minimumCategoryListings: MIN_LOCAL_CATEGORY_LISTINGS,
   pageCount: manifest.length,
+  categoryPageCount: manifest.reduce((sum, entry) => sum + entry.categories.length, 0),
   cities: manifest
 }, null, 2)}\n`);
 
