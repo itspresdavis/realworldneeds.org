@@ -86,7 +86,7 @@ test("local preview supports production clean URLs", async () => {
 test("unknown routes have a useful, non-indexable recovery page", async () => {
   const html = await readFile("public/404.html", "utf8");
   assert.match(html, /<meta name="robots" content="[^"]*noindex[^"]*"/i);
-  assert.match(html, /<meta name="robots" content="[^"]*follow[^"]*"/i);
+  assert.doesNotMatch(html, /<meta name="robots" content="[^"]*nofollow[^"]*"/i);
   assert.match(html, /href="\/directory"/);
   assert.match(html, /href="\/directory\/help\/food"/);
   assert.match(html, /<main id="content">/);
