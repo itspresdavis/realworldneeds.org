@@ -30,12 +30,13 @@ test("bootstrap loads the world-class interaction layer with the release hash", 
 
 test("directory pages remain indexable HTML while gaining instant local filtering", async () => {
   const html = await text("dist/directory/index.html");
-  const { release } = JSON.parse(await text("dist/data/release.json"));
+  const release = JSON.parse(await text("dist/data/release.json"));
+  assert.match(release.directoryRelease, /^[a-f0-9]{12}$/);
   assert.match(html, /data-directory-search/);
   assert.match(html, /data-directory-query/);
   assert.match(html, /data-directory-categories/);
-  assert.match(html, new RegExp(`/directory-enhancements\\.css\\?v=${release}`));
-  assert.match(html, new RegExp(`/directory\\.js\\?v=${release}`));
+  assert.match(html, new RegExp(`/directory-enhancements\\.css\\?v=${release.directoryRelease}`));
+  assert.match(html, new RegExp(`/directory\\.js\\?v=${release.directoryRelease}`));
   assert.match(html, /<article class="directory-record"/);
   assert.doesNotMatch(html, /noindex/);
 });
