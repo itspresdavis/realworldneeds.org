@@ -112,6 +112,15 @@ async function verifyStaticEnhancements() {
   if (!countryHtml.includes("directory-local-links") || !countryHtml.includes(usLocal.path)) {
     throw new Error("Country page does not expose crawlable local-directory links.");
   }
+
+  const localNeed = usLocal.categories?.[0];
+  if (localNeed) {
+    const cityHtml = await (await fetch(`${HOST}${usLocal.path}`)).text();
+    const needHtml = await (await fetch(`${HOST}${localNeed.path}`)).text();
+    if (!cityHtml.includes(localNeed.path) || !needHtml.includes('"@type":"CollectionPage"') || !needHtml.includes("Visit original source")) {
+      throw new Error("Local need page is not fully connected to the crawl graph.");
+    }
+  }
 }
 
 async function run() {
@@ -194,26 +203,32 @@ async function run() {
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
     await navigate(client, `${HOST}/`);
     const mobile = await evaluate(client, `(async () => {
+      document.documentElement.style.scrollBehavior = "auto";
       window.scrollTo(0, 500);
-      await new Promise((resolve) => setTimeout(resolve, 220));
+      window.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await new Promise((resolve) => setTimeout(resolve, 240));
       const taskbar = document.querySelector(".mobile-taskbar");
       const quick = document.querySelector(".quick-need");
       const style = quick ? getComputedStyle(quick) : null;
+      const taskbarStyle = taskbar ? getComputedStyle(taskbar) : null;
       const rect = taskbar?.getBoundingClientRect();
       return {
         taskbar: Boolean(taskbar),
-        taskbarVisible: Boolean(rect && rect.height > 0 && Number(getComputedStyle(taskbar).opacity) > .9),
+        taskbarVisible: Boolean(rect && rect.height > 0 && Number(taskbarStyle?.opacity || 0) > .9),
+        taskbarClass: document.documentElement.classList.contains("show-mobile-taskbar"),
+        scrollY: window.scrollY,
         quickHeight: quick?.getBoundingClientRect().height || 0,
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         motion: style?.transitionDuration || ""
       };
     })()`);
-    if (!mobile.taskbar || !mobile.taskbarVisible || mobile.quickHeight < 44 || mobile.overflow > 8) {
+    if (!mobile.taskbar || !mobile.taskbarVisible || !mobile.taskbarClass || mobile.scrollY <= 180 || mobile.quickHeight < 44 || mobile.overflow > 8) {
       throw new Error(`Mobile world-class UX failed: ${JSON.stringify(mobile)}`);
     }
 
     if (exceptions.length) throw new Error(`Browser emitted ${exceptions.length} exception(s): ${exceptions.slice(0, 3).join(" | ")}`);
-    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private directory filtering, local crawl graph, service accessibility, related services, mobile taskbar, and touch targets.");
+    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private directory filtering, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, and touch targets.");
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
