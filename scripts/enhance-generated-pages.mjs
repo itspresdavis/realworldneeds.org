@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
@@ -33,6 +34,15 @@ async function walkHtml(directory) {
     else if (entry.isFile() && entry.name === "index.html") files.push(path);
   }
   return files;
+}
+
+async function directoryAssetRelease() {
+  const hash = createHash("sha256");
+  for (const path of ["dist/directory.js", "dist/directory-enhancements.css", "dist/legal.css"]) {
+    hash.update(path);
+    hash.update(await readFile(path));
+  }
+  return hash.digest("hex").slice(0, 12);
 }
 
 function haversineKm(a, b) {
@@ -154,7 +164,10 @@ function replaceUrlLastmod(sitemap, path, date) {
 }
 
 const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-const release = releaseInfo.release;
+const directoryRelease = await directoryAssetRelease();
+releaseInfo.directoryRelease = directoryRelease;
+await writeFile("dist/data/release.json", `${JSON.stringify(releaseInfo, null, 2)}\n`);
+
 let localIndex = { cities: [] };
 try {
   localIndex = JSON.parse(await readFile("dist/data/resources/local-index.json", "utf8"));
@@ -164,7 +177,7 @@ try {
 
 for (const path of await walkHtml("dist/directory")) {
   const html = await readFile(path, "utf8");
-  await writeFile(path, enhanceCollectionPage(html, release));
+  await writeFile(path, enhanceCollectionPage(html, directoryRelease));
 }
 
 const localByCountry = new Map();
@@ -189,7 +202,7 @@ for (const [country, entries] of localByCountry) {
 for (const resource of resources) {
   const path = join("dist/service", resource.id, "index.html");
   const html = await readFile(path, "utf8");
-  await writeFile(path, enhanceServicePage(html, resource, release));
+  await writeFile(path, enhanceServicePage(html, resource, directoryRelease));
 }
 
 let sitemap = await readFile("dist/sitemap.xml", "utf8");
@@ -218,5 +231,8 @@ for (const region of regions) {
   sitemap = replaceUrlLastmod(sitemap, `/directory/region/${slugify(region)}`, latestDate(items));
 }
 
-for (const entry of localIndex.cities || []) sitemap = replaceUrlLastmod(sitemap, entry.path, entry.lastmod || null);
+for (const entry of localIndex.cities || []) {
+  sitemap = replaceUrlLastmod(sitemap, entry.path, entry.lastmod || null);
+  for (const category of entry.categories || []) sitemap = replaceUrlLastmod(sitemap, category.path, category.lastmod || null);
+}
 await writeFile("dist/sitemap.xml", sitemap);
