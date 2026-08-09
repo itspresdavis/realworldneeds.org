@@ -92,6 +92,11 @@ function relatedMarkup(resource) {
   </section>`;
 }
 
+function accessibilityMarkup(resource) {
+  if (!resource.accessibilityNote) return "";
+  return `<aside class="service-accessibility" aria-label="Accessibility information"><strong>Accessibility</strong><p>${escapeHtml(resource.accessibilityNote)}</p></aside>`;
+}
+
 function assetLinks(release, includeScript) {
   return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
 }
@@ -105,6 +110,14 @@ function directorySearchMarkup() {
     <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
   </section>`;
+}
+
+function localLinksMarkup(country, entries) {
+  if (!entries.length) return "";
+  return `<nav class="directory-local-links" aria-label="Local directories in ${escapeHtml(country)}"><div><strong>Browse local directories</strong><span>City pages are published only where RWN has at least three reviewed listings.</span></div><div>${entries
+    .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city))
+    .map((entry) => `<a href="${escapeHtml(entry.path)}">${escapeHtml([entry.city, entry.administrativeArea].filter(Boolean).join(", "))} <span>${entry.count}</span></a>`)
+    .join("")}</div></nav>`;
 }
 
 function enhanceCollectionPage(html, release) {
@@ -122,6 +135,10 @@ function enhanceServicePage(html, resource, release) {
   if (!html.includes("directory-enhancements.css")) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n  ${assetLinks(release, false)}`);
   }
+  const accessibility = accessibilityMarkup(resource);
+  if (accessibility && !html.includes("service-accessibility")) {
+    html = html.replace("        <h3>Services offered</h3>", `        ${accessibility}\n        <h3>Services offered</h3>`);
+  }
   if (!html.includes("related-services")) {
     const markup = relatedMarkup(resource);
     if (markup) html = html.replace("    </div>\n  </main>", `      ${markup}\n    </div>\n  </main>`);
@@ -138,10 +155,35 @@ function replaceUrlLastmod(sitemap, path, date) {
 
 const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"));
 const release = releaseInfo.release;
+let localIndex = { cities: [] };
+try {
+  localIndex = JSON.parse(await readFile("dist/data/resources/local-index.json", "utf8"));
+} catch {
+  // Local pages are an enhancement; the global directory must still build without them.
+}
 
 for (const path of await walkHtml("dist/directory")) {
   const html = await readFile(path, "utf8");
   await writeFile(path, enhanceCollectionPage(html, release));
+}
+
+const localByCountry = new Map();
+for (const entry of localIndex.cities || []) {
+  if (!localByCountry.has(entry.country)) localByCountry.set(entry.country, []);
+  localByCountry.get(entry.country).push(entry);
+}
+for (const [country, entries] of localByCountry) {
+  const path = join("dist/directory", slugify(country), "index.html");
+  try {
+    let html = await readFile(path, "utf8");
+    if (!html.includes("directory-local-links")) {
+      const markup = localLinksMarkup(country, entries);
+      html = html.replace('<section class="directory-search-tools"', `${markup}\n        <section class="directory-search-tools"`);
+      await writeFile(path, html);
+    }
+  } catch {
+    // Some synthetic/global country labels may not have a country landing page.
+  }
 }
 
 for (const resource of resources) {
@@ -157,7 +199,6 @@ sitemap = replaceUrlLastmod(sitemap, "/directory", newest);
 sitemap = replaceUrlLastmod(sitemap, "/transparency", newest);
 
 for (const path of STATIC_WITHOUT_DATA_LASTMOD) sitemap = replaceUrlLastmod(sitemap, path, null);
-
 for (const resource of resources) sitemap = replaceUrlLastmod(sitemap, `/service/${resource.id}`, resource.lastChecked);
 
 for (const [type] of Object.entries(categories)) {
@@ -177,14 +218,5 @@ for (const region of regions) {
   sitemap = replaceUrlLastmod(sitemap, `/directory/region/${slugify(region)}`, latestDate(items));
 }
 
-try {
-  const localIndex = JSON.parse(await readFile("dist/data/resources/local-index.json", "utf8"));
-  for (const entry of localIndex.cities || []) {
-    const items = resources.filter((resource) => resource.city === entry.city && resource.country === entry.country);
-    sitemap = replaceUrlLastmod(sitemap, entry.path, latestDate(items));
-  }
-} catch {
-  // Local SEO pages are optional; the core directory remains valid without them.
-}
-
+for (const entry of localIndex.cities || []) sitemap = replaceUrlLastmod(sitemap, entry.path, entry.lastmod || null);
 await writeFile("dist/sitemap.xml", sitemap);
