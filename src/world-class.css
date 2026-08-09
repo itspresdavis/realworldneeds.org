@@ -189,7 +189,7 @@
     transition: opacity 170ms ease, transform 170ms ease;
   }
 
-  .show-mobile-taskbar .mobile-taskbar {
+  html.show-mobile-taskbar .mobile-taskbar {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
@@ -265,5 +265,14 @@
 
   html {
     scroll-behavior: auto !important;
+  }
+}
+
+/* Keep the reveal state after all optional media/contrast rules in the cascade. */
+@media (max-width: 760px) {
+  html.show-mobile-taskbar .mobile-taskbar {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
   }
 }
