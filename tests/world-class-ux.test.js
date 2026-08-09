@@ -41,19 +41,23 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
   assert.doesNotMatch(html, /noindex/);
 });
 
-test("whole-catalog directory search uses a static privacy-preserving index", async () => {
+test("whole-catalog directory search uses a static privacy-preserving contextual index", async () => {
   const client = await text("public/directory.js");
   const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
+  assert.equal(searchIndex.schemaVersion, "1.1");
   assert.equal(searchIndex.resourceCount, resources.length);
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
   assert.match(client, /fetch\("\/data\/search-index\.json"/);
+  assert.match(client, /record\.scopes\?\.includes\(currentScope\)/);
   assert.doesNotMatch(client, /XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
   assert.doesNotMatch(client, /search-index\.json\?[^"']|fetch\(`[^`]*\$\{/);
   assert.match(client, /MAX_RESULTS = 60/);
   assert.match(client, /Escape/);
   for (const record of searchIndex.records.slice(0, 10)) {
-    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "name", "place", "search"].sort());
+    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "name", "place", "scopes", "search"].sort());
+    assert.ok(record.scopes.includes("/directory"));
+    assert.ok(record.scopes.includes(`/directory/${String(record.country).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown"}`));
   }
 });
 
