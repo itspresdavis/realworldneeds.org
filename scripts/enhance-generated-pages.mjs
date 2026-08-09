@@ -107,6 +107,21 @@ function accessibilityMarkup(resource) {
   return `<aside class="service-accessibility" aria-label="Accessibility information"><strong>Accessibility</strong><p>${escapeHtml(resource.accessibilityNote)}</p></aside>`;
 }
 
+function serviceNextStepMarkup(resource) {
+  const links = [`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`];
+  if (resource.phone) {
+    const number = resource.phone.replace(/[^+\d]/g, "");
+    links.push(`<a href="tel:${escapeHtml(number)}"><strong>Call</strong><span>${escapeHtml(resource.phone)}</span></a>`);
+  }
+  if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+    const coordinate = `${resource.lat},${resource.lng}`;
+    links.push(`<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open Apple Maps</span></a>`);
+    links.push(`<a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Open location</span></a>`);
+  }
+  links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
+  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong></div><div>${links.join("")}</div></nav>`;
+}
+
 function assetLinks(release, includeScript) {
   return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
 }
@@ -148,6 +163,10 @@ function enhanceCollectionPage(html, release) {
 function enhanceServicePage(html, resource, release) {
   if (!html.includes("directory-enhancements.css")) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n  ${assetLinks(release, false)}`);
+  }
+  if (!html.includes("service-next-steps")) {
+    const nextSteps = serviceNextStepMarkup(resource);
+    html = html.replace('<div class="policy-note">', `${nextSteps}\n      <div class="policy-note">`);
   }
   const accessibility = accessibilityMarkup(resource);
   if (accessibility && !html.includes("service-accessibility")) {
