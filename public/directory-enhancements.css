@@ -1,5 +1,33 @@
 /* Lightweight production styling layered over legal.css for generated directory and service pages. */
 
+/* Directory pages are task-first: keep the premium hero, but do not bury search below it. */
+#directory > .legal-hero {
+  padding: clamp(2.25rem, 4vw, 3.5rem) clamp(1rem, 4vw, 4rem) clamp(1.9rem, 3.5vw, 2.8rem);
+}
+
+#directory > .legal-hero .legal-hero__inner {
+  width: min(100%, 1080px);
+}
+
+#directory > .legal-hero h1 {
+  max-width: 20ch;
+  font-size: clamp(2.45rem, 5vw, 4rem);
+  line-height: .98;
+}
+
+#directory > .legal-hero .legal-hero__lede {
+  max-width: 52rem;
+  margin-top: .9rem;
+}
+
+#directory > .legal-hero .legal-meta {
+  margin-top: 1.05rem;
+}
+
+.directory-shell {
+  padding-top: clamp(1.45rem, 3vw, 2.35rem);
+}
+
 .directory-local-links {
   display: grid;
   gap: .85rem;
@@ -66,9 +94,9 @@
 
 .directory-search-tools {
   display: grid;
-  gap: .85rem;
-  margin: 1.2rem 0 1.6rem;
-  padding: 1rem;
+  gap: .78rem;
+  margin: .85rem 0 1.45rem;
+  padding: .9rem;
   border: 1px solid rgba(10, 58, 54, .12);
   border-radius: 16px;
   background: #fff;
@@ -179,7 +207,7 @@
 }
 
 .directory-global-results {
-  margin: -0.5rem 0 1.7rem;
+  margin: -0.35rem 0 1.7rem;
   border: 1px solid rgba(11, 70, 59, .12);
   border-radius: 16px;
   overflow: clip;
@@ -414,6 +442,20 @@
 }
 
 @media (max-width: 620px) {
+  #directory > .legal-hero {
+    padding-top: 2rem;
+    padding-bottom: 1.7rem;
+  }
+
+  #directory > .legal-hero h1 {
+    max-width: none;
+    font-size: clamp(2.25rem, 12vw, 3.2rem);
+  }
+
+  .directory-shell {
+    padding-top: 1.2rem;
+  }
+
   .directory-search-tools {
     margin-inline: -.15rem;
     border-radius: 13px;
