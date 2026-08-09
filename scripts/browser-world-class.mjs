@@ -203,10 +203,9 @@ async function run() {
       };
       const searchTools = document.querySelector("[data-directory-search]");
       const input = document.querySelector("[data-directory-query]");
-      const chips = [...document.querySelectorAll("[data-directory-category]")];
       const results = document.querySelector(".directory-global-results");
       const list = document.querySelector("[data-global-list]");
-      if (!searchTools || !input || chips.length < 2 || !results || !list) return { ok: false, reason: "directory controls missing" };
+      if (!searchTools || !input || document.querySelectorAll("[data-directory-category]").length < 2 || !results || !list) return { ok: false, reason: "directory controls missing" };
       const searchRect = searchTools.getBoundingClientRect();
       const searchAboveFold = searchRect.top < innerHeight - 70 && searchRect.bottom > 0;
 
@@ -228,7 +227,7 @@ async function run() {
 
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
       await sleep(40);
-      const categoryChip = chips.find((chip) => chip.dataset.directoryCategory);
+      const categoryChip = [...document.querySelectorAll("[data-directory-category]")].find((chip) => chip.dataset.directoryCategory);
       categoryChip?.focus();
       categoryChip?.click();
       const categoryReady = await waitUntil(() => !results.hidden && list.children.length > 0);
@@ -240,8 +239,36 @@ async function run() {
       throw new Error(`Whole-directory interaction failed: ${JSON.stringify(directory)}`);
     }
 
+    await navigate(client, `${HOST}/directory/united-states`);
+    const countryScope = await evaluate(client, `(async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const waitUntil = async (predicate, attempts = 80) => {
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          if (predicate()) return true;
+          await sleep(25);
+        }
+        return false;
+      };
+      const input = document.querySelector("[data-directory-query]");
+      if (!input) return { ok: false, reason: "country search missing" };
+      const catalog = await fetch("/data/search-index.json").then((response) => response.json());
+      const indexes = catalog.scopes["/directory/united-states"] || [];
+      const expected = [...new Set(indexes.flatMap((index) => catalog.records[index]?.categoryLabels || []))].sort();
+      input.focus();
+      const synced = await waitUntil(() => document.querySelectorAll("[data-directory-category]").length === expected.length + 1);
+      const actual = [...document.querySelectorAll("[data-directory-category]")]
+        .map((button) => button.dataset.directoryCategory)
+        .filter(Boolean)
+        .sort();
+      return { ok: true, synced, expected, actual, scopeSize: indexes.length };
+    })()`);
+    if (!countryScope.ok || !countryScope.synced || countryScope.scopeSize < 1 || JSON.stringify(countryScope.actual) !== JSON.stringify(countryScope.expected)) {
+      throw new Error(`Country directory category scope failed: ${JSON.stringify(countryScope)}`);
+    }
+
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
     await navigate(client, `${HOST}/`);
+    await capture(client, "finder-mobile-top.png");
     const mobile = await evaluate(client, `(async () => {
       document.documentElement.style.scrollBehavior = "auto";
       window.scrollTo(0, 500);
@@ -250,26 +277,29 @@ async function run() {
       await new Promise((resolve) => setTimeout(resolve, 240));
       const taskbar = document.querySelector(".mobile-taskbar");
       const quick = document.querySelector(".quick-need");
-      const style = quick ? getComputedStyle(quick) : null;
       const taskbarStyle = taskbar ? getComputedStyle(taskbar) : null;
       const rect = taskbar?.getBoundingClientRect();
+      const hitX = rect ? Math.max(0, Math.min(innerWidth - 1, rect.left + rect.width / 2)) : 0;
+      const hitY = rect ? Math.max(0, Math.min(innerHeight - 1, rect.top + Math.min(rect.height / 2, 20))) : 0;
+      const hit = taskbar ? document.elementFromPoint(hitX, hitY) : null;
       return {
         taskbar: Boolean(taskbar),
-        taskbarVisible: Boolean(rect && rect.height > 0 && Number(taskbarStyle?.opacity || 0) > .9),
         taskbarClass: document.documentElement.classList.contains("show-mobile-taskbar"),
+        taskbarInViewport: Boolean(rect && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight),
+        taskbarHit: Boolean(hit?.closest?.(".mobile-taskbar")),
+        pointerEvents: taskbarStyle?.pointerEvents || "",
         scrollY: window.scrollY,
         quickHeight: quick?.getBoundingClientRect().height || 0,
-        overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-        motion: style?.transitionDuration || ""
+        overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
       };
     })()`);
-    await capture(client, "finder-mobile.png");
-    if (!mobile.taskbar || !mobile.taskbarVisible || !mobile.taskbarClass || mobile.scrollY <= 180 || mobile.quickHeight < 44 || mobile.overflow > 8) {
+    await capture(client, "finder-mobile-scrolled.png");
+    if (!mobile.taskbar || !mobile.taskbarClass || !mobile.taskbarInViewport || !mobile.taskbarHit || mobile.pointerEvents !== "auto" || mobile.scrollY <= 180 || mobile.quickHeight < 44 || mobile.overflow > 8) {
       throw new Error(`Mobile world-class UX failed: ${JSON.stringify(mobile)}`);
     }
 
     if (exceptions.length) throw new Error(`Browser emitted ${exceptions.length} exception(s): ${exceptions.slice(0, 3).join(" | ")}`);
-    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, above-fold private whole-catalog directory search, stable filter focus, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, touch targets, and visual QA capture.");
+    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, above-fold private whole-catalog directory search, stable filter focus, full-scope category controls, local crawl graph, local need pages, service accessibility, related services, mobile taskbar hit-testing, touch targets, and visual QA capture.");
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
