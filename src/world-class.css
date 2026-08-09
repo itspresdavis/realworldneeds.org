@@ -94,6 +94,16 @@
   display: none;
 }
 
+/* Defer layout/paint work for content that is well below the primary finder. */
+.about-rwn,
+.rwn-story,
+.source-band,
+.accountability,
+.site-footer {
+  content-visibility: auto;
+  contain-intrinsic-size: 720px;
+}
+
 /* Strong, consistent keyboard treatment across both the application and generated pages. */
 .rwn-world-class :where(a, button, input, select, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--rwn-focus);
