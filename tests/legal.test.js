@@ -26,12 +26,29 @@ test("sitemap publishes every policy route", async () => {
 });
 
 test("production headers minimize referral and browser capability exposure", async () => {
-  const config = await readFile("vercel.json", "utf8");
-  assert.match(config, /Referrer-Policy/);
-  assert.match(config, /strict-origin-when-cross-origin/);
-  assert.match(config, /Permissions-Policy/);
-  assert.match(config, /geolocation=\(self\)/);
-  assert.match(config, /interest-cohort=\(\)/);
+  const config = JSON.parse(await readFile("vercel.json", "utf8"));
+  const catchAll = config.headers.find((entry) => entry.source === "/(.*)");
+  assert.ok(catchAll, "expected a catch-all production header policy");
+  const headers = Object.fromEntries(catchAll.headers.map(({ key, value }) => [key.toLowerCase(), value]));
+
+  assert.ok(["no-referrer", "strict-origin-when-cross-origin"].includes(headers["referrer-policy"]), `unexpected Referrer-Policy: ${headers["referrer-policy"]}`);
+  assert.equal(headers["x-content-type-options"], "nosniff");
+  assert.equal(headers["x-frame-options"], "DENY");
+  assert.equal(headers["cross-origin-opener-policy"], "same-origin");
+  assert.equal(headers["cross-origin-resource-policy"], "same-origin");
+  assert.match(headers["strict-transport-security"] || "", /max-age=63072000/);
+
+  const permissions = headers["permissions-policy"] || "";
+  assert.match(permissions, /geolocation=\(self\)/);
+  for (const capability of ["camera", "microphone", "payment", "usb", "gyroscope", "magnetometer"]) {
+    assert.match(permissions, new RegExp(`${capability}=\\(\\)`), `${capability} should be disabled`);
+  }
+
+  const csp = headers["content-security-policy"] || "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /upgrade-insecure-requests/);
 });
 
 test("production build has no mutable network download step", async () => {
@@ -45,8 +62,10 @@ test("privacy notice discloses the bounded official-source location query", asyn
   assert.match(html, /one decimal degree/);
   assert.match(html, /USDA/);
   assert.match(html, /Esri/);
-  assert.match(html, /href="\/directory"/);
-  assert.match(html, /href="\/data\/resources\.json"/);
+  assert.match(html, /exact coordinates stay in browser memory/);
+  assert.match(html, /not saved, added to a shared link, or sent to an RWN database/);
+  assert.match(html, /request happens only after you approve location/);
+  assert.match(html, /roughly 11 kilometres of latitude/);
 });
 
 test("homepage provides a complete no-JavaScript route", async () => {
