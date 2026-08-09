@@ -9,6 +9,7 @@ if (root) {
   const pageRecords = [...document.querySelectorAll(".directory-records > .directory-record")];
   const collator = new Intl.Collator(undefined, { sensitivity: "base", usage: "search" });
   const MAX_RESULTS = 60;
+  const currentScope = (location.pathname.replace(/\/page\/\d+\/?$/, "").replace(/\/$/, "") || "/directory");
 
   const normalize = (value) => String(value || "")
     .normalize("NFKD")
@@ -34,7 +35,7 @@ if (root) {
   const results = document.createElement("section");
   results.className = "directory-global-results";
   results.hidden = true;
-  results.setAttribute("aria-label", "Whole-directory search results");
+  results.setAttribute("aria-label", "Full directory search results");
   results.innerHTML = `<div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" data-global-list></div>`;
   root.insertAdjacentElement("afterend", results);
   const resultList = results.querySelector("[data-global-list]");
@@ -107,11 +108,12 @@ if (root) {
       return;
     }
 
-    if (count) count.textContent = "Searching the full directory…";
+    if (count) count.textContent = "Searching this directory…";
     try {
       const payload = await loadCatalog();
       if (currentGeneration !== generation) return;
-      const matches = payload.records
+      const scoped = payload.records.filter((record) => record.scopes?.includes(currentScope));
+      const matches = scoped
         .filter((record) => !activeCategory || record.categoryLabels.some((label) => normalize(label) === activeCategory))
         .map((record) => ({ record, score: scoreRecord(record, tokens) }))
         .filter(({ score }) => score >= 0)
@@ -121,12 +123,12 @@ if (root) {
       results.hidden = false;
       shell?.classList.add("has-global-search");
       const shown = Math.min(matches.length, MAX_RESULTS);
-      resultSummary.textContent = matches.length > shown ? `${matches.length.toLocaleString()} matches · showing the first ${shown}` : `${matches.length.toLocaleString()} matches across ${payload.resourceCount.toLocaleString()} reviewed listings`;
+      resultSummary.textContent = matches.length > shown ? `${matches.length.toLocaleString()} matches · showing the first ${shown}` : `${matches.length.toLocaleString()} matches across ${scoped.length.toLocaleString()} listings in this directory`;
       if (count) count.textContent = matches.length ? `${matches.length.toLocaleString()} matching listings` : "No matching listings";
     } catch {
       if (currentGeneration !== generation) return;
       clearGlobalResults();
-      if (count) count.textContent = "Whole-directory search is temporarily unavailable. Use the interactive finder or browse this page.";
+      if (count) count.textContent = "Full-directory search is temporarily unavailable. Use the interactive finder or browse this page.";
     }
   };
 
