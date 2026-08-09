@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
@@ -64,6 +65,41 @@ function localityPath({ city, country, administrativeArea }, ambiguousBase) {
   const citySlug = slugify(city);
   if (ambiguousBase && administrativeArea) return `/directory/local/${countrySlug}/${slugify(administrativeArea)}/${citySlug}`;
   return `/directory/local/${countrySlug}/${citySlug}`;
+}
+
+function localitySignature({ city, country, administrativeArea }) {
+  return `${country}\u0000${administrativeArea || ""}\u0000${city}`;
+}
+
+function allocateLocalityPath(info, ambiguousBase, usedPaths) {
+  const signature = localitySignature(info);
+  const initial = localityPath(info, ambiguousBase);
+  if (!usedPaths.has(initial)) {
+    usedPaths.set(initial, signature);
+    return initial;
+  }
+
+  const countrySlug = slugify(info.country);
+  const citySlug = slugify(info.city);
+  if (info.administrativeArea) {
+    const qualified = `/directory/local/${countrySlug}/${slugify(info.administrativeArea)}/${citySlug}`;
+    if (!usedPaths.has(qualified)) {
+      usedPaths.set(qualified, signature);
+      return qualified;
+    }
+  }
+
+  // Distinct Unicode/punctuation locality names can normalize to the same readable slug.
+  // Preserve the readable prefix and add a short deterministic suffix only for that rare collision.
+  const suffix = createHash("sha256").update(signature).digest("hex").slice(0, 8);
+  let candidate = `/directory/local/${countrySlug}/${citySlug}-${suffix}`;
+  let attempt = 1;
+  while (usedPaths.has(candidate)) {
+    candidate = `/directory/local/${countrySlug}/${citySlug}-${suffix}-${attempt}`;
+    attempt += 1;
+  }
+  usedPaths.set(candidate, signature);
+  return candidate;
 }
 
 function cityPage(localityInfo, items, canonicalPath) {
@@ -187,8 +223,9 @@ const eligible = groups
 
 const sitemapEntries = [];
 const manifest = [];
+const usedPaths = new Map();
 for (const { info, items, ambiguousBase } of eligible) {
-  const path = localityPath(info, ambiguousBase);
+  const path = allocateLocalityPath(info, ambiguousBase, usedPaths);
   const output = join("dist", path);
   await mkdir(output, { recursive: true });
   await writeFile(join(output, "index.html"), cityPage(info, items, path));
