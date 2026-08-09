@@ -10,7 +10,9 @@ test("finder starts calm and teaches the globe without adding persistent clutter
   const refinement = await text("src/refinement.js");
   const css = await text("src/refinement.css");
 
-  assert.match(refinement, /Search food, shelter, city or organization/);
+  assert.match(refinement, /input\.placeholder = "Search service or place"/);
+  assert.match(refinement, /Search by service, place, ZIP or postcode, or organization/);
+  assert.match(refinement, /Try “food pantry”, “Boston”, a ZIP\/postcode, “showers”, or an organization name/);
   assert.match(refinement, /rwn-initial-calm/);
   assert.match(refinement, /Tap a glow for details/);
   assert.match(refinement, /has-used-globe/);
