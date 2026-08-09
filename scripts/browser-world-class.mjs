@@ -1,11 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const HOST = "http://127.0.0.1:4174";
 const CDP_PORT = 9223;
 const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
+const QA_DIR = "qa-screenshots";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function findChrome() {
@@ -95,6 +96,12 @@ async function navigate(client, url) {
   await sleep(650);
 }
 
+async function capture(client, name) {
+  await mkdir(QA_DIR, { recursive: true });
+  const { data } = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
+  await writeFile(join(QA_DIR, name), Buffer.from(data, "base64"));
+}
+
 async function verifyStaticEnhancements() {
   const resources = await (await fetch(`${HOST}/data/resources.json`)).json();
   const accessible = resources.resources.find((resource) => resource.accessibilityNote);
@@ -160,6 +167,7 @@ async function run() {
     await Promise.all([client.call("Page.enable"), client.call("Runtime.enable")]);
     client.on("Runtime.exceptionThrown", ({ exceptionDetails }) => exceptions.push(exceptionDetails?.exception?.description || exceptionDetails?.text || "Unknown browser exception"));
 
+    await client.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
     await navigate(client, `${HOST}/`);
     const homepage = await evaluate(client, `(() => {
       const panel = document.getElementById("resourcePanel");
@@ -176,8 +184,10 @@ async function run() {
     if (!homepage.worldClass || !homepage.routeChoice || !homepage.jumpResults || homepage.detailLinks < 1 || !homepage.status || homepage.panelLive || homepage.panelRole !== "region") {
       throw new Error(`World-class homepage layer failed: ${JSON.stringify(homepage)}`);
     }
+    await capture(client, "finder-desktop.png");
 
     await navigate(client, `${HOST}/directory`);
+    await capture(client, "directory-desktop.png");
     const directory = await evaluate(client, `(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const input = document.querySelector("[data-directory-query]");
@@ -223,12 +233,13 @@ async function run() {
         motion: style?.transitionDuration || ""
       };
     })()`);
+    await capture(client, "finder-mobile.png");
     if (!mobile.taskbar || !mobile.taskbarVisible || !mobile.taskbarClass || mobile.scrollY <= 180 || mobile.quickHeight < 44 || mobile.overflow > 8) {
       throw new Error(`Mobile world-class UX failed: ${JSON.stringify(mobile)}`);
     }
 
     if (exceptions.length) throw new Error(`Browser emitted ${exceptions.length} exception(s): ${exceptions.slice(0, 3).join(" | ")}`);
-    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private directory filtering, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, and touch targets.");
+    console.log("RWN world-class browser test passed: finder semantics, permanent detail links, private directory filtering, local crawl graph, local need pages, service accessibility, related services, mobile taskbar, touch targets, and visual QA capture.");
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
