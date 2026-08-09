@@ -25,16 +25,28 @@ const slugify = (value) => String(value || "unknown")
 const aidTypes = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
 const aidLabels = (resource) => aidTypes(resource).map((type) => categories[type]?.label || type);
 const directCount = (items) => items.filter((resource) => resource.kind === "direct").length;
+const latestReview = (items) => items.map((resource) => resource.lastChecked).filter(Boolean).sort().at(-1);
 
 function jsonLd(value) {
   return `<script type="application/ld+json">${JSON.stringify(value).replaceAll("<", "\\u003c")}</script>`;
 }
 
-function cityKey(resource) {
+function administrativeArea(resource) {
+  const address = String(resource.address || "");
+  if (resource.country === "United States") {
+    return address.match(/,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/)?.[1] || "";
+  }
+  if (resource.country === "Canada") {
+    return address.match(/,\s*([A-Z]{2})\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d\b/i)?.[1]?.toUpperCase() || "";
+  }
+  return "";
+}
+
+function locality(resource) {
   const city = String(resource.city || "").trim();
   const country = String(resource.country || "").trim();
   if (!city || !country || country === "Global") return null;
-  return `${city}\u0000${country}`;
+  return { city, country, administrativeArea: administrativeArea(resource) };
 }
 
 function resourceCard(resource) {
@@ -47,14 +59,27 @@ function resourceCard(resource) {
   </article>`;
 }
 
-function cityPage(city, country, items) {
+function localityPath({ city, country, administrativeArea }, ambiguousBase) {
   const countrySlug = slugify(country);
   const citySlug = slugify(city);
-  const canonicalPath = `/directory/local/${countrySlug}/${citySlug}`;
+  if (ambiguousBase && administrativeArea) return `/directory/local/${countrySlug}/${slugify(administrativeArea)}/${citySlug}`;
+  return `/directory/local/${countrySlug}/${citySlug}`;
+}
+
+function cityPage(localityInfo, items, canonicalPath) {
+  const { city, country, administrativeArea } = localityInfo;
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
+  const countrySlug = slugify(country);
+  const displayLocation = [city, administrativeArea, country].filter(Boolean).join(", ");
   const categoriesPresent = [...new Set(items.flatMap(aidTypes))].filter((type) => categories[type]);
-  const categoryText = categoriesPresent.slice(0, 5).map((type) => categories[type].label.toLowerCase()).join(", ");
-  const description = `Find free essential services in ${city}, ${country}, including ${categoryText}. Browse ${items.length} reviewed listings connected to their original sources.`;
+  const categoryText = categoriesPresent.slice(0, 5).map((type) => categories[type].label.toLowerCase()).join(", ") || "essential help";
+  const description = `Find free essential services in ${displayLocation}, including ${categoryText}. Browse ${items.length} reviewed listings connected to their original sources.`;
+  const placeAddress = {
+    "@type": "PostalAddress",
+    addressLocality: city,
+    addressCountry: country,
+    ...(administrativeArea ? { addressRegion: administrativeArea } : {})
+  };
   const schema = {
     "@context": "https://schema.org",
     "@graph": [
@@ -62,11 +87,12 @@ function cityPage(city, country, items) {
         "@type": "CollectionPage",
         "@id": `${canonical}#page`,
         url: canonical,
-        name: `Free essential services in ${city}, ${country}`,
+        name: `Free essential services in ${displayLocation}`,
         description,
         isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
-        about: { "@type": "Place", name: `${city}, ${country}` },
-        mainEntity: { "@id": `${canonical}#list` }
+        about: { "@type": "Place", name: displayLocation, address: placeAddress },
+        mainEntity: { "@id": `${canonical}#list` },
+        dateModified: latestReview(items)
       },
       {
         "@type": "ItemList",
@@ -85,7 +111,7 @@ function cityPage(city, country, items) {
           { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_ORIGIN}/` },
           { "@type": "ListItem", position: 2, name: "Directory", item: `${SITE_ORIGIN}/directory` },
           { "@type": "ListItem", position: 3, name: country, item: `${SITE_ORIGIN}/directory/${countrySlug}` },
-          { "@type": "ListItem", position: 4, name: city }
+          { "@type": "ListItem", position: 4, name: displayLocation }
         ]
       }
     ]
@@ -103,19 +129,19 @@ function cityPage(city, country, items) {
   <link rel="stylesheet" href="/legal.css" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Real World Needs" />
-  <meta property="og:title" content="Free Essential Services in ${escapeHtml(city)}, ${escapeHtml(country)} | Real World Needs" />
+  <meta property="og:title" content="Free Essential Services in ${escapeHtml(displayLocation)} | Real World Needs" />
   <meta property="og:description" content="${escapeHtml(description)}" />
   <meta property="og:url" content="${canonical}" />
   ${jsonLd(schema)}
-  <title>Free Essential Services in ${escapeHtml(city)}, ${escapeHtml(country)} | Real World Needs</title>
+  <title>Free Essential Services in ${escapeHtml(displayLocation)} | Real World Needs</title>
 </head>
 <body>
   <a class="skip-link" href="#directory">Skip to local services</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
   <main id="directory">
-    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local directory</p><h1>Free essential services in ${escapeHtml(city)}, ${escapeHtml(country)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span></div></div></section>
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local directory</p><h1>Free essential services in ${escapeHtml(displayLocation)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Checked through ${escapeHtml(latestReview(items))}</span></div></div></section>
     <div class="directory-shell">
-      <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(country)}</a><span aria-current="page">${escapeHtml(city)}</span></nav>
+      <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(country)}</a><span aria-current="page">${escapeHtml(displayLocation)}</span></nav>
       <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
       <div class="directory-downloads"><strong>Browse this area</strong>${categoriesPresent.map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type].label)}</a>`).join("")}<a href="/directory/${countrySlug}">All services in ${escapeHtml(country)}</a><a href="/directory">Full directory</a></div>
       <div class="directory-records">${items.map(resourceCard).join("\n")}</div>
@@ -126,39 +152,67 @@ function cityPage(city, country, items) {
 </html>`;
 }
 
-const groups = new Map();
+const baseGroups = new Map();
 for (const resource of resources) {
-  const key = cityKey(resource);
-  if (!key) continue;
-  if (!groups.has(key)) groups.set(key, []);
-  groups.get(key).push(resource);
+  const info = locality(resource);
+  if (!info) continue;
+  const baseKey = `${info.city}\u0000${info.country}`;
+  if (!baseGroups.has(baseKey)) baseGroups.set(baseKey, []);
+  baseGroups.get(baseKey).push({ resource, info });
 }
 
-const eligible = [...groups.entries()]
-  .map(([key, items]) => ({ key, items }))
-  .filter(({ items }) => items.length >= MIN_CITY_LISTINGS)
-  .sort((a, b) => a.key.localeCompare(b.key));
+const groups = [];
+for (const [baseKey, entries] of baseGroups) {
+  const knownAreas = [...new Set(entries.map(({ info }) => info.administrativeArea).filter(Boolean))];
+  const ambiguousBase = knownAreas.length > 1;
+  const byArea = new Map();
 
-const paths = [];
+  for (const entry of entries) {
+    const key = ambiguousBase ? entry.info.administrativeArea : "";
+    if (ambiguousBase && !key) continue;
+    if (!byArea.has(key)) byArea.set(key, []);
+    byArea.get(key).push(entry);
+  }
+
+  for (const [, areaEntries] of byArea) {
+    const info = { ...areaEntries[0].info };
+    if (!ambiguousBase) info.administrativeArea = knownAreas.length === 1 ? knownAreas[0] : info.administrativeArea;
+    groups.push({ baseKey, ambiguousBase, info, items: areaEntries.map(({ resource }) => resource) });
+  }
+}
+
+const eligible = groups
+  .filter(({ items }) => items.length >= MIN_CITY_LISTINGS)
+  .sort((a, b) => `${a.info.country}\u0000${a.info.administrativeArea}\u0000${a.info.city}`.localeCompare(`${b.info.country}\u0000${b.info.administrativeArea}\u0000${b.info.city}`));
+
+const sitemapEntries = [];
 const manifest = [];
-for (const { key, items } of eligible) {
-  const [city, country] = key.split("\u0000");
-  const countrySlug = slugify(country);
-  const citySlug = slugify(city);
-  const output = join("dist/directory/local", countrySlug, citySlug);
+for (const { info, items, ambiguousBase } of eligible) {
+  const path = localityPath(info, ambiguousBase);
+  const output = join("dist", path);
   await mkdir(output, { recursive: true });
-  await writeFile(join(output, "index.html"), cityPage(city, country, items));
-  const path = `/directory/local/${countrySlug}/${citySlug}`;
-  paths.push(path);
-  manifest.push({ city, country, count: items.length, path });
+  await writeFile(join(output, "index.html"), cityPage(info, items, path));
+  sitemapEntries.push({ path, lastmod: latestReview(items) });
+  manifest.push({
+    city: info.city,
+    country: info.country,
+    administrativeArea: info.administrativeArea || null,
+    count: items.length,
+    lastmod: latestReview(items),
+    path
+  });
 }
 
 await mkdir("dist/data/resources", { recursive: true });
-await writeFile("dist/data/resources/local-index.json", `${JSON.stringify({ schemaVersion: "1.0", minimumListings: MIN_CITY_LISTINGS, pageCount: manifest.length, cities: manifest }, null, 2)}\n`);
+await writeFile("dist/data/resources/local-index.json", `${JSON.stringify({
+  schemaVersion: "1.1",
+  minimumListings: MIN_CITY_LISTINGS,
+  pageCount: manifest.length,
+  cities: manifest
+}, null, 2)}\n`);
 
 const sitemapPath = "dist/sitemap.xml";
 let sitemap = await readFile(sitemapPath, "utf8");
-const lastmod = [...resources].map((resource) => resource.lastChecked).sort().at(-1) || new Date().toISOString().slice(0, 10);
-const additions = paths.map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${lastmod}</lastmod></url>`).join("\n");
+const additions = sitemapEntries.map(({ path, lastmod }) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${lastmod}</lastmod></url>`).join("\n");
 sitemap = sitemap.replace("</urlset>", `${additions ? `${additions}\n` : ""}</urlset>`);
 await writeFile(sitemapPath, sitemap);
