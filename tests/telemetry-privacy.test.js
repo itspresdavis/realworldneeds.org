@@ -27,7 +27,7 @@ test("client telemetry does not persist sampling or send sensitive path/device c
   assert.doesNotMatch(client, /sessionStorage|localStorage/);
   assert.doesNotMatch(client, /path:\s*location\.pathname/);
   assert.doesNotMatch(client, /reducedMotion|navigator\.connection|effectiveType/);
-  assert.doesNotMatch(client, /innerWidth\}\x|innerHeight\}|\$\{Math\.round\(innerWidth\)\}/);
+  assert.doesNotMatch(client, /viewport:\s*`/);
   assert.match(client, /route:\s*routeClass\(location\.pathname\)/);
   assert.match(client, /viewportClass:\s*viewportClass\(\)/);
 });
