@@ -91,6 +91,16 @@ async function capture(client, name) {
   await writeFile(join(QA_DIR, name), Buffer.from(data, "base64"));
 }
 
+function normalizedUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.href;
+  } catch {
+    return String(value || "");
+  }
+}
+
 async function run() {
   const chrome = findChrome();
   const profile = await mkdtemp(join(tmpdir(), "rwn-service-qa-"));
@@ -143,10 +153,10 @@ async function run() {
         title: document.querySelector("#service h1")?.textContent?.trim() || "",
         nextSteps: Boolean(next),
         actionCount: links.length,
-        primaryExternal: Boolean(primary && /^https:\/\//.test(primary.href)),
-        sourceMatches: Boolean(primary && primary.href.split("#")[0] === ${JSON.stringify(resource.sourceUrl)}.split("#")[0]),
-        phoneAction: ${JSON.stringify(Boolean(resource.phone))} ? Boolean(phone) : true,
-        privateMapLink: Boolean(interactive && !interactive.href.includes("?resource=")),
+        primaryHref: primary?.href || "",
+        primaryExternal: Boolean(primary && primary.protocol === "https:"),
+        phoneHref: phone?.getAttribute("href") || "",
+        interactiveHref: interactive?.getAttribute("href") || "",
         aboveFold: Boolean(rect && rect.top < innerHeight - 70 && rect.bottom > 0),
         beforePolicy: Boolean(next && policy && (next.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING)),
         mapActions: links.filter((link) => /Maps|Directions/.test(link.textContent || "")).length,
@@ -154,8 +164,11 @@ async function run() {
       };
     })()`);
     await capture(client, "service-desktop.png");
-    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !desktop.sourceMatches || !desktop.phoneAction || !desktop.privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions < 2 || desktop.overflow > 8) {
-      throw new Error(`Desktop service landing page failed: ${JSON.stringify(desktop)}`);
+    const sourceMatches = normalizedUrl(desktop.primaryHref) === normalizedUrl(resource.sourceUrl);
+    const phoneAction = resource.phone ? desktop.phoneHref.startsWith("tel:") : true;
+    const privateMapLink = desktop.interactiveHref.startsWith("/#resource=") && !desktop.interactiveHref.includes("?resource=");
+    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions < 2 || desktop.overflow > 8) {
+      throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink })}`);
     }
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -192,10 +205,12 @@ async function run() {
       const toolsRect = tools?.getBoundingClientRect();
       const chips = [...document.querySelectorAll("[data-directory-category]")];
       if (!tools || !input || !list || chips.length < 2) return { ok: false, reason: "directory mobile controls missing" };
-      const target = ${JSON.stringify(resource.name)};
-      input.value = target;
+      const catalog = await fetch("/data/search-index.json").then((response) => response.json());
+      const target = catalog.records.find((record) => record.kind === "direct") || catalog.records[0];
+      if (!target) return { ok: false, reason: "search catalog empty" };
+      input.value = target.name;
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      const targetHref = "/service/" + encodeURIComponent(${JSON.stringify(resource.id)});
+      const targetHref = "/service/" + encodeURIComponent(target.id);
       const found = await waitUntil(() => [...list.querySelectorAll("a")].some((link) => new URL(link.href).pathname === targetHref));
       return {
         ok: true,
