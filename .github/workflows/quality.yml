@@ -31,3 +31,11 @@ jobs:
         run: npm run test:browser:chaos
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Upload visual QA
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rwn-visual-qa
+          path: qa-screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 7
