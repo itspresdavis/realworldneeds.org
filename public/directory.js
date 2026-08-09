@@ -62,10 +62,20 @@ if (root) {
 
   const renderChips = () => {
     if (!chips) return;
-    chips.innerHTML = [
-      `<button type="button" data-directory-category="" aria-pressed="${activeCategory === ""}">All help</button>`,
-      ...categoryLabels.map((label) => `<button type="button" data-directory-category="${label.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;")}" aria-pressed="${normalize(label) === activeCategory}">${label}</button>`)
-    ].join("");
+    if (!chips.children.length) {
+      const fragment = document.createDocumentFragment();
+      for (const [label, value] of [["All help", ""], ...categoryLabels.map((label) => [label, label])]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.directoryCategory = value;
+        button.textContent = label;
+        fragment.append(button);
+      }
+      chips.append(fragment);
+    }
+    for (const button of chips.querySelectorAll("[data-directory-category]")) {
+      button.setAttribute("aria-pressed", String(normalize(button.dataset.directoryCategory) === activeCategory));
+    }
   };
 
   const clearGlobalResults = () => {
