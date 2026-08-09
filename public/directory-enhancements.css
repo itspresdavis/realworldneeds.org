@@ -1,0 +1,295 @@
+/* Lightweight production styling layered over legal.css for generated directory and service pages. */
+
+.directory-search-tools {
+  display: grid;
+  gap: .85rem;
+  margin: 1.2rem 0 1.6rem;
+  padding: 1rem;
+  border: 1px solid rgba(10, 58, 54, .12);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(7, 25, 38, .06);
+}
+
+.directory-search-tools__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .65rem;
+  align-items: center;
+}
+
+.directory-search-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: .65rem;
+  min-height: 3.25rem;
+  padding: 0 .9rem;
+  border: 1px solid #c9d8d4;
+  border-radius: 12px;
+  background: #fbfdfc;
+}
+
+.directory-search-field:focus-within {
+  border-color: #168c58;
+  box-shadow: 0 0 0 4px rgba(22, 140, 88, .12);
+}
+
+.directory-search-field span {
+  color: #0e7b4b;
+  font-size: 1.05rem;
+}
+
+.directory-search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #09242c;
+  font: inherit;
+  font-size: .95rem;
+}
+
+.directory-search-tools__clear {
+  min-height: 3.25rem;
+  padding: 0 .9rem;
+  border: 1px solid #c9d8d4;
+  border-radius: 11px;
+  background: #fff;
+  color: #0a6e43;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.directory-search-tools__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem 1rem;
+  color: #5e7375;
+  font-size: .76rem;
+}
+
+.directory-search-tools__meta kbd {
+  display: inline-grid;
+  min-width: 1.5rem;
+  min-height: 1.4rem;
+  place-items: center;
+  margin-inline: .15rem;
+  border: 1px solid #cbd9d5;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #f5f8f7;
+  color: #365054;
+  font: inherit;
+  font-weight: 800;
+}
+
+.directory-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .42rem;
+}
+
+.directory-category-chips button {
+  min-height: 2.25rem;
+  padding: .48rem .7rem;
+  border: 1px solid #d0ddda;
+  border-radius: 999px;
+  background: #f8fbfa;
+  color: #365054;
+  font: inherit;
+  font-size: .73rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.directory-category-chips button[aria-pressed="true"] {
+  border-color: #16935b;
+  background: #eaf7ef;
+  color: #09653d;
+}
+
+.directory-records {
+  gap: .8rem;
+}
+
+.directory-record {
+  border-color: rgba(19, 71, 67, .11) !important;
+  border-radius: 15px !important;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(7, 25, 38, .045);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.directory-record:hover {
+  border-color: rgba(15, 127, 80, .24) !important;
+  box-shadow: 0 16px 40px rgba(7, 25, 38, .075);
+  transform: translateY(-1px);
+}
+
+.directory-record[hidden] {
+  display: none !important;
+}
+
+.directory-record h2 a {
+  color: inherit;
+  text-decoration-thickness: .08em;
+  text-decoration-color: rgba(10, 116, 70, .2);
+  text-underline-offset: .14em;
+}
+
+.directory-record h2 a:hover,
+.directory-record h2 a:focus-visible {
+  color: #087144;
+  text-decoration-color: currentColor;
+}
+
+.directory-links a {
+  min-height: 2.25rem;
+}
+
+.related-services {
+  margin: 1.8rem 0 0;
+  padding: clamp(1rem, 2.5vw, 1.4rem);
+  border: 1px solid rgba(12, 67, 62, .12);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #f8fcfa, #f1f8f4);
+}
+
+.related-services__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .9rem;
+}
+
+.related-services__heading h2 {
+  margin: 0;
+  color: #09242c;
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  letter-spacing: -.03em;
+}
+
+.related-services__heading a {
+  color: #0a7446;
+  font-size: .78rem;
+  font-weight: 800;
+  text-underline-offset: 3px;
+}
+
+.related-services__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.related-services__grid > a {
+  display: grid;
+  gap: .28rem;
+  min-height: 7rem;
+  padding: .85rem;
+  border: 1px solid rgba(17, 91, 74, .12);
+  border-radius: 12px;
+  background: #fff;
+  color: #09242c;
+  text-decoration: none;
+}
+
+.related-services__grid > a:hover,
+.related-services__grid > a:focus-visible {
+  border-color: rgba(10, 122, 72, .32);
+  box-shadow: 0 10px 24px rgba(7, 25, 38, .065);
+}
+
+.related-services__grid strong {
+  font-size: .86rem;
+  line-height: 1.25;
+}
+
+.related-services__grid span,
+.related-services__grid small {
+  color: #617679;
+  font-size: .72rem;
+  line-height: 1.4;
+}
+
+.related-services__grid small {
+  align-self: end;
+  color: #0a7245;
+  font-weight: 760;
+}
+
+.directory-search-tools :where(button, input):focus-visible,
+.related-services a:focus-visible,
+.directory-record a:focus-visible {
+  outline: 3px solid #177f53;
+  outline-offset: 3px;
+}
+
+@media (max-width: 840px) {
+  .related-services__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .directory-search-tools {
+    margin-inline: -.15rem;
+    border-radius: 13px;
+  }
+
+  .directory-search-tools__top {
+    grid-template-columns: 1fr;
+  }
+
+  .directory-search-tools__clear,
+  .directory-category-chips button,
+  .directory-links a,
+  .related-services__grid > a {
+    min-height: 44px;
+  }
+
+  .directory-search-tools__meta kbd,
+  .directory-search-tools__meta kbd + span {
+    display: none;
+  }
+
+  .related-services__heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .related-services__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .directory-record {
+    transition: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .directory-search-tools,
+  .directory-search-field,
+  .directory-record,
+  .related-services,
+  .related-services__grid > a {
+    border-color: currentColor !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .directory-search-tools,
+  .directory-record,
+  .related-services__grid > a {
+    border: 1px solid CanvasText;
+  }
+}
