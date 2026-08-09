@@ -44,5 +44,7 @@ test("privacy notice explicitly describes minimized first-party diagnostics", as
   const privacy = await readFile("public/privacy.html", "utf8");
   assert.match(privacy, /about 2% of page loads/);
   assert.match(privacy, /does <strong>not<\/strong> include your search words, exact page path, service identifier, city/);
-  assert.match(privacy, /no third-party analytics service/);
+  assert.match(privacy, /third-party analytics service/);
+  assert.match(privacy, /RWN has not added a third-party analytics or advertising tool/);
+  assert.match(privacy, /first-party endpoint on the same website/);
 });
