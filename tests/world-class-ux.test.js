@@ -28,7 +28,7 @@ test("bootstrap loads the world-class interaction layer with the release hash", 
   assert.match(bootstrap, /installWorldClassUX\(\)/);
 });
 
-test("directory pages remain indexable HTML while gaining instant local filtering", async () => {
+test("directory pages remain indexable HTML while gaining whole-catalog search", async () => {
   const html = await text("dist/directory/index.html");
   const release = JSON.parse(await text("dist/data/release.json"));
   assert.match(release.directoryRelease, /^[a-f0-9]{12}$/);
@@ -41,11 +41,20 @@ test("directory pages remain indexable HTML while gaining instant local filterin
   assert.doesNotMatch(html, /noindex/);
 });
 
-test("directory filtering is privacy-minimizing and does not depend on network requests", async () => {
+test("whole-catalog directory search uses a static privacy-preserving index", async () => {
   const client = await text("public/directory.js");
-  assert.doesNotMatch(client, /fetch\(|XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
-  assert.match(client, /data-directory-query/);
+  const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
+  assert.equal(searchIndex.resourceCount, resources.length);
+  assert.equal(searchIndex.records.length, resources.length);
+  assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
+  assert.match(client, /fetch\("\/data\/search-index\.json"/);
+  assert.doesNotMatch(client, /XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
+  assert.doesNotMatch(client, /search-index\.json\?[^"']|fetch\(`[^`]*\$\{/);
+  assert.match(client, /MAX_RESULTS = 60/);
   assert.match(client, /Escape/);
+  for (const record of searchIndex.records.slice(0, 10)) {
+    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "name", "place", "search"].sort());
+  }
 });
 
 test("service pages add crawlable related-help links and source-backed accessibility notes", async () => {
@@ -124,12 +133,13 @@ test("country pages expose local directories through normal crawlable links", as
   assert.ok(html.includes(us.path));
 });
 
-test("new interaction layers stay intentionally small", async () => {
+test("new interaction layers and search index stay within deliberate budgets", async () => {
   const budgets = [
     ["src/world-class.js", 10_000],
     ["src/world-class.css", 12_000],
-    ["public/directory.js", 7_000],
-    ["public/directory-enhancements.css", 12_000]
+    ["public/directory.js", 12_000],
+    ["public/directory-enhancements.css", 18_000],
+    ["dist/data/search-index.json", 1_500_000]
   ];
   for (const [path, maximum] of budgets) {
     const { size } = await stat(path);
