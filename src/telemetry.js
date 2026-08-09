@@ -23,7 +23,7 @@ function cleanNumber(value) {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
 }
 
-function routeClass(pathname) {
+export function routeClass(pathname) {
   if (pathname === "/" || pathname === "") return "finder";
   if (/^\/service\//.test(pathname)) return "service";
   if (/^\/directory\/local\/[^/]+(?:\/[^/]+)?\/[^/]+\/help\//.test(pathname)) return "local_need_directory";
