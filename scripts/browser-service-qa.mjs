@@ -9,6 +9,26 @@ const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
 const QA_DIR = "qa-screenshots";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function stopProcess(child, timeoutMs = 1800) {
+  if (!child || child.exitCode !== null || child.signalCode) return;
+  await new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch {}
+      finish();
+    }, timeoutMs);
+    timer.unref?.();
+    child.once("exit", finish);
+    try { child.kill("SIGTERM"); } catch { finish(); }
+  });
+}
+
 function findChrome() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
   for (const candidate of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"]) {
@@ -228,10 +248,9 @@ async function run() {
     console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, phone/map next steps, above-fold task flow, private map deep-link, mobile directory search, touch targets, no overflow, and screenshots.`);
   } finally {
     client?.close();
-    browser?.kill("SIGTERM");
-    server.kill("SIGTERM");
-    await sleep(100);
-    await rm(profile, { recursive: true, force: true });
+    await stopProcess(browser);
+    await stopProcess(server);
+    await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 125 });
   }
 }
 
