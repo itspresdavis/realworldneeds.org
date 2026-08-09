@@ -6,6 +6,7 @@ import { join } from "node:path";
 const HOST = "http://127.0.0.1:4173";
 const CDP_PORT = 9222;
 const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
+const EXPECTED_QUICK_NEEDS = 7;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -134,18 +135,41 @@ function interactiveNodesWithoutNames(nodes) {
 async function testStaticRoutes() {
   const homepage = await fetch(`${HOST}/`);
   if (!homepage.ok) throw new Error(`Homepage returned ${homepage.status}.`);
+  const homepageHtml = await homepage.text();
+  if (!homepageHtml.includes("Find free help near you") || !homepageHtml.includes("/directory/help/food")) {
+    throw new Error("Homepage is missing the server-visible finder fallback or need navigation.");
+  }
 
   const directory = await fetch(`${HOST}/directory`);
   if (!directory.ok) throw new Error(`Directory returned ${directory.status}.`);
   const directoryHtml = await directory.text();
   const recordCount = (directoryHtml.match(/<article class="directory-record"/g) || []).length;
   if (recordCount < 1 || recordCount > 80) throw new Error(`Directory page rendered ${recordCount} records; expected 1–80.`);
-  if (!directoryHtml.includes("Browse by country") || !directoryHtml.includes("/directory/united-states")) {
-    throw new Error("Directory is missing crawlable country navigation.");
+  if (!directoryHtml.includes("Browse by need") || !directoryHtml.includes("Browse by country") || !directoryHtml.includes("/directory/united-states")) {
+    throw new Error("Directory is missing crawlable need or country navigation.");
   }
 
   const country = await fetch(`${HOST}/directory/united-states`);
   if (!country.ok) throw new Error(`Country directory route returned ${country.status}.`);
+
+  const food = await fetch(`${HOST}/directory/help/food`);
+  if (!food.ok) throw new Error(`Food-assistance directory route returned ${food.status}.`);
+  const foodHtml = await food.text();
+  if (!foodHtml.includes("Find free food help") || !foodHtml.includes('"@type":"CollectionPage"')) {
+    throw new Error("Food-assistance page is missing expected semantic content.");
+  }
+
+  const resourcesResponse = await fetch(`${HOST}/data/resources.json`);
+  if (!resourcesResponse.ok) throw new Error(`Resource data returned ${resourcesResponse.status}.`);
+  const resourceData = await resourcesResponse.json();
+  const sampleId = resourceData.resources?.[0]?.id;
+  if (!sampleId) throw new Error("Resource data does not contain a sample listing.");
+  const service = await fetch(`${HOST}/service/${encodeURIComponent(sampleId)}`);
+  if (!service.ok) throw new Error(`Service detail route returned ${service.status}.`);
+  const serviceHtml = await service.text();
+  if (!serviceHtml.includes('"@type":"Service"') || !serviceHtml.includes("Visit original source")) {
+    throw new Error("Service detail page is missing structured service/source content.");
+  }
 
   const mapIndex = await fetch(`${HOST}/data/map-index.json`);
   if (!mapIndex.ok) throw new Error(`Compact map index returned ${mapIndex.status}.`);
@@ -222,7 +246,7 @@ async function run() {
     if (!initial.title.includes("Real World Needs") || initial.rootChildren < 1 || !initial.canvas) {
       throw new Error(`Homepage did not initialize correctly: ${JSON.stringify(initial)}; exceptions=${browserExceptions.slice(0, 3).join(" | ")}`);
     }
-    if (initial.quickNeeds !== 5 || !initial.refined) {
+    if (initial.quickNeeds !== EXPECTED_QUICK_NEEDS || !initial.refined) {
       throw new Error(`Finder refinements did not initialize: ${JSON.stringify(initial)}; exceptions=${browserExceptions.slice(0, 3).join(" | ")}`);
     }
     if (initial.clusterNumbers !== 0) throw new Error(`Numeric cluster markup is present in production output (${initial.clusterNumbers}).`);
@@ -234,7 +258,7 @@ async function run() {
       const canvas = document.getElementById("globeCanvas");
       const filters = [...document.querySelectorAll(".layer-toggle[data-type]")];
       const quick = [...document.querySelectorAll(".quick-need")];
-      if (!search || !canvas || filters.length < 7 || quick.length !== 5) return { ok: false, reason: "controls missing" };
+      if (!search || !canvas || filters.length < 7 || quick.length !== ${EXPECTED_QUICK_NEEDS}) return { ok: false, reason: "controls missing" };
 
       for (let i = 0; i < 120; i += 1) {
         search.value = i % 3 === 0 ? "food" : i % 3 === 1 ? "shelter" : "";
@@ -311,7 +335,7 @@ async function run() {
       quickNeeds: document.querySelectorAll(".quick-need").length,
       clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length
     }))()`);
-    if (!reducedMotion.reduced || reducedMotion.quickNeeds !== 5 || reducedMotion.clusterNumbers !== 0) {
+    if (!reducedMotion.reduced || reducedMotion.quickNeeds !== EXPECTED_QUICK_NEEDS || reducedMotion.clusterNumbers !== 0) {
       throw new Error(`Reduced-motion mode failed: ${JSON.stringify(reducedMotion)}`);
     }
 
@@ -326,7 +350,7 @@ async function run() {
       throw new Error(`Browser emitted ${browserExceptions.length} uncaught exception(s): ${browserExceptions.slice(0, 3).join(" | ")}`);
     }
 
-    console.log("RWN browser chaos test passed: desktop, mobile, rapid search/filter churn, globe input, WebGL context loss, reduced motion, accessibility names, routes, pagination, and compact data index.");
+    console.log("RWN browser chaos test passed: desktop, mobile, rapid search/filter churn, globe input, WebGL context loss, reduced motion, accessibility names, crawlable need/service routes, pagination, and compact data index.");
   } finally {
     client?.close();
     browser?.kill("SIGTERM");

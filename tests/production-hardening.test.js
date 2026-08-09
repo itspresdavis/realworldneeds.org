@@ -20,6 +20,14 @@ test("built homepage uses one content-derived release version for every source a
   assert.doesNotMatch(html, /rwn-2026\d+/);
 });
 
+test("built homepage contains useful server-visible finder content before JavaScript", async () => {
+  const html = await text("dist/index.html");
+  assert.match(html, /<main class="preboot-finder"/);
+  assert.match(html, /Find free help near you/);
+  assert.match(html, /\/directory\/help\/food/);
+  assert.match(html, /Browse the full text directory/);
+});
+
 test("built bootstrap explicitly installs the release-versioned finder refinement", async () => {
   const bootstrap = await text("dist/src/bootstrap.js");
   const { release } = JSON.parse(await text("dist/data/release.json"));
@@ -39,6 +47,7 @@ test("directory pages cap DOM size and expose crawlable geographic pages", async
   const firstPage = await text("dist/directory/index.html");
   const recordCount = (firstPage.match(/<article class="directory-record"/g) || []).length;
   assert.equal(recordCount, 80);
+  assert.match(firstPage, /Browse by need/);
   assert.match(firstPage, /Browse by region/);
   assert.match(firstPage, /Browse by country/);
   assert.match(firstPage, /href="\/directory\/united-states"/);
@@ -49,6 +58,41 @@ test("directory pages cap DOM size and expose crawlable geographic pages", async
 
   const us = await text("dist/directory/united-states/index.html");
   assert.match(us, /Free essential services in United States/);
+});
+
+test("help-by-need pages are canonical, structured, and source connected", async () => {
+  const food = await text("dist/directory/help/food/index.html");
+  assert.match(food, /Find free food help/);
+  assert.match(food, /rel="canonical" href="https:\/\/www\.realworldneeds\.org\/directory\/help\/food"/);
+  assert.match(food, /"@type":"CollectionPage"/);
+  assert.match(food, /"@type":"ItemList"/);
+  assert.match(food, /Full listing details/);
+  assert.match(food, /Visit original source/);
+
+  const manifest = JSON.parse(await text("dist/data/resources/index.json"));
+  assert.ok(Array.isArray(manifest.categories));
+  assert.ok(manifest.categories.some((entry) => entry.type === "food" && entry.count > 0));
+  const categoryFiles = await readdir("dist/data/resources/by-category");
+  assert.ok(categoryFiles.includes("food.json"));
+});
+
+test("every reviewed resource gets an indexable service detail page", async () => {
+  const sample = resources[0];
+  const html = await text(`dist/service/${sample.id}/index.html`);
+  assert.match(html, new RegExp(`<h1>${sample.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</h1>`));
+  assert.match(html, /"@type":"Service"/);
+  assert.match(html, /Visit original source/);
+  assert.match(html, /Show on interactive globe/);
+
+  const serviceDirectories = await readdir("dist/service");
+  assert.equal(serviceDirectories.length, resources.length);
+});
+
+test("sitemap includes need pages and individual service pages", async () => {
+  const sitemap = await text("dist/sitemap.xml");
+  assert.match(sitemap, /https:\/\/www\.realworldneeds\.org\/directory\/help\/food/);
+  assert.match(sitemap, new RegExp(`https:\\/\\/www\\.realworldneeds\\.org\\/service\\/${resources[0].id}`));
+  assert.match(sitemap, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
 });
 
 test("compact map index contains only lightweight globe fields", async () => {

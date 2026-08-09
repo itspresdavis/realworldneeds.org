@@ -23,9 +23,67 @@
   background: rgba(255, 255, 255, .055);
 }
 
+.search-box:focus-within {
+  border-color: rgba(185, 242, 211, .6);
+  background: rgba(255, 255, 255, .075);
+  box-shadow: 0 0 0 3px rgba(104, 208, 152, .12), 0 18px 40px rgba(0, 0, 0, .12);
+}
+
 .search-box input {
   font-size: .9rem;
   letter-spacing: -.01em;
+}
+
+.search-helper {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin: .52rem .08rem 0;
+  color: rgba(224, 239, 237, .58);
+  font-size: .68rem;
+  line-height: 1.45;
+}
+
+.search-helper kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.45rem;
+  min-height: 1.35rem;
+  margin-left: auto;
+  border: 1px solid rgba(206, 231, 226, .16);
+  border-bottom-color: rgba(206, 231, 226, .28);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .04);
+  color: rgba(234, 245, 243, .74);
+  font: inherit;
+  font-weight: 800;
+}
+
+.finder-trustbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .42rem .8rem;
+  margin-top: .9rem;
+  color: rgba(224, 239, 237, .7);
+  font-size: .68rem;
+  font-weight: 720;
+}
+
+.finder-trustbar span,
+.finder-trustbar a {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.finder-trustbar b {
+  color: #82dbaa;
+  font-size: .7rem;
+}
+
+.finder-trustbar a {
+  color: #bcefd3;
+  text-underline-offset: 3px;
 }
 
 .quick-needs {
@@ -245,6 +303,78 @@
   overscroll-behavior: contain;
 }
 
+.browse-needs {
+  width: min(100% - 2rem, 78rem);
+  margin: clamp(2.2rem, 5vw, 4.5rem) auto 0;
+  padding: clamp(1.2rem, 3vw, 2rem);
+  border: 1px solid rgba(11, 45, 52, .09);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(244,250,247,.96));
+  box-shadow: 0 22px 60px rgba(7, 25, 38, .08);
+}
+
+.browse-needs__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.browse-needs__heading h2 {
+  margin: .2rem 0 0;
+  color: #09242c;
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
+  letter-spacing: -.045em;
+}
+
+.browse-needs__heading > a {
+  color: #087044;
+  font-size: .8rem;
+  font-weight: 820;
+  text-underline-offset: 4px;
+}
+
+.browse-needs__links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid rgba(11, 45, 52, .1);
+  border-left: 1px solid rgba(11, 45, 52, .1);
+}
+
+.browse-needs__links a {
+  display: grid;
+  gap: .3rem;
+  min-height: 7.4rem;
+  padding: 1.05rem;
+  border-right: 1px solid rgba(11, 45, 52, .1);
+  border-bottom: 1px solid rgba(11, 45, 52, .1);
+  background: rgba(255,255,255,.56);
+  color: #09242c;
+  text-decoration: none;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.browse-needs__links a:hover,
+.browse-needs__links a:focus-visible {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(7, 25, 38, .08);
+  transform: translateY(-1px);
+}
+
+.browse-needs__links strong {
+  align-self: end;
+  font-size: .93rem;
+}
+
+.browse-needs__links span {
+  color: #617579;
+  font-size: .75rem;
+  line-height: 1.45;
+}
+
 /* Give the globe more room while the inspector is open without squeezing the search column. */
 @media (min-width: 1100px) {
   .finder__grid {
@@ -318,7 +448,18 @@
   background: #f1faf5;
 }
 
+@media (max-width: 900px) {
+  .browse-needs__links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
+  .search-helper kbd,
+  .search-helper kbd + span {
+    display: none;
+  }
+
   .quick-needs {
     gap: .4rem;
   }
@@ -356,13 +497,32 @@
     max-width: none;
     max-height: 42%;
   }
+
+  .browse-needs {
+    width: min(100% - 1rem, 78rem);
+    border-radius: 14px;
+  }
+
+  .browse-needs__heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .browse-needs__links {
+    grid-template-columns: 1fr;
+  }
+
+  .browse-needs__links a {
+    min-height: 5.8rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .quick-need,
   .globe-guide,
   .rwn-reveal,
-  .return-to-finder {
+  .return-to-finder,
+  .browse-needs__links a {
     transition: none;
   }
 

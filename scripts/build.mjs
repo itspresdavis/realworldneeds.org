@@ -8,6 +8,7 @@ import { formatResourcePlace } from "../src/utils/geo.js";
 
 const DIRECTORY_PAGE_SIZE = 80;
 const SITE_ORIGIN = "https://www.realworldneeds.org";
+const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -24,14 +25,16 @@ const slugify = (value) => String(value || "unknown")
   .replace(/&/g, " and ")
   .replace(/[^a-z0-9]+/g, "-")
   .replace(/^-|-$/g, "") || "unknown";
+
 const kindLabel = (resource) => resource.kind === "direct"
   ? "Service location"
   : resource.kind === "locator" ? "Resource finder" : "Service network";
-const aidLabels = (resource) => [resource.category, ...(resource.secondaryCategories || [])]
-  .map((type) => categories[type].label);
+
+const aidTypes = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
+const aidLabels = (resource) => aidTypes(resource).map((type) => categories[type]?.label || type);
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
 const coverageCount = new Set(resources.map((resource) => resource.country)).size;
-const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked || "";
+const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked || BUILD_DATE;
 const auditedLiveCount = sourceRegistry.reduce((sum, source) => sum + (source.activeRecordsAtAudit || 0), 0);
 
 async function walkFiles(directory) {
@@ -69,6 +72,14 @@ function stripClusterCountMarkup(source) {
   return source.replace(marker, "<span aria-hidden=\"true\"></span>");
 }
 
+function jsonLd(value) {
+  return `<script type="application/ld+json">${JSON.stringify(value).replaceAll("<", "\\u003c")}</script>`;
+}
+
+function breadcrumbs(items) {
+  return `<nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a>${items.map((item) => item.href ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>` : `<span aria-current="page">${escapeHtml(item.label)}</span>`).join("")}</nav>`;
+}
+
 function resourceRecord(resource) {
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
@@ -79,12 +90,12 @@ function resourceRecord(resource) {
     ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>`
     : "";
   return `<article class="directory-record" id="${escapeHtml(resource.id)}">
-    <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>${escapeHtml(resource.name)}</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+    <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
     <p>${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
     <dl><div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div><div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div><div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl>
     <p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p>
-    <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></div>
+    <div class="directory-links"><a href="/service/${encodeURIComponent(resource.id)}">Full listing details</a><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></div>
   </article>`;
 }
 
@@ -95,35 +106,79 @@ function pageHref(basePath, page) {
 function pagination(basePath, page, totalPages) {
   if (totalPages <= 1) return "";
   const links = [];
-  if (page > 1) links.push(`<a href="${pageHref(basePath, page - 1)}">Previous</a>`);
+  if (page > 1) links.push(`<a rel="prev" href="${pageHref(basePath, page - 1)}">Previous</a>`);
   links.push(`<span>Page ${page} of ${totalPages}</span>`);
-  if (page < totalPages) links.push(`<a href="${pageHref(basePath, page + 1)}">Next</a>`);
+  if (page < totalPages) links.push(`<a rel="next" href="${pageHref(basePath, page + 1)}">Next</a>`);
   return `<nav class="directory-downloads" aria-label="Directory pages"><strong>Browse pages</strong>${links.join("")}</nav>`;
 }
 
-function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, browseMarkup = "" }) {
+function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, browseMarkup = "", breadcrumbItems = [] }) {
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
+  const pageTitle = page > 1 ? `${title} — Page ${page}` : title;
+  const pageDescription = page > 1 ? `${lede} Page ${page} of ${totalPages}.` : lede;
+  const itemList = items.slice(0, 50).map((resource, index) => ({
+    "@type": "ListItem",
+    position: index + 1,
+    url: `${SITE_ORIGIN}/service/${encodeURIComponent(resource.id)}`,
+    name: resource.name
+  }));
+  const schema = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        "@id": `${canonical}#page`,
+        url: canonical,
+        name: pageTitle,
+        description: pageDescription,
+        isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
+        about: { "@id": `${SITE_ORIGIN}/#organization` },
+        mainEntity: { "@id": `${canonical}#list` }
+      },
+      {
+        "@type": "ItemList",
+        "@id": `${canonical}#list`,
+        numberOfItems: items.length,
+        itemListElement: itemList
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_ORIGIN}/` },
+          ...breadcrumbItems.map((item, index) => ({ "@type": "ListItem", position: index + 2, name: item.label, ...(item.href ? { item: `${SITE_ORIGIN}${item.href}` } : {}) }))
+        ]
+      }
+    ]
+  };
+
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="${escapeHtml(lede)}" />
+    <meta name="description" content="${escapeHtml(pageDescription)}" />
     <meta name="theme-color" content="#071926" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <link rel="canonical" href="${canonical}" />
     <link rel="alternate" type="application/json" href="/data/resources.json" title="RWN resource data" />
     <link rel="alternate" type="text/csv" href="/directory.csv" title="RWN resource directory CSV" />
     <link rel="stylesheet" href="/legal.css" />
-    <title>${escapeHtml(title)} | Real World Needs</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Real World Needs" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)} | Real World Needs" />
+    <meta property="og:description" content="${escapeHtml(pageDescription)}" />
+    <meta property="og:url" content="${canonical}" />
+    ${jsonLd(schema)}
+    <title>${escapeHtml(pageTitle)} | Real World Needs</title>
   </head>
   <body>
     <a class="skip-link" href="#directory">Skip to directory</a>
     <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
     <main id="directory">
-      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(lede)}</p><div class="legal-meta"><span>${resources.length} listings checked</span><span>${directCount} service locations</span><span>${auditedLiveCount.toLocaleString()} active USDA sites in the latest review</span><span>Sources last checked through ${escapeHtml(latestReview)}</span></div></div></section>
+      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p><div class="legal-meta"><span>${resources.length} reviewed listings</span><span>${directCount} service locations</span><span>${coverageCount} countries represented</span><span>Sources checked through ${escapeHtml(latestReview)}</span></div></div></section>
       <div class="directory-shell">
-        <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. Seasonal USDA meal sites are shown only for their published dates and are counted separately from the reviewed directory.</p></div>
+        ${breadcrumbs(breadcrumbItems)}
+        <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
         <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
         ${browseMarkup}
         ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
@@ -156,6 +211,108 @@ async function writePagedDirectory(baseDirectory, basePath, groupResources, meta
   return urls;
 }
 
+function resourceSchema(resource, canonical) {
+  const place = formatResourcePlace(resource);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": `${canonical}#page`,
+        url: canonical,
+        name: `${resource.name} — ${place}`,
+        description: resource.summary,
+        isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
+        about: { "@id": `${canonical}#service` },
+        dateModified: resource.lastChecked
+      },
+      {
+        "@type": "Service",
+        "@id": `${canonical}#service`,
+        name: resource.name,
+        description: resource.summary,
+        serviceType: aidLabels(resource),
+        areaServed: resource.country,
+        url: canonical,
+        sameAs: resource.sourceUrl,
+        provider: { "@type": "Organization", name: resource.sourceName, url: resource.sourceUrl }
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_ORIGIN}/` },
+          { "@type": "ListItem", position: 2, name: "Directory", item: `${SITE_ORIGIN}/directory` },
+          { "@type": "ListItem", position: 3, name: resource.name }
+        ]
+      }
+    ]
+  };
+}
+
+function resourcePage(resource) {
+  const canonicalPath = `/service/${resource.id}`;
+  const canonical = `${SITE_ORIGIN}${canonicalPath}`;
+  const place = formatResourcePlace(resource);
+  const coordinate = `${resource.lat},${resource.lng}`;
+  const direct = resource.kind === "direct";
+  const phone = resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">${escapeHtml(resource.phone)}</a></dd></div>` : "";
+  const mapLinks = direct ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
+  const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
+  const title = `${resource.name} — ${place}`;
+  const description = `${resource.summary} ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="${escapeHtml(description)}" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <meta name="theme-color" content="#071926" />
+  <link rel="canonical" href="${canonical}" />
+  <link rel="stylesheet" href="/legal.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Real World Needs" />
+  <meta property="og:title" content="${escapeHtml(title)} | Real World Needs" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  <meta property="og:url" content="${canonical}" />
+  ${jsonLd(resourceSchema(resource, canonical))}
+  <title>${escapeHtml(title)} | Real World Needs</title>
+</head>
+<body>
+  <a class="skip-link" href="#service">Skip to service details</a>
+  <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a></nav></header>
+  <main id="service">
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">${escapeHtml(kindLabel(resource))}</p><h1>${escapeHtml(resource.name)}</h1><p class="legal-hero__lede">${escapeHtml(resource.summary)}</p><div class="legal-meta"><span>${escapeHtml(place)}</span><span>${escapeHtml(freeAccessLabel(resource))}</span><span>Checked ${escapeHtml(resource.lastChecked)}</span></div></div></section>
+    <div class="directory-shell">
+      ${breadcrumbs([{ href: "/directory", label: "Directory" }, { label: resource.name }])}
+      <div class="policy-note"><p><strong>Confirm before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p></div>
+      <article class="directory-record">
+        <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+        <dl>
+          <div><dt>Help offered</dt><dd>${escapeHtml(aidLabels(resource).join(", "))}</dd></div>
+          <div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div>
+          <div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div>
+          <div><dt>${direct ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
+          ${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}
+          ${phone}
+          ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${escapeHtml(resource.eligibility)}</dd></div>` : ""}
+        </dl>
+        <h3>Services offered</h3>
+        <ul>${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
+        <h3>Source and review</h3>
+        <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
+        <p>${escapeHtml(resource.sourceDetail)}</p>
+        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on interactive globe</a></div>
+      </article>
+      <div class="directory-downloads"><strong>Browse related help</strong>${categoryLinks}<a href="/directory/${slugify(resource.country)}">More in ${escapeHtml(resource.country)}</a></div>
+    </div>
+  </main>
+  <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>
+</body>
+</html>`;
+}
+
 const release = await releaseHash();
 
 await rm("dist", { recursive: true, force: true });
@@ -185,6 +342,8 @@ await writeFile("dist/transparency.html", transparencyHtml);
 
 const countries = [...new Set(resources.map((resource) => resource.country))].sort((a, b) => a.localeCompare(b));
 const regions = [...new Set(resources.map((resource) => resource.region).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const categoryTypes = Object.keys(categories);
+
 const countryLinks = countries.map((country) => {
   const count = resources.filter((resource) => resource.country === country).length;
   return `<a href="/directory/${slugify(country)}">${escapeHtml(country)} (${count})</a>`;
@@ -193,24 +352,43 @@ const regionLinks = regions.map((region) => {
   const count = resources.filter((resource) => resource.region === region).length;
   return `<a href="/directory/region/${slugify(region)}">${escapeHtml(region)} (${count})</a>`;
 }).join("");
-const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
+const categoryLinks = categoryTypes.map((type) => {
+  const count = resources.filter((resource) => aidTypes(resource).includes(type)).length;
+  return `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type].label)} (${count})</a>`;
+}).join("");
+const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
 const sitemapPaths = ["/", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
-  title: "Service Directory",
-  heading: "Find services without using the globe.",
-  lede: "Browse the reviewed Real World Needs catalog in lightweight pages. Cost, eligibility, contact details, and the original source are included.",
-  browseMarkup
+  title: "Free Essential Services Directory",
+  heading: "Find free essential services without using the globe.",
+  lede: "Browse food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Every listing stays connected to its original source.",
+  browseMarkup,
+  breadcrumbItems: [{ label: "Directory" }]
 }));
+
+for (const type of categoryTypes) {
+  const items = resources.filter((resource) => aidTypes(resource).includes(type));
+  const slug = slugify(type);
+  const category = categories[type];
+  sitemapPaths.push(...await writePagedDirectory(join("dist/directory/help", slug), `/directory/help/${slug}`, items, {
+    title: `${category.label} Assistance Directory`,
+    heading: `Find free ${category.label.toLowerCase()} help.`,
+    lede: `${category.description} Browse ${items.length} reviewed listings and go directly to the organization or public source for current details.`,
+    browseMarkup: `<div class="directory-downloads"><strong>Browse other needs</strong>${categoryLinks}<a href="/directory">Full directory</a></div>`,
+    breadcrumbItems: [{ href: "/directory", label: "Directory" }, { label: category.label }]
+  }));
+}
 
 for (const region of regions) {
   const items = resources.filter((resource) => resource.region === region);
   const slug = slugify(region);
   sitemapPaths.push(...await writePagedDirectory(join("dist/directory/region", slug), `/directory/region/${slug}`, items, {
-    title: `${region} Service Directory`,
+    title: `${region} Free Essential Services`,
     heading: `Free essential services in ${region}.`,
     lede: `Browse ${items.length} reviewed Real World Needs listings connected to original sources across ${region}.`,
-    browseMarkup: `<div class="directory-downloads"><strong>Browse</strong><a href="/directory">All countries and regions</a></div>`
+    browseMarkup: `<div class="directory-downloads"><strong>Browse</strong><a href="/directory">All countries and regions</a>${categoryLinks}</div>`,
+    breadcrumbItems: [{ href: "/directory", label: "Directory" }, { label: region }]
   }));
 }
 
@@ -219,12 +397,21 @@ for (const country of countries) {
   const items = resources.filter((resource) => resource.country === country);
   const slug = slugify(country);
   sitemapPaths.push(...await writePagedDirectory(join("dist/directory", slug), `/directory/${slug}`, items, {
-    title: `${country} Service Directory`,
+    title: `${country} Free Essential Services`,
     heading: `Free essential services in ${country}.`,
     lede: `Browse ${items.length} reviewed Real World Needs listings connected to original sources in ${country}.`,
-    browseMarkup: `<div class="directory-downloads"><strong>Browse</strong><a href="/directory">All countries and regions</a></div>`
+    browseMarkup: `<div class="directory-downloads"><strong>Browse</strong><a href="/directory">All countries and regions</a>${categoryLinks}</div>`,
+    breadcrumbItems: [{ href: "/directory", label: "Directory" }, { label: country }]
   }));
   countryManifest.push({ country, slug, count: items.length, path: `/data/resources/by-country/${slug}.json` });
+}
+
+await mkdir("dist/service", { recursive: true });
+for (const resource of resources) {
+  const outputDirectory = join("dist/service", resource.id);
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(join(outputDirectory, "index.html"), resourcePage(resource));
+  sitemapPaths.push(`/service/${resource.id}`);
 }
 
 const csvFields = ["ID", "Name", "Place", "Country", "Latitude", "Longitude", "Type", "Aid", "Access", "Free access model", "Cost details", "Address or coverage", "Hours", "Phone", "Eligibility", "Active from", "Active through", "Dataset", "Reviewed", "Official source"];
@@ -254,8 +441,9 @@ const directoryCsv = [csvFields, ...csvRows].map((row) => row.map(escapeCsv).joi
 await writeFile("dist/directory.csv", `${directoryCsv}\n`);
 
 await mkdir("dist/data/resources/by-country", { recursive: true });
+await mkdir("dist/data/resources/by-category", { recursive: true });
 await writeFile("dist/data/resources.json", `${JSON.stringify({
-  schemaVersion: "1.3",
+  schemaVersion: "1.4",
   license: "Public service facts with source attribution; see https://www.realworldneeds.org/editorial-policy",
   resourceCount: resources.length,
   resources
@@ -266,10 +454,19 @@ await writeFile("dist/data/map-index.json", `${JSON.stringify({
   fields: ["id", "lat", "lng", "category", "kind", "country", "region"],
   resources: resources.map(({ id, lat, lng, category, kind, country, region }) => ({ id, lat, lng, category, kind, country, region }))
 })}\n`);
-await writeFile("dist/data/resources/index.json", `${JSON.stringify({ schemaVersion: "1.0", resourceCount: resources.length, countries: countryManifest }, null, 2)}\n`);
+await writeFile("dist/data/resources/index.json", `${JSON.stringify({
+  schemaVersion: "1.1",
+  resourceCount: resources.length,
+  countries: countryManifest,
+  categories: categoryTypes.map((type) => ({ type, label: categories[type].label, count: resources.filter((resource) => aidTypes(resource).includes(type)).length, path: `/data/resources/by-category/${slugify(type)}.json` }))
+}, null, 2)}\n`);
 for (const entry of countryManifest) {
   const items = resources.filter((resource) => resource.country === entry.country);
   await writeFile(`dist${entry.path}`, `${JSON.stringify({ schemaVersion: "1.0", country: entry.country, resourceCount: items.length, resources: items })}\n`);
+}
+for (const type of categoryTypes) {
+  const items = resources.filter((resource) => aidTypes(resource).includes(type));
+  await writeFile(`dist/data/resources/by-category/${slugify(type)}.json`, `${JSON.stringify({ schemaVersion: "1.0", category: type, label: categories[type].label, resourceCount: items.length, resources: items })}\n`);
 }
 await writeFile("dist/data/sources.json", `${JSON.stringify({
   schemaVersion: "1.0",
@@ -277,9 +474,9 @@ await writeFile("dist/data/sources.json", `${JSON.stringify({
   note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
-await writeFile("dist/data/release.json", `${JSON.stringify({ release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE })}\n`);
+await writeFile("dist/data/release.json", `${JSON.stringify({ release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, generatedAt: new Date().toISOString() })}\n`);
 
-const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc></url>`).join("\n")}\n</urlset>\n`;
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
 await writeFile("dist/sitemap.xml", sitemap);
 
 await mkdir("dist/vendor", { recursive: true });
