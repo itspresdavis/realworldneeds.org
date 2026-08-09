@@ -112,9 +112,9 @@ function assetLinks(release, includeScript) {
 }
 
 function directorySearchMarkup() {
-  return `<section class="directory-search-tools" data-directory-search aria-label="Filter listings on this page">
+  return `<section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
-      <label class="directory-search-field"><span aria-hidden="true">⌕</span><span class="sr-only">Search listings on this page</span><input type="search" data-directory-query placeholder="Search organization, service, city, address, or help type" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></label>
+      <label class="directory-search-field"><span aria-hidden="true">⌕</span><span class="sr-only">Search this directory</span><input type="search" data-directory-query placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></label>
       <button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button>
     </div>
     <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
@@ -136,7 +136,11 @@ function enhanceCollectionPage(html, release) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n    ${assetLinks(release, true)}`);
   }
   if (!html.includes("data-directory-search")) {
-    html = html.replace('<div class="directory-records">', `${directorySearchMarkup()}\n        <div class="directory-records">`);
+    const searchMarkup = directorySearchMarkup();
+    const breadcrumb = /(<nav class="directory-downloads" aria-label="Breadcrumb">[\s\S]*?<\/nav>)/;
+    html = breadcrumb.test(html)
+      ? html.replace(breadcrumb, `$1\n        ${searchMarkup}`)
+      : html.replace('<div class="directory-records">', `${searchMarkup}\n        <div class="directory-records">`);
   }
   return html;
 }
@@ -191,7 +195,7 @@ for (const [country, entries] of localByCountry) {
     let html = await readFile(path, "utf8");
     if (!html.includes("directory-local-links")) {
       const markup = localLinksMarkup(country, entries);
-      html = html.replace('<section class="directory-search-tools"', `${markup}\n        <section class="directory-search-tools"`);
+      html = html.replace('<div class="policy-note">', `${markup}\n        <div class="policy-note">`);
       await writeFile(path, html);
     }
   } catch {
