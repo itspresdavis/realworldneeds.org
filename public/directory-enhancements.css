@@ -1,5 +1,69 @@
 /* Lightweight production styling layered over legal.css for generated directory and service pages. */
 
+.directory-local-links {
+  display: grid;
+  gap: .85rem;
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border: 1px solid rgba(12, 80, 68, .12);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f5fbf7, #eef8f3);
+}
+
+.directory-local-links > div:first-child {
+  display: grid;
+  gap: .18rem;
+}
+
+.directory-local-links strong {
+  color: #09242c;
+  font-size: .9rem;
+}
+
+.directory-local-links > div:first-child span {
+  color: #617579;
+  font-size: .73rem;
+  line-height: 1.45;
+}
+
+.directory-local-links > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .42rem;
+}
+
+.directory-local-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 2.3rem;
+  padding: .48rem .65rem;
+  border: 1px solid rgba(15, 116, 70, .16);
+  border-radius: 999px;
+  background: #fff;
+  color: #096b41;
+  font-size: .73rem;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.directory-local-links a span {
+  display: inline-grid;
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #e8f6ee;
+  color: #0a7044;
+  font-size: .64rem;
+}
+
+.directory-local-links a:hover,
+.directory-local-links a:focus-visible {
+  border-color: rgba(10, 117, 70, .34);
+  box-shadow: 0 8px 20px rgba(7, 25, 38, .055);
+}
+
 .directory-search-tools {
   display: grid;
   gap: .85rem;
@@ -153,6 +217,29 @@
   min-height: 2.25rem;
 }
 
+.service-accessibility {
+  display: grid;
+  gap: .3rem;
+  margin: 1.1rem 0;
+  padding: .9rem 1rem;
+  border: 1px solid rgba(22, 116, 74, .16);
+  border-left: 4px solid #178b57;
+  border-radius: 10px;
+  background: #f4faf7;
+}
+
+.service-accessibility strong {
+  color: #0a683f;
+  font-size: .8rem;
+}
+
+.service-accessibility p {
+  margin: 0;
+  color: #466064;
+  font-size: .82rem;
+  line-height: 1.55;
+}
+
 .related-services {
   margin: 1.8rem 0 0;
   padding: clamp(1rem, 2.5vw, 1.4rem);
@@ -226,6 +313,7 @@
 }
 
 .directory-search-tools :where(button, input):focus-visible,
+.directory-local-links a:focus-visible,
 .related-services a:focus-visible,
 .directory-record a:focus-visible {
   outline: 3px solid #177f53;
@@ -250,6 +338,7 @@
 
   .directory-search-tools__clear,
   .directory-category-chips button,
+  .directory-local-links a,
   .directory-links a,
   .related-services__grid > a {
     min-height: 44px;
@@ -277,9 +366,11 @@
 }
 
 @media (prefers-contrast: more) {
+  .directory-local-links,
   .directory-search-tools,
   .directory-search-field,
   .directory-record,
+  .service-accessibility,
   .related-services,
   .related-services__grid > a {
     border-color: currentColor !important;
@@ -287,8 +378,10 @@
 }
 
 @media (forced-colors: active) {
+  .directory-local-links,
   .directory-search-tools,
   .directory-record,
+  .service-accessibility,
   .related-services__grid > a {
     border: 1px solid CanvasText;
   }
