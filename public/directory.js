@@ -10,6 +10,8 @@ if (root) {
   const collator = new Intl.Collator(undefined, { sensitivity: "base", usage: "search" });
   const MAX_RESULTS = 60;
   const currentScope = (location.pathname.replace(/\/page\/\d+\/?$/, "").replace(/\/$/, "") || "/directory");
+  const releaseVersion = new URL(import.meta.url).searchParams.get("v") || "";
+  const searchIndexUrl = `/data/search-index.json${releaseVersion ? `?v=${encodeURIComponent(releaseVersion)}` : ""}`;
 
   const normalize = (value) => String(value || "")
     .normalize("NFKD")
@@ -46,7 +48,7 @@ if (root) {
   let generation = 0;
 
   const loadCatalog = () => {
-    catalogPromise ||= fetch("/data/search-index.json", { credentials: "same-origin", cache: "force-cache" })
+    catalogPromise ||= fetch(searchIndexUrl, { credentials: "same-origin", cache: "force-cache" })
       .then((response) => {
         if (!response.ok) throw new Error(`Search index unavailable (${response.status})`);
         return response.json();
