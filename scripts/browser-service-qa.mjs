@@ -135,6 +135,8 @@ async function run() {
       const next = document.querySelector(".service-next-steps");
       const policy = document.querySelector("#service .policy-note");
       const primary = next?.querySelector("a.is-primary");
+      const phone = next?.querySelector('a[href^="tel:"]');
+      const interactive = [...(next?.querySelectorAll("a") || [])].find((link) => link.getAttribute("href")?.startsWith("/#resource="));
       const rect = next?.getBoundingClientRect();
       const links = [...(next?.querySelectorAll("a") || [])];
       return {
@@ -143,6 +145,8 @@ async function run() {
         actionCount: links.length,
         primaryExternal: Boolean(primary && /^https:\/\//.test(primary.href)),
         sourceMatches: Boolean(primary && primary.href.split("#")[0] === ${JSON.stringify(resource.sourceUrl)}.split("#")[0]),
+        phoneAction: ${JSON.stringify(Boolean(resource.phone))} ? Boolean(phone) : true,
+        privateMapLink: Boolean(interactive && !interactive.href.includes("?resource=")),
         aboveFold: Boolean(rect && rect.top < innerHeight - 70 && rect.bottom > 0),
         beforePolicy: Boolean(next && policy && (next.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING)),
         mapActions: links.filter((link) => /Maps|Directions/.test(link.textContent || "")).length,
@@ -150,7 +154,7 @@ async function run() {
       };
     })()`);
     await capture(client, "service-desktop.png");
-    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !desktop.sourceMatches || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions < 2 || desktop.overflow > 8) {
+    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !desktop.sourceMatches || !desktop.phoneAction || !desktop.privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions < 2 || desktop.overflow > 8) {
       throw new Error(`Desktop service landing page failed: ${JSON.stringify(desktop)}`);
     }
 
@@ -172,7 +176,41 @@ async function run() {
       throw new Error(`Mobile service landing page failed: ${JSON.stringify(mobile)}`);
     }
 
-    console.log(`RWN service landing page QA passed for ${resource.id}: verified source action, phone/map next steps, above-fold task flow, mobile touch targets, and screenshots.`);
+    await navigate(client, `${HOST}/directory`);
+    const directoryMobile = await evaluate(client, `(async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const waitUntil = async (predicate, attempts = 80) => {
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          if (predicate()) return true;
+          await sleep(25);
+        }
+        return false;
+      };
+      const tools = document.querySelector("[data-directory-search]");
+      const input = document.querySelector("[data-directory-query]");
+      const list = document.querySelector("[data-global-list]");
+      const toolsRect = tools?.getBoundingClientRect();
+      const chips = [...document.querySelectorAll("[data-directory-category]")];
+      if (!tools || !input || !list || chips.length < 2) return { ok: false, reason: "directory mobile controls missing" };
+      const target = ${JSON.stringify(resource.name)};
+      input.value = target;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      const targetHref = "/service/" + encodeURIComponent(${JSON.stringify(resource.id)});
+      const found = await waitUntil(() => [...list.querySelectorAll("a")].some((link) => new URL(link.href).pathname === targetHref));
+      return {
+        ok: true,
+        searchAboveFold: Boolean(toolsRect && toolsRect.top < innerHeight - 44 && toolsRect.bottom > 0),
+        minimumChipHeight: Math.min(...chips.map((chip) => chip.getBoundingClientRect().height)),
+        found,
+        overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+      };
+    })()`);
+    await capture(client, "directory-mobile.png");
+    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.minimumChipHeight < 44 || !directoryMobile.found || directoryMobile.overflow > 8) {
+      throw new Error(`Mobile directory failed: ${JSON.stringify(directoryMobile)}`);
+    }
+
+    console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, phone/map next steps, above-fold task flow, private map deep-link, mobile directory search, touch targets, no overflow, and screenshots.`);
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
