@@ -129,7 +129,7 @@ function assetLinks(release, includeScript) {
 function directorySearchMarkup() {
   return `<section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
-      <label class="directory-search-field"><span aria-hidden="true">⌕</span><span class="sr-only">Search this directory</span><input type="search" data-directory-query placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></label>
+      <label class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></label>
       <button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button>
     </div>
     <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
