@@ -35,7 +35,7 @@ function syncQuickNeeds(container) {
 function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
-  input.placeholder = "Search food, shelter, city, ZIP/postcode or organization";
+  input.placeholder = "Search food, shelter, city or organization";
   input.setAttribute("aria-label", "Search by service, place, ZIP or postcode, or organization");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");
@@ -44,7 +44,7 @@ function improveSearch() {
   if (search && !search.querySelector(".search-helper")) {
     const helper = document.createElement("p");
     helper.className = "search-helper";
-    helper.innerHTML = `<span>Try “food pantry”, “Boston”, “showers”, or an organization name.</span><kbd>/</kbd><span>to search</span>`;
+    helper.innerHTML = `<span>Try “food pantry”, “Boston”, a ZIP/postcode, “showers”, or an organization name.</span><kbd>/</kbd><span>to search</span>`;
     search.append(helper);
   }
 
