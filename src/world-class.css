@@ -112,6 +112,14 @@
 }
 
 @media (min-width: 1100px) {
+  .globe-stage {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .18);
+  }
+}
+
+/* A sticky, independently scrolling finder is useful only when the viewport is tall enough
+   to avoid the nested-scroll trap common on laptop displays. */
+@media (min-width: 1100px) and (min-height: 1050px) {
   .finder-sidebar {
     position: sticky;
     top: 5.35rem;
@@ -121,10 +129,6 @@
     overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: rgba(185, 242, 211, .22) transparent;
-  }
-
-  .globe-stage {
-    box-shadow: 0 24px 70px rgba(0, 0, 0, .18);
   }
 }
 
