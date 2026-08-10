@@ -7,8 +7,10 @@ const read = (path) => readFile(path, "utf8");
 test("offline directory caches only public same-origin essentials", async () => {
   const sw = await read("public/sw.js");
   assert.match(sw, /const CACHE_PREFIX = "rwn-offline-"/);
+  assert.match(sw, /__RWN_OFFLINE_RELEASE__/);
   assert.match(sw, /"\/directory"/);
   assert.match(sw, /"\/data\/search-index\.json"/);
+  assert.match(sw, /"\/offline-status\.js"/);
   assert.match(sw, /"\/site\.webmanifest"/);
   await read("public/site.webmanifest");
   assert.match(sw, /url\.origin !== self\.location\.origin/);
@@ -47,6 +49,7 @@ test("directory connectivity is based on a real uncached same-origin probe", asy
   assert.match(probe, /event\.stopImmediatePropagation\(\)/);
   assert.match(probe, /window\.addEventListener\("online", probe\)/);
   assert.match(probe, /window\.addEventListener\("offline"/);
+  assert.match(probe, /element\.textContent !== value/);
   assert.doesNotMatch(probe, /localStorage|sessionStorage|sendBeacon|XMLHttpRequest/);
 });
 
@@ -55,6 +58,17 @@ test("every generated directory page loads the hashed connectivity probe", async
   assert.match(page, /src="\/offline-status\.js\?v=[a-f0-9]{12}"/);
   const release = JSON.parse(await read("dist/data/release.json"));
   assert.match(release.directoryResilienceRelease || "", /^[a-f0-9]{12}$/);
+});
+
+test("offline cache IDs rotate with release inputs and purge older RWN caches", async () => {
+  const worker = await read("dist/sw.js");
+  const sourceWorker = await read("public/sw.js");
+  const release = JSON.parse(await read("dist/data/release.json"));
+  assert.match(sourceWorker, /rwn-offline-__RWN_OFFLINE_RELEASE__/);
+  assert.match(worker, /const CACHE_NAME = "rwn-offline-[a-f0-9]{12}"/);
+  assert.doesNotMatch(worker, /__RWN_OFFLINE_RELEASE__/);
+  assert.match(release.offlineRelease || "", /^[a-f0-9]{12}$/);
+  assert.match(worker, /name\.startsWith\(CACHE_PREFIX\) && name !== CACHE_NAME/);
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {
