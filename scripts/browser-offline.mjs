@@ -208,7 +208,7 @@ async function run() {
         status: count.textContent || "",
         apiCached,
         noticeVisible: !notice.hidden,
-        noticeText: notice.textContent.replace(/\s+/g, " ").trim(),
+        noticeText: notice.textContent.replace(/\\s+/g, " ").trim(),
         resultReconnect: Boolean(first?.textContent?.includes("reconnect for full details")),
         serviceNavigationBlocked: location.href === before,
         noticeFocused: document.activeElement === notice,
