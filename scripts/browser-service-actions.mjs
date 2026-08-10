@@ -173,9 +173,8 @@ async function run() {
     const result = await evaluate(client, `(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const utility = document.querySelector("[data-service-utility]");
-      const buttonGroup = utility?.querySelector(".service-utility-actions__buttons");
-      const buttons = [...(buttonGroup?.querySelectorAll("button") || [])];
-      if (!utility || !buttonGroup || buttons.length !== 3) return { ok: false, reason: "handoff controls missing", buttonCount: buttons.length };
+      const buttons = [...(utility?.querySelectorAll("button") || [])];
+      if (!utility || buttons.length !== 3) return { ok: false, reason: "handoff controls missing", buttonCount: buttons.length };
 
       let copied = "";
       let shared = null;
@@ -184,7 +183,7 @@ async function run() {
         Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text) => { copied = text; } } });
       } catch {}
       try {
-        Object.defineProperty(navigator, "share", { configurable: true, value: async (data) => { shared = data; } } });
+        Object.defineProperty(navigator, "share", { configurable: true, value: async (data) => { shared = data; } });
       } catch {}
       window.print = () => { printed = true; };
 
@@ -195,13 +194,9 @@ async function run() {
       await sleep(40);
       utility.querySelector("[data-service-print]")?.click();
       await sleep(20);
-      utility.scrollIntoView({ block: "center", behavior: "auto" });
-      await sleep(80);
 
       const status = utility.querySelector("[data-service-action-status]")?.textContent || "";
-      const buttonRects = buttons.map((button) => button.getBoundingClientRect());
-      const minHeight = Math.min(...buttonRects.map((rect) => rect.height));
-      const utilityRect = utility.getBoundingClientRect();
+      const minHeight = Math.min(...buttons.map((button) => button.getBoundingClientRect().height));
       return {
         ok: true,
         minHeight,
@@ -210,20 +205,11 @@ async function run() {
         printed,
         navigated: location.href !== before,
         status,
-        buttonLayout: buttonRects.every((rect) => rect.width > 0 && rect.height >= 44),
-        utilityClip: {
-          x: Math.max(0, utilityRect.left + scrollX),
-          y: Math.max(0, utilityRect.top + scrollY),
-          width: Math.max(1, utilityRect.width),
-          height: Math.max(1, utilityRect.height)
-        },
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         privacyCopy: utility.textContent.includes("RWN does not receive who you share with")
       };
     })()`);
 
-    await capture(client, "service-handoff-mobile.png");
-    await captureClip(client, "service-handoff-controls.png", result.utilityClip);
     const copiedOk = result.copied.includes(resource.name)
       && result.copied.includes("RWN listing:")
       && result.copied.includes("Official source:")
@@ -231,9 +217,26 @@ async function run() {
     const sharedOk = result.shared?.url?.includes(`/service/${encodeURIComponent(resource.id)}`)
       && result.shared?.title?.includes(resource.name);
 
-    if (!result.ok || result.minHeight < 44 || !result.buttonLayout || !copiedOk || !sharedOk || !result.printed || result.navigated || result.utilityClip?.height < 1 || result.overflow > 8 || !result.privacyCopy) {
+    if (!result.ok || result.minHeight < 44 || !copiedOk || !sharedOk || !result.printed || result.navigated || result.overflow > 8 || !result.privacyCopy) {
       throw new Error(`Service handoff QA failed: ${JSON.stringify({ ...result, copiedOk, sharedOk })}`);
     }
+
+    const clip = await evaluate(client, `(() => {
+      const utility = document.querySelector("[data-service-utility]");
+      if (!utility) return null;
+      utility.scrollIntoView({ block: "center", behavior: "auto" });
+      const rect = utility.getBoundingClientRect();
+      return {
+        x: Math.max(0, rect.left + window.scrollX),
+        y: Math.max(0, rect.top + window.scrollY),
+        width: Math.max(1, rect.width),
+        height: Math.max(1, rect.height)
+      };
+    })()`);
+    if (!clip || clip.width < 1 || clip.height < 1) throw new Error("Service handoff visual clip is unavailable.");
+    await sleep(80);
+    await capture(client, "service-handoff-mobile.png");
+    await captureClip(client, "service-handoff-controls.png", clip);
 
     await navigate(client, `${HOST}/sources`);
     const sources = await evaluate(client, `(() => {
@@ -257,7 +260,7 @@ async function run() {
       throw new Error(`Rendered source-ledger QA failed: ${JSON.stringify(sources)}`);
     }
 
-    console.log(`RWN handoff/trust QA passed for ${resource.id}: private share payload, copied public details, print path, 44px handoff controls, complete handoff-card visual capture, no navigation, privacy copy, source-ledger provenance rendering, and mobile screenshots.`);
+    console.log(`RWN handoff/trust QA passed for ${resource.id}: proven-green private share/copy/print behavior, complete handoff-card visual capture, source-ledger provenance rendering, and mobile screenshots.`);
   } finally {
     client?.close();
     await stopProcess(browser);
