@@ -168,9 +168,10 @@ async function run() {
       input?.focus();
       await fetch("/data/search-index.json", { credentials: "same-origin" });
       const keys = await caches.keys();
-      return { supported: true, active: Boolean(ready.active), controlled: Boolean(navigator.serviceWorker.controller), cache: keys.some((key) => key.startsWith("rwn-offline-")) };
+      const offlineProbeCached = Boolean(await caches.match("/offline-status.js"));
+      return { supported: true, active: Boolean(ready.active), controlled: Boolean(navigator.serviceWorker.controller), cache: keys.some((key) => key.startsWith("rwn-offline-")), offlineProbeCached };
     })()`);
-    if (!primed.supported || !primed.active || !primed.controlled || !primed.cache) {
+    if (!primed.supported || !primed.active || !primed.controlled || !primed.cache || !primed.offlineProbeCached) {
       throw new Error(`Offline directory did not prime correctly: ${JSON.stringify(primed)}`);
     }
 
@@ -188,10 +189,16 @@ async function run() {
       const input = document.querySelector("[data-directory-query]");
       const list = document.querySelector("[data-global-list]");
       const count = document.querySelector("[data-directory-count]");
-      if (!input || !list || !count) return { ok: false, reason: "cached directory controls missing" };
+      const notice = document.getElementById("offlineDirectoryNotice");
+      if (!input || !list || !count || !notice) return { ok: false, reason: "cached directory controls or warning missing" };
+      for (let attempt = 0; attempt < 100 && notice.hidden; attempt += 1) await sleep(30);
       input.value = "food";
       input.dispatchEvent(new Event("input", { bubbles: true }));
       for (let attempt = 0; attempt < 100 && list.children.length === 0; attempt += 1) await sleep(30);
+      const first = list.querySelector(".directory-global-result");
+      const before = location.href;
+      first?.click();
+      await sleep(60);
       let apiCached = true;
       try { await fetch("/api/rum", { cache: "no-store" }); } catch { apiCached = false; }
       return {
@@ -200,15 +207,20 @@ async function run() {
         results: list.children.length,
         status: count.textContent || "",
         apiCached,
+        noticeVisible: !notice.hidden,
+        noticeText: notice.textContent.replace(/\s+/g, " ").trim(),
+        resultReconnect: Boolean(first?.textContent?.includes("reconnect for full details")),
+        serviceNavigationBlocked: location.href === before,
+        noticeFocused: document.activeElement === notice,
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
       };
     })()`);
     await capture(client, "directory-offline.png");
-    if (!offline.ok || !offline.controlled || offline.results < 1 || !/matching listings/i.test(offline.status) || offline.apiCached || offline.overflow > 8) {
-      throw new Error(`Offline directory/search failed: ${JSON.stringify(offline)}`);
+    if (!offline.ok || !offline.controlled || offline.results < 1 || !/matching listings/i.test(offline.status) || offline.apiCached || !offline.noticeVisible || !/Reconnect before traveling or relying on a listing/i.test(offline.noticeText) || !offline.resultReconnect || !offline.serviceNavigationBlocked || !offline.noticeFocused || offline.overflow > 8) {
+      throw new Error(`Offline directory/search safety failed: ${JSON.stringify(offline)}`);
     }
 
-    console.log(`RWN offline browser QA passed: service worker controls the directory, cached navigation survives a fully offline network, catalog search still returns ${offline.results} result(s), API requests are not cached, and mobile overflow remains bounded.`);
+    console.log(`RWN offline browser QA passed: cached navigation survives a fully offline network, catalog search still returns ${offline.results} result(s), the reconnect warning is visible, cached result navigation is blocked and focused back to the warning, API requests are not cached, and mobile overflow remains bounded.`);
   } finally {
     try {
       await client?.call("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
