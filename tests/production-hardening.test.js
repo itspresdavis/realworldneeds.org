@@ -23,7 +23,7 @@ test("built homepage uses one content-derived release version for every source a
 test("built homepage contains useful server-visible finder content before JavaScript", async () => {
   const html = await text("dist/index.html");
   assert.match(html, /<main class="preboot-finder"/);
-  assert.match(html, /Find free help near you/);
+  assert.match(html, /Find free essential services near you/);
   assert.match(html, /\/directory\/help\/food/);
   assert.match(html, /Browse the full text directory/);
 });

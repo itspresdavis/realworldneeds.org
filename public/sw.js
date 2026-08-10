@@ -5,6 +5,7 @@ const CORE_ASSETS = [
   "/directory",
   "/legal.css",
   "/directory-enhancements.css",
+  "/professional-pages.css",
   "/directory.js",
   "/offline-status.js",
   "/data/search-index.json",
@@ -91,6 +92,7 @@ self.addEventListener("fetch", (event) => {
     || url.pathname === "/directory.js"
     || url.pathname === "/offline-status.js"
     || url.pathname === "/directory-enhancements.css"
+    || url.pathname === "/professional-pages.css"
     || url.pathname === "/legal.css"
     || url.pathname === "/rwn-mark.svg"
     || url.pathname === "/site.webmanifest";
