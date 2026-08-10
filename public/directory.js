@@ -34,6 +34,15 @@ if (root) {
   let categoryLabels = [...new Set(pageRecords.flatMap((record) => [...record.querySelectorAll(".directory-aid li")].map((item) => item.textContent.trim())).filter(Boolean))]
     .sort((a, b) => collator.compare(a, b));
 
+  const connectivityNotice = document.createElement("div");
+  connectivityNotice.id = "offlineDirectoryNotice";
+  connectivityNotice.className = "policy-note warning-note";
+  connectivityNotice.setAttribute("role", "status");
+  connectivityNotice.tabIndex = -1;
+  connectivityNotice.hidden = true;
+  connectivityNotice.innerHTML = "<p><strong>Offline mode.</strong> You can search the saved public directory, but current availability and service-detail pages require a connection. Reconnect before traveling or relying on a listing.</p>";
+  root.insertAdjacentElement("beforebegin", connectivityNotice);
+
   const results = document.createElement("section");
   results.className = "directory-global-results";
   results.hidden = true;
@@ -46,6 +55,10 @@ if (root) {
   let activeCategory = "";
   let catalogPromise;
   let generation = 0;
+
+  const showConnectivityState = () => {
+    connectivityNotice.hidden = navigator.onLine;
+  };
 
   const scopedRecords = (payload) => {
     if (currentScope === "/directory") return payload.records;
@@ -122,8 +135,17 @@ if (root) {
     place.textContent = record.place;
     main.append(name, place);
     const meta = document.createElement("small");
-    meta.textContent = `${record.categoryLabels.join(" · ")} · checked ${record.checked}`;
+    meta.textContent = `${record.categoryLabels.join(" · ")} · checked ${record.checked}${navigator.onLine ? "" : " · reconnect for full details"}`;
     link.append(main, meta);
+    if (!navigator.onLine) {
+      link.setAttribute("aria-describedby", connectivityNotice.id);
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        connectivityNotice.hidden = false;
+        connectivityNotice.focus({ preventScroll: true });
+        connectivityNotice.scrollIntoView({ block: "center", behavior: "auto" });
+      });
+    }
     return link;
   };
 
@@ -156,7 +178,7 @@ if (root) {
       shell?.classList.add("has-global-search");
       const shown = Math.min(matches.length, MAX_RESULTS);
       resultSummary.textContent = matches.length > shown ? `${matches.length.toLocaleString()} matches · showing the first ${shown}` : `${matches.length.toLocaleString()} matches across ${scoped.length.toLocaleString()} listings in this directory`;
-      if (count) count.textContent = matches.length ? `${matches.length.toLocaleString()} matching listings` : "No matching listings";
+      if (count) count.textContent = matches.length ? `${matches.length.toLocaleString()} matching listings${navigator.onLine ? "" : " · offline copy"}` : "No matching listings";
     } catch {
       if (currentGeneration !== generation) return;
       clearGlobalResults();
@@ -205,6 +227,14 @@ if (root) {
     input?.focus();
   });
 
+  const handleConnectivityChange = () => {
+    showConnectivityState();
+    if (!results.hidden) apply();
+  };
+  window.addEventListener("online", handleConnectivityChange);
+  window.addEventListener("offline", handleConnectivityChange);
+
+  showConnectivityState();
   renderChips();
   clearGlobalResults();
 }
