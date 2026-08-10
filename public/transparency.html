@@ -4,9 +4,95 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="How the Real World Needs directory works, where its information comes from, how releases can be inspected, and what the organization has not yet published." />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <meta name="theme-color" content="#071926" />
     <link rel="canonical" href="https://www.realworldneeds.org/transparency" />
+    <link rel="alternate" type="application/json" href="/data/resources.json" title="RWN resource data" />
+    <link rel="alternate" type="text/csv" href="/directory.csv" title="RWN resource directory CSV" />
     <link rel="stylesheet" href="/legal.css" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Real World Needs" />
+    <meta property="og:title" content="Transparency Center | Real World Needs" />
+    <meta property="og:description" content="Inspect the Real World Needs essential-services catalog, source registry, review standards, open data, privacy boundaries, and release integrity." />
+    <meta property="og:url" content="https://www.realworldneeds.org/transparency" />
+    <meta property="og:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Transparency Center | Real World Needs" />
+    <meta name="twitter:description" content="Inspect RWN’s reviewed essential-services catalog, source registry, open data, and release integrity." />
+    <meta name="twitter:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://www.realworldneeds.org/transparency#page",
+            "url": "https://www.realworldneeds.org/transparency",
+            "name": "Transparency Center | Real World Needs",
+            "description": "How the Real World Needs directory works, where its information comes from, and how releases can be inspected.",
+            "isPartOf": { "@id": "https://www.realworldneeds.org/#website" },
+            "about": { "@id": "https://www.realworldneeds.org/data/resources.json#dataset" },
+            "mainEntity": { "@id": "https://www.realworldneeds.org/data/resources.json#dataset" }
+          },
+          {
+            "@type": "DataCatalog",
+            "@id": "https://www.realworldneeds.org/directory#catalog",
+            "name": "Real World Needs Essential Services Directory",
+            "url": "https://www.realworldneeds.org/directory",
+            "description": "Public source-connected directory of free essential services and official resource finders.",
+            "dataset": { "@id": "https://www.realworldneeds.org/data/resources.json#dataset" }
+          },
+          {
+            "@type": "Dataset",
+            "@id": "https://www.realworldneeds.org/data/resources.json#dataset",
+            "name": "Real World Needs Essential Services Directory",
+            "description": "Reviewed public directory records for free food, shelter, health care, hygiene, clothing, drinking water, and navigation services, with original-source links and review dates.",
+            "url": "https://www.realworldneeds.org/transparency",
+            "isAccessibleForFree": true,
+            "creator": { "@id": "https://www.realworldneeds.org/#organization" },
+            "includedInDataCatalog": { "@id": "https://www.realworldneeds.org/directory#catalog" },
+            "dateModified": "{{LATEST_REVIEW}}",
+            "version": "Sources checked through {{LATEST_REVIEW}}",
+            "size": "{{RESOURCE_COUNT}} reviewed directory records",
+            "measurementTechnique": "Human review against cited original or public sources with automated release validation.",
+            "variableMeasured": [
+              "Service name",
+              "Location or coverage",
+              "Aid category",
+              "Access model",
+              "Free-access model",
+              "Eligibility",
+              "Original source",
+              "Review date"
+            ],
+            "keywords": [
+              "essential services",
+              "food assistance",
+              "shelter",
+              "health care",
+              "hygiene",
+              "clothing",
+              "drinking water",
+              "public resource directory"
+            ],
+            "distribution": [
+              {
+                "@type": "DataDownload",
+                "name": "RWN essential services CSV",
+                "encodingFormat": "text/csv",
+                "contentUrl": "https://www.realworldneeds.org/directory.csv"
+              },
+              {
+                "@type": "DataDownload",
+                "name": "RWN essential services JSON",
+                "encodingFormat": "application/json",
+                "contentUrl": "https://www.realworldneeds.org/data/resources.json"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
     <title>Transparency Center | Real World Needs</title>
   </head>
   <body>
