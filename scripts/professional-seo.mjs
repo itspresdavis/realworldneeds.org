@@ -5,6 +5,7 @@ import { join } from "node:path";
 const HOME_TITLE = "Find Free Essential Services Near You | Real World Needs";
 const HOME_DESCRIPTION = "Search free food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Verify every listing at its original source.";
 const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
+const ACCESSIBLE_TOUCH_TARGETS = '<style data-rwn-professional-a11y>.directory-category-chips button{min-height:44px}</style>';
 
 async function walkHtml(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -100,6 +101,9 @@ function enhanceHome(html, release) {
 function enhanceGeneratedPage(html, release) {
   if (!html.includes("/professional-pages.css")) {
     html = html.replace("</head>", `  <link rel="stylesheet" href="/professional-pages.css?v=${release}" />\n</head>`);
+  }
+  if (!html.includes("data-rwn-professional-a11y")) {
+    html = html.replace("</head>", `  ${ACCESSIBLE_TOUCH_TARGETS}\n</head>`);
   }
   html = ensureHeadLink(html, "icon", "/rwn-mark.svg", ' type="image/svg+xml"');
   html = ensureHeadLink(html, "manifest", "/site.webmanifest");
