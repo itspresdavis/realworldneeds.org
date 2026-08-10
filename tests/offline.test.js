@@ -34,9 +34,27 @@ test("offline directory clearly warns that availability and service pages requir
   assert.match(directory, /current availability and service-detail pages require a connection/);
   assert.match(directory, /Reconnect before traveling or relying on a listing/);
   assert.match(directory, /reconnect for full details/);
-  assert.match(directory, /if \(!navigator\.onLine\)[\s\S]*?event\.preventDefault\(\)/);
-  assert.match(directory, /window\.addEventListener\("offline"/);
-  assert.match(directory, /window\.addEventListener\("online"/);
+});
+
+test("directory connectivity is based on a real uncached same-origin probe", async () => {
+  const probe = await read("public/offline-status.js");
+  assert.match(probe, /const PROBE_URL = "\/data\/release\.json"/);
+  assert.match(probe, /cache:\s*"no-store"/);
+  assert.match(probe, /credentials:\s*"same-origin"/);
+  assert.match(probe, /X-RWN-Connectivity-Probe/);
+  assert.match(probe, /catch[\s\S]*?setOffline\(true\)/);
+  assert.match(probe, /event\.preventDefault\(\)/);
+  assert.match(probe, /event\.stopImmediatePropagation\(\)/);
+  assert.match(probe, /window\.addEventListener\("online", probe\)/);
+  assert.match(probe, /window\.addEventListener\("offline"/);
+  assert.doesNotMatch(probe, /localStorage|sessionStorage|sendBeacon|XMLHttpRequest/);
+});
+
+test("every generated directory page loads the hashed connectivity probe", async () => {
+  const page = await read("dist/directory/help/food/index.html");
+  assert.match(page, /src="\/offline-status\.js\?v=[a-f0-9]{12}"/);
+  const release = JSON.parse(await read("dist/data/release.json"));
+  assert.match(release.directoryResilienceRelease || "", /^[a-f0-9]{12}$/);
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {
