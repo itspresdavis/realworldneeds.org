@@ -57,6 +57,12 @@ import("./telemetry.js")
   .then(({ startTelemetry }) => startTelemetry())
   .catch(() => {});
 
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  }, { once: true });
+}
+
 const loadExperience = () => import("./experience.js").catch(() => {});
 
 if ("requestIdleCallback" in window) {
