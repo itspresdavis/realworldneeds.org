@@ -17,8 +17,8 @@ test("homepage ships world-class UX assets and accurate organization semantics",
   assert.match(html, new RegExp(`/src/world-class\\.css\\?v=${release.release}`));
   assert.match(html, /How listings are checked/);
   assert.match(html, /Transparency/);
-  assert.doesNotMatch(html, /"logo":"https:\/\/www\.realworldneeds\.org\/media\/earth-blue-marble\.jpg"/);
-  assert.match(html, /"image":\s*"https:\/\/www\.realworldneeds\.org\/media\/earth-blue-marble\.jpg"/);
+  assert.doesNotMatch(html, /"logo":"https:\/\/www\.realworldneeds\.org\/media\/rwn-social\.jpg"/);
+  assert.match(html, /"image":\s*"https:\/\/www\.realworldneeds\.org\/media\/rwn-social\.jpg"/);
 });
 
 test("bootstrap loads the world-class interaction layer with the release hash", async () => {

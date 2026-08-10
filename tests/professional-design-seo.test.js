@@ -8,11 +8,11 @@ test("production homepage uses the professional presentation and aligned search 
   const html = await readFile("dist/index.html", "utf8");
   assert.match(html, new RegExp(`<title>${HOME_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
   assert.match(html, /<html lang="en" class="rwn-professional">/);
-  assert.match(html, /<h1>Find free essential services near you\.<\/h1>/);
+  assert.match(html, /<h1>Find essential help\. Share what you can\.<\/h1>/);
   assert.match(html, /\/src\/professional\.css\?v=[a-f0-9]{12}/);
   assert.match(html, /\/src\/professional\.js\?v=[a-f0-9]{12}/);
   assert.match(html, /twitter:card[^>]+summary_large_image/i);
-  assert.match(html, /og:image[^>]+earth-blue-marble\.jpg/i);
+  assert.match(html, /og:image[^>]+rwn-social\.jpg/i);
 });
 
 test("generated directory, service, and trust pages share the same professional system", async () => {
@@ -27,7 +27,7 @@ test("generated directory, service, and trust pages share the same professional 
     const html = await readFile(path, "utf8");
     assert.match(html, /\/professional-pages\.css\?v=[a-f0-9]{12}/, `${path} is missing professional page CSS`);
     assert.match(html, /twitter:card[^>]+summary_large_image/i, `${path} is missing Twitter card metadata`);
-    assert.match(html, /og:image[^>]+earth-blue-marble\.jpg/i, `${path} is missing social imagery`);
+    assert.match(html, /og:image[^>]+rwn-social\.jpg/i, `${path} is missing social imagery`);
     assert.match(html, /professional-need-links/, `${path} is missing crawlable need navigation`);
   }
 });
