@@ -6,6 +6,7 @@ const CORE_ASSETS = [
   "/legal.css",
   "/directory-enhancements.css",
   "/directory.js",
+  "/offline-status.js",
   "/data/search-index.json",
   "/rwn-mark.svg",
   "/site.webmanifest"
@@ -88,6 +89,7 @@ self.addEventListener("fetch", (event) => {
 
   const cacheable = url.pathname === "/data/search-index.json"
     || url.pathname === "/directory.js"
+    || url.pathname === "/offline-status.js"
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/legal.css"
     || url.pathname === "/rwn-mark.svg"
