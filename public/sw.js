@@ -8,7 +8,7 @@ const CORE_ASSETS = [
   "/directory.js",
   "/data/search-index.json",
   "/rwn-mark.svg",
-  "/manifest.webmanifest"
+  "/site.webmanifest"
 ];
 
 const cacheKeyFor = (requestOrUrl) => {
@@ -91,7 +91,7 @@ self.addEventListener("fetch", (event) => {
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/legal.css"
     || url.pathname === "/rwn-mark.svg"
-    || url.pathname === "/manifest.webmanifest";
+    || url.pathname === "/site.webmanifest";
 
   if (cacheable) event.respondWith(staleWhileRevalidate(request));
 });
