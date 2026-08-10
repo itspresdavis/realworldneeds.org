@@ -296,7 +296,7 @@ async function run() {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       await new Promise((resolve) => setTimeout(resolve, 240));
       const taskbar = document.querySelector(".mobile-taskbar");
-      const quick = document.querySelector(".quick-need");
+      const quickNeeds = [...document.querySelectorAll(".quick-need")];
       const taskbarStyle = taskbar ? getComputedStyle(taskbar) : null;
       const rect = taskbar?.getBoundingClientRect();
       const hitX = rect ? Math.max(0, Math.min(innerWidth - 1, rect.left + rect.width / 2)) : 0;
@@ -309,12 +309,12 @@ async function run() {
         taskbarHit: Boolean(hit?.closest?.(".mobile-taskbar")),
         pointerEvents: taskbarStyle?.pointerEvents || "",
         scrollY: window.scrollY,
-        quickHeight: quick?.getBoundingClientRect().height || 0,
+        quickCount: quickNeeds.length,\n        quickHidden: quickNeeds.every((node) => node.getBoundingClientRect().height === 0),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
       };
     })()`);
     await capture(client, "finder-mobile-scrolled.png");
-    if (!mobile.taskbar || !mobile.taskbarClass || !mobile.taskbarInViewport || !mobile.taskbarHit || mobile.pointerEvents !== "auto" || mobile.scrollY <= 180 || mobile.quickHeight < 44 || mobile.overflow > 8) {
+    if (!mobile.taskbar || !mobile.taskbarClass || !mobile.taskbarInViewport || !mobile.taskbarHit || mobile.pointerEvents !== "auto" || mobile.scrollY <= 180 || mobile.quickCount !== 7 || !mobile.quickHidden || mobile.overflow > 8) {
       throw new Error(`Mobile world-class UX failed: ${JSON.stringify(mobile)}`);
     }
 
