@@ -208,3 +208,9 @@ if (root) {
   renderChips();
   clearGlobalResults();
 }
+
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  const registerOfflineDirectory = () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  if (document.readyState === "complete") registerOfflineDirectory();
+  else window.addEventListener("load", registerOfflineDirectory, { once: true });
+}
