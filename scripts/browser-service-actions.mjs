@@ -190,6 +190,7 @@ async function run() {
       const status = utility.querySelector("[data-service-action-status]")?.textContent || "";
       const minHeight = Math.min(...buttons.map((button) => button.getBoundingClientRect().height));
       const groupRect = buttonGroup.getBoundingClientRect();
+      const viewportHeight = Math.max(innerHeight, document.documentElement.clientHeight, visualViewport?.height || 0);
       return {
         ok: true,
         minHeight,
@@ -198,10 +199,11 @@ async function run() {
         printed,
         navigated: location.href !== before,
         status,
-        groupVisible: groupRect.top >= 0 && groupRect.bottom <= innerHeight,
+        viewportHeight,
+        groupVisible: groupRect.top >= 0 && groupRect.bottom <= viewportHeight,
         buttonsVisible: buttons.every((button) => {
           const rect = button.getBoundingClientRect();
-          return rect.top >= 0 && rect.bottom <= innerHeight;
+          return rect.top >= 0 && rect.bottom <= viewportHeight;
         }),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         privacyCopy: utility.textContent.includes("RWN does not receive who you share with")
