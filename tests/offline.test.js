@@ -27,6 +27,18 @@ test("offline registration is non-blocking and clear-browser-data removes offlin
   assert.match(bootstrap, /\.catch\(\(\) => \{\}\)/);
 });
 
+test("offline directory clearly warns that availability and service pages require reconnection", async () => {
+  const directory = await read("public/directory.js");
+  assert.match(directory, /offlineDirectoryNotice/);
+  assert.match(directory, /Offline mode\./);
+  assert.match(directory, /current availability and service-detail pages require a connection/);
+  assert.match(directory, /Reconnect before traveling or relying on a listing/);
+  assert.match(directory, /reconnect for full details/);
+  assert.match(directory, /if \(!navigator\.onLine\)[\s\S]*?event\.preventDefault\(\)/);
+  assert.match(directory, /window\.addEventListener\("offline"/);
+  assert.match(directory, /window\.addEventListener\("online"/);
+});
+
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {
   const config = JSON.parse(await read("vercel.json"));
   const catchAll = config.headers.find((entry) => entry.source === "/(.*)");
