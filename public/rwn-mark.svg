@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Real World Needs</title>
+  <desc id="desc">A green globe mark representing the Real World Needs essential services directory.</desc>
+  <circle cx="256" cy="256" r="240" fill="#071926"/>
+  <circle cx="256" cy="256" r="208" fill="#15985e"/>
+  <circle cx="256" cy="256" r="154" fill="none" stroke="#ffffff" stroke-width="24"/>
+  <path d="M102 208h308M102 304h308" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
+  <path d="M256 102c72 73 72 235 0 308M256 102c-72 73-72 235 0 308" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
+</svg>

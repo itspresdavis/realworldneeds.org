@@ -22,6 +22,7 @@ document.head.append(runtimeStyle);
 
 const appReady = import("./app.js");
 const refinementReady = import("./refinement.js");
+const worldClassReady = import("./world-class.js");
 const { installRefinements } = await refinementReady;
 
 let refinementsInstalled = false;
@@ -48,9 +49,31 @@ if (!refinementsInstalled) {
   refinementsInstalled = true;
 }
 
+const clearOfflineData = async () => {
+  if ("caches" in window) {
+    const names = await window.caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith("rwn-offline-")).map((name) => window.caches.delete(name)));
+  }
+  navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_RWN_OFFLINE" });
+};
+
+document.getElementById("clearBrowserData")?.addEventListener("click", () => {
+  clearOfflineData().catch(() => {});
+});
+
+worldClassReady
+  .then(({ installWorldClassUX }) => installWorldClassUX())
+  .catch(() => {});
+
 import("./telemetry.js")
   .then(({ startTelemetry }) => startTelemetry())
   .catch(() => {});
+
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  }, { once: true });
+}
 
 const loadExperience = () => import("./experience.js").catch(() => {});
 

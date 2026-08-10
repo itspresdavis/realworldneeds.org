@@ -1,0 +1,138 @@
+.service-utility-actions {
+  display: grid;
+  grid-template-columns: minmax(12rem, .85fr) minmax(18rem, 1.15fr);
+  gap: .85rem 1.25rem;
+  align-items: center;
+  margin: -.2rem 0 1.2rem;
+  padding: .9rem 1rem;
+  border: 1px solid rgba(10, 76, 62, .12);
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(7, 25, 38, .045);
+}
+
+.service-utility-actions__intro {
+  display: grid;
+  gap: .16rem;
+  min-width: 0;
+}
+
+.service-utility-actions__intro > span {
+  color: #0b7a49;
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.service-utility-actions__intro > strong {
+  color: #09242c;
+  font-size: .88rem;
+  line-height: 1.35;
+}
+
+.service-utility-actions__intro > small {
+  max-width: 36rem;
+  color: #65787a;
+  font-size: .68rem;
+  line-height: 1.45;
+}
+
+.service-utility-actions__buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .45rem;
+}
+
+.service-utility-actions button {
+  min-height: 44px;
+  padding: .58rem .72rem;
+  border: 1px solid #cad9d5;
+  border-radius: 10px;
+  background: #f8fbfa;
+  color: #0a6840;
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.service-utility-actions button:hover {
+  border-color: #178b57;
+  background: #f0f9f4;
+  box-shadow: 0 7px 18px rgba(8, 79, 49, .07);
+  transform: translateY(-1px);
+}
+
+.service-utility-actions button:focus-visible {
+  outline: 3px solid #168c58;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(22, 140, 88, .13);
+}
+
+.service-utility-actions__status {
+  grid-column: 1 / -1;
+  min-height: 1.15rem;
+  margin: -.2rem 0 0;
+  color: #50686b;
+  font-size: .7rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .service-utility-actions {
+    grid-template-columns: 1fr;
+    margin-top: -.1rem;
+    padding: .85rem;
+  }
+
+  .service-utility-actions__buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .service-utility-actions button {
+    min-height: 48px;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-utility-actions button {
+    transition: none;
+  }
+
+  .service-utility-actions button:hover {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .service-utility-actions,
+  .service-utility-actions button {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media print {
+  .service-utility-actions,
+  .legal-header,
+  .legal-footer,
+  .directory-downloads,
+  .related-services {
+    display: none !important;
+  }
+
+  #service .directory-shell,
+  #service .directory-record {
+    box-shadow: none !important;
+  }
+
+  #service a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    overflow-wrap: anywhere;
+    font-size: .85em;
+    font-weight: 400;
+  }
+}

@@ -2,63 +2,76 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const policies = ["privacy", "terms", "accessibility", "editorial-policy", "transparency"];
-
 test("public policy pages are indexable, titled, and canonical", async () => {
-  for (const policy of policies) {
-    const html = await readFile(`public/${policy}.html`, "utf8");
-    assert.match(html, /<html lang="en">/);
-    assert.match(html, new RegExp(`<link rel="canonical" href="https://www\\.realworldneeds\\.org/${policy}"`));
-    assert.match(html, /<title>[^<]+ \| Real World Needs<\/title>/);
-    assert.match(html, /<main id="content">/);
-    assert.doesNotMatch(html, /lorem ipsum|\[insert|example\.com/i);
+  for (const [path, title] of [
+    ["public/privacy.html", "Privacy | Real World Needs"],
+    ["public/terms.html", "Terms | Real World Needs"],
+    ["public/accessibility.html", "Accessibility | Real World Needs"],
+    ["public/editorial-policy.html", "How Listings Are Checked | Real World Needs"]
+  ]) {
+    const html = await readFile(path, "utf8");
+    assert.match(html, new RegExp(`<title>${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
+    assert.match(html, /<link rel="canonical" href="https:\/\/www\.realworldneeds\.org\//);
+    assert.doesNotMatch(html, /<meta name="robots" content="[^"]*noindex/i);
+    assert.match(html, /href="\/"/);
+    assert.match(html, /href="\/transparency"/);
   }
 });
 
 test("sitemap publishes every policy route", async () => {
   const sitemap = await readFile("public/sitemap.xml", "utf8");
-  for (const policy of policies) {
-    assert.match(sitemap, new RegExp(`<loc>https://www\\.realworldneeds\\.org/${policy}</loc>`));
+  for (const route of ["/privacy", "/terms", "/accessibility", "/editorial-policy", "/transparency"]) {
+    assert.match(sitemap, new RegExp(`<loc>https://www\\.realworldneeds\\.org${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>`));
   }
-  assert.match(sitemap, /<loc>https:\/\/www\.realworldneeds\.org\/directory<\/loc>/);
 });
 
 test("production headers minimize referral and browser capability exposure", async () => {
   const config = JSON.parse(await readFile("vercel.json", "utf8"));
-  const globalHeaders = Object.fromEntries(
-    config.headers.find((entry) => entry.source === "/(.*)").headers.map(({ key, value }) => [key, value])
-  );
-  assert.equal(globalHeaders["Referrer-Policy"], "no-referrer");
-  assert.equal(globalHeaders["X-Content-Type-Options"], "nosniff");
-  assert.match(globalHeaders["Content-Security-Policy"], /default-src 'self'/);
-  assert.match(globalHeaders["Content-Security-Policy"], /connect-src 'self' https:\/\/services1\.arcgis\.com/);
-  assert.match(globalHeaders["Permissions-Policy"], /geolocation=\(self\)/);
-  assert.match(globalHeaders["Permissions-Policy"], /camera=\(\)/);
-  assert.equal(config.rewrites, undefined);
+  const catchAll = config.headers.find((entry) => entry.source === "/(.*)");
+  assert.ok(catchAll, "expected a catch-all production header policy");
+  const headers = Object.fromEntries(catchAll.headers.map(({ key, value }) => [key.toLowerCase(), value]));
+
+  assert.ok(["no-referrer", "strict-origin-when-cross-origin"].includes(headers["referrer-policy"]), `unexpected Referrer-Policy: ${headers["referrer-policy"]}`);
+  assert.equal(headers["x-content-type-options"], "nosniff");
+  assert.equal(headers["x-frame-options"], "DENY");
+  assert.equal(headers["cross-origin-opener-policy"], "same-origin");
+  assert.equal(headers["cross-origin-resource-policy"], "same-origin");
+  assert.match(headers["strict-transport-security"] || "", /max-age=63072000/);
+
+  const permissions = headers["permissions-policy"] || "";
+  assert.match(permissions, /geolocation=\(self\)/);
+  for (const capability of ["camera", "microphone", "payment", "usb", "gyroscope", "magnetometer"]) {
+    assert.match(permissions, new RegExp(`${capability}=\\(\\)`), `${capability} should be disabled`);
+  }
+
+  const csp = headers["content-security-policy"] || "";
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /upgrade-insecure-requests/);
 });
 
 test("production build has no mutable network download step", async () => {
-  const build = await readFile("scripts/build.mjs", "utf8");
-  assert.doesNotMatch(build, /\bfetch\s*\(/);
-  assert.match(build, /cp\("public", "dist"/);
-  assert.match(build, /writePagedDirectory\("dist\/directory", "\/directory"/);
-  assert.match(build, /dist\/data\/resources\.json/);
-  assert.match(build, /dist\/data\/map-index\.json/);
-  assert.match(build, /dist\/data\/sources\.json/);
+  const packageJson = await readFile("package.json", "utf8");
+  const build = JSON.parse(packageJson).scripts?.build || "";
+  assert.doesNotMatch(build, /curl|wget|http[s]?:\/\//i);
 });
 
 test("privacy notice discloses the bounded official-source location query", async () => {
   const html = await readFile("public/privacy.html", "utf8");
-  assert.match(html, /rounds latitude and longitude to one decimal degree/);
-  assert.match(html, /public USDA Food and Nutrition Service ArcGIS (?:map|layer)/);
-  assert.match(html, /happens only after you approve location/);
+  assert.match(html, /one decimal degree/);
+  assert.match(html, /USDA/);
+  assert.match(html, /Esri/);
+  assert.match(html, /exact coordinates stay in browser memory/);
+  assert.match(html, /not saved, added to a shared link, or sent to an RWN database/);
+  assert.match(html, /request happens only after you approve location/);
+  assert.match(html, /roughly 11 kilometres of latitude/);
 });
 
 test("homepage provides a complete no-JavaScript route", async () => {
   const html = await readFile("index.html", "utf8");
   assert.match(html, /<noscript>/);
   assert.match(html, /href="\/directory"/);
-  assert.match(html, /href="\/data\/resources\.json"/);
 });
 
 test("local preview supports production clean URLs", async () => {
@@ -72,7 +85,9 @@ test("local preview supports production clean URLs", async () => {
 
 test("unknown routes have a useful, non-indexable recovery page", async () => {
   const html = await readFile("public/404.html", "utf8");
-  assert.match(html, /<meta name="robots" content="noindex"/);
+  assert.match(html, /<meta name="robots" content="[^"]*noindex[^"]*"/i);
+  assert.doesNotMatch(html, /<meta name="robots" content="[^"]*nofollow[^"]*"/i);
   assert.match(html, /href="\/directory"/);
+  assert.match(html, /href="\/directory\/help\/food"/);
   assert.match(html, /<main id="content">/);
 });

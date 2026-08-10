@@ -9,30 +9,44 @@ let cls = 0;
 let inp = 0;
 let longTasks = 0;
 
-function sessionSampled() {
-  const key = "rwn-rum-sampled";
+function randomSampled() {
   try {
-    const existing = sessionStorage.getItem(key);
-    if (existing !== null) return existing === "1";
-    const sampled = crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32 < PERF_SAMPLE_RATE;
-    sessionStorage.setItem(key, sampled ? "1" : "0");
-    return sampled;
+    return crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32 < PERF_SAMPLE_RATE;
   } catch {
     return Math.random() < PERF_SAMPLE_RATE;
   }
 }
 
-const sampled = sessionSampled();
+const sampled = randomSampled();
 
 function cleanNumber(value) {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
 }
 
+export function routeClass(pathname) {
+  if (pathname === "/" || pathname === "") return "finder";
+  if (/^\/service\//.test(pathname)) return "service";
+  if (/^\/directory\/local\/[^/]+(?:\/[^/]+)?\/[^/]+\/help\//.test(pathname)) return "local_need_directory";
+  if (/^\/directory\/local\//.test(pathname)) return "local_directory";
+  if (/^\/directory\/help\//.test(pathname)) return "need_directory";
+  if (/^\/directory\/region\//.test(pathname)) return "region_directory";
+  if (pathname === "/directory" || /^\/directory\/page\//.test(pathname)) return "directory";
+  if (/^\/directory\//.test(pathname)) return "country_directory";
+  if (["/privacy", "/terms", "/accessibility", "/editorial-policy", "/transparency"].includes(pathname)) return "policy";
+  return "other";
+}
+
+function viewportClass() {
+  if (innerWidth < 600) return "small";
+  if (innerWidth < 1024) return "medium";
+  return "large";
+}
+
 function send(payload) {
   const body = JSON.stringify({
-    schema: 1,
-    path: location.pathname.slice(0, 160),
-    viewport: `${Math.round(innerWidth)}x${Math.round(innerHeight)}`,
+    schema: 2,
+    route: routeClass(location.pathname),
+    viewportClass: viewportClass(),
     ...payload
   });
 
@@ -68,9 +82,7 @@ function reportPerformance() {
     fcp: cleanNumber(fcpEntry?.startTime),
     ttfb: cleanNumber(nav ? nav.responseStart - nav.requestStart : null),
     domReady: cleanNumber(nav?.domContentLoadedEventEnd),
-    longTasks,
-    reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
-    connection: navigator.connection?.effectiveType || null
+    longTasks
   });
 }
 

@@ -8,11 +8,23 @@
   "lang": "en",
   "dir": "ltr",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#061824",
   "theme_color": "#061824",
-  "categories": ["health", "medical", "navigation"],
+  "icons": [
+    {
+      "src": "/rwn-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "medical", "food", "navigation"],
   "shortcuts": [
-    { "name": "Find help", "short_name": "Find help", "url": "/#finder" },
-    { "name": "Text directory", "short_name": "Directory", "url": "/directory" }
+    { "name": "Find help", "short_name": "Find help", "description": "Open the RWN essential-services finder.", "url": "/#finder" },
+    { "name": "Find food help", "short_name": "Food", "description": "Browse reviewed food assistance listings.", "url": "/directory/help/food" },
+    { "name": "Find shelter", "short_name": "Shelter", "description": "Browse reviewed shelter and housing-help listings.", "url": "/directory/help/shelter" },
+    { "name": "Find health care", "short_name": "Health", "description": "Browse reviewed health-care assistance listings.", "url": "/directory/help/health" },
+    { "name": "Text directory", "short_name": "Directory", "description": "Open the lightweight text directory.", "url": "/directory" }
   ]
 }
