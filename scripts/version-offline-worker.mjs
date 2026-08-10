@@ -6,12 +6,14 @@ const inputs = [
   "public/directory.js",
   "public/offline-status.js",
   "public/directory-enhancements.css",
+  "public/professional-pages.css",
   "public/legal.css",
   "public/site.webmanifest",
   "scripts/build.mjs",
   "scripts/build-local-seo.mjs",
   "scripts/enhance-generated-pages.mjs",
   "scripts/inject-directory-resilience.mjs",
+  "scripts/professional-seo.mjs",
   "dist/data/search-index.json"
 ];
 
