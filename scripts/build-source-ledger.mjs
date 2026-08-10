@@ -136,6 +136,7 @@ const html = `<!doctype html>
   <meta name="theme-color" content="#071926" />
   <link rel="canonical" href="${SITE_ORIGIN}/sources" />
   <link rel="stylesheet" href="/legal.css" />
+  <link rel="stylesheet" href="/directory-enhancements.css" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Real World Needs" />
   <meta property="og:title" content="Data Sources & Provenance | Real World Needs" />
@@ -158,12 +159,31 @@ const html = `<!doctype html>
       <div class="open-data-actions"><a href="/transparency">Transparency Center</a><a href="/editorial-policy">Review standard</a><a href="/data/sources.json">Machine-readable source registry</a><a href="/data/resources.json">Full resource JSON</a></div>
     </div>
   </main>
-  <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/accessibility">Accessibility</a></nav></footer>
+  <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/sources">Sources</a><a href="/privacy">Privacy</a><a href="/accessibility">Accessibility</a></nav></footer>
 </body>
 </html>`;
 
 await mkdir("dist/sources", { recursive: true });
 await writeFile("dist/sources/index.html", html);
+
+const transparencyPath = "dist/transparency.html";
+let transparency = await readFile(transparencyPath, "utf8");
+if (!transparency.includes('href="/sources"')) {
+  transparency = transparency
+    .replace(
+      '<a href="/data/sources.json">View data sources</a>',
+      '<a href="/sources">Browse source ledger</a><a href="/data/sources.json">Raw source registry</a>'
+    )
+    .replace(
+      '<a href="/data/sources.json">Source registry</a>',
+      '<a href="/sources">Human source ledger</a><a href="/data/sources.json">Source registry JSON</a>'
+    )
+    .replace(
+      '<a href="/privacy">Privacy</a>',
+      '<a href="/sources">Sources</a><a href="/privacy">Privacy</a>'
+    );
+  await writeFile(transparencyPath, transparency);
+}
 
 const sitemapPath = "dist/sitemap.xml";
 let sitemap = await readFile(sitemapPath, "utf8");
@@ -177,6 +197,7 @@ const release = JSON.parse(await readFile(releasePath, "utf8"));
 release.sourceLedger = {
   structuredSourceFamilies: sourceRegistry.length,
   originalSourceGroups: otherSources.length,
+  totalSourceGroups: sourceRegistry.length + otherSources.length,
   lastmod: pageLastmod
 };
 await writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`);
