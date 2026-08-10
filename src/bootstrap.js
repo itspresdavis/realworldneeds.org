@@ -49,6 +49,18 @@ if (!refinementsInstalled) {
   refinementsInstalled = true;
 }
 
+const clearOfflineData = async () => {
+  if ("caches" in window) {
+    const names = await window.caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith("rwn-offline-")).map((name) => window.caches.delete(name)));
+  }
+  navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_RWN_OFFLINE" });
+};
+
+document.getElementById("clearBrowserData")?.addEventListener("click", () => {
+  clearOfflineData().catch(() => {});
+});
+
 worldClassReady
   .then(({ installWorldClassUX }) => installWorldClassUX())
   .catch(() => {});
