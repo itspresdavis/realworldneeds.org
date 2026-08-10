@@ -1,11 +1,12 @@
 import * as THREE from "/vendor/three.module.js";
-import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
+import { GLOBE_POINT_RADIUS, createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
 import { clusterProjectedEntries } from "./utils/globe-clustering.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import { freeAccessLabel, freeAccessModels } from "./data/free-access.js";
 import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js";
 import {
   cameraDistanceForSphere,
+  COUNTRY_NAME_ALIASES,
   createInitialTypeSet,
   distanceKm,
   featureGlobeView,
@@ -27,12 +28,26 @@ import {
   SAVED_RESOURCES_KEY
 } from "./utils/privacy.js";
 
-const DEFAULT_RESOURCE = "whitechapel-mission";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MIN_GLOBE_ZOOM = 0.82;
+const MAX_GLOBE_LATITUDE = 82;
+const localeCountryHint = (() => {
+  try {
+    const region = new Intl.Locale(navigator.language).region;
+    return region ? new Intl.DisplayNames(["en"], { type: "region" }).of(region) : "";
+  } catch {
+    return "";
+  }
+})();
+
+function clampGlobeLatitude(value) {
+  return Math.max(-MAX_GLOBE_LATITUDE, Math.min(MAX_GLOBE_LATITUDE, value));
+}
 
 function maxGlobeZoom() {
-  return window.innerWidth <= 600 ? 2.55 : 3.05;
+  if (window.innerWidth <= 600) return 4.25;
+  if (window.innerWidth <= 900) return 5;
+  return 6.25;
 }
 
 function initialResultCount() {
@@ -51,7 +66,7 @@ function loadSavedResources() {
 }
 
 const requestedResource = resourceIdFromUrl(window.location.href);
-const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : DEFAULT_RESOURCE;
+const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : null;
 
 if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
@@ -87,7 +102,7 @@ const state = {
   pinching: false,
   velocityLon: 0,
   velocityLat: 0,
-  autoRotate: !reduceMotion,
+  autoRotate: false,
   interactionUntil: 0,
   landRings: [],
   countryFeatures: [],
@@ -103,7 +118,7 @@ const state = {
   ambientZoom: 1,
   savedIds: loadSavedResources(),
   savedOnly: false,
-  inspectorOpen: true,
+  inspectorOpen: Boolean(initialResource),
   clusterIds: []
 };
 
@@ -147,8 +162,11 @@ let globeLastReadoutUpdate = 0;
 let globeCloseViewActive = false;
 let globePageScrollUntil = 0;
 let globeLastScrollFrame = 0;
+let globeLastIdleFrame = 0;
 let globeServicePoints = null;
 let globePointSignature = "";
+let globeClusterProjectionSignature = "";
+let globeProjectedClusters = [];
 const globeRaycaster = new THREE.Raycaster();
 const globePointerNdc = new THREE.Vector2();
 const globeProjectionVector = new THREE.Vector3();
@@ -190,11 +208,7 @@ const regionViews = {
   oceania: { label: "Oceania", lon: 145, lat: -23, zoom: 1.04 }
 };
 
-const countryNameAliases = {
-  "South Sudan": "S. Sudan",
-  "Türkiye": "Turkey",
-  "United States": "United States of America"
-};
+const countryNameAliases = COUNTRY_NAME_ALIASES;
 
 const mapLabels = [
   { label: "NORTH AMERICA", lat: 43, lng: -105 },
@@ -292,21 +306,21 @@ function shell() {
     <header class="site-header" id="top">
       <a class="brand" href="#top" aria-label="Real World Needs home">
         <span class="brand__mark">${icon.globe}</span>
-        <span class="brand__name"><strong>RWN</strong><small>Real World Needs</small></span>
+        <span class="brand__name"><strong>Real World Needs</strong><small>Essential services directory</small></span>
       </a>
       <nav class="primary-nav" aria-label="Primary navigation">
         <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-        <a href="#about" data-section-link="about">How it works</a>
-        <a href="#standards" data-section-link="standards">How we check</a>
-        <a href="/transparency">Transparency</a>
+        <a href="#about" data-section-link="about">About RWN</a>
+        <a href="#help" data-section-link="help">Ways to help</a>
+        <a href="#standards" data-section-link="standards">Standards</a>
       </nav>
       <details class="site-menu">
         <summary aria-label="Open site navigation" title="Menu">${icon.menu}</summary>
         <nav aria-label="Mobile navigation">
           <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-          <a href="#about" data-section-link="about">How it works</a>
-          <a href="#standards" data-section-link="standards">How we check</a>
-          <a href="/transparency">Transparency</a>
+          <a href="#about" data-section-link="about">About RWN</a>
+          <a href="#help" data-section-link="help">Ways to help</a>
+          <a href="#standards" data-section-link="standards">Standards</a>
         </nav>
       </details>
       <a class="header-action" href="#finder" data-section-link="finder">Find help</a>
@@ -317,15 +331,16 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find free help near you.</h1>
-              <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
+              <span class="section-kicker">Free essential services directory</span>
+              <h1>Find essential help. Share what you can.</h1>
+              <p>Search free food, shelter, health care, hygiene, clothing, water and other essentials. Every listing leads back to the organization or public source.</p>
             </div>
 
             <div class="finder-search" role="search">
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" placeholder="Search a place or service" autocomplete="off">
+                <input id="resourceSearch" type="search" placeholder="Search a service or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
@@ -359,7 +374,7 @@ function shell() {
 
           <section class="globe-stage" aria-label="Interactive globe of free essential services">
             <div class="globe-meta">
-              <div><span class="status-dot"></span><strong>Service map</strong></div>
+              <div><span class="status-dot"></span><strong>Explore services on the globe</strong></div>
               <div class="globe-meta__tools">
                 <span id="globeCount"></span>
                 <span class="globe-detail-status" id="globeDetailStatus">Standard boundaries</span>
@@ -377,21 +392,21 @@ function shell() {
                 </label>
               </div>
             </div>
-            <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
-            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details. Higher-resolution national boundaries load automatically when you zoom closer.</p>
+            <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="group" aria-describedby="globeHelp" aria-controls="globeReadout pinLayer" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown + - Home Space" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
+            <p class="sr-only" id="globeHelp">Use two fingers on touch screens, or drag with a mouse, to rotate the globe. Use plus and minus, pinch, or the mouse wheel to zoom. Arrow keys rotate the globe. Select a country or a location marker for details. A complete text directory is available below.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
-            <div class="globe-controls" aria-label="Globe controls">
+            <div class="globe-controls" id="globeControls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">${icon.plus}</button>
               <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">${icon.minus}</button>
               <button type="button" id="resetGlobe" title="Reset globe view" aria-label="Reset globe view">${icon.reset}</button>
-              <button type="button" id="toggleMotion" title="Pause globe rotation" aria-label="Pause globe rotation">${icon.pause}</button>
+              <button type="button" id="toggleMotion" title="Start globe rotation" aria-label="Start globe rotation">${icon.play}</button>
             </div>
             <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
             <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
-            <p class="globe-gesture-hint" aria-hidden="true">Drag to explore · Pinch or scroll to zoom</p>
+            <p class="globe-gesture-hint" aria-hidden="true"><span class="globe-gesture-hint__mouse">Drag to explore · Scroll to zoom</span><span class="globe-gesture-hint__touch">Use two fingers to explore · Pinch to zoom</span></p>
           </section>
 
           <aside class="resource-panel" id="resourcePanel" aria-live="polite"></aside>
@@ -404,7 +419,7 @@ function shell() {
 
         <div class="results-section">
           <div class="results-heading">
-            <div><span class="section-kicker">Search results</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
+            <div><span class="section-kicker">Search results</span><h2 id="resultTitle">Services you can check and contact</h2><p class="results-lede">Search by need or place. Open any listing to see access details, the original source, and when it was last checked.</p><p id="resultCount" aria-live="polite"></p></div>
             <div class="results-tools">
               <button class="directory-tool" type="button" id="toggleSaved" aria-pressed="false">${icon.bookmark}<span>Saved</span><b id="savedCount">0</b></button>
               <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
@@ -417,45 +432,54 @@ function shell() {
       </section>
 
       <section class="about-rwn" id="about">
-        <div class="about-rwn__heading">
-          <span class="section-kicker">How it works</span>
-          <h2>One place to find the basics.</h2>
-          <p>Real World Needs brings together public information about free essential services. Find a service, check the details, and contact the organization directly.</p>
+        <div class="about-rwn__visual">
+          <img src="/media/community-supplies.jpg" alt="Volunteers sorting useful community supplies on tables" loading="lazy" width="1800" height="1200">
         </div>
-        <div class="mission-steps">
-          <article><span>01</span><h3>Find</h3><p>Search by place or need. You can also use your location to see nearby services first.</p></article>
-          <article><span>02</span><h3>Check</h3><p>Review the hours, cost, eligibility, contact details, and the date we last checked the source.</p></article>
-          <article><span>03</span><h3>Contact</h3><p>Call the organization, visit its website, or open directions in Apple Maps or Google Maps.</p></article>
+        <div class="about-rwn__content">
+          <div class="about-rwn__heading">
+            <span class="section-kicker">About Real World Needs</span>
+            <h2>Find help. Give help. See where it goes.</h2>
+            <p>RWN brings reliable service information into one place. We are building a transparent way to direct donated goods and funds through trusted local partners, with clear records of what was received and where it went.</p>
+          </div>
+          <div class="mission-steps">
+            <article><span>01</span><div><h3>Find what is needed</h3><p>Local needs and receiving partners will be confirmed before a collection begins.</p></div></article>
+            <article><span>02</span><div><h3>Match the right support</h3><p>Useful goods and available funds will be directed to a published local need.</p></div></article>
+            <article><span>03</span><div><h3>Report the outcome</h3><p>Distribution records and updates will show supporters what happened next.</p></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="ways-to-help" id="help">
+        <div class="ways-to-help__heading">
+          <span class="section-kicker">Ways to help now</span>
+          <h2>Useful help starts with what people actually need.</h2>
+          <p>RWN is not accepting money or goods yet. These are the practical ways to help while the safeguards for responsible giving are put in place.</p>
+        </div>
+        <div class="ways-to-help__list">
+          <article><span>01</span><div><h3>Support a listed provider</h3><p>Use the directory to find an organization, check its current guidance, and give directly through its official website.</p></div><a href="#finder">Find a provider</a></article>
+          <article><span>02</span><div><h3>Share a dependable service</h3><p>Help someone reach current information by sharing a listing or the text directory. Access to services never depends on giving.</p></div><a href="/directory">Open the directory</a></article>
+          <article><span>03</span><div><h3>Prepare to give through RWN</h3><p>Giving will open only after secure payment, goods-handling, refund, safeguarding and public reporting controls are in place.</p></div><a href="/ways-to-help">Read the giving plan</a></article>
+        </div>
+        <div class="ways-to-help__actions">
+          <a class="ways-to-help__primary" href="/ways-to-help">Explore ways to help</a>
+          <a href="/transparency">Read our transparency standards</a>
         </div>
       </section>
 
       <section class="source-band" id="standards">
         <div class="source-band__heading">
-          <span class="section-kicker">How we check listings</span>
+          <span class="section-kicker">Sources and standards</span>
           <h2>Information you can check for yourself.</h2>
-          <p>Each listing links to its original source and shows when we last checked it. We include cost and eligibility details whenever they apply.</p>
+          <p>Each listing links to its original source and shows when we last checked it. We include access, cost and eligibility details whenever they apply.</p>
         </div>
         <div class="principle-grid" id="principleGrid"></div>
-      </section>
-
-      <section class="accountability" id="accountability">
-        <div class="accountability__heading">
-          <span class="section-kicker">About the directory</span>
-          <h2>Made to help you take the next step.</h2>
-          <p>RWN helps people find essential services and contact the organizations that provide them. We do not decide eligibility, reserve services, or accept donations or personal requests through this website.</p>
-        </div>
-        <div class="accountability-status">
-          <article class="is-live"><span>${icon.search}</span><div><small>Find</small><h3>Search by need or place</h3><p>Browse service locations, regional resource finders, and recognized support networks.</p></div></article>
-          <article><span>${icon.shield}</span><div><small>Check</small><h3>See the original source</h3><p>Every listing names its source, shows when it was checked, and links to the organization’s current information.</p></div></article>
-          <article><span>${icon.info}</span><div><small>Contact</small><h3>Confirm before you go</h3><p>Hours, availability, and eligibility can change. Contact the organization before making a long trip.</p></div></article>
-        </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
-      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="/directory">Text directory</a><a href="#about">How it works</a></nav>
-      <nav aria-label="Footer standards"><strong>About RWN</strong><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="#accountability">About the directory</a></nav>
+      <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
+      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="/directory">Text directory</a><a href="#about">About RWN</a></nav>
+      <nav aria-label="Footer standards"><strong>Help and standards</strong><a href="/ways-to-help">Ways to help</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a></nav>
       <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
       <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
       <p><span class="status-dot"></span>${resources.length} listings checked against original sources · This website does not accept donations or personal requests.</p>
@@ -509,13 +533,16 @@ function updateFilters() {
   state.filtered = state.userLocation
     ? rankResourcesForLocation(accessFiltered, state.userLocation, state.userCountry, state.query)
     : state.query
-      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, state.query) - resourceSearchScore(a, state.query) || a.name.localeCompare(b.name))
+      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, state.query) - resourceSearchScore(a, state.query)
+        || Number(b.country === localeCountryHint) - Number(a.country === localeCountryHint)
+        || a.name.localeCompare(b.name))
       : accessFiltered;
   state.visibleResults = initialResultCount();
   state.clusterIds = [];
 
-  if (!state.filtered.some((resource) => resource.id === state.selectedId)) {
-    state.selectedId = state.filtered[0]?.id || null;
+  if (state.selectedId && !state.filtered.some((resource) => resource.id === state.selectedId)) {
+    state.selectedId = null;
+    state.inspectorOpen = false;
   }
 
   syncGlobePointLayer();
@@ -616,7 +643,7 @@ function renderControls() {
   renderLiveSourceState();
 
   document.getElementById("globeLegend").innerHTML = aidMode
-    ? resourceTypes.filter((type) => state.activeTypes.has(type)).map((type) => `<span style="--legend:${categories[type].color}"><i></i>${categories[type].label}</span>`).join("")
+    ? `${resourceTypes.filter((type) => state.activeTypes.has(type)).map((type) => `<span style="--legend:${categories[type].color}"><i></i>${categories[type].label}</span>`).join("")}<span class="legend-kind is-direct"><i></i>Service location</span><span class="legend-kind is-finder"><i></i>Resource finder</span>`
     : `<span><i></i>Public requests</span>`;
 
   const empty = document.getElementById("globeEmpty");
@@ -736,7 +763,7 @@ function renderResults() {
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
-  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Public requests" : state.savedOnly ? "Saved services" : state.userLocation ? "Help near you" : "Find a service";
+  document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Public requests" : state.savedOnly ? "Saved services" : state.userLocation ? "Help near you" : "Services you can check and contact";
   count.textContent = state.viewMode === "aid"
     ? `${state.userLocation ? `${nearbyExactCount()} service locations within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} listings`
     : "No public requests are listed";
@@ -844,7 +871,7 @@ function focusGlobeOn(resource, immediate = false) {
     ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 1.72 : 1.9 }
     : featureGlobeView(countryFeatureByName(resource.country), { lat: resource.lat, lng: resource.lng });
   state.targetLon = view.lng;
-  state.targetLat = Math.max(-70, Math.min(70, view.lat));
+  state.targetLat = clampGlobeLatitude(view.lat);
   const serviceZoom = exact ? (window.innerWidth <= 600 ? 1.72 : 1.9) : 1.22;
   state.targetZoom = Math.min(maxGlobeZoom(), Math.max(view.zoom, serviceZoom));
   if (immediate) {
@@ -867,7 +894,7 @@ function focusGlobeOn(resource, immediate = false) {
 function focusGlobeNearUser() {
   if (!state.userLocation) return;
   state.targetLon = state.userLocation.lng;
-  state.targetLat = Math.max(-70, Math.min(70, state.userLocation.lat));
+  state.targetLat = clampGlobeLatitude(state.userLocation.lat);
   state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.72 : 1.9);
   state.velocityLon = 0;
   state.velocityLat = 0;
@@ -942,7 +969,7 @@ function latLngVector(lat, lng, radius = 1) {
 function cachedResourceVector(resource) {
   let vector = globeResourceVectorCache.get(resource);
   if (vector) return vector;
-  vector = latLngVector(resource.lat, resource.lng, 1.035);
+  vector = latLngVector(resource.lat, resource.lng, GLOBE_POINT_RADIUS);
   globeResourceVectorCache.set(resource, vector);
   return vector;
 }
@@ -952,11 +979,13 @@ function projectResourceGlobePoint(resource, width, height) {
   globeProjectionVector.copy(cachedResourceVector(resource)).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
   const depth = globeProjectionVector.z / scale;
+  const visible = globeCamera.position.z * globeProjectionVector.z > 1.002;
   globeProjectionVector.project(globeCamera);
   return {
     x: (globeProjectionVector.x * 0.5 + 0.5) * width,
     y: (-globeProjectionVector.y * 0.5 + 0.5) * height,
-    z: depth
+    z: depth,
+    visible
   };
 }
 
@@ -1072,8 +1101,12 @@ function loadEarthImagery() {
 }
 
 function loadDetailEarthImagery() {
-  if (earthDetailTextureRequested || window.innerWidth <= 900 || navigator.connection?.saveData) return;
-  if ((globeRenderer?.capabilities.maxTextureSize || 0) < 6144) return;
+  if (earthDetailTextureRequested || navigator.connection?.saveData) return;
+  const compactViewport = window.innerWidth <= 900;
+  const reportedMemoryGb = Number(navigator.deviceMemory || 4);
+  if (compactViewport && reportedMemoryGb < 4) return;
+  const requiredTextureSize = compactViewport ? 4096 : 6144;
+  if ((globeRenderer?.capabilities.maxTextureSize || 0) < requiredTextureSize) return;
   earthDetailTextureRequested = true;
   const status = document.getElementById("globeDetailStatus");
   if (status && state.detailGeometryReady) status.textContent = "1:10m · loading HD surface…";
@@ -1089,7 +1122,9 @@ function loadDetailEarthImagery() {
   image.onerror = () => {
     if (status && state.detailGeometryReady) status.textContent = "1:10m boundaries";
   };
-  image.src = "/media/earth-blue-marble-detail.jpg";
+  image.src = compactViewport
+    ? "/media/earth-blue-marble-mobile-detail.jpg"
+    : "/media/earth-blue-marble-detail.jpg";
 }
 
 function createStarField() {
@@ -1253,6 +1288,8 @@ function initThreeGlobe() {
       if (!box) return;
       globeViewportWidth = Math.max(1, box.width);
       globeViewportHeight = Math.max(1, box.height);
+      state.targetZoom = Math.min(maxGlobeZoom(), Math.max(MIN_GLOBE_ZOOM, state.targetZoom));
+      state.zoom = Math.min(maxGlobeZoom(), Math.max(MIN_GLOBE_ZOOM, state.zoom));
     });
     observer.observe(canvas);
   }
@@ -1397,7 +1434,9 @@ function renderThreeGlobe(width, height, now) {
   globeWorld.rotation.x = toRad(state.rotationLat);
   globeWorld.scale.setScalar(1);
   globeWorld.updateMatrixWorld(true);
-  globeCamera.position.z = Math.max(1.09, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));
+  globeCamera.position.z = globeBaseCameraDistance;
+  globeCamera.zoom = Math.max(MIN_GLOBE_ZOOM, state.zoom * state.ambientZoom);
+  globeCamera.updateProjectionMatrix();
   globeCamera.updateMatrixWorld(true);
 
   if (globeBorders) {
@@ -1539,7 +1578,8 @@ function drawGraticule(ctx, width, height) {
 function drawLand(ctx, width, height) {
   ctx.save();
   ctx.lineJoin = "round";
-  for (const ring of state.landRings) {
+  const rings = state.detailGeometryReady && state.detailLandRings.length ? state.detailLandRings : state.landRings;
+  for (const ring of rings) {
     const visible = drawVisiblePath(ctx, ring, width, height, true);
     if (visible > 3) {
       ctx.fillStyle = "rgba(117, 157, 146, 0.2)";
@@ -1736,7 +1776,7 @@ function clusterVisibleResources(width, height) {
 
   for (const resource of state.filtered) {
     const point = projectResourceGlobePoint(resource, width, height);
-    if (point.z <= 0.03 || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
+    if (point.visible === false || point.z <= 0.03 || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
     const entry = { resource, point };
     if (resource.id === selected?.id) selectedEntry = entry;
     else entries.push(entry);
@@ -1749,14 +1789,22 @@ function renderPins(width, height, now = performance.now()) {
   const ambientMotion = state.autoRotate && now > state.interactionUntil && !state.dragging && !state.pinching;
   const moving = ambientMotion || state.dragging || state.pinching || Math.abs(state.velocityLon) > 0.18 || Math.abs(state.velocityLat) > 0.18 || Math.abs(state.targetZoom - state.zoom) > 0.008 || state.targetLon !== null;
   const gpuPointsActive = Boolean(globeServicePoints);
-  globeStageElement?.classList.toggle("is-globe-moving", gpuPointsActive && moving);
-  if (gpuPointsActive && moving) return;
+  const hideInteractivePins = gpuPointsActive && moving;
+  globeStageElement?.classList.toggle("is-globe-moving", hideInteractivePins);
+  const layer = globePinLayerElement || document.getElementById("pinLayer");
+  layer.inert = hideInteractivePins;
+  layer.setAttribute("aria-hidden", String(hideInteractivePins));
+  if (hideInteractivePins) return;
   const minInterval = gpuPointsActive ? 90 : moving ? 42 : 70;
   if (now - globeLastPinUpdate < minInterval) return;
   globeLastPinUpdate = now;
-  const layer = globePinLayerElement || document.getElementById("pinLayer");
   const selected = selectedResource();
-  const clusters = clusterVisibleResources(width, height);
+  const projectionSignature = `${globePointSignature}:${state.rotationLon.toFixed(3)}:${state.rotationLat.toFixed(3)}:${state.zoom.toFixed(3)}:${Math.round(width)}:${Math.round(height)}:${state.selectedId || ""}`;
+  if (projectionSignature !== globeClusterProjectionSignature) {
+    globeProjectedClusters = clusterVisibleResources(width, height);
+    globeClusterProjectionSignature = projectionSignature;
+  }
+  const clusters = globeProjectedClusters;
   const clusterKeys = clusters.map((cluster) => cluster.members.map((resource) => resource.id).join(","));
   const signature = `${state.viewMode}:${clusterKeys.join("|")}:${state.selectedId}`;
   if (pinSignature !== signature) {
@@ -1799,7 +1847,15 @@ function updateGlobeReadout(now = performance.now()) {
   const resource = selectedResource();
   const readout = globeReadoutElement || document.getElementById("globeReadout");
   if (!readout) return;
+  const moving = state.dragging || state.pinching || state.targetLon !== null
+    || Math.abs(state.targetZoom - state.zoom) > 0.025
+    || Math.abs(state.velocityLon) > 0.22 || Math.abs(state.velocityLat) > 0.22;
+  readout.setAttribute("aria-live", moving ? "off" : "polite");
   const zoomLabel = `${state.zoom.toFixed(state.zoom < 2 ? 1 : 2)}×`;
+  const zoomIn = document.getElementById("zoomIn");
+  const zoomOut = document.getElementById("zoomOut");
+  if (zoomIn) zoomIn.disabled = state.targetZoom >= maxGlobeZoom() - 0.01;
+  if (zoomOut) zoomOut.disabled = state.targetZoom <= MIN_GLOBE_ZOOM + 0.01;
   const detailLabel = earthDetailTextureReady
     ? "1:10m + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
@@ -1835,7 +1891,7 @@ function advanceGlobe(now) {
     }
   } else if (!state.dragging && !state.pinching) {
     state.rotationLon = normalizeLongitude(state.rotationLon + state.velocityLon * dt);
-    state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + state.velocityLat * dt));
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + state.velocityLat * dt);
     const friction = Math.pow(0.055, dt);
     state.velocityLon *= friction;
     state.velocityLat *= friction;
@@ -1874,6 +1930,11 @@ function animateGlobe(now) {
     && Math.abs(state.velocityLat) < 0.22
     && Math.abs(state.targetZoom - state.zoom) < 0.025
     && state.targetLon === null;
+  if (interactionSettled && !state.autoRotate && now - globeLastIdleFrame < 160) {
+    requestAnimationFrame(animateGlobe);
+    return;
+  }
+  if (interactionSettled) globeLastIdleFrame = now;
   if (interactionSettled && (state.zoom > 1.28 || state.targetZoom > 1.28)) loadDetailGeometry();
   if (interactionSettled && (state.zoom > 1.55 || state.targetZoom > 1.55)) loadDetailEarthImagery();
 
@@ -1901,8 +1962,8 @@ function animateGlobe(now) {
 function focusRegion(key, selectMatching = false) {
   const view = regionViews[key] || regionViews.world;
   state.targetLon = view.lon;
-  state.targetLat = view.lat;
-  state.targetZoom = view.zoom;
+  state.targetLat = clampGlobeLatitude(view.lat);
+  state.targetZoom = Math.min(maxGlobeZoom(), Math.max(MIN_GLOBE_ZOOM, view.zoom));
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = null;
@@ -1955,8 +2016,9 @@ function focusCluster(ids) {
   const normalized = { x: vector.x / length, y: vector.y / length, z: vector.z / length };
   state.targetLon = Math.atan2(normalized.z, normalized.x) * 180 / Math.PI;
   const latitude = Math.asin(normalized.y) * 180 / Math.PI;
-  state.targetLat = Math.max(-65, Math.min(65, latitude));
-  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.42 : 1.34);
+  state.targetLat = clampGlobeLatitude(latitude);
+  const clusterStep = window.innerWidth <= 600 ? 1.38 : 1.48;
+  state.targetZoom = Math.min(maxGlobeZoom(), Math.max(state.targetZoom, state.zoom * clusterStep, 1.7));
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = { lat: latitude, lng: state.targetLon };
@@ -2056,8 +2118,8 @@ function selectCountryFromPointer(event) {
   state.inspectorOpen = false;
   const countryView = featureGlobeView(country, { lat, lng });
   state.targetLon = countryView.lng;
-  state.targetLat = Math.max(-70, Math.min(70, countryView.lat));
-  state.targetZoom = window.innerWidth <= 600 ? Math.min(1.06, countryView.zoom) : countryView.zoom;
+  state.targetLat = clampGlobeLatitude(countryView.lat);
+  state.targetZoom = Math.min(maxGlobeZoom(), Math.max(MIN_GLOBE_ZOOM, countryView.zoom));
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = { lat: countryView.lat, lng: countryView.lng };
@@ -2301,6 +2363,9 @@ function bindEvents() {
 
   const beginPinch = () => {
     if (activeGlobePointers.size < 2) return;
+    for (const pointerId of activeGlobePointers.keys()) {
+      try { globeStage.setPointerCapture(pointerId); } catch {}
+    }
     state.dragging = false;
     state.pinching = true;
     state.pointerMoved = true;
@@ -2318,9 +2383,11 @@ function bindEvents() {
     activeGlobePointers.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
+      startX: event.clientX,
+      startY: event.clientY,
+      pointerType: event.pointerType,
       startedOnCanvas
     });
-    try { globeStage.setPointerCapture(event.pointerId); } catch {}
 
     if (activeGlobePointers.size >= 2) {
       beginPinch();
@@ -2329,6 +2396,12 @@ function bindEvents() {
     }
 
     if (!startedOnCanvas) return;
+    if (event.pointerType === "touch") {
+      state.pointerMoved = false;
+      globeGestureHadMultiplePointers = false;
+      return;
+    }
+    try { globeStage.setPointerCapture(event.pointerId); } catch {}
     state.dragging = true;
     state.pinching = false;
     state.pointerX = event.clientX;
@@ -2339,7 +2412,6 @@ function bindEvents() {
     state.pointerTime = event.timeStamp || performance.now();
     globeGestureHadMultiplePointers = false;
     prepareGlobeInteraction();
-    if (event.pointerType === "touch") event.preventDefault();
   });
 
   globeStage.addEventListener("pointermove", (event) => {
@@ -2364,6 +2436,10 @@ function bindEvents() {
       return;
     }
 
+    if (pointer.pointerType === "touch") {
+      if (Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) > 8) state.pointerMoved = true;
+      return;
+    }
     if (!state.dragging) return;
     if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
     const dx = event.clientX - state.pointerX;
@@ -2371,7 +2447,7 @@ function bindEvents() {
     const lonDelta = -dx * 0.30 / state.zoom;
     const latDelta = dy * 0.22 / state.zoom;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
-    state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + latDelta));
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
     const pointerNow = event.timeStamp || performance.now();
     const pointerDt = Math.max(8, Math.min(40, pointerNow - (state.pointerTime || pointerNow - 16))) / 1000;
     const sampledVelocityLon = lonDelta / pointerDt;
@@ -2381,14 +2457,12 @@ function bindEvents() {
     state.pointerTime = pointerNow;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
-    if (event.pointerType === "touch") event.preventDefault();
   });
 
   const finishGlobePointer = (event, cancelled = false) => {
     const pointer = activeGlobePointers.get(event.pointerId);
     const shouldSelectCountry = !cancelled
       && activeGlobePointers.size === 1
-      && state.dragging
       && !state.pointerMoved
       && pointer?.startedOnCanvas
       && !globeGestureHadMultiplePointers;
@@ -2404,7 +2478,7 @@ function bindEvents() {
     state.pinching = false;
     if (activeGlobePointers.size === 1) {
       const remaining = activeGlobePointers.values().next().value;
-      state.dragging = Boolean(remaining?.startedOnCanvas);
+      state.dragging = Boolean(remaining?.startedOnCanvas && remaining?.pointerType !== "touch");
       state.pointerX = remaining?.x || 0;
       state.pointerY = remaining?.y || 0;
       state.pointerStartX = state.pointerX;
@@ -2421,6 +2495,19 @@ function bindEvents() {
 
   globeStage.addEventListener("pointerup", (event) => finishGlobePointer(event));
   globeStage.addEventListener("pointercancel", (event) => finishGlobePointer(event, true));
+  globeStage.addEventListener("lostpointercapture", (event) => {
+    if (activeGlobePointers.has(event.pointerId)) finishGlobePointer(event, true);
+  });
+
+  const cancelGlobeGesture = () => {
+    activeGlobePointers.clear();
+    state.dragging = false;
+    state.pinching = false;
+    state.pointerMoved = false;
+    globeGestureHadMultiplePointers = false;
+  };
+  window.addEventListener("blur", cancelGlobeGesture);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) cancelGlobeGesture(); });
 
   const preventNativePagePinch = (event) => {
     if (!isGlobeChrome(event.target)) event.preventDefault();
@@ -2436,8 +2523,14 @@ function bindEvents() {
   }, { passive: false });
 
   canvas.addEventListener("wheel", (event) => {
+    const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1;
+    const delta = event.deltaY * unit;
+    const maximum = maxGlobeZoom();
+    const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, state.targetZoom * Math.exp(-delta * 0.00135)));
+    const atBoundary = Math.abs(nextZoom - state.targetZoom) < 0.0001;
+    if (atBoundary) return;
     event.preventDefault();
-    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom * Math.exp(-event.deltaY * 0.00135)));
+    state.targetZoom = nextZoom;
     state.interactionUntil = performance.now() + 5000;
   }, { passive: false });
   canvas.addEventListener("dblclick", () => {
@@ -2445,11 +2538,11 @@ function bindEvents() {
     state.interactionUntil = performance.now() + 5000;
   });
   canvas.addEventListener("keydown", (event) => {
-    const step = event.shiftKey ? 12 : 5;
+    const step = (event.shiftKey ? 10 : 4) / Math.max(1, state.zoom);
     if (event.key === "ArrowLeft") state.rotationLon = normalizeLongitude(state.rotationLon - step);
     else if (event.key === "ArrowRight") state.rotationLon = normalizeLongitude(state.rotationLon + step);
-    else if (event.key === "ArrowUp") state.rotationLat = Math.max(-58, state.rotationLat + step);
-    else if (event.key === "ArrowDown") state.rotationLat = Math.min(58, state.rotationLat - step);
+    else if (event.key === "ArrowUp") state.rotationLat = clampGlobeLatitude(state.rotationLat + step);
+    else if (event.key === "ArrowDown") state.rotationLat = clampGlobeLatitude(state.rotationLat - step);
     else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.2);
     else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / 1.2);
     else if (event.key === "Home") {
@@ -2467,6 +2560,8 @@ function bindEvents() {
       return;
     }
     else return;
+    state.velocityLon = 0;
+    state.velocityLat = 0;
     state.targetLon = null;
     state.targetLat = null;
     state.focusPoint = null;
@@ -2484,6 +2579,7 @@ function bindEvents() {
     focusRegion("world");
   });
   document.getElementById("northGlobe").addEventListener("click", () => {
+    state.targetLon = state.rotationLon;
     state.targetLat = 0;
     state.velocityLat = 0;
     state.interactionUntil = performance.now() + 5000;
@@ -2507,7 +2603,7 @@ function bindEvents() {
   });
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
-  const sections = ["finder", "about", "standards", "accountability"].map((id) => document.getElementById(id));
+  const sections = ["finder", "about", "help", "standards"].map((id) => document.getElementById(id)).filter(Boolean);
   let navigationFrame = null;
   const updateCurrentSection = () => {
     navigationFrame = null;
@@ -2540,5 +2636,7 @@ bindEvents();
 initThreeGlobe();
 loadEarthImagery();
 loadLandGeometry();
-if (requestedResource === initialResource) focusGlobeOn(resources.find((resource) => resource.id === requestedResource));
+if (requestedResource && requestedResource === initialResource) {
+  focusGlobeOn(resources.find((resource) => resource.id === requestedResource));
+}
 requestAnimationFrame(animateGlobe);

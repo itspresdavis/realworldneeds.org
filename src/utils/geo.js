@@ -2,6 +2,15 @@ import { resourceTypes } from "../data/resources.js";
 
 export const THREE_SPHERE_TEXTURE_OFFSET = 0.25;
 
+export const COUNTRY_NAME_ALIASES = Object.freeze({
+  "Bosnia and Herzegovina": "Bosnia and Herz.",
+  "Democratic Republic of the Congo": "Dem. Rep. Congo",
+  "Dominican Republic": "Dominican Rep.",
+  "South Sudan": "S. Sudan",
+  "Türkiye": "Turkey",
+  "United States": "United States of America"
+});
+
 export function toRad(value) {
   return (value * Math.PI) / 180;
 }
@@ -29,35 +38,39 @@ function outerRings(geometry) {
 }
 
 export function featureGlobeView(feature, fallback = { lat: 0, lng: 0 }) {
-  const coordinates = outerRings(feature?.geometry).flatMap((ring) => {
-    if (ring.length < 2) return ring;
-    const first = ring[0];
-    const last = ring[ring.length - 1];
-    return first[0] === last[0] && first[1] === last[1] ? ring.slice(0, -1) : ring;
-  });
+  const rings = outerRings(feature?.geometry);
+  const ringArea = (ring) => Math.abs(ring.reduce((area, point, index) => {
+    const next = ring[(index + 1) % ring.length];
+    return area + point[0] * next[1] - next[0] * point[1];
+  }, 0));
+  const largestRing = rings.reduce((largest, ring) => ringArea(ring) > ringArea(largest) ? ring : largest, []);
+  const coordinates = largestRing.length > 1
+    && largestRing[0][0] === largestRing[largestRing.length - 1][0]
+    && largestRing[0][1] === largestRing[largestRing.length - 1][1]
+    ? largestRing.slice(0, -1)
+    : largestRing;
   if (!coordinates.length) return { lat: fallback.lat, lng: fallback.lng, zoom: 1.06, angularRadius: 0 };
 
-  const average = coordinates.reduce((sum, [lng, lat]) => {
-    const vector = coordinateVector(lat, lng);
-    sum.x += vector.x;
-    sum.y += vector.y;
-    sum.z += vector.z;
-    return sum;
-  }, { x: 0, y: 0, z: 0 });
-  const length = Math.hypot(average.x, average.y, average.z) || 1;
-  const center = { x: average.x / length, y: average.y / length, z: average.z / length };
-  const lat = Math.asin(Math.max(-1, Math.min(1, center.y))) * 180 / Math.PI;
-  const lng = normalizeLongitude(Math.atan2(center.x, center.z) * 180 / Math.PI);
+  const longitudes = [];
+  let previous = Number(coordinates[0][0]);
+  longitudes.push(previous);
+  for (const [rawLongitude] of coordinates.slice(1)) {
+    let longitude = Number(rawLongitude);
+    while (longitude - previous > 180) longitude -= 360;
+    while (longitude - previous < -180) longitude += 360;
+    longitudes.push(longitude);
+    previous = longitude;
+  }
+  const latitudes = coordinates.map(([, latitude]) => Number(latitude));
+  const lat = (Math.min(...latitudes) + Math.max(...latitudes)) / 2;
+  const lng = normalizeLongitude((Math.min(...longitudes) + Math.max(...longitudes)) / 2);
+  const center = coordinateVector(lat, lng);
   const angularRadius = coordinates.reduce((largest, [coordinateLng, coordinateLat]) => {
     const vector = coordinateVector(coordinateLat, coordinateLng);
     const dot = Math.max(-1, Math.min(1, center.x * vector.x + center.y * vector.y + center.z * vector.z));
     return Math.max(largest, Math.acos(dot) * 180 / Math.PI);
   }, 0);
-  const zoom = angularRadius > 55 ? 1.01
-    : angularRadius > 32 ? 1.04
-      : angularRadius > 18 ? 1.07
-        : angularRadius > 8 ? 1.1
-          : 1.13;
+  const zoom = Math.max(0.9, Math.min(4.8, 34 / Math.max(7, angularRadius * 1.1)));
 
   return { lat, lng, zoom, angularRadius };
 }
@@ -157,6 +170,8 @@ function resourceSearchFields(resource) {
   const services = Array.isArray(resource.services) ? resource.services : [];
   const fields = {
     name: normalizedText(resource.name),
+    city: normalizedText(resource.city),
+    country: normalizedText(resource.country),
     place: normalizedText([resource.city, resource.country, resource.region, resource.address].join(" ")),
     source: normalizedText(resource.sourceName),
     detail: normalizedText([
@@ -195,6 +210,8 @@ export function resourceSearchScore(resource, query) {
   if (!tokens.every((token) => fields.tokens.has(token) || fields.all.includes(token))) return -1;
 
   return tokens.reduce((score, token) => {
+    if (fields.city === token) return score + 24;
+    if (fields.country === token) return score + 18;
     if (fields.name === token) return score + 20;
     if (fields.name.startsWith(token)) return score + 12;
     if (fields.name.includes(token)) return score + 8;

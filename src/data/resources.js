@@ -42,7 +42,7 @@ export const categories = {
     description: "Medical, dental, mental health, and recovery services."
   },
   referral: {
-    label: "Navigation",
+    label: "Help finding services",
     color: "#ffb548",
     glow: "rgba(255, 181, 72, 0.42)",
     description: "Resource finders, caseworkers, and referrals to local services."

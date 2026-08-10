@@ -36,7 +36,7 @@ try {
 function scopesFor(resource, types) {
   const scopes = new Set([
     `/directory/${slugify(resource.country)}`,
-    ...types.map((type) => `/directory/help/${slugify(type)}`)
+    ...types.filter((type) => type !== "referral").map((type) => `/directory/help/${slugify(type)}`)
   ]);
   if (resource.region) scopes.add(`/directory/region/${slugify(resource.region)}`);
 

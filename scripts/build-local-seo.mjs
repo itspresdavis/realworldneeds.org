@@ -158,7 +158,7 @@ function collectionSchema({ canonical, name, description, info, items, breadcrum
 }
 
 function localCategoryGroups(items, localityCanonicalPath) {
-  return Object.keys(categories)
+  return Object.keys(categories).filter((type) => type !== "referral")
     .map((type) => {
       const matching = items.filter((resource) => aidTypes(resource).includes(type));
       return {
@@ -170,7 +170,7 @@ function localCategoryGroups(items, localityCanonicalPath) {
         path: `${localityCanonicalPath}/help/${slugify(type)}`
       };
     })
-    .filter((entry) => entry.count >= MIN_LOCAL_CATEGORY_LISTINGS)
+    .filter((entry) => entry.count >= MIN_LOCAL_CATEGORY_LISTINGS && entry.count < items.length)
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
@@ -178,7 +178,7 @@ function localBrowseMarkup(info, parentPath, localCategories, allTypesPresent) {
   const localTypes = new Set(localCategories.map((entry) => entry.type));
   const localLinks = localCategories.map((entry) => `<a href="${escapeHtml(entry.path)}">${escapeHtml(entry.label)} in ${escapeHtml(info.city)} (${entry.count})</a>`).join("");
   const broaderLinks = allTypesPresent
-    .filter((type) => !localTypes.has(type))
+    .filter((type) => type !== "referral" && !localTypes.has(type))
     .map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type].label)} directory</a>`)
     .join("");
   return `<div class="directory-downloads"><strong>Browse this area</strong>${localLinks}${broaderLinks}<a href="${escapeHtml(parentPath)}">All help in ${escapeHtml(displayLocation(info))}</a><a href="/directory/${slugify(info.country)}">All services in ${escapeHtml(info.country)}</a><a href="/directory">Full directory</a></div>`;
@@ -188,7 +188,7 @@ function cityPage(info, items, canonicalPath, localCategories) {
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
   const countrySlug = slugify(info.country);
   const display = displayLocation(info);
-  const typesPresent = [...new Set(items.flatMap(aidTypes))].filter((type) => categories[type]);
+  const typesPresent = [...new Set(items.flatMap(aidTypes))].filter((type) => type !== "referral" && categories[type]);
   const categoryText = typesPresent.slice(0, 5).map((type) => categories[type].label.toLowerCase()).join(", ") || "essential help";
   const description = `Find free essential services in ${display}, including ${categoryText}. Browse ${items.length} reviewed listings connected to their original sources.`;
   const schema = collectionSchema({

@@ -1,5 +1,9 @@
 import * as THREE from "/vendor/three.module.js";
 
+// Keep every globe layer on the same physical surface. A single radius avoids
+// HTML hit targets drifting away from their WebGL points near the horizon.
+export const GLOBE_POINT_RADIUS = 1.022;
+
 const VERTEX_SHADER = `
   attribute vec3 pointColor;
   attribute float pointScale;
@@ -39,7 +43,7 @@ const FRAGMENT_SHADER = `
   }
 `;
 
-function resourceVector(resource, radius = 1.018) {
+function resourceVector(resource, radius = GLOBE_POINT_RADIUS) {
   const latitude = THREE.MathUtils.degToRad(Number(resource.lat));
   const longitude = THREE.MathUtils.degToRad(Number(resource.lng));
   const cosLat = Math.cos(latitude);
