@@ -9,6 +9,8 @@ test("offline directory caches only public same-origin essentials", async () => 
   assert.match(sw, /const CACHE_PREFIX = "rwn-offline-"/);
   assert.match(sw, /"\/directory"/);
   assert.match(sw, /"\/data\/search-index\.json"/);
+  assert.match(sw, /"\/site\.webmanifest"/);
+  await read("public/site.webmanifest");
   assert.match(sw, /url\.origin !== self\.location\.origin/);
   assert.match(sw, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(sw, /new Request\(`\$\{url\.origin\}\$\{url\.pathname\}`\)/);
@@ -39,8 +41,19 @@ test("production CSP permits only same-origin workers and service worker revalid
   assert.match(cacheControl, /no-store/);
 });
 
+test("privacy notice accurately describes offline storage boundaries", async () => {
+  const privacy = await read("public/privacy.html");
+  assert.match(privacy, /Low-connectivity and offline directory files/);
+  assert.match(privacy, /does <strong>not<\/strong> cache RWN API requests/);
+  assert.match(privacy, /does not store the words you type into search/);
+  assert.match(privacy, /does not intentionally cache individual service-detail pages/);
+  assert.match(privacy, /Cache keys discard URL query strings/);
+  assert.match(privacy, /Clear browser data/);
+});
+
 test("built site publishes the offline worker", async () => {
   const sw = await read("dist/sw.js");
   assert.match(sw, /networkFirstNavigation/);
   assert.match(sw, /staleWhileRevalidate/);
+  assert.match(sw, /site\.webmanifest/);
 });
