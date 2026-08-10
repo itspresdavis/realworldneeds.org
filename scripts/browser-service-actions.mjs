@@ -162,8 +162,9 @@ async function run() {
     const result = await evaluate(client, `(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const utility = document.querySelector("[data-service-utility]");
-      const buttons = [...(utility?.querySelectorAll("button") || [])];
-      if (!utility || buttons.length !== 3) return { ok: false, reason: "handoff controls missing", buttonCount: buttons.length };
+      const buttonGroup = utility?.querySelector(".service-utility-actions__buttons");
+      const buttons = [...(buttonGroup?.querySelectorAll("button") || [])];
+      if (!utility || !buttonGroup || buttons.length !== 3) return { ok: false, reason: "handoff controls missing", buttonCount: buttons.length };
 
       let copied = "";
       let shared = null;
@@ -183,12 +184,12 @@ async function run() {
       await sleep(40);
       utility.querySelector("[data-service-print]")?.click();
       await sleep(20);
-      utility.scrollIntoView({ block: "center", behavior: "auto" });
+      buttonGroup.scrollIntoView({ block: "center", behavior: "auto" });
       await sleep(80);
 
       const status = utility.querySelector("[data-service-action-status]")?.textContent || "";
       const minHeight = Math.min(...buttons.map((button) => button.getBoundingClientRect().height));
-      const utilityRect = utility.getBoundingClientRect();
+      const groupRect = buttonGroup.getBoundingClientRect();
       return {
         ok: true,
         minHeight,
@@ -197,10 +198,10 @@ async function run() {
         printed,
         navigated: location.href !== before,
         status,
-        utilityVisible: utilityRect.top < innerHeight && utilityRect.bottom > 0,
+        groupVisible: groupRect.top >= 0 && groupRect.bottom <= innerHeight,
         buttonsVisible: buttons.every((button) => {
           const rect = button.getBoundingClientRect();
-          return rect.top < innerHeight && rect.bottom > 0;
+          return rect.top >= 0 && rect.bottom <= innerHeight;
         }),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         privacyCopy: utility.textContent.includes("RWN does not receive who you share with")
@@ -215,7 +216,7 @@ async function run() {
     const sharedOk = result.shared?.url?.includes(`/service/${encodeURIComponent(resource.id)}`)
       && result.shared?.title?.includes(resource.name);
 
-    if (!result.ok || result.minHeight < 44 || !copiedOk || !sharedOk || !result.printed || result.navigated || !result.utilityVisible || !result.buttonsVisible || result.overflow > 8 || !result.privacyCopy) {
+    if (!result.ok || result.minHeight < 44 || !copiedOk || !sharedOk || !result.printed || result.navigated || !result.groupVisible || !result.buttonsVisible || result.overflow > 8 || !result.privacyCopy) {
       throw new Error(`Service handoff QA failed: ${JSON.stringify({ ...result, copiedOk, sharedOk })}`);
     }
 
