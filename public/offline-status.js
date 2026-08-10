@@ -5,6 +5,10 @@ if (notice) {
   let offline = false;
   let probeGeneration = 0;
 
+  const setText = (element, value) => {
+    if (element && element.textContent !== value) element.textContent = value;
+  };
+
   const setOffline = (value) => {
     offline = Boolean(value);
     document.documentElement.classList.toggle("rwn-directory-offline", offline);
@@ -17,14 +21,15 @@ if (notice) {
       if (offline) link.setAttribute("aria-describedby", notice.id);
       if (!meta) continue;
       const base = meta.textContent.replace(/\s*·\s*reconnect for full details\s*$/i, "");
-      meta.textContent = offline ? `${base} · reconnect for full details` : base;
+      const desired = offline ? `${base} · reconnect for full details` : base;
+      setText(meta, desired);
     }
 
     const count = document.querySelector("[data-directory-count]");
     if (count) {
       const base = count.textContent.replace(/\s*·\s*offline copy\s*$/i, "");
-      if (offline && /matching listings/i.test(base)) count.textContent = `${base} · offline copy`;
-      else if (!offline) count.textContent = base;
+      const desired = offline && /matching listings/i.test(base) ? `${base} · offline copy` : base;
+      setText(count, desired);
     }
   };
 
