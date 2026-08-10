@@ -136,7 +136,7 @@ async function testStaticRoutes() {
   const homepage = await fetch(`${HOST}/`);
   if (!homepage.ok) throw new Error(`Homepage returned ${homepage.status}.`);
   const homepageHtml = await homepage.text();
-  if (!homepageHtml.includes("Find free essential services near you") || !homepageHtml.includes("/directory/help/food")) {
+  if (!homepageHtml.includes("Find essential help. Share what you can.") || !homepageHtml.includes("/directory/help/food")) {
     throw new Error("Homepage is missing the server-visible finder fallback or need navigation.");
   }
 
@@ -319,10 +319,11 @@ async function run() {
     const mobile = await evaluate(client, `(() => ({
       width: innerWidth,
       overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-      quickVisible: [...document.querySelectorAll(".quick-need")].every((node) => node.getBoundingClientRect().height > 0),
+      quickCount: document.querySelectorAll(".quick-need").length,
+      quickHidden: [...document.querySelectorAll(".quick-need")].every((node) => node.getBoundingClientRect().height === 0),
       clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length
     }))()`);
-    if (mobile.width !== 390 || mobile.overflow > 8 || !mobile.quickVisible || mobile.clusterNumbers !== 0) {
+    if (mobile.width !== 390 || mobile.overflow > 8 || mobile.quickCount !== EXPECTED_QUICK_NEEDS || !mobile.quickHidden || mobile.clusterNumbers !== 0) {
       throw new Error(`Mobile layout failed the crash test: ${JSON.stringify(mobile)}`);
     }
 
