@@ -183,9 +183,12 @@ async function run() {
       await sleep(40);
       utility.querySelector("[data-service-print]")?.click();
       await sleep(20);
+      utility.scrollIntoView({ block: "center", behavior: "auto" });
+      await sleep(80);
 
       const status = utility.querySelector("[data-service-action-status]")?.textContent || "";
       const minHeight = Math.min(...buttons.map((button) => button.getBoundingClientRect().height));
+      const utilityRect = utility.getBoundingClientRect();
       return {
         ok: true,
         minHeight,
@@ -194,6 +197,11 @@ async function run() {
         printed,
         navigated: location.href !== before,
         status,
+        utilityVisible: utilityRect.top < innerHeight && utilityRect.bottom > 0,
+        buttonsVisible: buttons.every((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.top < innerHeight && rect.bottom > 0;
+        }),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
         privacyCopy: utility.textContent.includes("RWN does not receive who you share with")
       };
@@ -207,11 +215,33 @@ async function run() {
     const sharedOk = result.shared?.url?.includes(`/service/${encodeURIComponent(resource.id)}`)
       && result.shared?.title?.includes(resource.name);
 
-    if (!result.ok || result.minHeight < 44 || !copiedOk || !sharedOk || !result.printed || result.navigated || result.overflow > 8 || !result.privacyCopy) {
+    if (!result.ok || result.minHeight < 44 || !copiedOk || !sharedOk || !result.printed || result.navigated || !result.utilityVisible || !result.buttonsVisible || result.overflow > 8 || !result.privacyCopy) {
       throw new Error(`Service handoff QA failed: ${JSON.stringify({ ...result, copiedOk, sharedOk })}`);
     }
 
-    console.log(`RWN service handoff QA passed for ${resource.id}: private share payload, copied public details, print path, 44px controls, no navigation, privacy copy, mobile overflow, and screenshot.`);
+    await navigate(client, `${HOST}/sources`);
+    const sources = await evaluate(client, `(() => {
+      const h1 = document.querySelector("main h1")?.textContent?.trim() || "";
+      const cards = [...document.querySelectorAll(".source-ledger-card")];
+      const canonical = document.querySelector('link[rel="canonical"]')?.href || "";
+      const text = document.querySelector("main")?.textContent || "";
+      const links = [...document.querySelectorAll("main a")].map((link) => new URL(link.href).pathname);
+      return {
+        h1,
+        cardCount: cards.length,
+        canonical,
+        hasNoEndorsementCopy: /does not imply sponsorship, endorsement, or a partnership/i.test(text),
+        hasMachineRegistry: links.includes("/data/sources.json"),
+        hasResourceExport: links.includes("/data/resources.json"),
+        overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+      };
+    })()`);
+    await capture(client, "sources-mobile.png");
+    if (!/where RWN/i.test(sources.h1) || sources.cardCount < 4 || !sources.canonical.endsWith("/sources") || !sources.hasNoEndorsementCopy || !sources.hasMachineRegistry || !sources.hasResourceExport || sources.overflow > 8) {
+      throw new Error(`Rendered source-ledger QA failed: ${JSON.stringify(sources)}`);
+    }
+
+    console.log(`RWN handoff/trust QA passed for ${resource.id}: private share payload, copied public details, print path, visible 44px handoff controls, no navigation, privacy copy, source-ledger provenance rendering, and mobile screenshots.`);
   } finally {
     client?.close();
     await stopProcess(browser);
