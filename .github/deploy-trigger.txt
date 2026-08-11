@@ -1,0 +1,4 @@
+Production redeploy trigger
+Requested: 2026-08-11 America/New_York
+App source release: f5e9ddd7a411580d447f898a0fc82f16fd6ea916
+Purpose: retrigger Vercel production after the prior build-rate-limit block. This file is not part of the public site output.
