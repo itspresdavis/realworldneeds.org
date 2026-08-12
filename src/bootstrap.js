@@ -38,6 +38,7 @@ document.head.append(clarityStyle);
 
 const appReady = import("./app.js");
 const refinementReady = import("./refinement.js");
+const professionalReady = import("./professional.js");
 const worldClassReady = import("./world-class.js");
 const resultActionsReady = import("./result-actions.js");
 const { installRefinements } = await refinementReady;
@@ -61,6 +62,10 @@ const installFinderRefinements = () => {
 installFinderRefinements();
 
 await appReady;
+
+const { installProfessionalPresentation } = await professionalReady;
+installProfessionalPresentation();
+
 if (!refinementsInstalled) {
   installRefinements();
   refinementsInstalled = true;
