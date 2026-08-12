@@ -10,12 +10,7 @@ const setAllText = (selector, values) => {
 };
 
 function simplifyStructure() {
-  // The finder already communicates catalog status and safety. Avoid repeating both
-  // in a full-width strip between the primary task and the results.
   document.querySelector(".directory-strip")?.remove();
-
-  // The accountability section repeated the same source/contact message already
-  // covered by About and Sources. Keep the public-facing page edited, not additive.
   document.getElementById("accountability")?.remove();
 
   const footerExplore = document.querySelector('.site-footer nav[aria-label="Footer explore"]');
@@ -102,21 +97,7 @@ function installCopy() {
 }
 
 export function installProfessionalPresentation() {
-  if (document.querySelector(".finder-intro")) {
-    installCopy();
-    return;
-  }
-
-  let frames = 0;
-  const waitForShell = () => {
-    if (document.querySelector(".finder-intro")) {
-      installCopy();
-      return;
-    }
-    frames += 1;
-    if (frames < 240) requestAnimationFrame(waitForShell);
-  };
-  waitForShell();
+  if (!document.querySelector(".finder-intro")) return false;
+  installCopy();
+  return true;
 }
-
-installProfessionalPresentation();
