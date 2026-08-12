@@ -20,9 +20,19 @@ runtimeStyle.textContent = `
 `;
 document.head.append(runtimeStyle);
 
+const clarityStyle = document.createElement("link");
+const clarityUrl = new URL("./clarity.css", import.meta.url);
+const releaseVersion = new URL(import.meta.url).searchParams.get("v");
+if (releaseVersion) clarityUrl.searchParams.set("v", releaseVersion);
+clarityStyle.rel = "stylesheet";
+clarityStyle.href = clarityUrl.href;
+clarityStyle.dataset.rwnClarity = "true";
+document.head.append(clarityStyle);
+
 const appReady = import("./app.js");
 const refinementReady = import("./refinement.js");
 const worldClassReady = import("./world-class.js");
+const resultActionsReady = import("./result-actions.js");
 const { installRefinements } = await refinementReady;
 
 let refinementsInstalled = false;
@@ -48,6 +58,10 @@ if (!refinementsInstalled) {
   installRefinements();
   refinementsInstalled = true;
 }
+
+resultActionsReady
+  .then(({ installResultActions }) => installResultActions())
+  .catch(() => {});
 
 const clearOfflineData = async () => {
   if ("caches" in window) {
