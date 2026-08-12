@@ -11,6 +11,24 @@
       "memory": 256
     }
   },
+  "redirects": [
+    {
+      "source": "/directory/help/referral",
+      "destination": "/directory",
+      "permanent": true
+    },
+    {
+      "source": "/directory/help/referral/:path*",
+      "destination": "/directory",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "realworldneeds.org" }],
+      "destination": "https://www.realworldneeds.org/:path*",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/sw.js",

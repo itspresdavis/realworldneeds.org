@@ -20,16 +20,19 @@ function installGlobalStatus() {
 
 function installBrowseModeChoice() {
   const intro = document.querySelector(".finder-intro");
+  const locationActions = document.querySelector(".location-actions");
   if (!intro || document.querySelector(".finder-route")) return;
 
   const route = document.createElement("nav");
   route.className = "finder-route";
   route.setAttribute("aria-label", "Choose how to find services");
   route.innerHTML = `
-    <a class="finder-route__current" href="#finder" aria-current="page"><span aria-hidden="true">●</span> Interactive finder</a>
-    <a href="/directory"><span aria-hidden="true">≡</span> Simple text directory</a>
+    <a class="finder-route__current" href="/directory">Browse the text directory</a>
+    <a href="#help">See how to help</a>
   `;
-  intro.append(route);
+  (locationActions || intro).insertAdjacentElement("afterend", route);
+  const quickNeeds = document.querySelector(".quick-needs");
+  if (quickNeeds) route.insertAdjacentElement("afterend", quickNeeds);
 }
 
 function installSearchKeyboardUX() {

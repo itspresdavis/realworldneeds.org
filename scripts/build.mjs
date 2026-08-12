@@ -112,7 +112,7 @@ function pagination(basePath, page, totalPages) {
   return `<nav class="directory-downloads" aria-label="Directory pages"><strong>Browse pages</strong>${links.join("")}</nav>`;
 }
 
-function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, browseMarkup = "", breadcrumbItems = [] }) {
+function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, totalItems = items.length, totalDirect = 0, totalCountries = 0, browseMarkup = "", breadcrumbItems = [] }) {
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
   const pageTitle = page > 1 ? `${title} — Page ${page}` : title;
   const pageDescription = page > 1 ? `${lede} Page ${page} of ${totalPages}.` : lede;
@@ -175,7 +175,7 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
     <a class="skip-link" href="#directory">Skip to directory</a>
     <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
     <main id="directory">
-      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p><div class="legal-meta"><span>${resources.length} reviewed listings</span><span>${directCount} service locations</span><span>${coverageCount} countries represented</span><span>Sources checked through ${escapeHtml(latestReview)}</span></div></div></section>
+      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p><div class="legal-meta"><span>${totalItems} reviewed ${totalItems === 1 ? "listing" : "listings"}</span><span>${totalDirect} service ${totalDirect === 1 ? "location" : "locations"}</span><span>${totalCountries} ${totalCountries === 1 ? "country" : "countries"} represented</span><span>Sources checked through ${escapeHtml(latestReview)}</span></div></div></section>
       <div class="directory-shell">
         ${breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
@@ -193,6 +193,9 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
 
 async function writePagedDirectory(baseDirectory, basePath, groupResources, metadata) {
   const totalPages = Math.max(1, Math.ceil(groupResources.length / DIRECTORY_PAGE_SIZE));
+  const totalItems = groupResources.length;
+  const totalDirect = groupResources.filter((resource) => resource.kind === "direct").length;
+  const totalCountries = new Set(groupResources.map((resource) => resource.country)).size;
   const urls = [];
   for (let page = 1; page <= totalPages; page += 1) {
     const items = groupResources.slice((page - 1) * DIRECTORY_PAGE_SIZE, page * DIRECTORY_PAGE_SIZE);
@@ -204,7 +207,10 @@ async function writePagedDirectory(baseDirectory, basePath, groupResources, meta
       canonicalPath,
       items,
       page,
-      totalPages
+      totalPages,
+      totalItems,
+      totalDirect,
+      totalCountries
     }));
     urls.push(canonicalPath);
   }
@@ -213,6 +219,7 @@ async function writePagedDirectory(baseDirectory, basePath, groupResources, meta
 
 function resourceSchema(resource, canonical) {
   const place = formatResourcePlace(resource);
+  const description = resourceSeoDescription(resource);
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -221,7 +228,7 @@ function resourceSchema(resource, canonical) {
         "@id": `${canonical}#page`,
         url: canonical,
         name: `${resource.name} — ${place}`,
-        description: resource.summary,
+        description,
         isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
         about: { "@id": `${canonical}#service` },
         dateModified: resource.lastChecked
@@ -230,12 +237,10 @@ function resourceSchema(resource, canonical) {
         "@type": "Service",
         "@id": `${canonical}#service`,
         name: resource.name,
-        description: resource.summary,
+        description,
         serviceType: aidLabels(resource),
         areaServed: resource.country,
-        url: canonical,
-        sameAs: resource.sourceUrl,
-        provider: { "@type": "Organization", name: resource.sourceName, url: resource.sourceUrl }
+        url: canonical
       },
       {
         "@type": "BreadcrumbList",
@@ -249,6 +254,13 @@ function resourceSchema(resource, canonical) {
   };
 }
 
+function resourceSeoDescription(resource) {
+  const help = (resource.services || []).slice(0, 3).join(", ") || aidLabels(resource).join(", ");
+  const raw = `${resource.name} in ${formatResourcePlace(resource)} offers ${help}. ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`;
+  if (raw.length <= 160) return raw;
+  return `${raw.slice(0, 157).replace(/\s+\S*$/, "")}…`;
+}
+
 function resourcePage(resource) {
   const canonicalPath = `/service/${resource.id}`;
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
@@ -257,9 +269,9 @@ function resourcePage(resource) {
   const direct = resource.kind === "direct";
   const phone = resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">${escapeHtml(resource.phone)}</a></dd></div>` : "";
   const mapLinks = direct ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
-  const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
+  const categoryLinks = aidTypes(resource).filter((type) => type !== "referral").map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
   const title = `${resource.name} — ${place}`;
-  const description = `${resource.summary} ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`;
+  const description = resourceSeoDescription(resource);
 
   return `<!doctype html>
 <html lang="en">
@@ -342,7 +354,7 @@ await writeFile("dist/transparency.html", transparencyHtml);
 
 const countries = [...new Set(resources.map((resource) => resource.country))].sort((a, b) => a.localeCompare(b));
 const regions = [...new Set(resources.map((resource) => resource.region).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-const categoryTypes = Object.keys(categories);
+const categoryTypes = Object.keys(categories).filter((type) => type !== "referral");
 
 const countryLinks = countries.map((country) => {
   const count = resources.filter((resource) => resource.country === country).length;
@@ -358,7 +370,7 @@ const categoryLinks = categoryTypes.map((type) => {
 }).join("");
 const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
-const sitemapPaths = ["/", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
+const sitemapPaths = ["/", "/directory", "/ways-to-help", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
   title: "Free Essential Services Directory",
   heading: "Find free essential services without using the globe.",
@@ -396,10 +408,13 @@ const countryManifest = [];
 for (const country of countries) {
   const items = resources.filter((resource) => resource.country === country);
   const slug = slugify(country);
+  const onlyFinder = items.length === 1 && items[0].kind !== "direct";
   sitemapPaths.push(...await writePagedDirectory(join("dist/directory", slug), `/directory/${slug}`, items, {
-    title: `${country} Free Essential Services`,
-    heading: `Free essential services in ${country}.`,
-    lede: `Browse ${items.length} reviewed Real World Needs listings connected to original sources in ${country}.`,
+    title: onlyFinder ? `${country} Essential Services Resource Finder` : `${country} Free Essential Services`,
+    heading: onlyFinder ? `Essential services resource finder for ${country}.` : `Free essential services in ${country}.`,
+    lede: onlyFinder
+      ? `Use this reviewed resource finder to look for essential services in ${country}, then confirm current details with the original source.`
+      : `Browse ${items.length} reviewed Real World Needs listings connected to original sources in ${country}.`,
     browseMarkup: `<div class="directory-downloads"><strong>Browse</strong><a href="/directory">All countries and regions</a>${categoryLinks}</div>`,
     breadcrumbItems: [{ href: "/directory", label: "Directory" }, { label: country }]
   }));

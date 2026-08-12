@@ -35,7 +35,7 @@ function syncQuickNeeds(container) {
 function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
-  input.placeholder = "Search service or place";
+  input.placeholder = "Search a service or place";
   input.setAttribute("aria-label", "Search by service, place, ZIP or postcode, or organization");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");
@@ -79,11 +79,10 @@ function installQuickNeeds() {
     const button = event.target.closest(".quick-need");
     if (!button) return;
     setLayerSelection(button.dataset.quickType);
-    syncQuickNeeds(container);
-    document.getElementById("resourceGrid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    requestAnimationFrame(() => syncQuickNeeds(container));
   });
 
-  layerList.addEventListener("click", () => queueMicrotask(() => syncQuickNeeds(container)));
+  layerList.addEventListener("click", () => requestAnimationFrame(() => syncQuickNeeds(container)));
   syncQuickNeeds(container);
 }
 
@@ -177,7 +176,7 @@ function installGlobeGuide() {
   const guide = document.createElement("div");
   guide.className = "globe-guide";
   guide.setAttribute("aria-hidden", "true");
-  guide.innerHTML = `<span>Drag to explore</span><i></i><span>Tap a glow for details</span><i></i><a href="#results" tabindex="-1">Prefer a list?</a>`;
+  guide.innerHTML = `<span>Mouse: drag · Touch: use two fingers</span><i></i><span>Select a marker for details</span><i></i><a href="#results" tabindex="-1">Prefer a list?</a>`;
   stage.append(guide);
 
   const dismiss = () => stage.classList.add("has-used-globe");

@@ -48,12 +48,12 @@ function installReturnToFinder() {
 function installScrollRhythm() {
   const targets = [
     ".about-rwn__heading",
+    ".about-rwn__visual",
     ".mission-steps",
-    ".rwn-story__lead",
-    ".rwn-story__proof",
+    ".ways-to-help__heading",
+    ".ways-to-help__list",
     ".source-band__heading",
-    ".principle-grid",
-    ".accountability__heading"
+    ".principle-grid"
   ].flatMap((selector) => [...document.querySelectorAll(selector)]);
 
   if (!targets.length) return;
@@ -79,6 +79,4 @@ function installScrollRhythm() {
 }
 
 if (finePointer) document.documentElement.classList.add("fine-pointer");
-installBrandStory();
-installReturnToFinder();
 installScrollRhythm();

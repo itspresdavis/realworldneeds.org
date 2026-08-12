@@ -3,8 +3,8 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const HOME_TITLE = "Find Free Essential Services Near You | Real World Needs";
-const HOME_DESCRIPTION = "Search free food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Verify every listing at its original source.";
-const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
+const HOME_DESCRIPTION = "Find free food, shelter, health care, hygiene support, clothing, drinking water and other essential services. Check access details and original sources before you go.";
+const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/rwn-social.jpg";
 const ACCESSIBLE_TOUCH_TARGETS = '<style data-rwn-professional-a11y>.directory-category-chips button{min-height:44px}</style>';
 const DIRECTORY_HEADING = "Browse free essential services by need and location.";
 const DIRECTORY_DESCRIPTION = "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Review the source and contact details before you go.";
@@ -59,20 +59,20 @@ function addSocialMetadata(html) {
   html = upsertMeta(html, "property", "og:title", title);
   html = upsertMeta(html, "property", "og:description", description);
   html = upsertMeta(html, "property", "og:image", SOCIAL_IMAGE);
-  html = upsertMeta(html, "property", "og:image:alt", "Real World Needs essential services directory");
+  html = upsertMeta(html, "property", "og:image:alt", "Real World Needs — Find essential help. Share what you can.");
   html = upsertMeta(html, "property", "og:locale", "en_US");
   html = upsertMeta(html, "name", "twitter:card", "summary_large_image");
   html = upsertMeta(html, "name", "twitter:title", title);
   html = upsertMeta(html, "name", "twitter:description", description);
   html = upsertMeta(html, "name", "twitter:image", SOCIAL_IMAGE);
-  html = upsertMeta(html, "name", "twitter:image:alt", "Real World Needs essential services directory");
+  html = upsertMeta(html, "name", "twitter:image:alt", "Real World Needs — Find essential help. Share what you can.");
   html = upsertMeta(html, "name", "author", "Real World Needs");
   html = upsertMeta(html, "name", "application-name", "Real World Needs");
   return html;
 }
 
 function professionalFooterLinks() {
-  return `<nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse help by need</strong><a href="/directory/help/food">Food assistance</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Showers &amp; hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Drinking water</a><a href="/directory">Full directory</a><a href="/sources">Source ledger</a></nav>`;
+  return `<nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse help by need</strong><a href="/directory/help/food">Food assistance</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Showers &amp; hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Drinking water</a><a href="/directory">Full directory</a><a href="/ways-to-help">Ways to help</a><a href="/sources">Source ledger</a></nav>`;
 }
 
 function enhanceHome(html, release) {
@@ -83,10 +83,10 @@ function enhanceHome(html, release) {
     .replaceAll("Real World Needs | Find Free Food, Shelter, Health Care & Essential Help", HOME_TITLE)
     .replaceAll("Find free food, shelter, health care, clothing, hygiene support, drinking water, and other essential services in one searchable directory.", HOME_DESCRIPTION)
     .replaceAll("Search free essential services and go directly to the original organization or public source. Find food, shelter, health care, clothing, hygiene support, drinking water, and more.", HOME_DESCRIPTION)
-    .replace("<h1>Find free help near you.</h1>", "<h1>Find free essential services near you.</h1>")
+    .replace("<h1>Find free help near you.</h1>", "<h1>Find essential help. Share what you can.</h1>")
     .replace(
       "<p>Real World Needs helps you find food, shelter, health care, showers and hygiene support, clothing, drinking water, and other essentials. Every listing stays connected to the organization or public source behind it.</p>",
-      "<p>Search food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Each listing links to the organization or public source behind it so you can verify the details before you go.</p>"
+      "<p>Search free food, shelter, health care, hygiene, clothing, water and other essentials. Every listing leads back to the organization or public source.</p>"
     );
 
   if (!html.includes("/src/professional.css")) {
