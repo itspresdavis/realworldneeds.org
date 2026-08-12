@@ -3,35 +3,27 @@ const refinementReady = import("./refinement.js");
 const professionalReady = import("./professional.js");
 const accessibilityReady = import("./accessibility.js");
 const resultActionsReady = import("./result-actions.js");
-const { installRefinements } = await refinementReady;
 
-let refinementsInstalled = false;
-let refinementFrames = 0;
-const installFinderRefinements = () => {
-  if (refinementsInstalled) return;
-  const finderReady = document.querySelector(".finder-search")
-    && document.querySelectorAll(".layer-toggle[data-type]").length >= 7;
-
-  if (finderReady) {
-    installRefinements();
-    refinementsInstalled = true;
-    return;
-  }
-
-  refinementFrames += 1;
-  if (refinementFrames < 180) requestAnimationFrame(installFinderRefinements);
-};
-installFinderRefinements();
-
+// The application owns the DOM and state. Enhancement layers install only after
+// that initialization is complete so they cannot race the app's initial render.
 await appReady;
 
-const { installProfessionalPresentation } = await professionalReady;
-installProfessionalPresentation();
+const [
+  { installRefinements },
+  { installProfessionalPresentation },
+  { installAccessibility },
+  { installResultActions }
+] = await Promise.all([
+  refinementReady,
+  professionalReady,
+  accessibilityReady,
+  resultActionsReady
+]);
 
-if (!refinementsInstalled) {
-  installRefinements();
-  refinementsInstalled = true;
-}
+installProfessionalPresentation();
+installRefinements();
+installAccessibility();
+installResultActions();
 
 // The globe is a deliberate exploration tool, not ambient motion. Start it still.
 requestAnimationFrame(() => {
@@ -39,10 +31,6 @@ requestAnimationFrame(() => {
   const label = `${motionButton?.getAttribute("aria-label") || ""} ${motionButton?.getAttribute("title") || ""}`;
   if (motionButton && /pause globe rotation/i.test(label)) motionButton.click();
 });
-
-resultActionsReady
-  .then(({ installResultActions }) => installResultActions())
-  .catch(() => {});
 
 const clearOfflineData = async () => {
   if ("caches" in window) {
@@ -55,10 +43,6 @@ const clearOfflineData = async () => {
 document.getElementById("clearBrowserData")?.addEventListener("click", () => {
   clearOfflineData().catch(() => {});
 });
-
-accessibilityReady
-  .then(({ installAccessibility }) => installAccessibility())
-  .catch(() => {});
 
 import("./telemetry.js")
   .then(({ startTelemetry }) => startTelemetry())
