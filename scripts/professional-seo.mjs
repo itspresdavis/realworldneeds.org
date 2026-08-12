@@ -5,7 +5,14 @@ const HOME_TITLE = "Find Free Essential Services Near You | Real World Needs";
 const HOME_DESCRIPTION = "Search free food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Verify every listing at its original source.";
 const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
 const ACCESSIBLE_TOUCH_TARGETS = '<style data-rwn-professional-a11y>.directory-category-chips button{min-height:44px}</style>';
-const CRITICAL_HOME_STYLE = '<style data-rwn-critical-shell>.directory-strip,.accountability{display:none!important}</style>';
+const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
+.directory-strip,.accountability{display:none!important}
+.globe-canvas{touch-action:none;overscroll-behavior:contain}
+.globe-pin-layer{transition:opacity 110ms ease}
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{opacity:0;pointer-events:none}
+@media(max-width:900px){.globe-canvas{touch-action:pan-y;overscroll-behavior-y:auto}}
+@media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
+</style>`;
 const DIRECTORY_HEADING = "Browse free essential services by need and location.";
 const DIRECTORY_DESCRIPTION = "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Review the source and contact details before you go.";
 
@@ -91,6 +98,9 @@ function enhanceHome(html, release) {
 
   if (!html.includes("/src/professional.css")) {
     html = html.replace("</head>", `  <link rel="stylesheet" href="/src/professional.css?v=${release}" />\n</head>`);
+  }
+  if (!html.includes("/src/clarity.css")) {
+    html = html.replace("</head>", `  <link rel="stylesheet" href="/src/clarity.css?v=${release}" />\n</head>`);
   }
   if (!html.includes("data-rwn-critical-shell")) {
     html = html.replace("</head>", `  ${CRITICAL_HOME_STYLE}\n</head>`);
