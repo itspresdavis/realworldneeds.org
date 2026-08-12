@@ -167,7 +167,7 @@ async function run() {
       const input = document.getElementById("resourceSearch");
       return {
         professional: document.documentElement.classList.contains("rwn-professional"),
-        accessibility: document.documentElement.classList.contains("rwn-world-class"),
+        accessibility: document.documentElement.classList.contains("rwn-accessibility"),
         noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
         sidebarOverflow: sidebar ? getComputedStyle(sidebar).overflowY : "missing",
         scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
