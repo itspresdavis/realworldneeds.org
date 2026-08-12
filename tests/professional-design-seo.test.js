@@ -4,13 +4,18 @@ import { readFile, stat } from "node:fs/promises";
 
 const HOME_TITLE = "Find Free Essential Services Near You | Real World Needs";
 
-test("production homepage uses the professional presentation and aligned search language", async () => {
-  const html = await readFile("dist/index.html", "utf8");
+test("production homepage uses the institutional presentation and aligned search language", async () => {
+  const [html, bootstrap] = await Promise.all([
+    readFile("dist/index.html", "utf8"),
+    readFile("dist/src/bootstrap.js", "utf8")
+  ]);
   assert.match(html, new RegExp(`<title>${HOME_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
   assert.match(html, /<html lang="en" class="rwn-professional">/);
   assert.match(html, /<h1>Find free essential services near you\.<\/h1>/);
   assert.match(html, /\/src\/professional\.css\?v=[a-f0-9]{12}/);
-  assert.match(html, /\/src\/professional\.js\?v=[a-f0-9]{12}/);
+  assert.match(html, /\/src\/clarity\.css\?v=[a-f0-9]{12}/);
+  assert.doesNotMatch(html, /<script[^>]+src="\/src\/professional\.js/);
+  assert.match(bootstrap, /import\("\.\/professional\.js\?v=[a-f0-9]{12}"\)/);
   assert.match(html, /twitter:card[^>]+summary_large_image/i);
   assert.match(html, /og:image[^>]+earth-blue-marble\.jpg/i);
 });
@@ -32,14 +37,17 @@ test("generated directory, service, and trust pages share the same professional 
   }
 });
 
-test("professional presentation stays intentionally lightweight and release-versioned", async () => {
-  const [appCss, pageCss, release] = await Promise.all([
+test("institutional presentation stays intentionally lightweight and release-versioned", async () => {
+  const [appCss, finalCss, pageCss, release] = await Promise.all([
     stat("src/professional.css"),
+    stat("src/clarity.css"),
     stat("public/professional-pages.css"),
     readFile("dist/data/release.json", "utf8").then(JSON.parse)
   ]);
 
   assert.ok(appCss.size < 32_000, `interactive professional CSS grew to ${appCss.size} bytes`);
+  assert.ok(finalCss.size < 20_000, `institutional final CSS grew to ${finalCss.size} bytes`);
   assert.ok(pageCss.size < 32_000, `generated-page professional CSS grew to ${pageCss.size} bytes`);
   assert.match(release.presentationRelease || "", /^[a-f0-9]{12}$/);
+  assert.equal(release.presentationRelease, release.release);
 });
