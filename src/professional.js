@@ -18,6 +18,15 @@ function simplifyStructure() {
   // covered by About and Sources. Keep the public-facing page edited, not additive.
   document.getElementById("accountability")?.remove();
 
+  const footerExplore = document.querySelector('.site-footer nav[aria-label="Footer explore"]');
+  if (footerExplore) {
+    footerExplore.innerHTML = `
+      <strong>Explore</strong>
+      <a href="#finder">Find help</a>
+      <a href="/directory">Text directory</a>
+    `;
+  }
+
   const footerAbout = document.querySelector('.site-footer nav[aria-label="Footer standards"]');
   if (footerAbout) {
     footerAbout.innerHTML = `
@@ -26,6 +35,17 @@ function simplifyStructure() {
       <a href="/editorial-policy">Review policy</a>
       <a href="/transparency">Transparency</a>
     `;
+  }
+
+  const mapNav = document.querySelector('.site-footer nav[aria-label="Footer map and imagery"]');
+  const footerNote = document.querySelector(".site-footer > p");
+  if (mapNav && footerNote) {
+    const existing = footerNote.textContent.trim();
+    footerNote.innerHTML = `
+      <span>${existing}</span>
+      <span class="footer-attribution">Map data: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span>
+    `;
+    mapNav.remove();
   }
 }
 
