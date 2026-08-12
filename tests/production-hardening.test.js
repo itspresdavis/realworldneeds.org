@@ -37,10 +37,10 @@ test("built bootstrap installs release-versioned finder, presentation, and acces
   assert.match(bootstrap, new RegExp(`import\\(\"\\./app\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./refinement\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./professional\\.js\\?v=${release}\"\\)`));
-  assert.match(bootstrap, new RegExp(`import\\(\"\\./world-class\\.js\\?v=${release}\"\\)`));
+  assert.match(bootstrap, new RegExp(`import\\(\"\\./accessibility\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, /installRefinements\(\);/);
   assert.match(bootstrap, /installProfessionalPresentation\(\);/);
-  assert.match(bootstrap, /installWorldClassUX\(\)/);
+  assert.match(bootstrap, /installAccessibility\(\)/);
 });
 
 test("production app output cannot render numeric cluster badges", async () => {
