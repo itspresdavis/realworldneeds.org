@@ -17,8 +17,9 @@ test("built homepage uses one content-derived release version for every shipped 
   assert.match(html, new RegExp(`/src/professional\\.css\\?v=${release.release}`));
   assert.match(html, new RegExp(`/src/app\\.js\\?v=${release.release}`));
   assert.match(html, new RegExp(`/src/bootstrap\\.js\\?v=${release.release}`));
-  assert.match(html, new RegExp(`/src/professional\\.js\\?v=${release.release}`));
+  assert.doesNotMatch(html, /<script[^>]+src="\/src\/professional\.js/);
   assert.doesNotMatch(html, /\/src\/(?:experience|refinement|world-class)\.css\?v=/);
+  assert.match(html, /data-rwn-critical-shell/);
   assert.doesNotMatch(html, /rwn-2026\d+/);
 });
 
@@ -30,13 +31,15 @@ test("built homepage contains useful server-visible finder content before JavaSc
   assert.match(html, /Browse the full text directory/);
 });
 
-test("built bootstrap explicitly installs release-versioned finder and accessibility layers", async () => {
+test("built bootstrap installs release-versioned finder, presentation, and accessibility layers", async () => {
   const bootstrap = await text("dist/src/bootstrap.js");
   const { release } = JSON.parse(await text("dist/data/release.json"));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./app\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./refinement\\.js\\?v=${release}\"\\)`));
+  assert.match(bootstrap, new RegExp(`import\\(\"\\./professional\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./world-class\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, /installRefinements\(\);/);
+  assert.match(bootstrap, /installProfessionalPresentation\(\);/);
   assert.match(bootstrap, /installWorldClassUX\(\)/);
 });
 
