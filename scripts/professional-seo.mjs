@@ -6,7 +6,7 @@ const HOME_DESCRIPTION = "Search free food assistance, shelter, health care, hyg
 const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
 const ACCESSIBLE_TOUCH_TARGETS = '<style data-rwn-professional-a11y>.directory-category-chips button{min-height:44px}</style>';
 const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
-.directory-strip,.accountability{display:none!important}
+.directory-strip,.accountability,#openInspector{display:none!important}
 .globe-canvas{touch-action:none;overscroll-behavior:contain}
 .globe-pin-layer{transition:opacity 110ms ease}
 .globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{opacity:0;pointer-events:none}
@@ -20,7 +20,7 @@ const PUBLIC_PAGE_DENSITY_STYLE = `<style data-rwn-public-density>
 .legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{margin-top:.9rem;font-size:clamp(.98rem,1.3vw,1.08rem);line-height:1.62}
 .legal-meta,#directory>.legal-hero .legal-meta,#service>.legal-hero .legal-meta{margin-top:1.05rem}
 @media(max-width:820px){.legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:2.25rem 1rem 2rem}.legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{font-size:clamp(2.15rem,9vw,3.2rem);line-height:1.02;letter-spacing:-.043em}.legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{font-size:1rem;line-height:1.56}}
-@media(max-width:600px){#directory>.legal-hero h1{font-size:clamp(2.1rem,10vw,3rem)}.directory-shell{padding-top:1.8rem}}
+@media(max-width:600px){#directory>.legal-hero{padding:1.4rem 1rem 1.25rem}#directory>.legal-hero h1{margin-top:.4rem;font-size:clamp(2.05rem,9.6vw,2.55rem);line-height:1.03;letter-spacing:-.04em}#directory>.legal-hero .legal-hero__lede{margin-top:.65rem;font-size:.94rem;line-height:1.5}#directory>.legal-hero .legal-meta{display:none}.directory-shell{padding-top:1.15rem}}
 </style>`;
 const DIRECTORY_HEADING = "Browse free essential services by need and location.";
 const DIRECTORY_DESCRIPTION = "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Review the source and contact details before you go.";
