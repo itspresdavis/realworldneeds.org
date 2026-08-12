@@ -6,18 +6,20 @@ async function text(path) {
   return readFile(path, "utf8");
 }
 
-test("finder starts calm and teaches the globe without adding persistent clutter", async () => {
+test("finder starts calm without persistent tutorial or forced-scroll clutter", async () => {
   const refinement = await text("src/refinement.js");
-  const css = await text("src/refinement.css");
+  const bootstrap = await text("src/bootstrap.js");
+  const css = await text("src/clarity.css");
 
-  assert.match(refinement, /input\.placeholder = "Search service or place"/);
+  assert.match(refinement, /input\.placeholder = "Search a service or place"/);
   assert.match(refinement, /Search by service, place, ZIP or postcode, or organization/);
-  assert.match(refinement, /Try “food pantry”, “Boston”, a ZIP\/postcode, “showers”, or an organization name/);
+  assert.match(refinement, /Try a service, city, ZIP or postcode, or organization name/);
   assert.match(refinement, /rwn-initial-calm/);
-  assert.match(refinement, /Tap a glow for details/);
-  assert.match(refinement, /has-used-globe/);
-  assert.match(css, /\.globe-detail-status,\s*\.globe-readout\s*\{\s*display: none !important;/s);
-  assert.match(css, /\.globe-stage\.has-used-globe \.globe-guide/);
+  assert.doesNotMatch(refinement, /scrollIntoView/);
+  assert.doesNotMatch(refinement, /globe-guide|Tap a glow for details|has-used-globe/);
+  assert.match(bootstrap, /pause globe rotation/i);
+  assert.match(bootstrap, /touch-action:\s*pan-y/);
+  assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });
 
 test("globe points become calmer rather than larger as users zoom into dense places", async () => {
@@ -30,16 +32,12 @@ test("globe points become calmer rather than larger as users zoom into dense pla
   assert.doesNotMatch(points, /zoomBoost = clamp\(0\.72 \+ max/);
 });
 
-test("editorial experience is human, useful, and motion-safe", async () => {
-  const experience = await text("src/experience.js");
-  const css = await text("src/refinement.css");
+test("institutional presentation is restrained and motion-safe", async () => {
+  const bootstrap = await text("src/bootstrap.js");
+  const css = await text("src/clarity.css");
 
-  assert.match(experience, /The help should be easier to reach than the crisis/);
-  assert.match(experience, /No account required/);
-  assert.match(experience, /No paywall/);
-  assert.match(experience, /Original sources stay visible/);
-  assert.match(experience, /IntersectionObserver/);
-  assert.match(experience, /reduceMotion/);
+  assert.doesNotMatch(bootstrap, /experience\.js/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(css, /\.rwn-reveal\.is-visible/);
+  assert.doesNotMatch(css, /\.rwn-reveal/);
+  assert.match(css, /scroll-behavior:\s*auto !important/);
 });
