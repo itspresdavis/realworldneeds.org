@@ -31,8 +31,8 @@ jobs:
       - name: Install Chrome
         id: chrome
         uses: browser-actions/setup-chrome@v1
-      - name: Crash-test built site
-        run: npm run test:browser:chaos
+      - name: Verify rendered site
+        run: npm run test:browser:qa
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Upload visual QA

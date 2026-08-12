@@ -1,14 +1,14 @@
 function announce(message) {
-  const status = document.getElementById("worldClassStatus");
+  const status = document.getElementById("accessibilityStatus");
   if (!status) return;
   status.textContent = "";
   requestAnimationFrame(() => { status.textContent = message; });
 }
 
 function installGlobalStatus() {
-  if (document.getElementById("worldClassStatus")) return;
+  if (document.getElementById("accessibilityStatus")) return;
   const status = document.createElement("p");
-  status.id = "worldClassStatus";
+  status.id = "accessibilityStatus";
   status.className = "sr-only";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
@@ -20,6 +20,7 @@ function installSearchAccessibility() {
   const input = document.getElementById("resourceSearch");
   if (!input) return;
   input.setAttribute("autocapitalize", "none");
+  input.setAttribute("aria-keyshortcuts", "/ Escape");
 
   const helper = document.querySelector(".search-helper");
   if (helper) {
@@ -28,6 +29,23 @@ function installSearchAccessibility() {
     describedBy.add(helper.id);
     input.setAttribute("aria-describedby", [...describedBy].join(" "));
   }
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !input.value) return;
+    event.preventDefault();
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    announce("Search cleared");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+    event.preventDefault();
+    input.focus({ preventScroll: true });
+    input.select();
+  });
 }
 
 function installResultLandmark() {
@@ -86,11 +104,11 @@ function installResultContext() {
   update();
 }
 
-export function installWorldClassUX() {
+export function installAccessibility() {
   installGlobalStatus();
   installSearchAccessibility();
   installResultLandmark();
   installAccessibleResourcePanel();
   installResultContext();
-  document.documentElement.classList.add("rwn-world-class");
+  document.documentElement.classList.add("rwn-accessibility");
 }

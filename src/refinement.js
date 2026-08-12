@@ -126,12 +126,14 @@ function startFinderCalm() {
   if (hasRequestedResource()) return;
   const panel = document.getElementById("resourcePanel");
   const grid = document.querySelector(".finder__grid");
-  const inspectorToggle = document.getElementById("openInspector");
-  if (!panel || !grid) throw new Error("Finder panel prerequisites are missing.");
+  const regionSelect = document.getElementById("regionFocus");
+  if (!panel || !grid || !regionSelect) throw new Error("Finder panel prerequisites are missing.");
 
-  panel.hidden = true;
-  grid.classList.add("is-panel-collapsed", "rwn-initial-calm");
-  if (inspectorToggle) inspectorToggle.hidden = true;
+  // Use the application's own region-change path so selectedId and inspectorOpen
+  // are cleared in state, not merely hidden in the DOM where a later render can reopen them.
+  regionSelect.value = "world";
+  regionSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  grid.classList.add("rwn-initial-calm");
 }
 
 export function installRefinements() {
