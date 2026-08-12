@@ -9,6 +9,7 @@ async function text(path) {
 test("finder starts calm without persistent tutorial or forced-scroll clutter", async () => {
   const refinement = await text("src/refinement.js");
   const bootstrap = await text("src/bootstrap.js");
+  const presentation = await text("scripts/professional-seo.mjs");
   const css = await text("src/clarity.css");
 
   assert.match(refinement, /input\.placeholder = "Search a service or place"/);
@@ -18,7 +19,7 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   assert.doesNotMatch(refinement, /scrollIntoView/);
   assert.doesNotMatch(refinement, /globe-guide|Tap a glow for details|has-used-globe/);
   assert.match(bootstrap, /pause globe rotation/i);
-  assert.match(bootstrap, /touch-action:\s*pan-y/);
+  assert.match(presentation, /touch-action:pan-y/);
   assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });
 
