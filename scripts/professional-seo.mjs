@@ -14,6 +14,7 @@ const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 @media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
 </style>`;
 const PUBLIC_PAGE_DENSITY_STYLE = `<style data-rwn-public-density>
+.legal-brand__mark{display:block;object-fit:cover;background:none!important;color:transparent}
 .legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:clamp(2.6rem,4.5vw,4.5rem) clamp(1rem,4vw,4rem) clamp(2.2rem,3.8vw,3.6rem)}
 .legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{margin-top:.6rem;font-size:clamp(2.45rem,4.5vw,4.15rem);font-weight:620;line-height:1.01;letter-spacing:-.047em}
 .legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{margin-top:.9rem;font-size:clamp(.98rem,1.3vw,1.08rem);line-height:1.62}
@@ -120,6 +121,7 @@ function enhanceHome(html, release) {
 
 function enhanceGeneratedPage(html, release) {
   html = html
+    .replaceAll('<span class="legal-brand__mark">RWN</span>', '<img class="legal-brand__mark" src="/rwn-mark.svg" alt="" width="34" height="34" decoding="async" />')
     .replaceAll("Find free essential services without using the globe.", DIRECTORY_HEADING)
     .replaceAll("Browse food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Every listing stays connected to its original source.", DIRECTORY_DESCRIPTION);
 
