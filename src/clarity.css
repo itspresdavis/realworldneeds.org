@@ -1,1 +1,103 @@
-placeholder
+/* RWN clarity layer: high-impact task completion improvements added after the institutional redesign. */
+
+/* Quick-need controls are primary touch targets, not tiny filter chips. */
+.quick-need {
+  min-height: 44px;
+  padding-inline: .8rem;
+}
+
+/* Let people act from search results without first opening the map inspector. */
+.result-direct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .42rem;
+  padding: 0 .9rem .8rem;
+}
+
+.result-direct-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: .56rem .76rem;
+  border: 1px solid rgba(206, 231, 226, .2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .04);
+  color: #e8f3f1;
+  font-size: .72rem;
+  font-weight: 780;
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.result-direct-action:hover,
+.result-direct-action:focus-visible {
+  border-color: rgba(185, 242, 211, .58);
+  background: rgba(15, 159, 96, .11);
+  color: #fff;
+}
+
+.result-direct-action:focus-visible {
+  outline: 3px solid rgba(185, 242, 211, .42);
+  outline-offset: 2px;
+}
+
+.result-direct-action.is-primary {
+  border-color: rgba(104, 211, 155, .52);
+  background: rgba(8, 117, 72, .16);
+}
+
+.rwn-professional .result-direct-actions {
+  padding: 0 .9rem .85rem;
+  border-top: 1px solid #e4eae8;
+  background: #fff;
+}
+
+.rwn-professional .result-direct-action {
+  margin-top: .65rem;
+  border-color: #cbd7d3;
+  background: #fff;
+  color: var(--pro-ink-soft, #32464d);
+}
+
+.rwn-professional .result-direct-action:hover,
+.rwn-professional .result-direct-action:focus-visible {
+  border-color: var(--pro-green, #087548);
+  background: #f2f9f5;
+  color: #055f3a;
+}
+
+.rwn-professional .result-direct-action.is-primary {
+  border-color: var(--pro-green, #087548);
+  background: var(--pro-green, #087548);
+  color: #fff;
+}
+
+.rwn-professional .result-direct-action.is-primary:hover,
+.rwn-professional .result-direct-action.is-primary:focus-visible {
+  background: #065e3a;
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .result-direct-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem;
+  }
+
+  .result-direct-action.is-primary {
+    grid-column: 1 / -1;
+  }
+
+  .result-direct-action {
+    width: 100%;
+    padding-inline: .65rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-direct-action {
+    scroll-behavior: auto;
+  }
+}
