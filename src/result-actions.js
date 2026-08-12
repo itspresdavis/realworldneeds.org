@@ -1,7 +1,6 @@
 import { resources } from "./data/resources.js";
 
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function cleanPhone(value) {
   return String(value || "").replace(/[^+\d]/g, "");
@@ -15,45 +14,60 @@ function directionsUrl(resource) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`;
 }
 
-function createAction(label, href, ariaLabel, { primary = false } = {}) {
+function createAction(label, href, ariaLabel, { primary = false, newTab = false } = {}) {
   const anchor = document.createElement("a");
   anchor.className = `result-direct-action${primary ? " is-primary" : ""}`;
   anchor.href = href;
   anchor.textContent = label;
   anchor.setAttribute("aria-label", ariaLabel);
-  if (!href.startsWith("tel:")) {
+  if (newTab) {
     anchor.target = "_blank";
     anchor.rel = "noopener noreferrer";
   }
   return anchor;
 }
 
+function replaceResultTrigger(trigger, resource) {
+  const link = document.createElement("a");
+  link.className = `${trigger.className || ""} result-row-link`.trim();
+  link.href = `/service/${encodeURIComponent(resource.id)}`;
+  link.innerHTML = trigger.innerHTML;
+  link.setAttribute("aria-label", `View details for ${resource.name}`);
+  trigger.replaceWith(link);
+  return link;
+}
+
 function enhanceCard(article) {
-  if (article.querySelector(".result-direct-actions")) return;
+  if (article.dataset.resultEnhanced === "true") return;
   const trigger = article.querySelector("[data-resource-id]");
   const resource = resourceById.get(trigger?.dataset.resourceId);
   if (!resource) return;
 
+  article.dataset.resultEnhanced = "true";
+  article.dataset.resultResourceId = resource.id;
+  replaceResultTrigger(trigger, resource);
+
   const actions = document.createElement("nav");
   actions.className = "result-direct-actions";
-  actions.setAttribute("aria-label", `Quick actions for ${resource.name}`);
+  actions.setAttribute("aria-label", `Actions for ${resource.name}`);
 
-  if (resource.phone) {
-    const phone = cleanPhone(resource.phone);
-    if (phone) actions.append(createAction("Call", `tel:${phone}`, `Call ${resource.name}`, { primary: true }));
-  }
-
-  if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
-    actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`));
-  }
-
-  const providerUrl = resource.providerUrl || resource.sourceUrl;
-  if (providerUrl) {
-    actions.append(createAction(
-      resource.kind === "direct" ? "Provider site" : "Find local help",
-      providerUrl,
-      resource.kind === "direct" ? `Visit ${resource.name} website` : `Open the official resource finder for ${resource.name}`
-    ));
+  if (resource.kind === "direct") {
+    if (resource.phone) {
+      const phone = cleanPhone(resource.phone);
+      if (phone) actions.append(createAction("Call", `tel:${phone}`, `Call ${resource.name}`, { primary: true }));
+    }
+    if (Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+      actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));
+    }
+    if (!actions.childElementCount) {
+      const providerUrl = resource.providerUrl || resource.sourceUrl;
+      if (providerUrl) actions.append(createAction("Provider website", providerUrl, `Visit ${resource.name} website`, { newTab: true }));
+    }
+  } else {
+    const providerUrl = resource.providerUrl || resource.sourceUrl;
+    if (providerUrl) {
+      actions.append(createAction("Official finder", providerUrl, `Open the official resource finder for ${resource.name}`, { primary: true, newTab: true }));
+    }
   }
 
   if (actions.childElementCount) article.append(actions);
@@ -71,14 +85,6 @@ export function installResultActions() {
 
   const observer = new MutationObserver(() => enhanceResults(grid));
   observer.observe(grid, { childList: true });
-
-  grid.addEventListener("click", (event) => {
-    const action = event.target.closest(".result-direct-action");
-    if (!action || window.innerWidth > 900) return;
-    const row = action.closest(".resource-card");
-    if (!row) return;
-    row.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
-  });
 
   document.documentElement.classList.add("rwn-result-actions");
 }

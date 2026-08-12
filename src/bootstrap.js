@@ -14,6 +14,13 @@ runtimeStyle.textContent = `
     pointer-events: none;
   }
 
+  @media (max-width: 900px) {
+    .globe-canvas {
+      touch-action: pan-y;
+      overscroll-behavior-y: auto;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .globe-pin-layer { transition: none; }
   }
@@ -59,6 +66,13 @@ if (!refinementsInstalled) {
   refinementsInstalled = true;
 }
 
+// The globe is a deliberate exploration tool, not ambient motion. Start it still.
+requestAnimationFrame(() => {
+  const motionButton = document.getElementById("toggleMotion");
+  const label = `${motionButton?.getAttribute("aria-label") || ""} ${motionButton?.getAttribute("title") || ""}`;
+  if (motionButton && /pause globe rotation/i.test(label)) motionButton.click();
+});
+
 resultActionsReady
   .then(({ installResultActions }) => installResultActions())
   .catch(() => {});
@@ -87,12 +101,4 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
   }, { once: true });
-}
-
-const loadExperience = () => import("./experience.js").catch(() => {});
-
-if ("requestIdleCallback" in window) {
-  window.requestIdleCallback(loadExperience, { timeout: 1400 });
-} else {
-  window.setTimeout(loadExperience, 180);
 }
