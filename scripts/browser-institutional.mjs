@@ -180,7 +180,7 @@ async function run() {
         finderRoute: Boolean(document.querySelector(".finder-route")),
         headerAction: document.querySelector(".header-action")?.textContent?.trim() || "",
         searchShortcuts: input?.getAttribute("aria-keyshortcuts") || "",
-        motionLabel: `${motion?.getAttribute("aria-label") || ""} ${motion?.getAttribute("title") || ""}`,
+        motionLabel: (motion?.getAttribute("aria-label") || "") + " " + (motion?.getAttribute("title") || ""),
         stylesheets
       };
     })()`);
