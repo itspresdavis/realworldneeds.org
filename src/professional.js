@@ -9,6 +9,26 @@ const setAllText = (selector, values) => {
   });
 };
 
+function simplifyStructure() {
+  // The finder already communicates catalog status and safety. Avoid repeating both
+  // in a full-width strip between the primary task and the results.
+  document.querySelector(".directory-strip")?.remove();
+
+  // The accountability section repeated the same source/contact message already
+  // covered by About and Sources. Keep the public-facing page edited, not additive.
+  document.getElementById("accountability")?.remove();
+
+  const footerAbout = document.querySelector('.site-footer nav[aria-label="Footer standards"]');
+  if (footerAbout) {
+    footerAbout.innerHTML = `
+      <strong>About RWN</strong>
+      <a href="#about">How it works</a>
+      <a href="/editorial-policy">Review policy</a>
+      <a href="/transparency">Transparency</a>
+    `;
+  }
+}
+
 function installCopy() {
   document.documentElement.classList.add("rwn-professional");
   document.body.classList.add("rwn-professional");
@@ -21,32 +41,33 @@ function installCopy() {
     if (small) small.textContent = "Essential services directory";
   }
 
-  setAllText(".primary-nav a", ["Find help", "About", "Sources & standards", "Transparency"]);
-  setAllText(".site-menu nav a", ["Find help", "About", "Sources & standards", "Transparency"]);
-  setText(".header-action", "Search services");
+  setAllText(".primary-nav a", ["Find help", "About", "Sources", "Transparency"]);
+  setAllText(".site-menu nav a", ["Find help", "About", "Sources", "Transparency"]);
 
-  setText(".finder-intro h1", "Find free essential services near you.");
+  const headerAction = document.querySelector(".header-action");
+  if (headerAction) {
+    headerAction.textContent = "Text directory";
+    headerAction.href = "/directory";
+    headerAction.removeAttribute("data-section-link");
+    headerAction.setAttribute("aria-label", "Open the text service directory");
+  }
+
+  setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Each listing links to the organization or public source behind it."
+    "Search food, shelter, health care, hygiene, clothing, drinking water and other essential services. Check the details, then contact the provider directly."
   );
 
-  setText(".about-rwn__heading h2", "A public directory built around the next step.");
+  setText(".about-rwn__heading h2", "Find. Check. Contact.");
   setText(
     ".about-rwn__heading p",
-    "RWN organizes public information about essential services so you can find an option, review the practical details, and contact the provider directly."
+    "Real World Needs organizes public service information in one directory. Search for an option, review the source and practical details, then contact the organization providing the service."
   );
 
-  setText(".source-band__heading h2", "Know where every listing came from.");
+  setText(".source-band__heading h2", "Sources and review standards.");
   setText(
     ".source-band__heading p",
-    "Listings keep their original source, review date, access details, and eligibility information where available. You can inspect the source before deciding what to do next."
-  );
-
-  setText(".accountability__heading h2", "Useful information, without getting between you and the provider.");
-  setText(
-    ".accountability__heading p",
-    "RWN helps people discover and verify public service information. The organization providing the service remains the authority on hours, availability, eligibility, and access."
+    "Each listing keeps its original source and review date. Hours, eligibility and availability can change, so the provider remains the final authority."
   );
 
   const footerBrand = document.querySelector(".footer-brand > span:last-child");
@@ -56,6 +77,8 @@ function installCopy() {
     if (strong) strong.textContent = "Real World Needs";
     if (small) small.textContent = "Essential services directory";
   }
+
+  simplifyStructure();
 }
 
 export function installProfessionalPresentation() {
