@@ -8,15 +8,17 @@ async function text(path) {
   return readFile(path, "utf8");
 }
 
-test("built homepage uses one content-derived release version for every source asset", async () => {
+test("built homepage uses one content-derived release version for every shipped source asset", async () => {
   const html = await text("dist/index.html");
   const release = JSON.parse(await text("dist/data/release.json"));
   assert.match(release.release, /^[a-f0-9]{12}$/);
+  assert.equal(release.presentationRelease, release.release);
   assert.match(html, new RegExp(`/src/styles\\.css\\?v=${release.release}`));
-  assert.match(html, new RegExp(`/src/experience\\.css\\?v=${release.release}`));
-  assert.match(html, new RegExp(`/src/refinement\\.css\\?v=${release.release}`));
+  assert.match(html, new RegExp(`/src/professional\\.css\\?v=${release.release}`));
   assert.match(html, new RegExp(`/src/app\\.js\\?v=${release.release}`));
   assert.match(html, new RegExp(`/src/bootstrap\\.js\\?v=${release.release}`));
+  assert.match(html, new RegExp(`/src/professional\\.js\\?v=${release.release}`));
+  assert.doesNotMatch(html, /\/src\/(?:experience|refinement|world-class)\.css\?v=/);
   assert.doesNotMatch(html, /rwn-2026\d+/);
 });
 
@@ -28,12 +30,14 @@ test("built homepage contains useful server-visible finder content before JavaSc
   assert.match(html, /Browse the full text directory/);
 });
 
-test("built bootstrap explicitly installs the release-versioned finder refinement", async () => {
+test("built bootstrap explicitly installs release-versioned finder and accessibility layers", async () => {
   const bootstrap = await text("dist/src/bootstrap.js");
   const { release } = JSON.parse(await text("dist/data/release.json"));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./app\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./refinement\\.js\\?v=${release}\"\\)`));
+  assert.match(bootstrap, new RegExp(`import\\(\"\\./world-class\\.js\\?v=${release}\"\\)`));
   assert.match(bootstrap, /installRefinements\(\);/);
+  assert.match(bootstrap, /installWorldClassUX\(\)/);
 });
 
 test("production app output cannot render numeric cluster badges", async () => {
