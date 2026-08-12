@@ -25,11 +25,22 @@ installRefinements();
 installAccessibility();
 installResultActions();
 
-// The globe is a deliberate exploration tool, not ambient motion. Start it still.
+// The globe is a deliberate exploration tool, not ambient motion. The app already
+// disables rotation for reduced-motion visitors; synchronize that button state
+// without toggling rotation back on. Otherwise pause the normal initial rotation.
 requestAnimationFrame(() => {
   const motionButton = document.getElementById("toggleMotion");
-  const label = `${motionButton?.getAttribute("aria-label") || ""} ${motionButton?.getAttribute("title") || ""}`;
-  if (motionButton && /pause globe rotation/i.test(label)) motionButton.click();
+  if (!motionButton) return;
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    motionButton.innerHTML = '<span aria-hidden="true">▶</span>';
+    motionButton.title = "Resume globe rotation";
+    motionButton.setAttribute("aria-label", motionButton.title);
+    return;
+  }
+
+  const label = `${motionButton.getAttribute("aria-label") || ""} ${motionButton.getAttribute("title") || ""}`;
+  if (/pause globe rotation/i.test(label)) motionButton.click();
 });
 
 const clearOfflineData = async () => {
