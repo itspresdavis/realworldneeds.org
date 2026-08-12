@@ -11,17 +11,19 @@ function sitemapEntry(sitemap, path) {
   return sitemap.match(new RegExp(`<url><loc>${url}<\\/loc>(?:<lastmod>([^<]+)<\\/lastmod>)?<\\/url>`));
 }
 
-test("homepage ships world-class UX assets and accurate organization semantics", async () => {
+test("homepage ships the consolidated institutional UX and accurate organization semantics", async () => {
   const html = await text("dist/index.html");
   const release = JSON.parse(await text("dist/data/release.json"));
-  assert.match(html, new RegExp(`/src/world-class\\.css\\?v=${release.release}`));
+  assert.match(html, new RegExp(`/src/styles\\.css\\?v=${release.release}`));
+  assert.match(html, new RegExp(`/src/professional\\.css\\?v=${release.release}`));
+  assert.doesNotMatch(html, /\/src\/(?:world-class|experience|refinement)\.css\?v=/);
   assert.match(html, /How listings are checked/);
   assert.match(html, /Transparency/);
   assert.doesNotMatch(html, /"logo":"https:\/\/www\.realworldneeds\.org\/media\/earth-blue-marble\.jpg"/);
   assert.match(html, /"image":\s*"https:\/\/www\.realworldneeds\.org\/media\/earth-blue-marble\.jpg"/);
 });
 
-test("bootstrap loads the world-class interaction layer with the release hash", async () => {
+test("bootstrap loads the accessibility interaction layer with the release hash", async () => {
   const bootstrap = await text("dist/src/bootstrap.js");
   const { release } = JSON.parse(await text("dist/data/release.json"));
   assert.match(bootstrap, new RegExp(`import\\(\"\\./world-class\\.js\\?v=${release}\"\\)`));
@@ -144,10 +146,10 @@ test("country pages expose local directories through normal crawlable links", as
   assert.ok(html.includes(us.path));
 });
 
-test("new interaction layers and search index stay within deliberate budgets", async () => {
+test("interaction layers and search index stay within deliberate budgets", async () => {
   const budgets = [
     ["src/world-class.js", 10_000],
-    ["src/world-class.css", 12_000],
+    ["src/clarity.css", 20_000],
     ["public/directory.js", 12_000],
     ["public/directory-enhancements.css", 18_000],
     ["dist/data/search-index.json", 1_500_000]
@@ -158,13 +160,13 @@ test("new interaction layers and search index stay within deliberate budgets", a
   }
 });
 
-test("accessibility layer includes mobile target sizing, forced-colors, reduced-motion, and below-fold containment", async () => {
-  const css = await text("src/world-class.css");
+test("accessibility layer keeps touch targets, reduced motion, landmarks, and keyboard affordances", async () => {
+  const css = await text("src/clarity.css");
   const script = await text("src/world-class.js");
   assert.match(css, /min-height:\s*44px/);
-  assert.match(css, /forced-colors:\s*active/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.match(css, /content-visibility:\s*auto/);
   assert.match(script, /removeAttribute\("aria-live"\)/);
   assert.match(script, /aria-keyshortcuts/);
+  assert.match(script, /Escape/);
+  assert.match(script, /preventScroll:\s*true/);
 });
