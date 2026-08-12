@@ -235,7 +235,7 @@ async function run() {
     client?.close();
     await stopProcess(browser);
     await stopProcess(server);
-    await rm(profile, { recursive: true, force: true });
+    await rm(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 120 });
   }
 }
 
