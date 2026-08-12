@@ -13,6 +13,14 @@ const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 @media(max-width:900px){.globe-canvas{touch-action:pan-y;overscroll-behavior-y:auto}}
 @media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
 </style>`;
+const PUBLIC_PAGE_DENSITY_STYLE = `<style data-rwn-public-density>
+.legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:clamp(2.6rem,4.5vw,4.5rem) clamp(1rem,4vw,4rem) clamp(2.2rem,3.8vw,3.6rem)}
+.legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{margin-top:.6rem;font-size:clamp(2.45rem,4.5vw,4.15rem);font-weight:620;line-height:1.01;letter-spacing:-.047em}
+.legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{margin-top:.9rem;font-size:clamp(.98rem,1.3vw,1.08rem);line-height:1.62}
+.legal-meta,#directory>.legal-hero .legal-meta,#service>.legal-hero .legal-meta{margin-top:1.05rem}
+@media(max-width:820px){.legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:2.25rem 1rem 2rem}.legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{font-size:clamp(2.15rem,9vw,3.2rem);line-height:1.02;letter-spacing:-.043em}.legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{font-size:1rem;line-height:1.56}}
+@media(max-width:600px){#directory>.legal-hero h1{font-size:clamp(2.1rem,10vw,3rem)}.directory-shell{padding-top:1.8rem}}
+</style>`;
 const DIRECTORY_HEADING = "Browse free essential services by need and location.";
 const DIRECTORY_DESCRIPTION = "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Review the source and contact details before you go.";
 
@@ -117,6 +125,9 @@ function enhanceGeneratedPage(html, release) {
 
   if (!html.includes("/professional-pages.css")) {
     html = html.replace("</head>", `  <link rel="stylesheet" href="/professional-pages.css?v=${release}" />\n</head>`);
+  }
+  if (!html.includes("data-rwn-public-density")) {
+    html = html.replace("</head>", `  ${PUBLIC_PAGE_DENSITY_STYLE}\n</head>`);
   }
   if (!html.includes("data-rwn-professional-a11y")) {
     html = html.replace("</head>", `  ${ACCESSIBLE_TOUCH_TARGETS}\n</head>`);
