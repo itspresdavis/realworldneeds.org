@@ -39,7 +39,7 @@ document.head.append(clarityStyle);
 const appReady = import("./app.js");
 const refinementReady = import("./refinement.js");
 const professionalReady = import("./professional.js");
-const worldClassReady = import("./world-class.js");
+const accessibilityReady = import("./accessibility.js");
 const resultActionsReady = import("./result-actions.js");
 const { installRefinements } = await refinementReady;
 
@@ -94,8 +94,8 @@ document.getElementById("clearBrowserData")?.addEventListener("click", () => {
   clearOfflineData().catch(() => {});
 });
 
-worldClassReady
-  .then(({ installWorldClassUX }) => installWorldClassUX())
+accessibilityReady
+  .then(({ installAccessibility }) => installAccessibility())
   .catch(() => {});
 
 import("./telemetry.js")
