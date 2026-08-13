@@ -51,7 +51,8 @@ replaceRequired(
   `globeCamera.position.z = Math.max(1.018, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));`,
   "minimum camera distance"
 );
-replaceAllRequired(`latLngVector(resource.lat, resource.lng, 1.035)`, `latLngVector(resource.lat, resource.lng, 1.010)`, 2, "projected point radius");
+replaceRequired(`latLngVector(resource.lat, resource.lng, 1.035)`, `latLngVector(resource.lat, resource.lng, 1.010)`, "resource projection radius");
+replaceRequired(`latLngVector(lat, lng, 1.035)`, `latLngVector(lat, lng, 1.010)`, "coordinate projection radius");
 
 replaceRequired(
   `if (earthDetailTextureRequested || window.innerWidth <= 900 || navigator.connection?.saveData) return;`,
