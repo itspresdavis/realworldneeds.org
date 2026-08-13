@@ -86,7 +86,6 @@ const records = resources.map((resource, index) => {
     phone: resource.phone || "",
     lat: resource.lat,
     lng: resource.lng,
-    sourceUrl: resource.sourceUrl,
     search
   };
 });
