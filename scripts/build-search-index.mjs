@@ -83,15 +83,18 @@ const records = resources.map((resource, index) => {
     categoryLabels: labels,
     kind: resource.kind,
     checked: resource.lastChecked,
+    phone: resource.phone || "",
+    lat: resource.lat,
+    lng: resource.lng,
     search
   };
 });
 
 await mkdir("dist/data", { recursive: true });
 await writeFile("dist/data/search-index.json", `${JSON.stringify({
-  schemaVersion: "1.2",
+  schemaVersion: "1.3",
   resourceCount: records.length,
-  privacy: "Static search index. Search terms remain in the visitor's browser and are not included in requests.",
+  privacy: "Static public-service search index. Search terms remain in the visitor's browser and are not included in requests.",
   records,
   scopes
 })}\n`);

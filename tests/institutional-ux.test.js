@@ -46,7 +46,7 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
 test("whole-catalog directory search uses a static privacy-preserving contextual index", async () => {
   const client = await text("public/directory.js");
   const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(searchIndex.schemaVersion, "1.2");
+  assert.equal(searchIndex.schemaVersion, "1.3");
   assert.equal(searchIndex.resourceCount, resources.length);
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
@@ -60,14 +60,12 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.match(client, /MAX_RESULTS = 60/);
   assert.match(client, /Escape/);
   for (const record of searchIndex.records.slice(0, 10)) {
-    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "name", "place", "search"].sort());
+    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "place", "search"].sort());
   }
   const usIndex = searchIndex.records.findIndex((record) => record.country === "United States");
   assert.ok(usIndex >= 0);
   assert.ok(searchIndex.scopes["/directory/united-states"].includes(usIndex));
-  for (const indexes of Object.values(searchIndex.scopes)) {
-    assert.ok(indexes.every((index) => Number.isInteger(index) && index >= 0 && index < searchIndex.records.length));
-  }
+  for (const indexes of Object.values(searchIndex.scopes)) assert.ok(indexes.every((index) => Number.isInteger(index) && index >= 0 && index < searchIndex.records.length));
 });
 
 test("service pages add crawlable related-help links and source-backed accessibility notes", async () => {
@@ -91,7 +89,6 @@ test("sitemap freshness follows the resource data instead of one fake global dat
   const service = sitemapEntry(sitemap, `/service/${sample.id}`);
   assert.ok(service, "sample service should exist in sitemap");
   assert.equal(service[1], sample.lastChecked);
-
   for (const path of ["/privacy", "/terms", "/accessibility", "/editorial-policy"]) {
     const entry = sitemapEntry(sitemap, path);
     assert.ok(entry, `${path} should exist in sitemap`);
@@ -127,10 +124,9 @@ test("local need pages are crawlable, useful, and linked from their city page", 
   const categoryHtml = await text(`dist${category.path}/index.html`);
   assert.ok(cityHtml.includes(category.path), "city page should crawlably link to local need page");
   assert.match(categoryHtml, /"@type":"CollectionPage"/);
-  assert.match(categoryHtml, /Visit original source/);
+  assert.match(categoryHtml, /Official source/);
   assert.match(categoryHtml, /data-directory-search/);
   assert.ok((categoryHtml.match(/<article class="directory-record"/g) || []).length >= manifest.minimumCategoryListings);
-
   const sitemap = await text("dist/sitemap.xml");
   const entry = sitemapEntry(sitemap, category.path);
   assert.ok(entry, "local need page should be in sitemap");
@@ -158,7 +154,6 @@ test("interaction layers and search index stay within deliberate budgets", async
     const { size } = await stat(path);
     assert.ok(size <= maximum, `${path} is ${size.toLocaleString()} bytes; budget is ${maximum.toLocaleString()} bytes`);
   }
-
   const html = await text("dist/index.html");
   assert.doesNotMatch(html, /\/src\/professional\.css/);
 });

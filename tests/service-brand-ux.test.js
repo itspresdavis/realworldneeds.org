@@ -68,7 +68,7 @@ test("service landing pages surface reviewed next steps before the caution/detai
 
   for (const resource of samples) {
     const html = await text(`dist/service/${resource.id}/index.html`);
-    const actionsAt = html.indexOf('class="service-next-steps"');
+    const actionsAt = html.indexOf('class="service-next-steps service-next-steps--v3"');
     const cautionAt = html.indexOf('class="policy-note"');
     assert.ok(actionsAt >= 0, `${resource.id} should have a next-step action bar`);
     assert.ok(cautionAt > actionsAt, `${resource.id} should show next steps before caution/details`);
@@ -79,8 +79,10 @@ test("service landing pages surface reviewed next steps before the caution/detai
       assert.ok(html.includes(`href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}"`), `${resource.id} should expose its reviewed phone number as a call action`);
     }
     if (resource.kind === "direct") {
-      assert.match(html, /maps\.apple\.com/);
-      assert.match(html, /google\.com\/maps\/search/);
+      assert.match(html, /maps\.apple\.com\/\?daddr=/);
+      assert.match(html, /google\.com\/maps\/dir\/\?api=1&amp;destination=/);
+      assert.match(html, />Apple Maps<\/strong>/);
+      assert.match(html, />Google Maps<\/strong>/);
     }
   }
 });
