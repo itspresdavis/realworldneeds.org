@@ -188,6 +188,22 @@ async function captureRegion(client, rect) {
   return { buffer, digest: createHash("sha256").update(buffer).digest("hex") };
 }
 
+async function waitForGlobeSettle(client, timeoutMs = 9000) {
+  return evaluate(client, `new Promise((resolve) => {
+    const started = performance.now();
+    const check = () => {
+      const stage = document.querySelector('.globe-stage');
+      const layer = document.getElementById('pinLayer');
+      const moving = stage?.classList.contains('is-globe-moving') || false;
+      const opacity = Number(getComputedStyle(layer).opacity || 0);
+      if (!moving && opacity > .85) return resolve({ settled: true, opacity });
+      if (performance.now() - started > ${timeoutMs}) return resolve({ settled: false, moving, opacity });
+      setTimeout(check, 80);
+    };
+    check();
+  })`);
+}
+
 async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-globe-touch-"));
   const server = spawn(process.execPath, ["scripts/serve.mjs", "4178"], { stdio: ["ignore", "pipe", "pipe"] });
@@ -257,16 +273,25 @@ async function run() {
       await dispatchTouch(client, "touchMove", [touchPoint(horizontal.point.x + step * 22, horizontal.point.y + 2)]);
       await sleep(32);
     }
+    const movingLayer = await evaluate(client, `(() => {
+      const stage = document.querySelector('.globe-stage');
+      const layer = document.getElementById('pinLayer');
+      return { moving: stage?.classList.contains('is-globe-moving') || false, opacity: Number(getComputedStyle(layer).opacity || 0) };
+    })()`);
     await dispatchTouch(client, "touchEnd", []);
-    await sleep(420);
+    await sleep(280);
     const horizontalScroll = await evaluate(client, "scrollY");
-    const horizontalAfter = await projectionSnapshot(client, horizontalBefore.map((row) => row.id));
     const imageAfter = await captureRegion(client, horizontal.rect);
     if (Math.abs(horizontalScroll - horizontal.scrollY) > 18) throw new Error(`Horizontal globe rotation moved page by ${Math.abs(horizontalScroll - horizontal.scrollY)}px.`);
-    const changedMarkers = horizontalBefore.filter((row) => globeProjectionChanged(row, horizontalAfter.find((item) => item.id === row.id))).length;
+    if (!movingLayer.moving || movingLayer.opacity > .2) throw new Error(`GPU motion did not suppress stale HTML pins: ${JSON.stringify(movingLayer)}`);
     if (imageBefore.digest === imageAfter.digest) throw new Error("Horizontal touch left the rendered globe pixel-identical.");
-    if (horizontalBefore.length && changedMarkers === 0) {
-      throw new Error(`Horizontal touch changed the Earth but left all ${horizontalBefore.length} tracked service projections unchanged.`);
+
+    const settled = await waitForGlobeSettle(client);
+    if (!settled.settled) throw new Error(`HTML service targets did not return after globe motion settled: ${JSON.stringify(settled)}`);
+    const horizontalAfter = await projectionSnapshot(client, horizontalBefore.map((row) => row.id));
+    const reprojectedMarkers = horizontalBefore.filter((row) => globeProjectionChanged(row, horizontalAfter.find((item) => item.id === row.id))).length;
+    if (horizontalBefore.length && reprojectedMarkers === 0) {
+      throw new Error(`GPU globe moved but all ${horizontalBefore.length} HTML service targets returned at stale projections.`);
     }
 
     const pinch = await bareCanvasPoint(client);
@@ -293,11 +318,11 @@ async function run() {
         return { zoom, readout, canvasWidth: canvas?.width || 0, stageWidth: stage?.getBoundingClientRect().width || 0, overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth), detailed: /HD NASA|high-detail boundaries/.test(readout), closeView: stage?.classList.contains('is-close-view') || false };
       };
       const drive = () => {
-        const state = read();
-        if (state.zoom >= 7 && state.detailed && state.closeView) return resolve({ ...state, clicks });
-        if (performance.now() - started > 20000) return resolve({ ...state, clicks });
-        if (state.zoom < 7.2 && clicks < 44) { button.click(); clicks += 1; }
-        setTimeout(drive, state.zoom > 5 ? 190 : 125);
+        const current = read();
+        if (current.zoom >= 7 && current.detailed && current.closeView) return resolve({ ...current, clicks });
+        if (performance.now() - started > 20000) return resolve({ ...current, clicks });
+        if (current.zoom < 7.2 && clicks < 44) { button.click(); clicks += 1; }
+        setTimeout(drive, current.zoom > 5 ? 190 : 125);
       };
       drive();
     })`);
@@ -334,7 +359,7 @@ async function run() {
     await mkdir("qa-screenshots", { recursive: true });
     const shot = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     await writeFile("qa-screenshots/globe-touch-mobile.png", Buffer.from(shot.data, "base64"));
-    console.log(`RWN real-touch globe QA passed: vertical page pan, horizontal WebGL + service projection movement, two-finger zoom, ${deep.zoom.toFixed(2)}x mobile detail, bounded DPR/layout, deep point picking, and orientation resize.`);
+    console.log(`RWN real-touch globe QA passed: vertical page pan, GPU rotation with hidden stale targets, settled target reprojection, two-finger zoom, ${deep.zoom.toFixed(2)}x mobile detail, bounded DPR/layout, deep point picking, and orientation resize.`);
   } finally {
     client?.close();
     await stopProcess(browser);
