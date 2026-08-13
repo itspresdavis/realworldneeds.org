@@ -17,14 +17,6 @@ function installBrandMarks() {
     mark.style.borderRadius = "50%";
     mark.style.boxShadow = "none";
     mark.style.overflow = "visible";
-
-    const image = mark.querySelector(".rwn-brand-image");
-    if (image) {
-      image.style.display = "block";
-      image.style.width = "100%";
-      image.style.height = "100%";
-      image.style.objectFit = "contain";
-    }
   });
 }
 
@@ -35,8 +27,8 @@ function simplifyStructure() {
   const footerExplore = document.querySelector('.site-footer nav[aria-label="Footer explore"]');
   if (footerExplore) {
     footerExplore.innerHTML = `
-      <strong>Explore</strong>
-      <a href="#finder">Find help</a>
+      <strong>Find help</strong>
+      <a href="#finder">Interactive finder</a>
       <a href="/directory">Text directory</a>
     `;
   }
@@ -44,10 +36,10 @@ function simplifyStructure() {
   const footerAbout = document.querySelector('.site-footer nav[aria-label="Footer standards"]');
   if (footerAbout) {
     footerAbout.innerHTML = `
-      <strong>About RWN</strong>
-      <a href="#about">How it works</a>
-      <a href="/editorial-policy">Review policy</a>
+      <strong>Trust &amp; standards</strong>
+      <a href="/editorial-policy">How listings are checked</a>
       <a href="/transparency">Transparency</a>
+      <a href="/sources">Source ledger</a>
     `;
   }
 
@@ -74,36 +66,36 @@ function installCopy() {
     const strong = brand.querySelector("strong");
     const small = brand.querySelector("small");
     if (strong) strong.textContent = "Real World Needs";
-    if (small) small.textContent = "Essential services directory";
+    if (small) small.textContent = "Free essential services directory";
   }
 
-  setAllText(".primary-nav a", ["Find help", "About", "Sources", "Transparency"]);
-  setAllText(".site-menu nav a", ["Find help", "About", "Sources", "Transparency"]);
+  setAllText(".primary-nav a", ["Find help", "How it works", "Review standards", "Transparency"]);
+  setAllText(".site-menu nav a", ["Find help", "How it works", "Review standards", "Transparency"]);
 
   const headerAction = document.querySelector(".header-action");
   if (headerAction) {
-    headerAction.textContent = "Text directory";
+    headerAction.textContent = "Browse directory";
     headerAction.href = "/directory";
     headerAction.removeAttribute("data-section-link");
-    headerAction.setAttribute("aria-label", "Open the text service directory");
+    headerAction.setAttribute("aria-label", "Browse the complete text service directory");
   }
 
-  setText(".finder-intro h1", "Find essential services near you.");
+  setText(".finder-intro h1", "Find essential help near you.");
   setText(
     ".finder-intro p",
-    "Search food, shelter, health care, hygiene, clothing, drinking water and other essential services. Check the details, then contact the provider directly."
+    "Search food, shelter, health care, hygiene, clothing, drinking water and other essential services. Review the source and practical details, then contact the provider directly."
   );
 
-  setText(".about-rwn__heading h2", "Find. Check. Contact.");
+  setText(".about-rwn__heading h2", "Find it. Check it. Contact the provider.");
   setText(
     ".about-rwn__heading p",
-    "Real World Needs organizes public service information in one directory. Search for an option, review the source and practical details, then contact the organization providing the service."
+    "Real World Needs organizes public service information into one usable directory. Search for an option, review where the information came from, and contact the organization providing the service."
   );
 
-  setText(".source-band__heading h2", "Sources and review standards.");
+  setText(".source-band__heading h2", "Every listing stays connected to its source.");
   setText(
     ".source-band__heading p",
-    "Each listing keeps its original source and review date. Hours, eligibility and availability can change, so the provider remains the final authority."
+    "Listings show where the information came from and when it was reviewed. Hours, eligibility and availability can change, so the provider remains the final authority."
   );
 
   const footerBrand = document.querySelector(".footer-brand > span:last-child");
@@ -111,7 +103,7 @@ function installCopy() {
     const strong = footerBrand.querySelector("strong");
     const small = footerBrand.querySelector("small");
     if (strong) strong.textContent = "Real World Needs";
-    if (small) small.textContent = "Essential services directory";
+    if (small) small.textContent = "Free essential services directory";
   }
 
   simplifyStructure();
