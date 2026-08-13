@@ -9,17 +9,11 @@ if (root) {
   const pageRecords = [...document.querySelectorAll(".directory-records > .directory-record")];
   const collator = new Intl.Collator(undefined, { sensitivity: "base", usage: "search" });
   const MAX_RESULTS = 60;
-  const currentScope = (location.pathname.replace(/\/page\/\d+\/?$/, "").replace(/\/$/, "") || "/directory");
+  const currentScope = location.pathname.replace(/\/page\/\d+\/?$/, "").replace(/\/$/, "") || "/directory";
   const releaseVersion = new URL(import.meta.url).searchParams.get("v") || "";
   const searchIndexUrl = `/data/search-index.json${releaseVersion ? `?v=${encodeURIComponent(releaseVersion)}` : ""}`;
-
-  const normalize = (value) => String(value || "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9+]+/g, " ")
-    .trim();
-
+  const html = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+  const normalize = (value) => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
   const aliases = new Map(Object.entries({
     meals: "food", meal: "food", pantry: "food", pantries: "food", groceries: "food", comida: "food", nourriture: "food",
     drinking: "water", hydration: "water", agua: "water", eau: "water",
@@ -31,8 +25,10 @@ if (root) {
   const noise = new Set(["a", "an", "the", "for", "to", "of", "please", "find", "finding", "need", "needs", "help", "free", "near", "nearby", "me", "my", "local", "around", "ayuda", "gratis", "cerca", "aide", "gratuit", "ajuda", "perto"]);
   const queryTokens = (value) => normalize(value).split(/\s+/).filter((token) => token && !noise.has(token)).map((token) => aliases.get(token) || token);
 
-  let categoryLabels = [...new Set(pageRecords.flatMap((record) => [...record.querySelectorAll(".directory-aid li")].map((item) => item.textContent.trim())).filter(Boolean))]
-    .sort((a, b) => collator.compare(a, b));
+  let categoryLabels = [...new Set(pageRecords.flatMap((record) => [...record.querySelectorAll(".directory-aid li")].map((item) => item.textContent.trim())).filter(Boolean))].sort((a, b) => collator.compare(a, b));
+  let activeCategory = "";
+  let catalogPromise;
+  let generation = 0;
 
   const connectivityNotice = document.createElement("div");
   connectivityNotice.id = "offlineDirectoryNotice";
@@ -47,32 +43,20 @@ if (root) {
   results.className = "directory-global-results";
   results.hidden = true;
   results.setAttribute("aria-label", "Full directory search results");
-  results.innerHTML = `<div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" data-global-list></div>`;
+  results.innerHTML = '<div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" data-global-list></div>';
   root.insertAdjacentElement("afterend", results);
   const resultList = results.querySelector("[data-global-list]");
   const resultSummary = results.querySelector("[data-global-summary]");
 
-  let activeCategory = "";
-  let catalogPromise;
-  let generation = 0;
-
-  const showConnectivityState = () => {
-    connectivityNotice.hidden = navigator.onLine;
-  };
-
-  const scopedRecords = (payload) => {
-    if (currentScope === "/directory") return payload.records;
-    return (payload.scopes[currentScope] || []).map((index) => payload.records[index]).filter(Boolean);
-  };
+  const scopedRecords = (payload) => currentScope === "/directory"
+    ? payload.records
+    : (payload.scopes[currentScope] || []).map((index) => payload.records[index]).filter(Boolean);
 
   const renderChips = () => {
     if (!chips) return;
     const expected = [["All help", ""], ...categoryLabels.map((label) => [label, label])];
     const current = [...chips.querySelectorAll("[data-directory-category]")];
-    const matchesExpected = current.length === expected.length
-      && current.every((button, index) => button.dataset.directoryCategory === expected[index][1]);
-
-    if (!matchesExpected) {
+    if (current.length !== expected.length || !current.every((button, index) => button.dataset.directoryCategory === expected[index][1])) {
       const fragment = document.createDocumentFragment();
       for (const [label, value] of expected) {
         const button = document.createElement("button");
@@ -83,30 +67,24 @@ if (root) {
       }
       chips.replaceChildren(fragment);
     }
-
-    for (const button of chips.querySelectorAll("[data-directory-category]")) {
-      button.setAttribute("aria-pressed", String(normalize(button.dataset.directoryCategory) === activeCategory));
-    }
+    for (const button of chips.querySelectorAll("[data-directory-category]")) button.setAttribute("aria-pressed", String(normalize(button.dataset.directoryCategory) === activeCategory));
   };
 
   const syncCategoryLabels = (payload) => {
-    const fullLabels = [...new Set(scopedRecords(payload).flatMap((record) => record.categoryLabels || []).filter(Boolean))]
-      .sort((a, b) => collator.compare(a, b));
-    if (fullLabels.length === categoryLabels.length && fullLabels.every((label, index) => label === categoryLabels[index])) return;
-    categoryLabels = fullLabels;
+    const labels = [...new Set(scopedRecords(payload).flatMap((record) => record.categoryLabels || []).filter(Boolean))].sort((a, b) => collator.compare(a, b));
+    if (labels.length === categoryLabels.length && labels.every((label, index) => label === categoryLabels[index])) return;
+    categoryLabels = labels;
     renderChips();
   };
 
   const loadCatalog = () => {
-    catalogPromise ||= fetch(searchIndexUrl, { credentials: "same-origin", cache: "force-cache" })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Search index unavailable (${response.status})`);
-        return response.json();
-      })
-      .then((payload) => {
-        if (!Array.isArray(payload.records) || !payload.scopes) throw new Error("Search index is invalid");
-        return payload;
-      });
+    catalogPromise ||= fetch(searchIndexUrl, { credentials: "same-origin", cache: "force-cache" }).then((response) => {
+      if (!response.ok) throw new Error(`Search index unavailable (${response.status})`);
+      return response.json();
+    }).then((payload) => {
+      if (!Array.isArray(payload.records) || !payload.scopes) throw new Error("Search index is invalid");
+      return payload;
+    });
     return catalogPromise;
   };
 
@@ -124,46 +102,16 @@ if (root) {
     return tokens.reduce((score, token) => score + (name === token ? 25 : name.startsWith(token) ? 16 : name.includes(token) ? 10 : place.includes(token) ? 7 : 2), 0);
   };
 
-  const appleDirections = (record) => `https://maps.apple.com/?daddr=${encodeURIComponent(`${record.lat},${record.lng}`)}&q=${encodeURIComponent(record.name)}`;
-  const googleDirections = (record) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${record.lat},${record.lng}`)}`;
-
-  const makeAction = (label, href, className = "") => {
-    const link = document.createElement("a");
-    link.href = href;
-    link.textContent = label;
-    link.className = className;
-    return link;
-  };
-
   const resultRow = (record) => {
+    const id = encodeURIComponent(record.id);
+    const phone = record.phone ? `<a class="is-call" href="tel:${html(String(record.phone).replace(/[^+\d]/g, ""))}">Call</a>` : "";
+    const coordinate = `${record.lat},${record.lng}`;
+    const maps = record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)
+      ? `<a class="is-map" href="${html(`https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(record.name)}`)}">Apple Maps</a><a class="is-map" href="${html(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`)}">Google Maps</a>`
+      : "";
     const row = document.createElement("article");
     row.className = "directory-global-result";
-
-    const main = document.createElement("div");
-    main.className = "directory-global-result__main";
-    const details = document.createElement("a");
-    details.className = "directory-global-result__details";
-    details.href = `/service/${encodeURIComponent(record.id)}`;
-    const name = document.createElement("strong");
-    name.textContent = record.name;
-    const place = document.createElement("span");
-    place.textContent = record.place;
-    details.append(name, place);
-    const meta = document.createElement("small");
-    meta.textContent = `${record.categoryLabels.join(" · ")} · checked ${record.checked}${navigator.onLine ? "" : " · reconnect for full details"}`;
-    main.append(details, meta);
-
-    const actions = document.createElement("nav");
-    actions.className = "directory-global-result__actions";
-    actions.setAttribute("aria-label", `Actions for ${record.name}`);
-    if (record.phone) actions.append(makeAction("Call", `tel:${String(record.phone).replace(/[^+\d]/g, "")}`, "is-call"));
-    if (record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
-      actions.append(makeAction("Apple Maps", appleDirections(record), "is-map"));
-      actions.append(makeAction("Google Maps", googleDirections(record), "is-map"));
-    }
-    actions.append(makeAction("View details", `/service/${encodeURIComponent(record.id)}`, "is-details"));
-    row.append(main, actions);
-
+    row.innerHTML = `<div class="directory-global-result__main"><a class="directory-global-result__details" href="/service/${id}"><strong>${html(record.name)}</strong><span>${html(record.place)}</span></a><small>${html(record.categoryLabels.join(" · "))} · checked ${html(record.checked)}${navigator.onLine ? "" : " · reconnect for full details"}</small></div><nav class="directory-global-result__actions" aria-label="Actions for ${html(record.name)}">${phone}${maps}<a class="is-details" href="/service/${id}">View details</a></nav>`;
     if (!navigator.onLine) {
       for (const link of row.querySelectorAll('a[href^="/service/"]')) {
         link.setAttribute("aria-describedby", connectivityNotice.id);
@@ -179,18 +127,14 @@ if (root) {
   };
 
   const apply = async () => {
-    const query = input?.value || "";
-    const tokens = queryTokens(query);
+    const tokens = queryTokens(input?.value || "");
     const filtering = Boolean(tokens.length || activeCategory);
     const currentGeneration = ++generation;
     if (clear) clear.hidden = !filtering;
     root.classList.toggle("has-filter", filtering);
-    if (!filtering) {
-      clearGlobalResults();
-      return;
-    }
-
+    if (!filtering) return clearGlobalResults();
     if (count) count.textContent = "Searching this directory…";
+
     try {
       const payload = await loadCatalog();
       if (currentGeneration !== generation) return;
@@ -201,7 +145,6 @@ if (root) {
         .map((record) => ({ record, score: scoreRecord(record, tokens) }))
         .filter(({ score }) => score >= 0)
         .sort((left, right) => right.score - left.score || collator.compare(left.record.name, right.record.name));
-
       resultList.replaceChildren(...matches.slice(0, MAX_RESULTS).map(({ record }) => resultRow(record)));
       results.hidden = false;
       shell?.classList.add("has-global-search");
@@ -227,19 +170,14 @@ if (root) {
   };
 
   let inputTimer;
-  input?.addEventListener("focus", () => {
-    loadCatalog().then(syncCategoryLabels).catch(() => {});
-  }, { once: true });
+  input?.addEventListener("focus", () => loadCatalog().then(syncCategoryLabels).catch(() => {}), { once: true });
   input?.addEventListener("input", () => {
     clearTimeout(inputTimer);
     inputTimer = setTimeout(apply, 80);
   });
   input?.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    reset();
+    if (event.key === "Escape") { event.preventDefault(); reset(); }
   });
-
   clear?.addEventListener("click", reset);
   chips?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-directory-category]");
@@ -248,22 +186,18 @@ if (root) {
     renderChips();
     apply();
   });
-
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target?.isContentEditable) return;
+    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target?.isContentEditable) return;
     event.preventDefault();
     input?.focus();
   });
-
-  const handleConnectivityChange = () => {
-    showConnectivityState();
+  const connectivity = () => {
+    connectivityNotice.hidden = navigator.onLine;
     if (!results.hidden) apply();
   };
-  window.addEventListener("online", handleConnectivityChange);
-  window.addEventListener("offline", handleConnectivityChange);
-
-  showConnectivityState();
+  window.addEventListener("online", connectivity);
+  window.addEventListener("offline", connectivity);
+  connectivity();
   renderChips();
   clearGlobalResults();
 }
