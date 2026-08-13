@@ -1,29 +1,19 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const HOME_TITLE = "Find Free Essential Services Near You | Real World Needs";
-const HOME_DESCRIPTION = "Search free food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Verify every listing at its original source.";
+const HOME_TITLE = "Find Essential Services Near You | Real World Needs";
+const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review the source, date checked and provider contact details.";
 const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
-const ACCESSIBLE_TOUCH_TARGETS = '<style data-rwn-professional-a11y>.directory-category-chips button{min-height:44px}</style>';
 const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 .directory-strip,.accountability,#openInspector{display:none!important}
 .globe-canvas{touch-action:none;overscroll-behavior:contain}
-.globe-pin-layer{transition:opacity 110ms ease}
+.globe-pin-layer{transition:opacity 100ms linear}
 .globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{opacity:0;pointer-events:none}
 @media(max-width:900px){.globe-canvas{touch-action:pan-y;overscroll-behavior-y:auto}}
 @media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
 </style>`;
-const PUBLIC_PAGE_DENSITY_STYLE = `<style data-rwn-public-density>
-.legal-brand__mark{display:block;object-fit:contain;color:transparent}
-.legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:clamp(2.6rem,4.5vw,4.5rem) clamp(1rem,4vw,4rem) clamp(2.2rem,3.8vw,3.6rem)}
-.legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{margin-top:.6rem;font-size:clamp(2.45rem,4.5vw,4.15rem);font-weight:620;line-height:1.01;letter-spacing:-.047em}
-.legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{margin-top:.9rem;font-size:clamp(.98rem,1.3vw,1.08rem);line-height:1.62}
-.legal-meta,#directory>.legal-hero .legal-meta,#service>.legal-hero .legal-meta{margin-top:1.05rem}
-@media(max-width:820px){.legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:2.25rem 1rem 2rem}.legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{font-size:clamp(2.15rem,9vw,3.2rem);line-height:1.02;letter-spacing:-.043em}.legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{font-size:1rem;line-height:1.56}}
-@media(max-width:600px){#directory>.legal-hero{padding:1.8rem 1rem 1.6rem}#directory>.legal-hero h1{margin-top:.4rem;font-size:clamp(2.05rem,9.6vw,2.75rem);line-height:1.03;letter-spacing:-.04em}#directory>.legal-hero .legal-hero__lede{margin-top:.65rem;font-size:.94rem;line-height:1.5}#directory>.legal-hero .legal-meta{display:none}.directory-shell{padding-top:1.15rem}}
-</style>`;
-const DIRECTORY_HEADING = "Browse free essential services by need and location.";
-const DIRECTORY_DESCRIPTION = "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Review the source and contact details before you go.";
+const DIRECTORY_HEADING = "Browse essential services by need and location.";
+const DIRECTORY_DESCRIPTION = "Search the directory by service, place or organization. Each listing includes provider details, its source and the date it was reviewed.";
 
 async function walkHtml(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -55,7 +45,7 @@ function titleFrom(html) {
 
 function descriptionFrom(html) {
   const match = html.match(/<meta\b[^>]*\bname=(["'])description\1[^>]*\bcontent=(["'])(.*?)\2[^>]*>/i);
-  return decodeEntities(match?.[3]?.trim() || "Find free essential services and verify listings at their original sources.");
+  return decodeEntities(match?.[3]?.trim() || "Find essential services and review the source behind each listing.");
 }
 
 function upsertMeta(html, attribute, key, content) {
@@ -88,7 +78,7 @@ function addSocialMetadata(html) {
 }
 
 function professionalFooterLinks() {
-  return `<nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse help by need</strong><a href="/directory/help/food">Food assistance</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Showers &amp; hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Drinking water</a><a href="/directory">Full directory</a><a href="/sources">Source ledger</a></nav>`;
+  return `<nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse by need</strong><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Water</a><a href="/directory">Full directory</a><a href="/sources">Sources</a></nav>`;
 }
 
 function enhanceHome(html, release) {
@@ -99,21 +89,19 @@ function enhanceHome(html, release) {
     .replaceAll("Real World Needs | Find Free Food, Shelter, Health Care & Essential Help", HOME_TITLE)
     .replaceAll("Find free food, shelter, health care, clothing, hygiene support, drinking water, and other essential services in one searchable directory.", HOME_DESCRIPTION)
     .replaceAll("Search free essential services and go directly to the original organization or public source. Find food, shelter, health care, clothing, hygiene support, drinking water, and more.", HOME_DESCRIPTION)
-    .replace("<h1>Find free help near you.</h1>", "<h1>Find free essential services near you.</h1>")
+    .replace("<h1>Find free help near you.</h1>", "<h1>Find food, shelter, health care and other essentials.</h1>")
     .replace(
       "<p>Real World Needs helps you find food, shelter, health care, showers and hygiene support, clothing, drinking water, and other essentials. Every listing stays connected to the organization or public source behind it.</p>",
-      "<p>Search food assistance, shelter, health care, hygiene, clothing, drinking water, and other essential services. Each listing links to the organization or public source behind it so you can verify the details before you go.</p>"
+      "<p>Search by service or place. Each listing shows who provides the help, how to contact them, where the information came from, and when we last checked it.</p>"
     );
 
-  if (!html.includes("/src/professional.css")) {
-    html = html.replace("</head>", `  <link rel="stylesheet" href="/src/professional.css?v=${release}" />\n</head>`);
-  }
   if (!html.includes("/src/clarity.css")) {
     html = html.replace("</head>", `  <link rel="stylesheet" href="/src/clarity.css?v=${release}" />\n</head>`);
   }
   if (!html.includes("data-rwn-critical-shell")) {
     html = html.replace("</head>", `  ${CRITICAL_HOME_STYLE}\n</head>`);
   }
+
   html = addSocialMetadata(html);
   html = ensureHeadLink(html, "sitemap", "/sitemap.xml", ' type="application/xml"');
   return html;
@@ -123,17 +111,12 @@ function enhanceGeneratedPage(html, release) {
   html = html
     .replaceAll('<span class="legal-brand__mark">RWN</span>', '<img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" />')
     .replaceAll('<img class="legal-brand__mark" src="/rwn-mark.svg" alt="" width="34" height="34" decoding="async" />', '<img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" />')
+    .replaceAll("Free essential services directory", "Essential services directory")
     .replaceAll("Find free essential services without using the globe.", DIRECTORY_HEADING)
     .replaceAll("Browse food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Every listing stays connected to its original source.", DIRECTORY_DESCRIPTION);
 
   if (!html.includes("/professional-pages.css")) {
     html = html.replace("</head>", `  <link rel="stylesheet" href="/professional-pages.css?v=${release}" />\n</head>`);
-  }
-  if (!html.includes("data-rwn-public-density")) {
-    html = html.replace("</head>", `  ${PUBLIC_PAGE_DENSITY_STYLE}\n</head>`);
-  }
-  if (!html.includes("data-rwn-professional-a11y")) {
-    html = html.replace("</head>", `  ${ACCESSIBLE_TOUCH_TARGETS}\n</head>`);
   }
   html = ensureHeadLink(html, "icon", "/rwn-mark.svg", ' type="image/svg+xml"');
   html = ensureHeadLink(html, "manifest", "/site.webmanifest");
