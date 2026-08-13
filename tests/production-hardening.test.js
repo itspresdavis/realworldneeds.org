@@ -75,8 +75,8 @@ test("help-by-need pages are canonical, structured, and source connected", async
   assert.match(food, /rel="canonical" href="https:\/\/www\.realworldneeds\.org\/directory\/help\/food"/);
   assert.match(food, /"@type":"CollectionPage"/);
   assert.match(food, /"@type":"ItemList"/);
-  assert.match(food, /Full listing details/);
-  assert.match(food, /Visit original source/);
+  assert.match(food, /View details/);
+  assert.match(food, /Official source/);
 
   const manifest = JSON.parse(await text("dist/data/resources/index.json"));
   assert.ok(Array.isArray(manifest.categories));
@@ -90,8 +90,8 @@ test("every reviewed resource gets an indexable service detail page", async () =
   const html = await text(`dist/service/${sample.id}/index.html`);
   assert.match(html, new RegExp(`<h1>${sample.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</h1>`));
   assert.match(html, /"@type":"Service"/);
-  assert.match(html, /Visit original source/);
-  assert.match(html, /Show on interactive globe/);
+  assert.match(html, /Official source/);
+  assert.match(html, /Show on RWN map/);
 
   const serviceDirectories = await readdir("dist/service");
   assert.equal(serviceDirectories.length, resources.length);
