@@ -185,7 +185,7 @@ async function run() {
       };
     })()`);
 
-    if (!desktop.professional || !desktop.accessibility || !desktop.noHorizontalOverflow || desktop.sidebarOverflow === "auto" || desktop.sidebarOverflow === "scroll" || desktop.scrollBehavior !== "auto" || desktop.panelRole !== "region" || desktop.panelLive || desktop.resultLinks < 1 || desktop.directActions < 1 || !desktop.jumpResults || desktop.mobileTaskbar || desktop.finderRoute || desktop.headerAction !== "Text directory" || !desktop.searchShortcuts.includes("Escape") || /pause globe rotation/i.test(desktop.motionLabel)) {
+    if (!desktop.professional || !desktop.accessibility || !desktop.noHorizontalOverflow || desktop.sidebarOverflow === "auto" || desktop.sidebarOverflow === "scroll" || desktop.scrollBehavior !== "auto" || desktop.panelRole !== "region" || desktop.panelLive || desktop.resultLinks < 1 || desktop.directActions < 1 || !desktop.jumpResults || desktop.mobileTaskbar || desktop.finderRoute || desktop.headerAction !== "Browse directory" || !desktop.searchShortcuts.includes("Escape") || /pause globe rotation/i.test(desktop.motionLabel)) {
       throw new Error(`Institutional desktop homepage failed: ${JSON.stringify(desktop)}`);
     }
     if (desktop.stylesheets.some((href) => /\/(?:experience|refinement|world-class)\.css(?:\?|$)/.test(href))) {
