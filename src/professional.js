@@ -9,6 +9,25 @@ const setAllText = (selector, values) => {
   });
 };
 
+function installBrandMarks() {
+  document.querySelectorAll(".brand__mark").forEach((mark, index) => {
+    mark.innerHTML = `<img class="rwn-brand-image" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} />`;
+    mark.style.background = "transparent";
+    mark.style.border = "0";
+    mark.style.borderRadius = "50%";
+    mark.style.boxShadow = "none";
+    mark.style.overflow = "visible";
+
+    const image = mark.querySelector(".rwn-brand-image");
+    if (image) {
+      image.style.display = "block";
+      image.style.width = "100%";
+      image.style.height = "100%";
+      image.style.objectFit = "contain";
+    }
+  });
+}
+
 function simplifyStructure() {
   document.querySelector(".directory-strip")?.remove();
   document.getElementById("accountability")?.remove();
@@ -47,6 +66,8 @@ function simplifyStructure() {
 function installCopy() {
   document.documentElement.classList.add("rwn-professional");
   document.body.classList.add("rwn-professional");
+
+  installBrandMarks();
 
   const brand = document.querySelector(".brand .brand__name");
   if (brand) {
