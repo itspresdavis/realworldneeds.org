@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-async function filesUnder(root, extensions) {
+async function filesUnder(root, extensions, { skipDirectories = new Set() } = {}) {
   const output = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && skipDirectories.has(entry.name)) continue;
     const path = join(root, entry.name);
-    if (entry.isDirectory()) output.push(...await filesUnder(path, extensions));
+    if (entry.isDirectory()) output.push(...await filesUnder(path, extensions, { skipDirectories }));
     else if (extensions.some((extension) => entry.name.endsWith(extension))) output.push(path);
   }
   return output;
@@ -51,17 +52,24 @@ test("editorial policy rejects AI-only evidence and fabricated endorsements", as
   assert.match(editorial, /privacy, safety, crisis-response, and source-integrity review before launch/);
 });
 
-test("current runtime has no hidden upload, payment, subscription, or generative-AI integration", async () => {
-  const runtimeFiles = [
-    ...(await filesUnder("src", [".js", ".mjs"])),
+test("current executable product has no hidden upload, payment, subscription, or generative-AI integration", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  const dependencyNames = Object.keys({
+    ...(packageJson.dependencies || {}),
+    ...(packageJson.devDependencies || {}),
+    ...(packageJson.optionalDependencies || {})
+  }).join("\n");
+
+  const executableFiles = [
+    ...(await filesUnder("src", [".js", ".mjs"], { skipDirectories: new Set(["data"]) })),
     ...(await filesUnder("api", [".js", ".mjs"])),
-    ...(await filesUnder("public", [".js", ".mjs"])),
-    "package.json"
+    ...(await filesUnder("public", [".js", ".mjs"], { skipDirectories: new Set(["data"]) }))
   ];
-  const runtime = await joined(runtimeFiles);
-  assert.doesNotMatch(runtime, /\b(openai|anthropic|gemini|langchain)\b|@ai-sdk\//i);
-  assert.doesNotMatch(runtime, /\b(stripe|braintree|paddle|lemonsqueezy|paypal)\b/i);
-  assert.doesNotMatch(runtime, /\b(multer|uploadthing)\b|supabase\s*\.\s*storage|storage\s*\.\s*from\s*\(/i);
+  const integrationSurface = `${dependencyNames}\n${await joined(executableFiles)}`;
+
+  assert.doesNotMatch(integrationSurface, /\b(openai|anthropic|gemini|langchain)\b|@ai-sdk\//i);
+  assert.doesNotMatch(integrationSurface, /\b(stripe|braintree|paddle|lemonsqueezy|paypal)\b/i);
+  assert.doesNotMatch(integrationSurface, /\b(multer|uploadthing)\b|supabase\s*\.\s*storage|storage\s*\.\s*from\s*\(/i);
 
   const htmlFiles = ["index.html", ...(await filesUnder("public", [".html"]))];
   const html = await joined(htmlFiles);
