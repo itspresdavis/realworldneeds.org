@@ -9,7 +9,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     <div class="service-utility-actions__intro">
       <span>Listing tools</span>
       <strong>Share, copy, or print this listing.</strong>
-      <small>These actions happen on your device. RWN does not receive the recipient or the text you copy.</small>
+      <small>These actions happen on your device. RWN does not receive who you share with or the text you copy.</small>
     </div>
     <div class="service-utility-actions__buttons">
       <button type="button" data-service-share>Share</button>
