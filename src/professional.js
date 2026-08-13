@@ -12,22 +12,49 @@ function installBrandMarks() {
 
 function rewriteNavigation() {
   const desktop = document.querySelector(".primary-nav");
-  const mobile = document.querySelector(".site-menu nav");
-  const links = `
+  const menu = document.querySelector(".site-menu");
+  const mobile = menu?.querySelector("nav");
+  const desktopLinks = `
     <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-    <a href="/directory">Directory</a>
     <a href="/editorial-policy">How listings are checked</a>
     <a href="/transparency">Transparency</a>
   `;
-  if (desktop) desktop.innerHTML = links;
-  if (mobile) mobile.innerHTML = links;
+  const mobileLinks = `
+    <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
+    <a href="/directory">Browse directory</a>
+    <a href="/editorial-policy">How listings are checked</a>
+    <a href="/transparency">Transparency</a>
+  `;
+  if (desktop) desktop.innerHTML = desktopLinks;
+  if (mobile) mobile.innerHTML = mobileLinks;
+
+  const menuSummary = menu?.querySelector("summary");
+  if (menuSummary) {
+    menuSummary.textContent = "Menu";
+    menuSummary.setAttribute("aria-label", "Menu");
+    menuSummary.title = "Menu";
+  }
+  mobile?.addEventListener("click", (event) => {
+    if (event.target.closest("a") && menu) menu.open = false;
+  });
+  menu?.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    menu.open = false;
+    menuSummary?.focus();
+  });
 
   const action = document.querySelector(".header-action");
   if (action) {
     action.textContent = "Browse directory";
     action.href = "/directory";
     action.removeAttribute("data-section-link");
-    action.setAttribute("aria-label", "Browse the full Real World Needs directory");
+    action.setAttribute("aria-label", "Browse the Real World Needs directory");
+  }
+
+  const brand = document.querySelector(".site-header .brand");
+  if (brand) {
+    brand.href = "/";
+    brand.setAttribute("aria-label", "Real World Needs home");
   }
 }
 
