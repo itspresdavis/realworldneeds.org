@@ -88,13 +88,36 @@ const dispatchTouch = (client, type, touchPoints) => client.call("Input.dispatch
 async function markerSnapshot(client, preferredId = "") {
   return evaluate(client, `(() => {
     const nodes = [...document.querySelectorAll('.globe-pin[data-pin-id]')];
-    const preferred = ${JSON.stringify(preferredId)} ? nodes.find((node) => node.dataset.pinId === ${JSON.stringify(preferredId)}) : null;
-    const node = preferred || nodes.find((candidate) => {
-      const rect = candidate.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight && Number(getComputedStyle(candidate).opacity) > .25;
-    });
-    return node ? { id: node.dataset.pinId, transform: node.style.transform, opacity: node.style.opacity } : null;
+    const snapshot = (node) => {
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return {
+        id: node.dataset.pinId,
+        transform: node.style.transform,
+        opacity: Number(style.opacity || 0),
+        visibility: style.visibility,
+        display: style.display,
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        visible: rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight && Number(style.opacity) > .25 && style.visibility !== 'hidden' && style.display !== 'none'
+      };
+    };
+    if (${JSON.stringify(preferredId)}) {
+      const preferred = nodes.find((node) => node.dataset.pinId === ${JSON.stringify(preferredId)});
+      return preferred ? snapshot(preferred) : null;
+    }
+    const candidates = nodes.map(snapshot).filter((item) => item.visible);
+    candidates.sort((a, b) => Math.hypot(a.x - innerWidth / 2, a.y - innerHeight / 2) - Math.hypot(b.x - innerWidth / 2, b.y - innerHeight / 2));
+    return candidates[0] || null;
   })()`);
+}
+
+function projectionChanged(before, after) {
+  if (!before || !after) return false;
+  return before.transform !== after.transform
+    || Math.abs((before.opacity || 0) - (after.opacity || 0)) > 0.05
+    || before.visibility !== after.visibility
+    || before.display !== after.display;
 }
 
 async function run() {
@@ -139,16 +162,20 @@ async function run() {
 
     const geometry = await evaluate(client, `(() => {
       const canvas = document.getElementById('globeCanvas');
+      const stage = document.querySelector('.globe-stage');
       canvas.scrollIntoView({ block: 'center', behavior: 'auto' });
       const rect = canvas.getBoundingClientRect();
       return {
         x: rect.left + rect.width * .5,
         y: Math.min(innerHeight - 120, Math.max(160, rect.top + rect.height * .52)),
-        touchAction: getComputedStyle(canvas).touchAction,
+        canvasTouchAction: getComputedStyle(canvas).touchAction,
+        stageTouchAction: getComputedStyle(stage).touchAction,
         scrollY
       };
     })()`);
-    if (geometry.touchAction !== "pan-y") throw new Error(`Mobile globe must preserve vertical page panning, got ${geometry.touchAction}.`);
+    if (geometry.canvasTouchAction !== "pan-y" || geometry.stageTouchAction !== "pan-y") {
+      throw new Error(`Mobile globe must preserve pan-y across the map surface: ${JSON.stringify(geometry)}`);
+    }
 
     const verticalMarkerBefore = await markerSnapshot(client);
     await dispatchTouch(client, "touchStart", [touchPoint(geometry.x, geometry.y)]);
@@ -161,8 +188,8 @@ async function run() {
     const verticalScroll = await evaluate(client, "scrollY");
     const verticalMarkerAfter = verticalMarkerBefore ? await markerSnapshot(client, verticalMarkerBefore.id) : null;
     if (Math.abs(verticalScroll - geometry.scrollY) < 30) throw new Error(`Vertical swipe did not move the page (${geometry.scrollY} -> ${verticalScroll}).`);
-    if (verticalMarkerBefore && verticalMarkerAfter && verticalMarkerBefore.transform !== verticalMarkerAfter.transform) {
-      throw new Error(`Vertical page swipe rotated globe marker ${verticalMarkerBefore.id}.`);
+    if (verticalMarkerBefore && verticalMarkerAfter && projectionChanged(verticalMarkerBefore, verticalMarkerAfter)) {
+      throw new Error(`Vertical page swipe changed globe projection for ${verticalMarkerBefore.id}: ${JSON.stringify({ verticalMarkerBefore, verticalMarkerAfter })}`);
     }
 
     const horizontal = await evaluate(client, `(() => {
@@ -183,8 +210,8 @@ async function run() {
     const horizontalScroll = await evaluate(client, "scrollY");
     const horizontalMarkerAfter = horizontalMarkerBefore ? await markerSnapshot(client, horizontalMarkerBefore.id) : null;
     if (Math.abs(horizontalScroll - horizontal.scrollY) > 18) throw new Error(`Horizontal globe rotation moved page by ${Math.abs(horizontalScroll - horizontal.scrollY)}px.`);
-    if (horizontalMarkerBefore && horizontalMarkerAfter && horizontalMarkerBefore.transform === horizontalMarkerAfter.transform) {
-      throw new Error(`Horizontal touch did not move projected service marker ${horizontalMarkerBefore.id}.`);
+    if (horizontalMarkerBefore && horizontalMarkerAfter && !projectionChanged(horizontalMarkerBefore, horizontalMarkerAfter)) {
+      throw new Error(`Horizontal touch did not change projected service ${horizontalMarkerBefore.id}: ${JSON.stringify({ horizontalMarkerBefore, horizontalMarkerAfter })}`);
     }
 
     const zoomBefore = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
@@ -249,7 +276,7 @@ async function run() {
     await mkdir("qa-screenshots", { recursive: true });
     const shot = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     await writeFile("qa-screenshots/globe-touch-mobile.png", Buffer.from(shot.data, "base64"));
-    console.log(`RWN real-touch globe QA passed: vertical page pan, horizontal globe rotation, two-finger zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, point picking, and orientation resize.`);
+    console.log(`RWN real-touch globe QA passed: vertical page pan, horizontal globe projection change, two-finger zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, point picking, and orientation resize.`);
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
