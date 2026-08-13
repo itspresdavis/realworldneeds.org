@@ -167,13 +167,12 @@ async function projectionSnapshot(client, ids = []) {
   })()`);
 }
 
-function changedProjection(before, after) {
+function globeProjectionChanged(before, after) {
   if (!before || !after) return false;
   return before.transform !== after.transform
     || Math.abs(before.opacity - after.opacity) > 0.03
     || before.visibility !== after.visibility
-    || before.display !== after.display
-    || Math.hypot(before.x - after.x, before.y - after.y) > 1.5;
+    || before.display !== after.display;
 }
 
 async function captureRegion(client, rect) {
@@ -245,8 +244,8 @@ async function run() {
     const verticalScroll = await evaluate(client, "scrollY");
     const verticalAfter = await projectionSnapshot(client, verticalBefore.map((row) => row.id));
     if (Math.abs(verticalScroll - vertical.scrollY) < 30) throw new Error(`Vertical swipe did not move the page (${vertical.scrollY} -> ${verticalScroll}).`);
-    const verticalChanges = verticalBefore.filter((row) => changedProjection(row, verticalAfter.find((item) => item.id === row.id))).length;
-    if (verticalChanges > 0) throw new Error(`Vertical page swipe changed ${verticalChanges} globe projections.`);
+    const verticalProjectionChanges = verticalBefore.filter((row) => globeProjectionChanged(row, verticalAfter.find((item) => item.id === row.id))).length;
+    if (verticalProjectionChanges > 0) throw new Error(`Vertical page swipe changed ${verticalProjectionChanges} globe-controlled projections.`);
 
     const horizontal = await bareCanvasPoint(client);
     if (!horizontal.point) throw new Error("Could not find a bare canvas point for horizontal rotation.");
@@ -264,7 +263,7 @@ async function run() {
     const horizontalAfter = await projectionSnapshot(client, horizontalBefore.map((row) => row.id));
     const imageAfter = await captureRegion(client, horizontal.rect);
     if (Math.abs(horizontalScroll - horizontal.scrollY) > 18) throw new Error(`Horizontal globe rotation moved page by ${Math.abs(horizontalScroll - horizontal.scrollY)}px.`);
-    const changedMarkers = horizontalBefore.filter((row) => changedProjection(row, horizontalAfter.find((item) => item.id === row.id))).length;
+    const changedMarkers = horizontalBefore.filter((row) => globeProjectionChanged(row, horizontalAfter.find((item) => item.id === row.id))).length;
     if (imageBefore.digest === imageAfter.digest) throw new Error("Horizontal touch left the rendered globe pixel-identical.");
     if (horizontalBefore.length && changedMarkers === 0) {
       throw new Error(`Horizontal touch changed the Earth but left all ${horizontalBefore.length} tracked service projections unchanged.`);
