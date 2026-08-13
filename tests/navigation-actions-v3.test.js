@@ -1,0 +1,71 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { resources } from "../src/data/resources.js";
+
+const text = (path) => readFile(path, "utf8");
+
+function primaryLabels(html) {
+  const nav = html.match(/<nav class="rwn-page-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1] || "";
+  return [...nav.matchAll(/<a[^>]*>([^<]+)<\/a>/g)].map((match) => match[1].trim());
+}
+
+test("public pages share one task-first navigation order and an explicit mobile Menu", async () => {
+  const pages = await Promise.all([
+    text("dist/directory/index.html"),
+    text("dist/service/whitechapel-mission/index.html"),
+    text("dist/transparency.html"),
+    text("dist/editorial-policy.html")
+  ]);
+  const expected = ["Find help", "Directory", "How listings are checked", "Sources", "Transparency"];
+  for (const html of pages) {
+    assert.deepEqual(primaryLabels(html), expected);
+    assert.match(html, /class="rwn-page-menu"/);
+    assert.match(html, /<summary[^>]*>Menu<\/summary>/);
+    assert.match(html, /\/navigation-actions\.css\?v=[a-f0-9]{12}/);
+    assert.match(html, /class="legal-footer rwn-unified-footer"/);
+  }
+});
+
+test("directory rows put call and map directions ahead of secondary details", async () => {
+  const resource = resources.find((item) => item.kind === "direct" && item.phone) || resources.find((item) => item.kind === "direct");
+  assert.ok(resource, "a direct service is required for action QA");
+  const html = await text("dist/directory/index.html");
+  const encodedId = encodeURIComponent(resource.id);
+  const record = html.match(new RegExp(`<article class="directory-record"[^>]*>[\\s\\S]*?href="/service/${encodedId}"[\\s\\S]*?</article>`))?.[0] || "";
+  assert.match(record, new RegExp(`data-rwn-actions="${resource.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  if (resource.phone) assert.match(record, /href="tel:/);
+  assert.match(record, /maps\.apple\.com\/\?daddr=/);
+  assert.match(record, /google\.com\/maps\/dir\/\?api=1&amp;destination=/);
+  assert.match(record, />View details<\/a>/);
+});
+
+test("service pages make call and preferred map choices immediate while preserving source verification", async () => {
+  const resource = resources.find((item) => item.kind === "direct" && item.phone) || resources.find((item) => item.kind === "direct");
+  assert.ok(resource);
+  const html = await text(`dist/service/${resource.id}/index.html`);
+  const next = html.match(/<nav class="service-next-steps"[\s\S]*?<\/nav>/)?.[0] || "";
+  if (resource.phone) assert.match(next, /class="is-call"[^>]+href="tel:/);
+  assert.match(next, /class="is-map"[^>]+maps\.apple\.com\/\?daddr=/);
+  assert.match(next, /class="is-map"[^>]+google\.com\/maps\/dir\/\?api=1&amp;destination=/);
+  assert.match(next, /class="is-primary"[^>]+Official source/);
+  assert.match(next, /href="\/#resource=/);
+});
+
+test("whole-directory search index carries only the fields needed for immediate actions", async () => {
+  const payload = JSON.parse(await text("dist/data/search-index.json"));
+  assert.equal(payload.schemaVersion, "1.3");
+  const direct = payload.records.find((record) => record.kind === "direct");
+  assert.ok(direct);
+  assert.ok(Object.hasOwn(direct, "phone"));
+  assert.ok(Object.hasOwn(direct, "lat"));
+  assert.ok(Object.hasOwn(direct, "lng"));
+});
+
+test("advanced directory downloads and broad browse links stay available without leading the task flow", async () => {
+  const html = await text("dist/directory/index.html");
+  assert.match(html, /<details class="directory-advanced"><summary>Download directory data<\/summary>/);
+  assert.match(html, /<details class="directory-browse-more"><summary>Browse by location or type of help<\/summary>/);
+  assert.match(html, /Download CSV/);
+  assert.match(html, /Browse by country/);
+});
