@@ -11,7 +11,7 @@ test("production homepage uses the institutional presentation and aligned search
   ]);
   assert.match(html, new RegExp(`<title>${HOME_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
   assert.match(html, /<html lang="en" class="rwn-professional">/);
-  assert.match(html, /<h1>Find food, shelter, health care and other essentials\.<\/h1>/);
+  assert.match(html, /<h1>Find essential services near you\.<\/h1>/);
   assert.match(html, /\/src\/clarity\.css\?v=[a-f0-9]{12}/);
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(html, /<script[^>]+src="\/src\/professional\.js/);
