@@ -2,7 +2,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const HOME_TITLE = "Find Essential Services Near You | Real World Needs";
-const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review the source, date checked and provider contact details.";
+const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing.";
 const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
 const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 .directory-strip,.accountability,#openInspector{display:none!important}
@@ -101,10 +101,10 @@ function enhanceHome(html, release) {
     .replaceAll("Real World Needs | Find Free Food, Shelter, Health Care & Essential Help", HOME_TITLE)
     .replaceAll("Find free food, shelter, health care, clothing, hygiene support, drinking water, and other essential services in one searchable directory.", HOME_DESCRIPTION)
     .replaceAll("Search free essential services and go directly to the original organization or public source. Find food, shelter, health care, clothing, hygiene support, drinking water, and more.", HOME_DESCRIPTION)
-    .replace("<h1>Find free help near you.</h1>", "<h1>Find food, shelter, health care and other essentials.</h1>")
+    .replace("<h1>Find free help near you.</h1>", "<h1>Find essential services near you.</h1>")
     .replace(
       "<p>Real World Needs helps you find food, shelter, health care, showers and hygiene support, clothing, drinking water, and other essentials. Every listing stays connected to the organization or public source behind it.</p>",
-      "<p>Search by service or place. Each listing shows who provides the help, how to contact them, where the information came from, and when we last checked it.</p>"
+      "<p>Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>"
     );
 
   if (!html.includes("/src/clarity.css")) {
