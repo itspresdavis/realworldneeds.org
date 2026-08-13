@@ -12,14 +12,7 @@ function directPhoneResource() {
 }
 
 test("major generated page families use one main navigation model", async () => {
-  const paths = [
-    "dist/directory/index.html",
-    "dist/privacy.html",
-    "dist/editorial-policy.html",
-    "dist/transparency.html",
-    "dist/sources/index.html"
-  ];
-
+  const paths = ["dist/directory/index.html", "dist/privacy.html", "dist/editorial-policy.html", "dist/transparency.html", "dist/sources/index.html"];
   for (const path of paths) {
     const html = await text(path);
     assert.match(html, /class="legal-header rwn-unified-header"/, `${path} is missing unified header`);
@@ -30,6 +23,7 @@ test("major generated page families use one main navigation model", async () => 
     assert.match(html, /class="rwn-header-action" href="\/directory"/, `${path} is missing directory action`);
     assert.match(html, /<details class="rwn-site-menu">\s*<summary>Menu<\/summary>/, `${path} is missing plain-language mobile Menu`);
     assert.match(html, /\/navigation-directory\.css\?v=[a-f0-9]{12}/, `${path} is missing unified navigation CSS`);
+    assert.match(html, /class="professional-need-links"/, `${path} is missing crawlable browse-by-need links`);
   }
 });
 
@@ -69,7 +63,7 @@ test("directory search index carries only public fields needed for immediate con
   assert.equal(record.phone, resource.phone);
   assert.equal(record.lat, resource.lat);
   assert.equal(record.lng, resource.lng);
-  assert.equal(record.sourceUrl, resource.sourceUrl);
+  assert.equal(Object.hasOwn(record, "sourceUrl"), false, "provider URLs do not need to inflate the search-action payload");
   assert.match(payload.privacy, /Search terms remain in the visitor's browser/);
 });
 
