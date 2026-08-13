@@ -32,7 +32,7 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@v1
       - name: Crash-test real globe touch input
-        run: node scripts/browser-globe-touch-v4.mjs
+        run: node --input-type=module -e 'globalThis.innerWidth = 844; await import("./scripts/browser-globe-touch-v4.mjs")'
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Verify rendered site
