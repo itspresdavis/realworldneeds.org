@@ -41,10 +41,10 @@ function rewriteBrandText() {
 }
 
 function rewriteFinderCopy() {
-  setText(".finder-intro h1", "Find food, shelter, health care and other essentials.");
+  setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Search by service or place. Each listing shows who provides the help, how to contact them, where the information came from, and when we last checked it."
+    "Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it."
   );
 
   const status = document.getElementById("locationStatus");
