@@ -145,34 +145,50 @@ async function run() {
     })`);
     if (!ready) throw new Error("Deep-zoom globe controls did not initialize within 12 seconds.");
 
-    await evaluate(client, `(() => {
+    const deep = await evaluate(client, `new Promise((resolve) => {
       const button = document.getElementById('zoomIn');
-      for (let i = 0; i < 24; i += 1) button.click();
-      return true;
-    })()`);
-    await sleep(2600);
-
-    const deep = await evaluate(client, `(() => {
-      const canvas = document.getElementById('globeCanvas');
-      const stage = document.querySelector('.globe-stage');
-      const readout = document.getElementById('globeReadout')?.innerText || '';
-      const match = readout.match(/([0-9.]+)×/);
-      const gl = canvas?.getContext('webgl2') || canvas?.getContext('webgl');
-      return {
-        zoom: match ? Number(match[1]) : 0,
-        readout,
-        canvasWidth: canvas?.width || 0,
-        canvasHeight: canvas?.height || 0,
-        stageWidth: stage?.getBoundingClientRect().width || 0,
-        stageHeight: stage?.getBoundingClientRect().height || 0,
-        contextLost: gl ? gl.isContextLost() : true,
-        pointLayer: document.querySelector('.globe-stage')?.classList.contains('has-gpu-points') || false,
-        overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+      const started = performance.now();
+      let clicks = 0;
+      let lastZoom = 0;
+      const readState = () => {
+        const canvas = document.getElementById('globeCanvas');
+        const stage = document.querySelector('.globe-stage');
+        const readout = document.getElementById('globeReadout')?.innerText || '';
+        const match = readout.match(/([0-9.]+)×/);
+        const zoom = match ? Number(match[1]) : 0;
+        const gl = canvas?.getContext('webgl2') || canvas?.getContext('webgl');
+        return {
+          zoom,
+          readout,
+          canvasWidth: canvas?.width || 0,
+          canvasHeight: canvas?.height || 0,
+          stageWidth: stage?.getBoundingClientRect().width || 0,
+          stageHeight: stage?.getBoundingClientRect().height || 0,
+          contextLost: gl ? gl.isContextLost() : true,
+          pointLayer: stage?.classList.contains('has-gpu-points') || false,
+          closeView: stage?.classList.contains('is-close-view') || false,
+          detailed: /high-detail boundaries|1:10m \+ HD NASA/.test(readout),
+          overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+          clicks
+        };
       };
-    })()`);
+      const drive = () => {
+        const state = readState();
+        lastZoom = state.zoom || lastZoom;
+        if (state.zoom >= 6 && state.detailed && state.closeView) return resolve(state);
+        if (performance.now() - started > 16000) return resolve(state);
+        if (clicks < 38 && state.zoom < 7.2) {
+          button.click();
+          clicks += 1;
+        }
+        setTimeout(drive, state.zoom >= 6 ? 220 : 140);
+      };
+      drive();
+    })`);
 
     if (deep.zoom < 6) throw new Error(`Deep globe did not reach a meaningful close view: ${JSON.stringify(deep)}`);
-    if (deep.contextLost || !deep.canvasWidth || !deep.canvasHeight || !deep.stageWidth || !deep.stageHeight) {
+    if (!deep.closeView || !deep.detailed) throw new Error(`Deep globe did not finish its detailed close-view layer: ${JSON.stringify(deep)}`);
+    if (deep.contextLost || !deep.canvasWidth || !deep.canvasHeight || !deep.stageWidth || !deep.stageHeight || !deep.pointLayer) {
       throw new Error(`Deep globe rendering became invalid: ${JSON.stringify(deep)}`);
     }
     if (deep.overflow > 8) throw new Error(`Deep globe introduced horizontal overflow: ${deep.overflow}px.`);
@@ -183,7 +199,7 @@ async function run() {
     if (!shot.data || shot.data.length < 20_000) throw new Error("Deep globe screenshot payload was unexpectedly small.");
     await writeFile("qa-screenshots/institutional-globe-deep.png", Buffer.from(shot.data, "base64"));
 
-    console.log(`RWN deep-globe QA passed at ${deep.zoom.toFixed(2)}×: WebGL remained live, the point layer stayed integrated, layout remained bounded, and a close-view screenshot was captured.`);
+    console.log(`RWN deep-globe QA passed at ${deep.zoom.toFixed(2)}× with ${deep.detailed ? "detailed close-view data" : "standard data"}: WebGL remained live, the point layer stayed integrated, layout remained bounded, and a close-view screenshot was captured.`);
   } finally {
     client?.close();
     browser?.kill("SIGTERM");
