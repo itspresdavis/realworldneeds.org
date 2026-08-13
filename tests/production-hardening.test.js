@@ -14,11 +14,11 @@ test("built homepage uses one content-derived release version for every shipped 
   assert.match(release.release, /^[a-f0-9]{12}$/);
   assert.equal(release.presentationRelease, release.release);
   assert.match(html, new RegExp(`/src/styles\\.css\\?v=${release.release}`));
-  assert.match(html, new RegExp(`/src/professional\\.css\\?v=${release.release}`));
+  assert.match(html, new RegExp(`/src/clarity\\.css\\?v=${release.release}`));
   assert.match(html, new RegExp(`/src/app\\.js\\?v=${release.release}`));
   assert.match(html, new RegExp(`/src/bootstrap\\.js\\?v=${release.release}`));
   assert.doesNotMatch(html, /<script[^>]+src="\/src\/professional\.js/);
-  assert.doesNotMatch(html, /\/src\/(?:experience|refinement|world-class)\.css\?v=/);
+  assert.doesNotMatch(html, /\/src\/(?:professional|experience|refinement|world-class)\.css\?v=/);
   assert.match(html, /data-rwn-critical-shell/);
   assert.doesNotMatch(html, /rwn-2026\d+/);
 });
@@ -26,9 +26,10 @@ test("built homepage uses one content-derived release version for every shipped 
 test("built homepage contains useful server-visible finder content before JavaScript", async () => {
   const html = await text("dist/index.html");
   assert.match(html, /<main class="preboot-finder"/);
-  assert.match(html, /Find free essential services near you/);
+  assert.match(html, /Find food, shelter, health care and other essentials/);
   assert.match(html, /\/directory\/help\/food/);
-  assert.match(html, /Browse the full text directory/);
+  assert.match(html, /Browse the full directory/);
+  assert.doesNotMatch(html, /No account required\. No paywall/);
 });
 
 test("built bootstrap installs release-versioned finder, presentation, and accessibility layers", async () => {
