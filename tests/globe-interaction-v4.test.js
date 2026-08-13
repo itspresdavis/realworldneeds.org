@@ -16,6 +16,7 @@ test("production globe uses the audited deep-view profile", async () => {
 
 test("single-touch map ownership distinguishes scroll, rotation and pinch", async () => {
   const app = await text("dist/src/app.js");
+  const css = await text("dist/src/clarity.css");
   assert.match(app, /const startedOnMap = event\.pointerType === "touch" \? !isGlobeChrome\(event\.target\) : startedOnCanvas/);
   assert.match(app, /startedOnMap,/);
   assert.match(app, /classifyGlobeDragIntent/);
@@ -24,6 +25,9 @@ test("single-touch map ownership distinguishes scroll, rotation and pinch", asyn
   assert.match(app, /event\.pointerType !== "touch"/);
   assert.match(app, /setPointerCapture\(event\.pointerId\)/);
   assert.match(app, /event\.touches\.length > 1/);
+  assert.match(css, /RWN globe touch-surface contract/);
+  assert.match(css, /\.rwn-professional \.globe-stage \{ touch-action: pan-y; overscroll-behavior-y: auto; \}/);
+  assert.match(css, /\.rwn-professional \.globe-pin \{ touch-action: pan-y; \}/);
 });
 
 test("service point picking scales from screen space instead of a fixed world radius", async () => {
