@@ -124,29 +124,58 @@ if (root) {
     return tokens.reduce((score, token) => score + (name === token ? 25 : name.startsWith(token) ? 16 : name.includes(token) ? 10 : place.includes(token) ? 7 : 2), 0);
   };
 
-  const resultRow = (record) => {
+  const appleDirections = (record) => `https://maps.apple.com/?daddr=${encodeURIComponent(`${record.lat},${record.lng}`)}&q=${encodeURIComponent(record.name)}`;
+  const googleDirections = (record) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${record.lat},${record.lng}`)}`;
+
+  const makeAction = (label, href, className = "") => {
     const link = document.createElement("a");
-    link.className = "directory-global-result";
-    link.href = `/service/${encodeURIComponent(record.id)}`;
-    const main = document.createElement("span");
+    link.href = href;
+    link.textContent = label;
+    link.className = className;
+    return link;
+  };
+
+  const resultRow = (record) => {
+    const row = document.createElement("article");
+    row.className = "directory-global-result";
+
+    const main = document.createElement("div");
+    main.className = "directory-global-result__main";
+    const details = document.createElement("a");
+    details.className = "directory-global-result__details";
+    details.href = `/service/${encodeURIComponent(record.id)}`;
     const name = document.createElement("strong");
     name.textContent = record.name;
     const place = document.createElement("span");
     place.textContent = record.place;
-    main.append(name, place);
+    details.append(name, place);
     const meta = document.createElement("small");
     meta.textContent = `${record.categoryLabels.join(" · ")} · checked ${record.checked}${navigator.onLine ? "" : " · reconnect for full details"}`;
-    link.append(main, meta);
-    if (!navigator.onLine) {
-      link.setAttribute("aria-describedby", connectivityNotice.id);
-      link.addEventListener("click", (event) => {
-        event.preventDefault();
-        connectivityNotice.hidden = false;
-        connectivityNotice.focus({ preventScroll: true });
-        connectivityNotice.scrollIntoView({ block: "center", behavior: "auto" });
-      });
+    main.append(details, meta);
+
+    const actions = document.createElement("nav");
+    actions.className = "directory-global-result__actions";
+    actions.setAttribute("aria-label", `Actions for ${record.name}`);
+    if (record.phone) actions.append(makeAction("Call", `tel:${String(record.phone).replace(/[^+\d]/g, "")}`, "is-call"));
+    if (record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
+      actions.append(makeAction("Apple Maps", appleDirections(record), "is-map"));
+      actions.append(makeAction("Google Maps", googleDirections(record), "is-map"));
     }
-    return link;
+    actions.append(makeAction("View details", `/service/${encodeURIComponent(record.id)}`, "is-details"));
+    row.append(main, actions);
+
+    if (!navigator.onLine) {
+      for (const link of row.querySelectorAll('a[href^="/service/"]')) {
+        link.setAttribute("aria-describedby", connectivityNotice.id);
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          connectivityNotice.hidden = false;
+          connectivityNotice.focus({ preventScroll: true });
+          connectivityNotice.scrollIntoView({ block: "center", behavior: "auto" });
+        });
+      }
+    }
+    return row;
   };
 
   const apply = async () => {
