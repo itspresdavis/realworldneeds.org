@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,14 +25,41 @@ async function waitFor(url, attempts = 80) {
       const response = await fetch(url);
       if (response.ok) return response;
       lastError = new Error(`${url} returned ${response.status}`);
-    } catch (error) { lastError = error; }
+    } catch (error) {
+      lastError = error;
+    }
     await sleep(125);
   }
   throw lastError || new Error(`Timed out waiting for ${url}`);
 }
 
+async function stopProcess(child, timeoutMs = 1800) {
+  if (!child || child.exitCode !== null || child.signalCode) return;
+  await new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch {}
+      finish();
+    }, timeoutMs);
+    timer.unref?.();
+    child.once("exit", finish);
+    try { child.kill("SIGTERM"); } catch { finish(); }
+  });
+}
+
 class CdpClient {
-  constructor(url) { this.url = url; this.nextId = 1; this.pending = new Map(); this.listeners = new Map(); }
+  constructor(url) {
+    this.url = url;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.listeners = new Map();
+  }
   async connect() {
     this.ws = new WebSocket(this.url);
     await new Promise((resolve, reject) => {
@@ -85,10 +113,40 @@ async function navigate(client, url) {
 const touchPoint = (x, y, id = 0) => ({ x, y, id, radiusX: 8, radiusY: 8, force: 1 });
 const dispatchTouch = (client, type, touchPoints) => client.call("Input.dispatchTouchEvent", { type, touchPoints });
 
-async function markerSnapshot(client, preferredId = "") {
+async function bareCanvasPoint(client) {
   return evaluate(client, `(() => {
-    const nodes = [...document.querySelectorAll('.globe-pin[data-pin-id]')];
-    const snapshot = (node) => {
+    const canvas = document.getElementById('globeCanvas');
+    const stage = document.querySelector('.globe-stage');
+    canvas.scrollIntoView({ block: 'center', behavior: 'auto' });
+    const rect = canvas.getBoundingClientRect();
+    const candidates = [];
+    for (const yf of [.34,.45,.56,.67]) {
+      for (const xf of [.24,.36,.48,.60,.72]) {
+        const x = rect.left + rect.width * xf;
+        const y = Math.min(innerHeight - 92, Math.max(120, rect.top + rect.height * yf));
+        const node = document.elementFromPoint(x, y);
+        candidates.push({ x, y, isCanvas: node === canvas, tag: node?.tagName || '', cls: String(node?.className || '') });
+      }
+    }
+    const point = candidates.find((candidate) => candidate.isCanvas);
+    return {
+      point,
+      candidates,
+      scrollY,
+      canvasTouchAction: getComputedStyle(canvas).touchAction,
+      stageTouchAction: getComputedStyle(stage).touchAction,
+      rect: { x: rect.left + scrollX, y: rect.top + scrollY, width: rect.width, height: rect.height }
+    };
+  })()`);
+}
+
+async function projectionSnapshot(client, ids = []) {
+  return evaluate(client, `(() => {
+    const requested = ${JSON.stringify(ids)};
+    const nodes = requested.length
+      ? requested.map((id) => document.querySelector('.globe-pin[data-pin-id="' + CSS.escape(id) + '"]')).filter(Boolean)
+      : [...document.querySelectorAll('.globe-pin[data-pin-id]')];
+    const rows = nodes.map((node) => {
       const rect = node.getBoundingClientRect();
       const style = getComputedStyle(node);
       return {
@@ -99,25 +157,36 @@ async function markerSnapshot(client, preferredId = "") {
         display: style.display,
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2,
-        visible: rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight && Number(style.opacity) > .25 && style.visibility !== 'hidden' && style.display !== 'none'
+        visible: rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < innerWidth && rect.bottom > 0 && rect.top < innerHeight && Number(style.opacity) > .2 && style.visibility !== 'hidden' && style.display !== 'none'
       };
-    };
-    if (${JSON.stringify(preferredId)}) {
-      const preferred = nodes.find((node) => node.dataset.pinId === ${JSON.stringify(preferredId)});
-      return preferred ? snapshot(preferred) : null;
-    }
-    const candidates = nodes.map(snapshot).filter((item) => item.visible);
-    candidates.sort((a, b) => Math.hypot(a.x - innerWidth / 2, a.y - innerHeight / 2) - Math.hypot(b.x - innerWidth / 2, b.y - innerHeight / 2));
-    return candidates[0] || null;
+    });
+    if (requested.length) return rows;
+    return rows.filter((row) => row.visible)
+      .sort((a, b) => Math.hypot(a.x - innerWidth / 2, a.y - innerHeight / 2) - Math.hypot(b.x - innerWidth / 2, b.y - innerHeight / 2))
+      .slice(0, 8);
   })()`);
 }
 
-function projectionChanged(before, after) {
+function changedProjection(before, after) {
   if (!before || !after) return false;
   return before.transform !== after.transform
-    || Math.abs((before.opacity || 0) - (after.opacity || 0)) > 0.05
+    || Math.abs(before.opacity - after.opacity) > 0.03
     || before.visibility !== after.visibility
-    || before.display !== after.display;
+    || before.display !== after.display
+    || Math.hypot(before.x - after.x, before.y - after.y) > 1.5;
+}
+
+async function captureRegion(client, rect) {
+  const width = Math.max(1, Math.min(rect.width, 390));
+  const height = Math.max(1, Math.min(rect.height, 560));
+  const { data } = await client.call("Page.captureScreenshot", {
+    format: "png",
+    fromSurface: true,
+    captureBeyondViewport: false,
+    clip: { x: rect.x, y: rect.y, width, height, scale: 1 }
+  });
+  const buffer = Buffer.from(data, "base64");
+  return { buffer, digest: createHash("sha256").update(buffer).digest("hex") };
 }
 
 async function run() {
@@ -160,64 +229,52 @@ async function run() {
     })`);
     if (!ready) throw new Error("Mobile globe did not initialize within 12 seconds.");
 
-    const geometry = await evaluate(client, `(() => {
-      const canvas = document.getElementById('globeCanvas');
-      const stage = document.querySelector('.globe-stage');
-      canvas.scrollIntoView({ block: 'center', behavior: 'auto' });
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: rect.left + rect.width * .5,
-        y: Math.min(innerHeight - 120, Math.max(160, rect.top + rect.height * .52)),
-        canvasTouchAction: getComputedStyle(canvas).touchAction,
-        stageTouchAction: getComputedStyle(stage).touchAction,
-        scrollY
-      };
-    })()`);
-    if (geometry.canvasTouchAction !== "pan-y" || geometry.stageTouchAction !== "pan-y") {
-      throw new Error(`Mobile globe must preserve pan-y across the map surface: ${JSON.stringify(geometry)}`);
+    const vertical = await bareCanvasPoint(client);
+    if (!vertical.point) throw new Error(`Could not find a bare WebGL canvas point: ${JSON.stringify(vertical.candidates)}`);
+    if (vertical.canvasTouchAction !== "pan-y" || vertical.stageTouchAction !== "pan-y") {
+      throw new Error(`Mobile globe must preserve pan-y across the whole map: ${JSON.stringify(vertical)}`);
     }
-
-    const verticalMarkerBefore = await markerSnapshot(client);
-    await dispatchTouch(client, "touchStart", [touchPoint(geometry.x, geometry.y)]);
+    const verticalBefore = await projectionSnapshot(client);
+    await dispatchTouch(client, "touchStart", [touchPoint(vertical.point.x, vertical.point.y)]);
     for (let step = 1; step <= 5; step += 1) {
-      await dispatchTouch(client, "touchMove", [touchPoint(geometry.x + 2, geometry.y - step * 22)]);
+      await dispatchTouch(client, "touchMove", [touchPoint(vertical.point.x + 2, vertical.point.y - step * 22)]);
       await sleep(28);
     }
     await dispatchTouch(client, "touchEnd", []);
-    await sleep(260);
+    await sleep(280);
     const verticalScroll = await evaluate(client, "scrollY");
-    const verticalMarkerAfter = verticalMarkerBefore ? await markerSnapshot(client, verticalMarkerBefore.id) : null;
-    if (Math.abs(verticalScroll - geometry.scrollY) < 30) throw new Error(`Vertical swipe did not move the page (${geometry.scrollY} -> ${verticalScroll}).`);
-    if (verticalMarkerBefore && verticalMarkerAfter && projectionChanged(verticalMarkerBefore, verticalMarkerAfter)) {
-      throw new Error(`Vertical page swipe changed globe projection for ${verticalMarkerBefore.id}: ${JSON.stringify({ verticalMarkerBefore, verticalMarkerAfter })}`);
-    }
+    const verticalAfter = await projectionSnapshot(client, verticalBefore.map((row) => row.id));
+    if (Math.abs(verticalScroll - vertical.scrollY) < 30) throw new Error(`Vertical swipe did not move the page (${vertical.scrollY} -> ${verticalScroll}).`);
+    const verticalChanges = verticalBefore.filter((row) => changedProjection(row, verticalAfter.find((item) => item.id === row.id))).length;
+    if (verticalChanges > 0) throw new Error(`Vertical page swipe changed ${verticalChanges} globe projections.`);
 
-    const horizontal = await evaluate(client, `(() => {
-      const canvas = document.getElementById('globeCanvas');
-      canvas.scrollIntoView({ block: 'center', behavior: 'auto' });
-      const rect = canvas.getBoundingClientRect();
-      return { x: rect.left + rect.width * .45, y: Math.min(innerHeight - 120, Math.max(160, rect.top + rect.height * .50)), scrollY };
-    })()`);
+    const horizontal = await bareCanvasPoint(client);
+    if (!horizontal.point) throw new Error("Could not find a bare canvas point for horizontal rotation.");
     await sleep(180);
-    const horizontalMarkerBefore = await markerSnapshot(client);
-    await dispatchTouch(client, "touchStart", [touchPoint(horizontal.x, horizontal.y)]);
+    const horizontalBefore = await projectionSnapshot(client);
+    const imageBefore = await captureRegion(client, horizontal.rect);
+    await dispatchTouch(client, "touchStart", [touchPoint(horizontal.point.x, horizontal.point.y)]);
     for (let step = 1; step <= 6; step += 1) {
-      await dispatchTouch(client, "touchMove", [touchPoint(horizontal.x + step * 22, horizontal.y + 2)]);
-      await sleep(30);
+      await dispatchTouch(client, "touchMove", [touchPoint(horizontal.point.x + step * 22, horizontal.point.y + 2)]);
+      await sleep(32);
     }
     await dispatchTouch(client, "touchEnd", []);
-    await sleep(320);
+    await sleep(420);
     const horizontalScroll = await evaluate(client, "scrollY");
-    const horizontalMarkerAfter = horizontalMarkerBefore ? await markerSnapshot(client, horizontalMarkerBefore.id) : null;
+    const horizontalAfter = await projectionSnapshot(client, horizontalBefore.map((row) => row.id));
+    const imageAfter = await captureRegion(client, horizontal.rect);
     if (Math.abs(horizontalScroll - horizontal.scrollY) > 18) throw new Error(`Horizontal globe rotation moved page by ${Math.abs(horizontalScroll - horizontal.scrollY)}px.`);
-    if (horizontalMarkerBefore && horizontalMarkerAfter && !projectionChanged(horizontalMarkerBefore, horizontalMarkerAfter)) {
-      throw new Error(`Horizontal touch did not change projected service ${horizontalMarkerBefore.id}: ${JSON.stringify({ horizontalMarkerBefore, horizontalMarkerAfter })}`);
+    const changedMarkers = horizontalBefore.filter((row) => changedProjection(row, horizontalAfter.find((item) => item.id === row.id))).length;
+    if (imageBefore.digest === imageAfter.digest) throw new Error("Horizontal touch left the rendered globe pixel-identical.");
+    if (horizontalBefore.length && changedMarkers === 0) {
+      throw new Error(`Horizontal touch changed the Earth but left all ${horizontalBefore.length} tracked service projections unchanged.`);
     }
 
+    const pinch = await bareCanvasPoint(client);
     const zoomBefore = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
-    await dispatchTouch(client, "touchStart", [touchPoint(horizontal.x - 28, horizontal.y, 0), touchPoint(horizontal.x + 28, horizontal.y, 1)]);
+    await dispatchTouch(client, "touchStart", [touchPoint(pinch.point.x - 28, pinch.point.y, 0), touchPoint(pinch.point.x + 28, pinch.point.y, 1)]);
     for (let step = 1; step <= 5; step += 1) {
-      await dispatchTouch(client, "touchMove", [touchPoint(horizontal.x - 28 - step * 13, horizontal.y, 0), touchPoint(horizontal.x + 28 + step * 13, horizontal.y, 1)]);
+      await dispatchTouch(client, "touchMove", [touchPoint(pinch.point.x - 28 - step * 13, pinch.point.y, 0), touchPoint(pinch.point.x + 28 + step * 13, pinch.point.y, 1)]);
       await sleep(35);
     }
     await dispatchTouch(client, "touchEnd", []);
@@ -251,7 +308,9 @@ async function run() {
 
     const pick = await evaluate(client, `(() => {
       const layer = document.getElementById('pinLayer');
-      const candidates = [...document.querySelectorAll('.globe-pin[data-pin-id]')].map((node) => ({ node, rect: node.getBoundingClientRect() })).filter(({ rect }) => rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight);
+      const candidates = [...document.querySelectorAll('.globe-pin[data-pin-id]')]
+        .map((node) => ({ node, rect: node.getBoundingClientRect(), opacity: Number(getComputedStyle(node).opacity || 0) }))
+        .filter(({ rect, opacity }) => rect.width > 0 && rect.height > 0 && opacity > .25 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight);
       const candidate = candidates[0];
       if (!candidate) return null;
       layer.style.pointerEvents = 'none';
@@ -269,21 +328,23 @@ async function run() {
     await sleep(450);
     const landscape = await evaluate(client, `(() => { const stage=document.querySelector('.globe-stage')?.getBoundingClientRect(); return { overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), width:stage?.width||0, height:stage?.height||0 }; })()`);
     if (landscape.overflow > 8 || !landscape.width || !landscape.height || landscape.width > innerWidth + 8) throw new Error(`Landscape globe layout failed: ${JSON.stringify(landscape)}`);
-    if (exceptions.length) throw new Error(`Globe touch QA emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
+    if (exceptions.length) throw new Error(`Globe touch QA emitted uncaught exceptions: ${exceptions.slice(0, 3).join(" | ")}`);
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
     await sleep(350);
     await mkdir("qa-screenshots", { recursive: true });
     const shot = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     await writeFile("qa-screenshots/globe-touch-mobile.png", Buffer.from(shot.data, "base64"));
-    console.log(`RWN real-touch globe QA passed: vertical page pan, horizontal globe projection change, two-finger zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, point picking, and orientation resize.`);
+    console.log(`RWN real-touch globe QA passed: vertical page pan, horizontal WebGL + service projection movement, two-finger zoom, ${deep.zoom.toFixed(2)}x mobile detail, bounded DPR/layout, deep point picking, and orientation resize.`);
   } finally {
     client?.close();
-    browser?.kill("SIGTERM");
-    server.kill("SIGTERM");
-    await sleep(150);
-    await rm(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 100 });
+    await stopProcess(browser);
+    await stopProcess(server);
+    await rm(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 125 });
   }
 }
 
-run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+run().catch((error) => {
+  console.error(error.stack || error);
+  process.exitCode = 1;
+});
