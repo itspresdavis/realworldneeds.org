@@ -13,11 +13,13 @@ const escapeHtml = (value) => String(value ?? "")
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#39;");
 
-test("RWN publishes one crawlable brand mark across favicon, manifest, and organization schema", async () => {
-  const [homepage, manifestText, mark] = await Promise.all([
+test("RWN publishes one crawlable brand mark across favicon, manifest, organization schema, and app chrome", async () => {
+  const [homepage, manifestText, mark, presentation, logo] = await Promise.all([
     text("dist/index.html"),
     text("dist/site.webmanifest"),
-    text("dist/rwn-mark.svg")
+    text("dist/rwn-mark.svg"),
+    text("dist/src/professional.js"),
+    readFile("dist/brand/rwn-logo-192.png")
   ]);
   const manifest = JSON.parse(manifestText);
 
@@ -27,6 +29,9 @@ test("RWN publishes one crawlable brand mark across favicon, manifest, and organ
   assert.ok(manifest.icons?.some((icon) => icon.src === "/rwn-mark.svg" && icon.type === "image/svg+xml"));
   assert.match(mark, /viewBox="0 0 512 512"/);
   assert.match(mark, /Real World Needs/);
+  assert.match(presentation, /\/brand\/rwn-logo-192\.png/);
+  assert.deepEqual([...logo.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], "canonical app logo should be a real PNG, not encoded text");
+  assert.ok(logo.length > 5000, "canonical app logo should contain production image data");
 });
 
 test("service landing pages surface reviewed next steps before the caution/detail block", async () => {
