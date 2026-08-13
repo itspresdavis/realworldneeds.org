@@ -61,7 +61,7 @@ const FRAGMENT_SHADER = `
   }
 `;
 
-function resourceVector(resource, radius = 1.018) {
+function resourceVector(resource, radius = 1.009) {
   const latitude = THREE.MathUtils.degToRad(Number(resource.lat));
   const longitude = THREE.MathUtils.degToRad(Number(resource.lng));
   const cosLat = Math.cos(latitude);
