@@ -38,7 +38,7 @@ replaceRequired(
 
 replaceRequired(
   `globeCamera = new THREE.PerspectiveCamera(42, 1, 0.015, 100);`,
-  `globeCamera = new THREE.PerspectiveCamera(42, 1, 0.004, 100);`,
+  `globeCamera = new THREE.PerspectiveCamera(42, 1, 0.02, 100);`,
   "camera clipping plane"
 );
 replaceRequired(
@@ -48,8 +48,8 @@ replaceRequired(
 );
 replaceRequired(
   `globeCamera.position.z = Math.max(1.09, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));`,
-  `globeCamera.position.z = Math.max(1.018, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));`,
-  "minimum camera distance"
+  `const opticalZoom = Math.pow(Math.max(1, state.zoom * state.ambientZoom), 0.42);\n  globeCamera.position.z = Math.max(window.innerWidth <= 600 ? 1.62 : 1.5, globeBaseCameraDistance / opticalZoom);`,
+  "progressive optical zoom"
 );
 replaceRequired(`latLngVector(resource.lat, resource.lng, 1.035)`, `latLngVector(resource.lat, resource.lng, 1.010)`, "resource projection radius");
 replaceRequired(`latLngVector(lat, lng, 1.035)`, `latLngVector(lat, lng, 1.010)`, "coordinate projection radius");
@@ -62,27 +62,27 @@ replaceRequired(
 
 replaceRequired(
   `? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 1.72 : 1.9 }`,
-  `? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 2.55 : 3.1 }`,
+  `? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 3.4 : 4.2 }`,
   "service focus view"
 );
 replaceRequired(
   `const serviceZoom = exact ? (window.innerWidth <= 600 ? 1.72 : 1.9) : 1.22;`,
-  `const serviceZoom = exact ? (window.innerWidth <= 600 ? 2.55 : 3.1) : 1.32;`,
+  `const serviceZoom = exact ? (window.innerWidth <= 600 ? 3.4 : 4.2) : 1.55;`,
   "service focus zoom"
 );
 replaceRequired(
   `state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.72 : 1.9);`,
-  `state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 2.4 : 2.85);`,
+  `state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 3.1 : 3.8);`,
   "user location focus zoom"
 );
 replaceRequired(
   `state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.42 : 1.34);`,
-  `state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.9 : 2.15);`,
+  `state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 2.35 : 2.8);`,
   "cluster focus zoom"
 );
 replaceRequired(
   `const threshold = Math.max(22, (width < 600 ? 54 : 44) - (state.zoom - 0.86) * 16);`,
-  `const threshold = Math.max(state.zoom > 4 ? 10 : 16, (width < 600 ? 50 : 40) - Math.max(0, state.zoom - 0.86) * 10);`,
+  `const threshold = Math.max(state.zoom > 5 ? 8 : 14, (width < 600 ? 48 : 38) - Math.max(0, state.zoom - 0.86) * 8);`,
   "deep-view clustering threshold"
 );
 
