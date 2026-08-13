@@ -87,7 +87,7 @@ replaceRequired(
 );
 replaceRequired(
   `  if (interactionSettled && (state.zoom > 1.28 || state.targetZoom > 1.28)) loadDetailGeometry();\n  if (interactionSettled && (state.zoom > 1.55 || state.targetZoom > 1.55)) loadDetailEarthImagery();\n\n  const closeView = state.zoom > 1.72;`,
-  `  if (interactionSettled && (state.zoom > 1.35 || state.targetZoom > 1.35)) loadDetailGeometry();\n  const detailTextureZoom = window.innerWidth <= 600 ? 2.7 : 2.15;\n  if (interactionSettled && (state.zoom > detailTextureZoom || state.targetZoom > detailTextureZoom)) loadDetailEarthImagery();\n\n  const closeView = state.zoom > 1.9;`,
+  `  const deepBoundaryIntent = state.targetZoom > (window.innerWidth <= 600 ? 3.4 : 3.0);\n  if ((interactionSettled || deepBoundaryIntent) && (state.zoom > 1.35 || state.targetZoom > 1.35)) loadDetailGeometry();\n  const detailTextureZoom = window.innerWidth <= 600 ? 2.7 : 2.15;\n  const deepTextureIntent = state.targetZoom > (window.innerWidth <= 600 ? 4.2 : 3.6);\n  if ((interactionSettled || deepTextureIntent) && (state.zoom > detailTextureZoom || state.targetZoom > detailTextureZoom)) loadDetailEarthImagery();\n\n  const closeView = state.zoom > 1.9;`,
   "progressive detail thresholds"
 );
 
