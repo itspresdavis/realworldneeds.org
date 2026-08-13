@@ -111,7 +111,15 @@ function simplifyStructure() {
   if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
-  if (legal) legal.innerHTML = `<strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button>`;
+  if (legal) {
+    const clearButton = legal.querySelector("#clearBrowserData");
+    legal.innerHTML = `<strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a>`;
+    if (clearButton) {
+      clearButton.className = "footer-data-button";
+      clearButton.textContent = "Clear browser data";
+      legal.append(clearButton);
+    }
+  }
 
   const map = footer.querySelector('nav[aria-label="Footer map and imagery"]');
   const note = footer.querySelector(":scope > p");
