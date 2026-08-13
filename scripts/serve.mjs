@@ -11,6 +11,8 @@ const contentTypes = {
   ".geojson": "application/geo+json; charset=utf-8",
   ".html": "text/html; charset=utf-8",
   ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8",
