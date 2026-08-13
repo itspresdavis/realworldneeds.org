@@ -10,8 +10,9 @@ test("production globe starts calm, zooms deeply, and preserves ordinary page sc
   assert.match(app, /const initialResource = resources\.some\([^\n]+\) \? requestedResource : null/);
   assert.match(app, /autoRotate: false/);
   assert.match(app, /inspectorOpen: Boolean\(initialResource\)/);
-  assert.match(app, /PerspectiveCamera\(42, 1, 0\.004, 100\)/);
-  assert.match(app, /Math\.max\(1\.018, globeBaseCameraDistance/);
+  assert.match(app, /PerspectiveCamera\(42, 1, 0\.02, 100\)/);
+  assert.match(app, /const opticalZoom = Math\.pow\(Math\.max\(1, state\.zoom \* state\.ambientZoom\), 0\.42\)/);
+  assert.match(app, /Math\.max\(window\.innerWidth <= 600 \? 1\.62 : 1\.5, globeBaseCameraDistance \/ opticalZoom\)/);
   assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 144 : 256, window\.innerWidth <= 600 \? 96 : 160\)/);
 
   const wheel = app.match(/canvas\.addEventListener\("wheel", \(event\) => \{([\s\S]*?)\}, \{ passive: false \}\);/)?.[1] || "";
@@ -38,7 +39,8 @@ test("homepage uses one final presentation system and plain organizational langu
   assert.match(html, /\/src\/clarity\.css\?v=/);
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(presentation, /href=\"\/src\/professional\.css/);
-  assert.match(copy, /Find food, shelter, health care and other essentials\./);
+  assert.match(copy, /Find essential services near you\./);
+  assert.match(copy, /Listings include provider contact details, the original source, and the date RWN checked it\./);
   assert.match(copy, /What Real World Needs does\./);
   assert.doesNotMatch(refinement, /No account|No paywall|Original sources/);
 });
