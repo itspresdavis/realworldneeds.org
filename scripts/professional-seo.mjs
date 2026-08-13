@@ -24,8 +24,8 @@ const CRITICAL_PAGE_STYLE = `<style data-rwn-page-critical>
   #service>.legal-hero{padding:1.35rem .9rem 1.15rem!important}
 }
 </style>`;
-const DIRECTORY_HEADING = "Browse essential services by need and location.";
-const DIRECTORY_DESCRIPTION = "Search the directory by service, place or organization. Each listing includes provider details, its source and the date it was reviewed.";
+const DIRECTORY_HEADING = "Find a service in the directory.";
+const DIRECTORY_DESCRIPTION = "Search by service, place, or organization. Listings include contact details, the source, and the date RWN checked it.";
 
 async function walkHtml(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -124,6 +124,7 @@ function enhanceGeneratedPage(html, release) {
     .replaceAll('<span class="legal-brand__mark">RWN</span>', '<img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" />')
     .replaceAll('<img class="legal-brand__mark" src="/rwn-mark.svg" alt="" width="34" height="34" decoding="async" />', '<img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" />')
     .replaceAll("Free essential services directory", "Essential services directory")
+    .replaceAll("Text directory", "Directory")
     .replaceAll("Find free essential services without using the globe.", DIRECTORY_HEADING)
     .replaceAll("Browse food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Every listing stays connected to its original source.", DIRECTORY_DESCRIPTION);
 
