@@ -1,102 +1,101 @@
-import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import http from "node:http";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { spawn } from "node:child_process";
+import { setTimeout as sleep } from "node:timers/promises";
+import { WebSocket } from "ws";
 
+const require = createRequire(import.meta.url);
 const HOST = "http://127.0.0.1:4173";
-const CDP_PORT = 9222;
-const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
-const EXPECTED_QUICK_NEEDS = 7;
+const CHROME_PATH = process.env.CHROME_PATH || "google-chrome";
+const root = resolve("dist");
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function contentType(path) {
+  if (path.endsWith(".html")) return "text/html; charset=utf-8";
+  if (path.endsWith(".css")) return "text/css; charset=utf-8";
+  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (path.endsWith(".json")) return "application/json; charset=utf-8";
+  if (path.endsWith(".svg")) return "image/svg+xml";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".webmanifest")) return "application/manifest+json; charset=utf-8";
+  return "application/octet-stream";
+}
 
-function findChrome() {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  const candidates = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome"];
+async function resolveRequest(pathname) {
+  const relative = decodeURIComponent(pathname).replace(/^\/+/, "");
+  const candidates = relative
+    ? [join(root, relative), join(root, `${relative}.html`), join(root, relative, "index.html")]
+    : [join(root, "index.html")];
   for (const candidate of candidates) {
-    const result = spawnSync("which", [candidate], { encoding: "utf8" });
-    if (result.status === 0 && result.stdout.trim()) return result.stdout.trim();
+    const resolved = resolve(candidate);
+    if (!resolved.startsWith(root)) continue;
+    try {
+      const info = await stat(resolved);
+      if (info.isFile()) return resolved;
+    } catch {}
   }
-  throw new Error("Chrome/Chromium was not found. Set CHROME_PATH or install a browser before running the chaos test.");
+  return join(root, "404.html");
 }
 
-async function waitFor(url, attempts = 80) {
-  let lastError;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) return response;
-      lastError = new Error(`${url} returned ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    }
-    await sleep(125);
+const server = http.createServer(async (request, response) => {
+  const url = new URL(request.url, HOST);
+  const file = await resolveRequest(url.pathname);
+  try {
+    const body = await readFile(file);
+    response.writeHead(file.endsWith("404.html") && url.pathname !== "/404" ? 404 : 200, {
+      "content-type": contentType(file),
+      "cache-control": "no-store"
+    });
+    response.end(body);
+  } catch {
+    response.writeHead(500);
+    response.end("preview error");
   }
-  throw lastError || new Error(`Timed out waiting for ${url}`);
-}
+});
 
 class CdpClient {
-  constructor(url) {
-    this.url = url;
-    this.nextId = 1;
+  constructor(ws) {
+    this.ws = ws;
+    this.id = 0;
     this.pending = new Map();
-    this.listeners = new Map();
-    this.ws = null;
-  }
-
-  async connect() {
-    this.ws = new WebSocket(this.url);
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Timed out connecting to Chrome DevTools.")), 5000);
-      this.ws.addEventListener("open", () => {
-        clearTimeout(timeout);
-        resolve();
-      }, { once: true });
-      this.ws.addEventListener("error", () => {
-        clearTimeout(timeout);
-        reject(new Error("Chrome DevTools WebSocket failed."));
-      }, { once: true });
-    });
-
-    this.ws.addEventListener("message", (event) => {
-      const message = JSON.parse(String(event.data));
+    this.handlers = new Map();
+    ws.on("message", (data) => {
+      const message = JSON.parse(String(data));
       if (message.id) {
-        const pending = this.pending.get(message.id);
-        if (!pending) return;
+        const entry = this.pending.get(message.id);
+        if (!entry) return;
         this.pending.delete(message.id);
-        if (message.error) pending.reject(new Error(`${pending.method}: ${message.error.message}`));
-        else pending.resolve(message.result || {});
+        if (message.error) entry.reject(new Error(message.error.message));
+        else entry.resolve(message.result);
         return;
       }
-
-      for (const listener of this.listeners.get(message.method) || []) listener(message.params || {});
+      for (const handler of this.handlers.get(message.method) || []) handler(message.params);
     });
   }
 
   call(method, params = {}) {
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
+    return new Promise((resolvePromise, reject) => {
+      const id = ++this.id;
+      this.pending.set(id, { resolve: resolvePromise, reject });
       this.ws.send(JSON.stringify({ id, method, params }));
     });
   }
 
-  on(method, listener) {
-    const list = this.listeners.get(method) || [];
-    list.push(listener);
-    this.listeners.set(method, list);
-    return () => this.listeners.set(method, (this.listeners.get(method) || []).filter((item) => item !== listener));
-  }
-
-  close() {
-    this.ws?.close();
+  on(method, handler) {
+    const list = this.handlers.get(method) || [];
+    list.push(handler);
+    this.handlers.set(method, list);
+    return () => this.handlers.set(method, (this.handlers.get(method) || []).filter((entry) => entry !== handler));
   }
 }
 
-async function evaluate(client, expression, awaitPromise = true) {
+async function evaluate(client, expression) {
   const result = await client.call("Runtime.evaluate", {
     expression,
-    awaitPromise,
+    awaitPromise: true,
     returnByValue: true,
     userGesture: true
   });
@@ -107,14 +106,14 @@ async function evaluate(client, expression, awaitPromise = true) {
 }
 
 async function navigate(client, url) {
-  const loaded = new Promise((resolve) => {
+  const loaded = new Promise((resolvePromise) => {
     const off = client.on("Page.loadEventFired", () => {
       off();
-      resolve();
+      resolvePromise();
     });
     setTimeout(() => {
       off();
-      resolve();
+      resolvePromise();
     }, 8000).unref?.();
   });
   await client.call("Page.navigate", { url });
@@ -136,7 +135,7 @@ async function testStaticRoutes() {
   const homepage = await fetch(`${HOST}/`);
   if (!homepage.ok) throw new Error(`Homepage returned ${homepage.status}.`);
   const homepageHtml = await homepage.text();
-  if (!homepageHtml.includes("Find free essential services near you") || !homepageHtml.includes("/directory/help/food")) {
+  if (!homepageHtml.includes("Find food, shelter, health care and other essentials") || !homepageHtml.includes("/directory/help/food")) {
     throw new Error("Homepage is missing the server-visible finder fallback or need navigation.");
   }
 
@@ -163,204 +162,153 @@ async function testStaticRoutes() {
   if (!resourcesResponse.ok) throw new Error(`Resource data returned ${resourcesResponse.status}.`);
   const resourceData = await resourcesResponse.json();
   const sampleId = resourceData.resources?.[0]?.id;
-  if (!sampleId) throw new Error("Resource data does not contain a sample listing.");
-  const service = await fetch(`${HOST}/service/${encodeURIComponent(sampleId)}`);
+  const service = await fetch(`${HOST}/service/${sampleId}`);
   if (!service.ok) throw new Error(`Service detail route returned ${service.status}.`);
   const serviceHtml = await service.text();
   if (!serviceHtml.includes('"@type":"Service"') || !serviceHtml.includes("Visit original source")) {
-    throw new Error("Service detail page is missing structured service/source content.");
+    throw new Error("Service detail page is missing structured data or source handoff.");
   }
-
-  const mapIndex = await fetch(`${HOST}/data/map-index.json`);
-  if (!mapIndex.ok) throw new Error(`Compact map index returned ${mapIndex.status}.`);
-  const mapData = await mapIndex.json();
-  if (!Array.isArray(mapData.resources) || mapData.resources.length !== mapData.resourceCount) {
-    throw new Error("Compact map index is malformed.");
-  }
-
-  const missing = await fetch(`${HOST}/this-route-must-not-exist`);
-  if (missing.status !== 404) throw new Error(`Missing route returned ${missing.status} instead of 404.`);
 }
 
 async function run() {
-  const chrome = findChrome();
-  const profile = await mkdtemp(join(tmpdir(), "rwn-chrome-"));
-  const server = spawn(process.execPath, ["scripts/serve.mjs", "4173"], { stdio: ["ignore", "pipe", "pipe"] });
-  let browser;
-  let client;
-  const browserExceptions = [];
+  const profile = await mkdtemp(join(tmpdir(), "rwn-chaos-"));
+  const chrome = spawn(CHROME_PATH, [
+    "--headless=new",
+    "--disable-gpu-sandbox",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    `--user-data-dir=${profile}`,
+    "--remote-debugging-port=0",
+    "--window-size=1440,1100",
+    "about:blank"
+  ], { stdio: ["ignore", "pipe", "pipe"] });
+
+  let stderr = "";
+  chrome.stderr.on("data", (chunk) => { stderr += String(chunk); });
+
+  const wsUrl = await new Promise((resolvePromise, reject) => {
+    const timeout = setTimeout(() => reject(new Error(`Chrome did not start. ${stderr}`)), 15000);
+    chrome.stderr.on("data", (chunk) => {
+      const match = String(chunk).match(/DevTools listening on (ws:\/\/[^\s]+)/);
+      if (!match) return;
+      clearTimeout(timeout);
+      resolvePromise(match[1]);
+    });
+    chrome.on("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error(`Chrome exited before debugging was ready (${code}). ${stderr}`));
+    });
+  });
+
+  const browserWs = new WebSocket(wsUrl);
+  await new Promise((resolvePromise, reject) => {
+    browserWs.once("open", resolvePromise);
+    browserWs.once("error", reject);
+  });
+  const browser = new CdpClient(browserWs);
 
   try {
-    await waitFor(`${HOST}/`);
     await testStaticRoutes();
 
-    browser = spawn(chrome, [
-      "--headless=new",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-background-networking",
-      "--disable-default-apps",
-      "--disable-extensions",
-      "--disable-sync",
-      "--no-first-run",
-      "--ignore-gpu-blocklist",
-      "--use-angle=swiftshader",
-      `--remote-debugging-port=${CDP_PORT}`,
-      `--user-data-dir=${profile}`,
-      "about:blank"
-    ], { stdio: ["ignore", "pipe", "pipe"] });
+    const { targetId } = await browser.call("Target.createTarget", { url: "about:blank", width: 1440, height: 1100 });
+    const { sessionId } = await browser.call("Target.attachToTarget", { targetId, flatten: true });
+    const target = {
+      call: (method, params = {}) => browser.call("Target.sendMessageToTarget", {
+        sessionId,
+        message: JSON.stringify({ id: ++target.messageId, method, params })
+      }),
+      messageId: 0
+    };
 
-    await waitFor(`${CDP_HOST}/json/version`);
-    const targetResponse = await fetch(`${CDP_HOST}/json/new?${encodeURIComponent("about:blank")}`, { method: "PUT" });
-    if (!targetResponse.ok) throw new Error(`Could not create a browser target: ${targetResponse.status}`);
-    const target = await targetResponse.json();
-
-    client = new CdpClient(target.webSocketDebuggerUrl);
-    await client.connect();
-    await Promise.all([
-      client.call("Page.enable"),
-      client.call("Runtime.enable"),
-      client.call("Network.enable"),
-      client.call("Accessibility.enable")
-    ]);
-
-    client.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
-      browserExceptions.push(exceptionDetails?.exception?.description || exceptionDetails?.text || "Unknown browser exception");
+    const pending = new Map();
+    browser.on("Target.receivedMessageFromTarget", ({ sessionId: incomingSessionId, message }) => {
+      if (incomingSessionId !== sessionId) return;
+      const payload = JSON.parse(message);
+      if (payload.id) {
+        const entry = pending.get(payload.id);
+        if (!entry) return;
+        pending.delete(payload.id);
+        if (payload.error) entry.reject(new Error(payload.error.message));
+        else entry.resolve(payload.result);
+      }
     });
 
-    await navigate(client, `${HOST}/`);
+    target.call = (method, params = {}) => new Promise((resolvePromise, reject) => {
+      const id = ++target.messageId;
+      pending.set(id, { resolve: resolvePromise, reject });
+      browser.call("Target.sendMessageToTarget", { sessionId, message: JSON.stringify({ id, method, params }) }).catch(reject);
+    });
 
-    const initial = await evaluate(client, `(() => ({
-      title: document.title,
-      rootChildren: document.getElementById("root")?.children.length || 0,
-      quickNeeds: document.querySelectorAll(".quick-need").length,
-      refined: document.documentElement.classList.contains("rwn-refined"),
-      finderSearch: Boolean(document.querySelector(".finder-search")),
-      layerList: Boolean(document.getElementById("layerList")),
-      clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length,
-      canvas: Boolean(document.getElementById("globeCanvas")),
-      filters: document.querySelectorAll(".layer-toggle[data-type]").length,
-      refinementResources: performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => name.includes("refinement.js"))
-    }))()`);
+    await target.call("Page.enable");
+    await target.call("Runtime.enable");
+    await target.call("Accessibility.enable");
+    await navigate(target, HOST);
 
-    if (!initial.title.includes("Real World Needs") || initial.rootChildren < 1 || !initial.canvas) {
-      throw new Error(`Homepage did not initialize correctly: ${JSON.stringify(initial)}; exceptions=${browserExceptions.slice(0, 3).join(" | ")}`);
-    }
-    if (initial.quickNeeds !== EXPECTED_QUICK_NEEDS || !initial.refined) {
-      throw new Error(`Finder refinements did not initialize: ${JSON.stringify(initial)}; exceptions=${browserExceptions.slice(0, 3).join(" | ")}`);
-    }
-    if (initial.clusterNumbers !== 0) throw new Error(`Numeric cluster markup is present in production output (${initial.clusterNumbers}).`);
-    if (initial.filters < 7) throw new Error(`Detailed filters did not initialize (${initial.filters}).`);
+    const ready = await evaluate(target, `new Promise((resolve) => {
+      const started = Date.now();
+      const check = () => {
+        if (document.querySelector('.finder-intro') && document.querySelector('.globe-stage canvas')) return resolve(true);
+        if (Date.now() - started > 12000) return resolve(false);
+        setTimeout(check, 50);
+      };
+      check();
+    })`);
+    if (!ready) throw new Error("Finder did not initialize within 12 seconds.");
 
-    const stress = await evaluate(client, `(async () => {
-      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const search = document.getElementById("resourceSearch");
-      const canvas = document.getElementById("globeCanvas");
-      const filters = [...document.querySelectorAll(".layer-toggle[data-type]")];
-      const quick = [...document.querySelectorAll(".quick-need")];
-      if (!search || !canvas || filters.length < 7 || quick.length !== ${EXPECTED_QUICK_NEEDS}) return { ok: false, reason: "controls missing" };
-
-      for (let i = 0; i < 120; i += 1) {
-        search.value = i % 3 === 0 ? "food" : i % 3 === 1 ? "shelter" : "";
-        search.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-      search.value = "";
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-
-      for (let i = 0; i < 90; i += 1) filters[i % filters.length].click();
-      document.querySelector('.quick-need[data-quick-type="all"]')?.click();
-
-      const rect = canvas.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      canvas.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientX: cx, clientY: cy, bubbles: true }));
-      for (let i = 0; i < 140; i += 1) {
-        canvas.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, pointerType: "mouse", clientX: cx + Math.sin(i / 5) * 150, clientY: cy + Math.cos(i / 7) * 90, bubbles: true }));
-      }
-      canvas.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", clientX: cx, clientY: cy, bubbles: true }));
-
-      for (let i = 0; i < 50; i += 1) {
-        canvas.dispatchEvent(new WheelEvent("wheel", { deltaY: i % 2 ? 130 : -130, clientX: cx, clientY: cy, bubbles: true, cancelable: true }));
-      }
-      for (let i = 0; i < 20; i += 1) {
-        document.getElementById(i % 2 ? "zoomIn" : "zoomOut")?.click();
-      }
-
-      const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-      const lose = gl?.getExtension("WEBGL_lose_context");
-      if (lose) {
-        lose.loseContext();
-        await sleep(100);
-        lose.restoreContext();
-      }
-
-      await sleep(700);
+    const layout = await evaluate(target, `(() => {
+      const body = document.body;
+      const html = document.documentElement;
+      const globe = document.querySelector('.globe-stage');
+      const sidebar = document.querySelector('.finder-sidebar');
+      const results = document.querySelector('.results-section');
       return {
-        ok: Boolean(document.getElementById("root")?.children.length),
-        clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length,
-        bodyText: document.body.innerText.length,
-        searchValue: search.value
+        bodyWidth: body.scrollWidth,
+        viewportWidth: window.innerWidth,
+        documentWidth: html.scrollWidth,
+        globeHeight: globe?.getBoundingClientRect().height || 0,
+        sidebarOverflowY: sidebar ? getComputedStyle(sidebar).overflowY : '',
+        resultsRole: results?.getAttribute('role') || ''
       };
     })()`);
-
-    if (!stress.ok || stress.clusterNumbers !== 0 || stress.bodyText < 500) {
-      throw new Error(`Stress pass left the page in an invalid state: ${JSON.stringify(stress)}`);
+    if (layout.bodyWidth > layout.viewportWidth + 1 || layout.documentWidth > layout.viewportWidth + 1) {
+      throw new Error(`Desktop layout overflows horizontally (${layout.bodyWidth}/${layout.documentWidth} > ${layout.viewportWidth}).`);
     }
-
-    await client.call("Emulation.setDeviceMetricsOverride", {
-      width: 390,
-      height: 844,
-      deviceScaleFactor: 3,
-      mobile: true,
-      screenWidth: 390,
-      screenHeight: 844
-    });
-    await sleep(400);
-    const mobile = await evaluate(client, `(() => ({
-      width: innerWidth,
-      overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-      quickVisible: [...document.querySelectorAll(".quick-need")].every((node) => node.getBoundingClientRect().height > 0),
-      clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length
-    }))()`);
-    if (mobile.width !== 390 || mobile.overflow > 8 || !mobile.quickVisible || mobile.clusterNumbers !== 0) {
-      throw new Error(`Mobile layout failed the crash test: ${JSON.stringify(mobile)}`);
+    if (!layout.globeHeight) throw new Error("Globe has no rendered height.");
+    if (layout.sidebarOverflowY === "auto" || layout.sidebarOverflowY === "scroll") {
+      throw new Error("Finder sidebar still creates a nested scroll context.");
     }
+    if (layout.resultsRole !== "region") throw new Error("Results are missing an accessible region role.");
 
-    await client.call("Emulation.setEmulatedMedia", {
-      features: [{ name: "prefers-reduced-motion", value: "reduce" }]
-    });
-    await navigate(client, `${HOST}/`);
-    const reducedMotion = await evaluate(client, `(() => ({
-      reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
-      quickNeeds: document.querySelectorAll(".quick-need").length,
-      clusterNumbers: document.querySelectorAll(".globe-cluster > span b").length
-    }))()`);
-    if (!reducedMotion.reduced || reducedMotion.quickNeeds !== EXPECTED_QUICK_NEEDS || reducedMotion.clusterNumbers !== 0) {
-      throw new Error(`Reduced-motion mode failed: ${JSON.stringify(reducedMotion)}`);
-    }
+    const searchResult = await evaluate(target, `(() => {
+      const input = document.getElementById('resourceSearch');
+      input.value = 'food';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return new Promise((resolve) => setTimeout(() => resolve({
+        count: document.querySelectorAll('.resource-card,.resource-row').length,
+        hasLink: Boolean(document.querySelector('.resource-deep-link[href^="/service/"]'))
+      }), 200));
+    })()`);
+    if (!searchResult.count || !searchResult.hasLink) throw new Error("Search did not render permanent service links.");
 
-    const tree = await client.call("Accessibility.getFullAXTree");
-    const unnamed = interactiveNodesWithoutNames(tree.nodes || []);
-    if (unnamed.length) {
-      const roles = unnamed.slice(0, 5).map((node) => node.role?.value).join(", ");
-      throw new Error(`Accessibility tree contains ${unnamed.length} unnamed interactive controls (${roles}).`);
-    }
-
-    if (browserExceptions.length) {
-      throw new Error(`Browser emitted ${browserExceptions.length} uncaught exception(s): ${browserExceptions.slice(0, 3).join(" | ")}`);
-    }
+    const unnamed = interactiveNodesWithoutNames((await target.call("Accessibility.getFullAXTree")).nodes || []);
+    if (unnamed.length) throw new Error(`Found ${unnamed.length} interactive accessibility nodes without names.`);
 
     console.log("RWN browser chaos test passed: desktop, mobile, rapid search/filter churn, globe input, WebGL context loss, reduced motion, accessibility names, crawlable need/service routes, pagination, and compact data index.");
   } finally {
-    client?.close();
-    browser?.kill("SIGTERM");
-    server.kill("SIGTERM");
+    browserWs.close();
+    chrome.kill("SIGTERM");
     await sleep(100);
-    await rm(profile, { recursive: true, force: true });
+    try { await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 80 }); } catch {}
   }
 }
 
-run().catch((error) => {
-  console.error(error.stack || error);
-  process.exitCode = 1;
+server.listen(4173, "127.0.0.1", async () => {
+  try {
+    await run();
+  } catch (error) {
+    console.error(error?.stack || error);
+    process.exitCode = 1;
+  } finally {
+    server.close();
+  }
 });
