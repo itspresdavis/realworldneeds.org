@@ -15,8 +15,8 @@ test("homepage ships the consolidated institutional UX and accurate organization
   const html = await text("dist/index.html");
   const release = JSON.parse(await text("dist/data/release.json"));
   assert.match(html, new RegExp(`/src/styles\\.css\\?v=${release.release}`));
-  assert.match(html, new RegExp(`/src/professional\\.css\\?v=${release.release}`));
-  assert.doesNotMatch(html, /\/src\/(?:world-class|experience|refinement)\.css\?v=/);
+  assert.match(html, new RegExp(`/src/clarity\\.css\\?v=${release.release}`));
+  assert.doesNotMatch(html, /\/src\/(?:professional|world-class|experience|refinement)\.css\?v=/);
   assert.match(html, /How listings are checked/);
   assert.match(html, /Transparency/);
   assert.doesNotMatch(html, /"logo":"https:\/\/www\.realworldneeds\.org\/media\/earth-blue-marble\.jpg"/);
@@ -149,7 +149,7 @@ test("country pages expose local directories through normal crawlable links", as
 test("interaction layers and search index stay within deliberate budgets", async () => {
   const budgets = [
     ["src/accessibility.js", 10_000],
-    ["src/clarity.css", 20_000],
+    ["src/clarity.css", 30_000],
     ["public/directory.js", 12_000],
     ["public/directory-enhancements.css", 18_000],
     ["dist/data/search-index.json", 1_500_000]
@@ -158,6 +158,9 @@ test("interaction layers and search index stay within deliberate budgets", async
     const { size } = await stat(path);
     assert.ok(size <= maximum, `${path} is ${size.toLocaleString()} bytes; budget is ${maximum.toLocaleString()} bytes`);
   }
+
+  const html = await text("dist/index.html");
+  assert.doesNotMatch(html, /\/src\/professional\.css/);
 });
 
 test("accessibility layer keeps touch targets, reduced motion, landmarks, and keyboard affordances", async () => {

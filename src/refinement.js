@@ -2,7 +2,7 @@ const QUICK_TYPES = [
   ["food", "Food"],
   ["shelter", "Shelter"],
   ["health", "Health care"],
-  ["hygiene", "Showers & hygiene"],
+  ["hygiene", "Hygiene"],
   ["clothing", "Clothing"],
   ["water", "Water"]
 ];
@@ -44,7 +44,7 @@ function improveSearch() {
   if (search && !search.querySelector(".search-helper")) {
     const helper = document.createElement("p");
     helper.className = "search-helper";
-    helper.textContent = "Try a service, city, ZIP or postcode, or organization name.";
+    helper.textContent = "Service, city, ZIP or postcode, or organization name.";
     search.append(helper);
   }
 }
@@ -58,11 +58,11 @@ function installQuickNeeds() {
   const container = document.createElement("div");
   container.className = "quick-needs";
   container.setAttribute("role", "group");
-  container.setAttribute("aria-label", "Quick service filters");
+  container.setAttribute("aria-label", "Common service filters");
   container.innerHTML = `
-    <p class="quick-needs__label">Browse by need</p>
+    <p class="quick-needs__label">Common needs</p>
     ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
-    <button class="quick-need" type="button" data-quick-type="all" aria-pressed="true">All services</button>
+    <button class="quick-need quick-need--all" type="button" data-quick-type="all" aria-pressed="true">All</button>
   `;
   search.insertAdjacentElement("afterend", container);
 
@@ -77,71 +77,43 @@ function installQuickNeeds() {
   syncQuickNeeds(container);
 }
 
-function installFinderTrustBar() {
-  const intro = document.querySelector(".finder-intro");
-  if (!intro || document.querySelector(".finder-trustbar")) return;
-  const trust = document.createElement("div");
-  trust.className = "finder-trustbar";
-  trust.setAttribute("aria-label", "Real World Needs directory principles");
-  trust.innerHTML = `
-    <span>No account</span>
-    <span>No paywall</span>
-    <span>Original sources</span>
-    <a href="/editorial-policy">Review policy</a>
-  `;
-  intro.append(trust);
-}
-
-function compactFinderNotes() {
+function compactLocationNotes() {
   const locationStatus = document.getElementById("locationStatus");
   const liveSourceStatus = document.getElementById("liveSourceStatus");
   const privacy = document.querySelector(".location-privacy");
-  const safety = document.querySelector(".finder-safety");
-  if (!locationStatus || !liveSourceStatus || !privacy || !safety) {
-    throw new Error("Finder note refinement prerequisites are missing.");
-  }
-  if (document.querySelector(".finder-notes")) return;
+  if (!locationStatus || !liveSourceStatus || !privacy || document.querySelector(".finder-location-notes")) return;
 
   const details = document.createElement("details");
-  details.className = "finder-notes";
-  details.innerHTML = `<summary>Location, privacy and safety</summary><div class="finder-notes__body"></div>`;
-  const body = details.querySelector(".finder-notes__body");
+  details.className = "finder-location-notes";
+  details.innerHTML = `<summary>About location</summary><div class="finder-location-notes__body"></div>`;
+  const body = details.querySelector(".finder-location-notes__body");
   locationStatus.insertAdjacentElement("afterend", details);
-  body.append(liveSourceStatus, privacy, safety);
+  body.append(liveSourceStatus, privacy);
 }
 
 function improveFilterSummary() {
   const disclosure = document.querySelector(".filter-disclosure");
   const summary = disclosure?.querySelector("summary");
   if (!disclosure || !summary) throw new Error("Detailed filter disclosure is missing.");
-  summary.setAttribute("aria-label", "Open detailed service filters");
+  summary.setAttribute("aria-label", "Open all service filters");
 }
 
-function hasRequestedResource() {
-  const url = new URL(window.location.href);
-  return url.searchParams.has("resource") || /(?:^|[&#])resource=/.test(url.hash);
-}
+function refineGlobeInstructions() {
+  const help = document.getElementById("globeHelp");
+  if (help) help.textContent = "Drag or use arrow keys to rotate. Pinch, use plus and minus, or hold Control or Command while scrolling to zoom. Normal scrolling moves the page. Select a country or service point for details.";
 
-function startFinderCalm() {
-  if (hasRequestedResource()) return;
-  const panel = document.getElementById("resourcePanel");
-  const grid = document.querySelector(".finder__grid");
-  const regionSelect = document.getElementById("regionFocus");
-  if (!panel || !grid || !regionSelect) throw new Error("Finder panel prerequisites are missing.");
+  const hint = document.querySelector(".globe-gesture-hint");
+  if (hint) hint.textContent = "Drag to rotate · Pinch or use + / − to zoom";
 
-  // Use the application's own region-change path so selectedId and inspectorOpen
-  // are cleared in state, not merely hidden in the DOM where a later render can reopen them.
-  regionSelect.value = "world";
-  regionSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  grid.classList.add("rwn-initial-calm");
+  const stage = document.querySelector(".globe-stage");
+  if (stage) stage.setAttribute("data-map-version", "2");
 }
 
 export function installRefinements() {
   improveSearch();
-  installFinderTrustBar();
   installQuickNeeds();
-  compactFinderNotes();
+  compactLocationNotes();
   improveFilterSummary();
-  startFinderCalm();
+  refineGlobeInstructions();
   document.documentElement.classList.add("rwn-refined");
 }

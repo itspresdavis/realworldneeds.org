@@ -3,114 +3,141 @@ const setText = (selector, value) => {
   if (node) node.textContent = value;
 };
 
-const setAllText = (selector, values) => {
-  document.querySelectorAll(selector).forEach((node, index) => {
-    if (values[index]) node.textContent = values[index];
-  });
-};
-
 function installBrandMarks() {
   document.querySelectorAll(".brand__mark").forEach((mark, index) => {
     mark.innerHTML = `<img class="rwn-brand-image" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} />`;
-    mark.style.background = "transparent";
-    mark.style.border = "0";
-    mark.style.borderRadius = "50%";
-    mark.style.boxShadow = "none";
-    mark.style.overflow = "visible";
+    mark.removeAttribute("style");
   });
+}
+
+function rewriteNavigation() {
+  const desktop = document.querySelector(".primary-nav");
+  const mobile = document.querySelector(".site-menu nav");
+  const links = `
+    <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
+    <a href="/directory">Directory</a>
+    <a href="/editorial-policy">How listings are checked</a>
+    <a href="/transparency">Transparency</a>
+  `;
+  if (desktop) desktop.innerHTML = links;
+  if (mobile) mobile.innerHTML = links;
+
+  const action = document.querySelector(".header-action");
+  if (action) {
+    action.textContent = "Browse directory";
+    action.href = "/directory";
+    action.removeAttribute("data-section-link");
+    action.setAttribute("aria-label", "Browse the full Real World Needs directory");
+  }
+}
+
+function rewriteBrandText() {
+  for (const container of document.querySelectorAll(".brand__name, .footer-brand > span:last-child")) {
+    const strong = container.querySelector("strong");
+    const small = container.querySelector("small");
+    if (strong) strong.textContent = "Real World Needs";
+    if (small) small.textContent = "Essential services directory";
+  }
+}
+
+function rewriteFinderCopy() {
+  setText(".finder-intro h1", "Find essential services near you.");
+  setText(
+    ".finder-intro p",
+    "Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it."
+  );
+
+  const status = document.getElementById("locationStatus");
+  if (status) status.textContent = "Nearby service locations appear first when you choose to share your location.";
+
+  const live = document.getElementById("liveSourceStatus");
+  if (live) live.textContent = "In the United States, location search can also load current USDA summer meal sites.";
+
+  const privacy = document.querySelector(".location-privacy");
+  if (privacy) privacy.innerHTML = `Your exact location stays in your browser. <a href="/privacy#location">Read how location works</a>.`;
+
+  const safety = document.querySelector(".finder-safety");
+  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not an emergency service.`;
+}
+
+function rewriteMethodSections() {
+  setText(".about-rwn__heading h2", "What Real World Needs does.");
+  setText(
+    ".about-rwn__heading p",
+    "RWN organizes public information about essential services and helps you reach the organization providing them. We do not decide eligibility, reserve services, or provide the listed services ourselves."
+  );
+
+  const stepCopy = [
+    ["Search", "Look by need or place. Use location only if you want nearby services sorted first."],
+    ["Review", "Check the source, review date, hours, eligibility and contact information we have."],
+    ["Contact", "Call the provider, open its official site, or get directions before you travel."]
+  ];
+  document.querySelectorAll(".mission-steps article").forEach((article, index) => {
+    const copy = stepCopy[index];
+    if (!copy) return;
+    const heading = article.querySelector("h3");
+    const paragraph = article.querySelector("p");
+    if (heading) heading.textContent = copy[0];
+    if (paragraph) paragraph.textContent = copy[1];
+  });
+
+  setText(".source-band__heading h2", "Check the source before you go.");
+  setText(
+    ".source-band__heading p",
+    "Listings include the source and the date we reviewed it. Hours, capacity and eligibility can change, so the provider remains the final authority."
+  );
+
+  const principles = document.getElementById("principleGrid");
+  if (principles) {
+    principles.innerHTML = `
+      <article><span>01</span><div><h3>Source</h3><p>We name and link the public source used for the listing.</p></div></article>
+      <article><span>02</span><div><h3>Review date</h3><p>We show when the source was last checked by RWN.</p></div></article>
+      <article><span>03</span><div><h3>Provider authority</h3><p>The provider is responsible for current hours, eligibility, capacity and service decisions.</p></div></article>
+    `;
+  }
 }
 
 function simplifyStructure() {
   document.querySelector(".directory-strip")?.remove();
   document.getElementById("accountability")?.remove();
 
-  const footerExplore = document.querySelector('.site-footer nav[aria-label="Footer explore"]');
-  if (footerExplore) {
-    footerExplore.innerHTML = `
-      <strong>Find help</strong>
-      <a href="#finder">Interactive finder</a>
-      <a href="/directory">Text directory</a>
-    `;
+  const footer = document.querySelector(".site-footer");
+  if (!footer) return;
+
+  const explore = footer.querySelector('nav[aria-label="Footer explore"]');
+  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a>`;
+
+  const standards = footer.querySelector('nav[aria-label="Footer standards"]');
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a>`;
+
+  const legal = footer.querySelector('nav[aria-label="Footer legal"]');
+  if (legal) {
+    const clearButton = legal.querySelector("#clearBrowserData");
+    legal.innerHTML = `<strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a>`;
+    if (clearButton) {
+      clearButton.className = "footer-data-button";
+      clearButton.textContent = "Clear browser data";
+      legal.append(clearButton);
+    }
   }
 
-  const footerAbout = document.querySelector('.site-footer nav[aria-label="Footer standards"]');
-  if (footerAbout) {
-    footerAbout.innerHTML = `
-      <strong>Trust &amp; standards</strong>
-      <a href="/editorial-policy">How listings are checked</a>
-      <a href="/transparency">Transparency</a>
-      <a href="/sources">Source ledger</a>
-    `;
+  const map = footer.querySelector('nav[aria-label="Footer map and imagery"]');
+  const note = footer.querySelector(":scope > p");
+  if (map) map.remove();
+  if (note) {
+    note.innerHTML = `<span>Map boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Earth imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span>`;
   }
-
-  const mapNav = document.querySelector('.site-footer nav[aria-label="Footer map and imagery"]');
-  const footerNote = document.querySelector(".site-footer > p");
-  if (mapNav && footerNote) {
-    const existing = footerNote.textContent.trim();
-    footerNote.innerHTML = `
-      <span>${existing}</span>
-      <span class="footer-attribution">Map data: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span>
-    `;
-    mapNav.remove();
-  }
-}
-
-function installCopy() {
-  document.documentElement.classList.add("rwn-professional");
-  document.body.classList.add("rwn-professional");
-
-  installBrandMarks();
-
-  const brand = document.querySelector(".brand .brand__name");
-  if (brand) {
-    const strong = brand.querySelector("strong");
-    const small = brand.querySelector("small");
-    if (strong) strong.textContent = "Real World Needs";
-    if (small) small.textContent = "Free essential services directory";
-  }
-
-  setAllText(".primary-nav a", ["Find help", "How it works", "Review standards", "Transparency"]);
-  setAllText(".site-menu nav a", ["Find help", "How it works", "Review standards", "Transparency"]);
-
-  const headerAction = document.querySelector(".header-action");
-  if (headerAction) {
-    headerAction.textContent = "Browse directory";
-    headerAction.href = "/directory";
-    headerAction.removeAttribute("data-section-link");
-    headerAction.setAttribute("aria-label", "Browse the complete text service directory");
-  }
-
-  setText(".finder-intro h1", "Find essential help near you.");
-  setText(
-    ".finder-intro p",
-    "Search food, shelter, health care, hygiene, clothing, drinking water and other essential services. Review the source and practical details, then contact the provider directly."
-  );
-
-  setText(".about-rwn__heading h2", "Find it. Check it. Contact the provider.");
-  setText(
-    ".about-rwn__heading p",
-    "Real World Needs organizes public service information into one usable directory. Search for an option, review where the information came from, and contact the organization providing the service."
-  );
-
-  setText(".source-band__heading h2", "Every listing stays connected to its source.");
-  setText(
-    ".source-band__heading p",
-    "Listings show where the information came from and when it was reviewed. Hours, eligibility and availability can change, so the provider remains the final authority."
-  );
-
-  const footerBrand = document.querySelector(".footer-brand > span:last-child");
-  if (footerBrand) {
-    const strong = footerBrand.querySelector("strong");
-    const small = footerBrand.querySelector("small");
-    if (strong) strong.textContent = "Real World Needs";
-    if (small) small.textContent = "Free essential services directory";
-  }
-
-  simplifyStructure();
 }
 
 export function installProfessionalPresentation() {
   if (!document.querySelector(".finder-intro")) return false;
-  installCopy();
+  document.documentElement.classList.add("rwn-professional");
+  document.body.classList.add("rwn-professional");
+  installBrandMarks();
+  rewriteBrandText();
+  rewriteNavigation();
+  rewriteFinderCopy();
+  rewriteMethodSections();
+  simplifyStructure();
   return true;
 }

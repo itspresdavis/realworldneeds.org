@@ -4,8 +4,8 @@ const professionalReady = import("./professional.js");
 const accessibilityReady = import("./accessibility.js");
 const resultActionsReady = import("./result-actions.js");
 
-// The application owns the DOM and state. Enhancement layers install only after
-// that initialization is complete so they cannot race the app's initial render.
+// The application owns its DOM and state. Presentation and accessibility
+// install only after app initialization so startup is deterministic.
 await appReady;
 
 const [
@@ -24,21 +24,6 @@ installProfessionalPresentation();
 installRefinements();
 installAccessibility();
 installResultActions();
-
-// The globe is a deliberate exploration tool, not ambient motion. app.js has
-// already bound its controls by this point, so establish the initial state now
-// rather than deferring it to a later animation frame.
-const motionButton = document.getElementById("toggleMotion");
-if (motionButton) {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    motionButton.innerHTML = '<span aria-hidden="true">▶</span>';
-    motionButton.title = "Resume globe rotation";
-    motionButton.setAttribute("aria-label", motionButton.title);
-  } else {
-    const label = `${motionButton.getAttribute("aria-label") || ""} ${motionButton.getAttribute("title") || ""}`;
-    if (/pause globe rotation/i.test(label)) motionButton.click();
-  }
-}
 
 const clearOfflineData = async () => {
   if ("caches" in window) {
