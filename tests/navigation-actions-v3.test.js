@@ -28,8 +28,9 @@ test("public pages share one task-first navigation order and an explicit mobile 
 });
 
 test("directory rows put call and map directions ahead of secondary details", async () => {
-  const resource = resources.find((item) => item.kind === "direct" && item.phone) || resources.find((item) => item.kind === "direct");
-  assert.ok(resource, "a direct service is required for action QA");
+  const firstPage = resources.slice(0, 80);
+  const resource = firstPage.find((item) => item.kind === "direct" && item.phone) || firstPage.find((item) => item.kind === "direct");
+  assert.ok(resource, "a first-page direct service is required for action QA");
   const html = await text("dist/directory/index.html");
   const encodedId = encodeURIComponent(resource.id);
   const record = html.match(new RegExp(`<article class="directory-record"[^>]*>[\\s\\S]*?href="/service/${encodedId}"[\\s\\S]*?</article>`))?.[0] || "";
