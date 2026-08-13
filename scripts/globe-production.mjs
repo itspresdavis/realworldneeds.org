@@ -9,16 +9,22 @@ function replaceRequired(from, to, label) {
   source = source.replace(from, to);
 }
 
+function replaceRequiredPattern(pattern, replacement, label) {
+  const matches = [...source.matchAll(pattern)].length;
+  if (matches !== 1) throw new Error(`Globe production transform expected one ${label} match, found ${matches}.`);
+  source = source.replace(pattern, replacement);
+}
+
 function replaceAllRequired(from, to, expected, label) {
   const matches = source.split(from).length - 1;
   if (matches !== expected) throw new Error(`Globe production transform expected ${expected} ${label} matches, found ${matches}.`);
   source = source.split(from).join(to);
 }
 
-replaceRequired(
-  `import { pinchZoom, pointerDistance } from "./utils/gesture.js";`,
-  `import { classifyGlobeDragIntent, globeViewProfile, pinchZoom, pointPickThresholdWorld, pointerDistance } from "./utils/gesture.js";`,
-  "globe interaction utilities"
+replaceRequiredPattern(
+  /import \{ pinchZoom, pointerDistance \} from "(\.\/utils\/gesture\.js\?v=[a-f0-9]{12})";/g,
+  (_match, versionedGesturePath) => `import { classifyGlobeDragIntent, globeViewProfile, pinchZoom, pointPickThresholdWorld, pointerDistance } from "${versionedGesturePath}";`,
+  "versioned globe interaction utilities"
 );
 
 replaceRequired(
