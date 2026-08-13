@@ -12,6 +12,18 @@ const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 @media(max-width:900px){.globe-canvas{touch-action:pan-y;overscroll-behavior-y:auto}}
 @media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
 </style>`;
+const CRITICAL_PAGE_STYLE = `<style data-rwn-page-critical>
+.directory-category-chips button{min-height:44px!important}
+#service>.legal-hero{padding-top:2.6rem!important;padding-bottom:2.2rem!important}
+@media(max-width:650px){
+  #directory>.legal-hero{padding:1.2rem .9rem 1rem!important}
+  #directory>.legal-hero h1{max-width:19ch!important;font-size:clamp(1.85rem,8vw,2.3rem)!important;line-height:1.04!important;letter-spacing:-.04em!important}
+  #directory>.legal-hero .legal-hero__lede{margin-top:.55rem!important;font-size:.84rem!important;line-height:1.48!important}
+  #directory>.legal-hero .eyebrow{font-size:.62rem!important}
+  .directory-shell{padding-top:.7rem!important}
+  #service>.legal-hero{padding:1.35rem .9rem 1.15rem!important}
+}
+</style>`;
 const DIRECTORY_HEADING = "Browse essential services by need and location.";
 const DIRECTORY_DESCRIPTION = "Search the directory by service, place or organization. Each listing includes provider details, its source and the date it was reviewed.";
 
@@ -117,6 +129,9 @@ function enhanceGeneratedPage(html, release) {
 
   if (!html.includes("/professional-pages.css")) {
     html = html.replace("</head>", `  <link rel="stylesheet" href="/professional-pages.css?v=${release}" />\n</head>`);
+  }
+  if (!html.includes("data-rwn-page-critical")) {
+    html = html.replace("</head>", `  ${CRITICAL_PAGE_STYLE}\n</head>`);
   }
   html = ensureHeadLink(html, "icon", "/rwn-mark.svg", ' type="image/svg+xml"');
   html = ensureHeadLink(html, "manifest", "/site.webmanifest");
