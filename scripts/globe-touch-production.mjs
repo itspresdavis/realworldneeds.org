@@ -52,3 +52,10 @@ replaceRequired(
 );
 
 await writeFile(path, source);
+
+const clarityPath = "dist/src/clarity.css";
+let clarity = await readFile(clarityPath, "utf8");
+const marker = "/* RWN globe touch-surface contract */";
+if (clarity.includes(marker)) throw new Error("Globe touch-surface contract was injected more than once.");
+clarity += `\n\n${marker}\n@media (max-width: 900px) {\n  .rwn-professional .globe-stage { touch-action: pan-y; overscroll-behavior-y: auto; }\n  .rwn-professional .globe-canvas,\n  .rwn-professional .globe-pin-layer,\n  .rwn-professional .globe-pin { touch-action: pan-y; }\n  .rwn-professional .globe-controls,\n  .rwn-professional .globe-meta__tools { touch-action: manipulation; }\n}\n`;
+await writeFile(clarityPath, clarity);
