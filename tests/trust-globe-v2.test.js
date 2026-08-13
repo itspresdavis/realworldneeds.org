@@ -51,5 +51,5 @@ test("generated public pages use the same official mark and compact shared prese
   assert.match(directory, /\/professional-pages\.css\?v=/);
   assert.match(directory, /Browse essential services by need and location\./);
   assert.match(pages, /--page-blue: #07538d/);
-  assert.match(pages, /font-size:clamp\(2\.35rem,4\.3vw,3\.8rem\)/);
+  assert.match(pages, /font-size:\s*clamp\(2\.35rem,4\.3vw,3\.8rem\)/);
 });
