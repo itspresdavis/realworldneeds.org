@@ -149,7 +149,6 @@ async function run() {
       const button = document.getElementById('zoomIn');
       const started = performance.now();
       let clicks = 0;
-      let lastZoom = 0;
       const readState = () => {
         const canvas = document.getElementById('globeCanvas');
         const stage = document.querySelector('.globe-stage');
@@ -167,14 +166,13 @@ async function run() {
           contextLost: gl ? gl.isContextLost() : true,
           pointLayer: stage?.classList.contains('has-gpu-points') || false,
           closeView: stage?.classList.contains('is-close-view') || false,
-          detailed: /high-detail boundaries|1:10m \+ HD NASA/.test(readout),
+          detailed: readout.includes('HD NASA') || readout.includes('high-detail boundaries'),
           overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
           clicks
         };
       };
       const drive = () => {
         const state = readState();
-        lastZoom = state.zoom || lastZoom;
         if (state.zoom >= 6 && state.detailed && state.closeView) return resolve(state);
         if (performance.now() - started > 16000) return resolve(state);
         if (clicks < 38 && state.zoom < 7.2) {
