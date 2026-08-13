@@ -49,7 +49,7 @@ test("service pages make call and preferred map choices immediate while preservi
   if (resource.phone) assert.match(next, /class="is-call"[^>]+href="tel:/);
   assert.match(next, /class="is-map"[^>]+maps\.apple\.com\/\?daddr=/);
   assert.match(next, /class="is-map"[^>]+google\.com\/maps\/dir\/\?api=1&amp;destination=/);
-  assert.match(next, /class="is-primary"[^>]+Official source/);
+  assert.match(next, /class="is-primary"[^>]*>[\s\S]*?<strong>Official source<\/strong>/);
   assert.match(next, /href="\/#resource=/);
 });
 
