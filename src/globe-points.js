@@ -20,9 +20,9 @@ const VERTEX_SHADER = `
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * viewPosition;
 
-    float perspective = clamp(2.85 / max(1.12, -viewPosition.z), 0.72, 1.35);
-    float zoomLift = 1.0 + smoothstep(1.15, 4.5, uZoom) * 0.34;
-    float deepViewCalm = 1.0 - smoothstep(5.0, 8.0, uZoom) * 0.10;
+    float perspective = clamp(2.85 / max(1.10, -viewPosition.z), 0.70, 1.42);
+    float zoomLift = 1.0 + smoothstep(1.1, 4.2, uZoom) * 0.28;
+    float deepViewCalm = 1.0 - smoothstep(4.8, 10.0, uZoom) * 0.24;
     gl_PointSize = uPointSize * pointScale * perspective * zoomLift * deepViewCalm * uPixelRatio;
   }
 `;
@@ -39,24 +39,29 @@ const FRAGMENT_SHADER = `
     float radius = length(centered);
     if (radius > 0.5) discard;
 
-    float edge = 1.0 - smoothstep(0.44, 0.50, radius);
-    float halo = 1.0 - smoothstep(0.22, 0.50, radius);
-    float core = 1.0 - smoothstep(0.055, 0.155, radius);
-    float ring = smoothstep(0.22, 0.29, radius) * (1.0 - smoothstep(0.37, 0.45, radius));
+    float antialias = 1.0 - smoothstep(0.455, 0.50, radius);
+    float outerRing = smoothstep(0.355, 0.385, radius) * (1.0 - smoothstep(0.455, 0.49, radius));
+    float halo = 1.0 - smoothstep(0.25, 0.50, radius);
+    float core = 1.0 - smoothstep(0.065, 0.165, radius);
+    float ring = smoothstep(0.205, 0.27, radius) * (1.0 - smoothstep(0.355, 0.425, radius));
 
     float isDirect = 1.0 - step(0.5, vPointKind);
     float isLocator = step(0.5, vPointKind) * (1.0 - step(1.5, vPointKind));
     float isNetwork = step(1.5, vPointKind);
 
-    float shape = isDirect * max(core, ring * 0.82)
-      + isLocator * max(ring, core * 0.18)
-      + isNetwork * max(ring * 0.72, core * 0.10);
+    float shape = isDirect * max(core, ring * 0.88)
+      + isLocator * max(ring, core * 0.16)
+      + isNetwork * max(ring * 0.74, core * 0.08);
 
-    float closeClarity = mix(0.88, 1.0, smoothstep(1.4, 3.0, uZoom));
-    float alpha = min(1.0, shape * closeClarity + halo * 0.08) * edge * uOpacity * vPointOpacity;
+    float closeClarity = mix(0.90, 1.0, smoothstep(1.4, 4.0, uZoom));
+    float shapeAlpha = shape * closeClarity;
+    float outlineAlpha = outerRing * (0.72 + isDirect * 0.16);
+    float alpha = min(1.0, max(shapeAlpha, outlineAlpha) + halo * 0.055) * antialias * uOpacity * vPointOpacity;
     if (alpha < 0.025) discard;
 
-    vec3 color = mix(vPointColor, vec3(1.0), core * isDirect * 0.20 + ring * 0.08);
+    vec3 outlineColor = vec3(0.012, 0.055, 0.075);
+    vec3 pointColor = mix(vPointColor, vec3(1.0), core * isDirect * 0.18 + ring * 0.06);
+    vec3 color = mix(pointColor, outlineColor, outerRing * 0.88);
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -74,14 +79,14 @@ function resourceVector(resource, radius = 1.009) {
 
 function resourcePointScale(resource) {
   if (resource.kind === "direct") return 1;
-  if (resource.kind === "locator") return 0.86;
-  return 0.74;
+  if (resource.kind === "locator") return 0.82;
+  return 0.68;
 }
 
 function resourcePointOpacity(resource) {
   if (resource.kind === "direct") return 1;
-  if (resource.kind === "locator") return 0.82;
-  return 0.68;
+  if (resource.kind === "locator") return 0.80;
+  return 0.62;
 }
 
 function resourcePointKind(resource) {
@@ -126,10 +131,10 @@ export function createGlobePointLayer(resources, categories, { pixelRatio = 1 } 
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     uniforms: {
-      uPointSize: { value: window.innerWidth <= 600 ? 5.15 : 4.8 },
-      uPixelRatio: { value: Math.min(1.75, Math.max(1, pixelRatio)) },
+      uPointSize: { value: window.innerWidth <= 600 ? 5.5 : 5.0 },
+      uPixelRatio: { value: Math.min(2, Math.max(1, pixelRatio)) },
       uZoom: { value: 1 },
-      uOpacity: { value: 0.94 }
+      uOpacity: { value: 0.95 }
     },
     transparent: true,
     depthTest: true,
@@ -152,9 +157,9 @@ export function replaceGlobePointResources(points, resources, categories) {
   previousGeometry?.dispose();
 }
 
-export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.94 } = {}) {
+export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.95 } = {}) {
   if (!points?.material?.uniforms) return;
   points.material.uniforms.uZoom.value = zoom;
-  points.material.uniforms.uPixelRatio.value = Math.min(1.75, Math.max(1, pixelRatio));
+  points.material.uniforms.uPixelRatio.value = Math.min(2, Math.max(1, pixelRatio));
   points.material.uniforms.uOpacity.value = opacity;
 }

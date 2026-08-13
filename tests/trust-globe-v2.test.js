@@ -5,15 +5,17 @@ import { readFile } from "node:fs/promises";
 test("production globe starts calm, zooms deeply, and preserves ordinary page scrolling", async () => {
   const app = await readFile("dist/src/app.js", "utf8");
 
-  assert.match(app, /return window\.innerWidth <= 600 \? 6\.5 : 9\.0/);
+  assert.match(app, /return window\.innerWidth <= 600 \? 8\.0 : 12\.0/);
   assert.match(app, /const DEFAULT_RESOURCE = null/);
   assert.match(app, /const initialResource = resources\.some\([^\n]+\) \? requestedResource : null/);
   assert.match(app, /autoRotate: false/);
   assert.match(app, /inspectorOpen: Boolean\(initialResource\)/);
   assert.match(app, /PerspectiveCamera\(42, 1, 0\.02, 100\)/);
-  assert.match(app, /const opticalZoom = Math\.pow\(Math\.max\(1, state\.zoom \* state\.ambientZoom\), 0\.42\)/);
-  assert.match(app, /Math\.max\(window\.innerWidth <= 600 \? 1\.62 : 1\.5, globeBaseCameraDistance \/ opticalZoom\)/);
-  assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 144 : 256, window\.innerWidth <= 600 \? 96 : 160\)/);
+  assert.match(app, /globeViewProfile\(state\.zoom \* state\.ambientZoom/);
+  assert.match(app, /minimumCameraDistance/);
+  assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288, window\.innerWidth <= 600 \? 112 : 180\)/);
+  assert.match(app, /pointPickThresholdWorld/);
+  assert.match(app, /classifyGlobeDragIntent/);
 
   const wheel = app.match(/canvas\.addEventListener\("wheel", \(event\) => \{([\s\S]*?)\}, \{ passive: false \}\);/)?.[1] || "";
   assert.match(wheel, /if \(!\(event\.ctrlKey \|\| event\.metaKey\)\) return/);
@@ -28,6 +30,7 @@ test("globe points communicate listing type instead of rendering every record as
   assert.match(points, /isDirect/);
   assert.match(points, /isLocator/);
   assert.match(points, /isNetwork/);
+  assert.match(points, /outerRing/);
 });
 
 test("homepage uses one final presentation system and plain organizational language", async () => {
