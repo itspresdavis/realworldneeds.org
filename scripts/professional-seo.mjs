@@ -1,9 +1,11 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { resources } from "../src/data/resources.js";
 
 const HOME_TITLE = "Find Essential Services Near You | Real World Needs";
 const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing.";
 const SOCIAL_IMAGE = "https://www.realworldneeds.org/media/earth-blue-marble.jpg";
+const resourcesById = new Map(resources.map((resource) => [resource.id, resource]));
 const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 .directory-strip,.accountability,#openInspector{display:none!important}
 .globe-canvas{touch-action:none;overscroll-behavior:contain}
@@ -50,6 +52,7 @@ const escapeAttribute = (value) => String(value || "")
   .replaceAll('"', "&quot;")
   .replaceAll("<", "&lt;")
   .replaceAll(">", "&gt;");
+const escapeHtml = (value) => escapeAttribute(value).replaceAll("'", "&#39;");
 
 function titleFrom(html) {
   return decodeEntities(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() || "Real World Needs");
@@ -58,6 +61,15 @@ function titleFrom(html) {
 function descriptionFrom(html) {
   const match = html.match(/<meta\b[^>]*\bname=(["'])description\1[^>]*\bcontent=(["'])(.*?)\2[^>]*>/i);
   return decodeEntities(match?.[3]?.trim() || "Find essential services and review the source behind each listing.");
+}
+
+function canonicalPathFrom(html) {
+  const canonical = html.match(/<link\b[^>]*\brel=(["'])canonical\1[^>]*\bhref=(["'])(.*?)\2[^>]*>/i)?.[3] || "/";
+  try {
+    return new URL(canonical, "https://www.realworldneeds.org").pathname;
+  } catch {
+    return "/";
+  }
 }
 
 function upsertMeta(html, attribute, key, content) {
@@ -69,6 +81,11 @@ function upsertMeta(html, attribute, key, content) {
 function ensureHeadLink(html, rel, href, extra = "") {
   if (new RegExp(`<link[^>]+href=["']${escapeRegex(href)}(?:\\?[^"']*)?["']`, "i").test(html)) return html;
   return html.replace("</head>", `  <link rel="${rel}" href="${href}"${extra} />\n</head>`);
+}
+
+function ensureVersionedStylesheet(html, href, release) {
+  if (new RegExp(`<link[^>]+href=["']${escapeRegex(href)}(?:\\?[^"']*)?["']`, "i").test(html)) return html;
+  return html.replace("</head>", `  <link rel="stylesheet" href="${href}?v=${release}" />\n</head>`);
 }
 
 function addSocialMetadata(html) {
@@ -89,8 +106,111 @@ function addSocialMetadata(html) {
   return html;
 }
 
-function professionalFooterLinks() {
-  return `<nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse by need</strong><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Water</a><a href="/directory">Full directory</a><a href="/sources">Sources</a></nav>`;
+function navKey(path) {
+  if (path.startsWith("/directory") || path.startsWith("/service/")) return "directory";
+  if (path === "/editorial-policy") return "checks";
+  if (path === "/sources") return "sources";
+  if (path === "/transparency") return "transparency";
+  return "find";
+}
+
+function navigationLinks(path) {
+  const current = navKey(path);
+  const links = [
+    ["find", "/", "Find help"],
+    ["directory", "/directory", "Directory"],
+    ["checks", "/editorial-policy", "How listings are checked"],
+    ["sources", "/sources", "Sources"],
+    ["transparency", "/transparency", "Transparency"]
+  ];
+  return links.map(([key, href, label]) => `<a href="${href}"${key === current ? ' aria-current="page"' : ""}>${label}</a>`).join("");
+}
+
+function unifiedHeader(path) {
+  const links = navigationLinks(path);
+  return `<header class="legal-header rwn-unified-header">
+    <a class="legal-brand" href="/" aria-label="Real World Needs home"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
+    <nav class="rwn-page-nav" aria-label="Primary navigation">${links}</nav>
+    <details class="rwn-page-menu"><summary aria-label="Open navigation menu">Menu</summary><nav aria-label="Mobile navigation">${links}</nav></details>
+  </header>`;
+}
+
+function unifiedFooter() {
+  return `<footer class="legal-footer rwn-unified-footer">
+    <p><strong>Real World Needs</strong><br />Essential services directory</p>
+    <nav aria-label="Footer find help"><strong>Find help</strong><a href="/">Interactive map</a><a href="/directory">Directory</a></nav>
+    <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a></nav>
+    <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav>
+    <nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse by need</strong><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Water</a></nav>
+  </footer>`;
+}
+
+function mapsFor(resource) {
+  const coordinate = `${resource.lat},${resource.lng}`;
+  return {
+    apple: `https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(resource.name)}`,
+    google: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`
+  };
+}
+
+function directoryQuickActions(resource) {
+  const links = [];
+  if (resource.phone) {
+    const number = resource.phone.replace(/[^+\d]/g, "");
+    links.push(`<a class="is-call" href="tel:${escapeHtml(number)}">Call ${escapeHtml(resource.phone)}</a>`);
+  }
+  if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+    const maps = mapsFor(resource);
+    links.push(`<a href="${escapeHtml(maps.apple)}" rel="noopener noreferrer">Apple Maps</a>`);
+    links.push(`<a href="${escapeHtml(maps.google)}" rel="noopener noreferrer">Google Maps</a>`);
+  }
+  links.push(`<a class="is-details" href="/service/${encodeURIComponent(resource.id)}">View details</a>`);
+  return `<nav class="directory-quick-actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Quick actions for ${escapeHtml(resource.name)}"><span>${resource.kind === "direct" ? "Call or get directions" : "Open this listing"}</span>${links.join("")}</nav>`;
+}
+
+function serviceActions(resource) {
+  const links = [];
+  if (resource.phone) {
+    const number = resource.phone.replace(/[^+\d]/g, "");
+    links.push(`<a class="is-call" href="tel:${escapeHtml(number)}"><strong>Call</strong><span>${escapeHtml(resource.phone)}</span></a>`);
+  }
+  if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+    const maps = mapsFor(resource);
+    links.push(`<a class="is-map" href="${escapeHtml(maps.apple)}" rel="noopener noreferrer"><strong>Apple Maps</strong><span>Get directions</span></a>`);
+    links.push(`<a class="is-map" href="${escapeHtml(maps.google)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Get directions</span></a>`);
+  }
+  links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`);
+  links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
+  return `<nav class="service-next-steps" aria-label="Contact or get directions for this service"><div><span>Next step</span><strong>${resource.phone ? "Call, get directions, or verify details" : "Get directions or verify details"}</strong></div><div>${links.join("")}</div></nav>`;
+}
+
+function enhanceActionOrientation(html) {
+  html = html.replace(/<article class="directory-record"([^>]*)>[\s\S]*?<\/article>/g, (article) => {
+    if (article.includes("data-rwn-actions=")) return article;
+    const match = article.match(/href="\/service\/([^"#?]+)"/);
+    if (!match) return article;
+    const id = decodeURIComponent(match[1]);
+    const resource = resourcesById.get(id);
+    if (!resource) return article;
+    return article.replace("</header>", `</header>\n    ${directoryQuickActions(resource)}`);
+  });
+
+  const serviceId = canonicalPathFrom(html).match(/^\/service\/([^/]+)\/?$/)?.[1];
+  if (serviceId) {
+    const resource = resourcesById.get(decodeURIComponent(serviceId));
+    if (resource) html = html.replace(/<nav class="service-next-steps"[\s\S]*?<\/nav>/, serviceActions(resource));
+  }
+
+  html = html.replace(
+    /<div class="directory-downloads"><strong>Directory tools<\/strong>([\s\S]*?)<\/div>/,
+    '<details class="directory-advanced"><summary>Download directory data</summary><div class="directory-downloads">$1</div></details>'
+  );
+
+  const browsePattern = /(<nav class="directory-downloads" aria-label="Browse directory by need">[\s\S]*?<\/nav>\s*<nav class="directory-downloads" aria-label="Browse directory by region">[\s\S]*?<\/nav>\s*<nav class="directory-downloads" aria-label="Browse directory by country">[\s\S]*?<\/nav>)/;
+  if (browsePattern.test(html)) {
+    html = html.replace(browsePattern, '<details class="directory-browse-more"><summary>Browse by location or type of help</summary><div>$1</div></details>');
+  }
+  return html;
 }
 
 function enhanceHome(html, release) {
@@ -107,12 +227,9 @@ function enhanceHome(html, release) {
       "<p>Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>"
     );
 
-  if (!html.includes("/src/clarity.css")) {
-    html = html.replace("</head>", `  <link rel="stylesheet" href="/src/clarity.css?v=${release}" />\n</head>`);
-  }
-  if (!html.includes("data-rwn-critical-shell")) {
-    html = html.replace("</head>", `  ${CRITICAL_HOME_STYLE}\n</head>`);
-  }
+  html = ensureVersionedStylesheet(html, "/src/clarity.css", release);
+  html = ensureVersionedStylesheet(html, "/navigation-actions.css", release);
+  if (!html.includes("data-rwn-critical-shell")) html = html.replace("</head>", `  ${CRITICAL_HOME_STYLE}\n</head>`);
 
   html = addSocialMetadata(html);
   html = ensureHeadLink(html, "sitemap", "/sitemap.xml", ' type="application/xml"');
@@ -128,20 +245,19 @@ function enhanceGeneratedPage(html, release) {
     .replaceAll("Find free essential services without using the globe.", DIRECTORY_HEADING)
     .replaceAll("Browse food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Every listing stays connected to its original source.", DIRECTORY_DESCRIPTION);
 
-  if (!html.includes("/professional-pages.css")) {
-    html = html.replace("</head>", `  <link rel="stylesheet" href="/professional-pages.css?v=${release}" />\n</head>`);
-  }
-  if (!html.includes("data-rwn-page-critical")) {
-    html = html.replace("</head>", `  ${CRITICAL_PAGE_STYLE}\n</head>`);
-  }
+  html = ensureVersionedStylesheet(html, "/professional-pages.css", release);
+  html = ensureVersionedStylesheet(html, "/navigation-actions.css", release);
+  if (!html.includes("data-rwn-page-critical")) html = html.replace("</head>", `  ${CRITICAL_PAGE_STYLE}\n</head>`);
   html = ensureHeadLink(html, "icon", "/rwn-mark.svg", ' type="image/svg+xml"');
   html = ensureHeadLink(html, "manifest", "/site.webmanifest");
   html = ensureHeadLink(html, "sitemap", "/sitemap.xml", ' type="application/xml"');
   html = addSocialMetadata(html);
   html = html.replace(/<meta\b[^>]*\bname=(["'])theme-color\1[^>]*\bcontent=(["'])(.*?)\2[^>]*>/i, '<meta name="theme-color" content="#ffffff" />');
-  if (html.includes('<footer class="legal-footer">') && !html.includes("professional-need-links")) {
-    html = html.replace("</footer>", `${professionalFooterLinks()}\n  </footer>`);
-  }
+
+  const path = canonicalPathFrom(html);
+  if (/<header class="legal-header">[\s\S]*?<\/header>/.test(html)) html = html.replace(/<header class="legal-header">[\s\S]*?<\/header>/, unifiedHeader(path));
+  if (/<footer class="legal-footer">[\s\S]*?<\/footer>/.test(html)) html = html.replace(/<footer class="legal-footer">[\s\S]*?<\/footer>/, unifiedFooter());
+  html = enhanceActionOrientation(html);
   return html;
 }
 
