@@ -12,9 +12,12 @@ test("offline directory caches only public same-origin essentials", async () => 
   assert.match(sw, /"\/data\/search-index\.json"/);
   assert.match(sw, /"\/offline-status\.js"/);
   assert.match(sw, /"\/professional-pages\.css"/);
+  assert.match(sw, /"\/brand\/rwn-logo-192\.png"/);
   assert.match(sw, /"\/site\.webmanifest"/);
   await read("public/site.webmanifest");
   await read("public/professional-pages.css");
+  const logo = await readFile("public/brand/rwn-logo-192.png");
+  assert.deepEqual([...logo.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], "offline brand asset must remain a real PNG");
   assert.match(sw, /url\.origin !== self\.location\.origin/);
   assert.match(sw, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(sw, /new Request\(`\$\{url\.origin\}\$\{url\.pathname\}`\)/);
@@ -102,5 +105,6 @@ test("built site publishes the offline worker", async () => {
   assert.match(sw, /networkFirstNavigation/);
   assert.match(sw, /staleWhileRevalidate/);
   assert.match(sw, /professional-pages\.css/);
+  assert.match(sw, /brand\/rwn-logo-192\.png/);
   assert.match(sw, /site\.webmanifest/);
 });
