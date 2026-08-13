@@ -4,12 +4,12 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const utility = document.createElement("section");
   utility.className = "service-utility-actions";
   utility.dataset.serviceUtility = "";
-  utility.setAttribute("aria-label", "Keep or share this service information");
+  utility.setAttribute("aria-label", "Share, copy, or print this service listing");
   utility.innerHTML = `
     <div class="service-utility-actions__intro">
-      <span>Keep this handy</span>
+      <span>Listing tools</span>
       <strong>Share, copy, or print this listing.</strong>
-      <small>These actions stay on your device. RWN does not receive who you share with or what you copy.</small>
+      <small>These actions happen on your device. RWN does not receive the recipient or the text you copy.</small>
     </div>
     <div class="service-utility-actions__buttons">
       <button type="button" data-service-share>Share</button>
