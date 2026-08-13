@@ -75,6 +75,12 @@
 .rwn-page-menu nav a:focus-visible,
 .rwn-page-menu nav a[aria-current="page"] { background:#f6f8f7; color:var(--rwn-action-blue); }
 
+/* Breadcrumbs orient people without competing with the page title. */
+.directory-shell > .directory-downloads[aria-label="Breadcrumb"] {
+  justify-content:flex-start !important;
+  gap:.35rem .65rem !important;
+}
+
 /* Keep advanced directory utilities available without making them the primary task. */
 .directory-advanced,
 .directory-browse-more {
@@ -196,6 +202,7 @@
   text-decoration:none;
 }
 .directory-global-result-actions a.is-call { border-color:var(--rwn-action-blue); background:var(--rwn-action-blue); color:#fff; }
+.directory-global-result-actions a.is-details { color:var(--rwn-action-blue); }
 
 /* Generated footer navigation mirrors the homepage information architecture. */
 .legal-footer.rwn-unified-footer {
@@ -215,6 +222,9 @@
 
 @media (max-width:650px) {
   .legal-header.rwn-unified-header { min-height:66px; }
+  .legal-header.rwn-unified-header .legal-brand small { display:block !important; }
+  .directory-shell > .directory-downloads[aria-label="Breadcrumb"] span[aria-current="page"] { display:none; }
+
   .directory-quick-actions { display:grid; grid-template-columns:1fr 1fr; }
   .directory-quick-actions > span { grid-column:1/-1; }
   .directory-quick-actions a { min-height:48px; }
