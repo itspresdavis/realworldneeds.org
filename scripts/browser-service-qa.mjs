@@ -222,30 +222,54 @@ async function run() {
       const tools = document.querySelector("[data-directory-search]");
       const input = document.querySelector("[data-directory-query]");
       const list = document.querySelector("[data-global-list]");
+      const menu = document.querySelector(".rwn-page-menu");
       const toolsRect = tools?.getBoundingClientRect();
       const chips = [...document.querySelectorAll("[data-directory-category]")];
-      if (!tools || !input || !list || chips.length < 2) return { ok: false, reason: "directory mobile controls missing" };
+      if (!tools || !input || !list || !menu || chips.length < 2) return { ok: false, reason: "directory mobile controls missing" };
+
+      menu.open = true;
+      await sleep(30);
+      const menuLinks = [...menu.querySelectorAll("nav a")];
+      const menuLabels = menuLinks.map((link) => link.textContent.trim());
+      const visibleMenuLinks = menuLinks.filter((link) => {
+        const rect = link.getBoundingClientRect();
+        const style = getComputedStyle(link);
+        return rect.width > 0 && rect.height >= 44 && style.display !== "none" && style.visibility !== "hidden";
+      }).length;
+      menu.open = false;
+
       const catalog = await fetch("/data/search-index.json").then((response) => response.json());
-      const target = catalog.records.find((record) => record.kind === "direct") || catalog.records[0];
+      const target = catalog.records.find((record) => record.kind === "direct" && record.phone) || catalog.records.find((record) => record.kind === "direct") || catalog.records[0];
       if (!target) return { ok: false, reason: "search catalog empty" };
       input.value = target.name;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       const targetHref = "/service/" + encodeURIComponent(target.id);
       const found = await waitUntil(() => [...list.querySelectorAll("a")].some((link) => new URL(link.href).pathname === targetHref));
+      const actionsReady = await waitUntil(() => list.querySelectorAll(".directory-global-result-actions a").length >= (target.phone ? 4 : 3));
+      const quickActions = [...list.querySelectorAll(".directory-global-result-actions a")];
       return {
         ok: true,
         searchAboveFold: Boolean(toolsRect && toolsRect.top < innerHeight - 44 && toolsRect.bottom > 0),
         minimumChipHeight: Math.min(...chips.map((chip) => chip.getBoundingClientRect().height)),
         found,
+        actionsReady,
+        actionLabels: quickActions.map((link) => link.textContent.trim()),
+        minimumActionHeight: quickActions.length ? Math.min(...quickActions.map((link) => link.getBoundingClientRect().height)) : 0,
+        menuLabels,
+        visibleMenuLinks,
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
       };
     })()`);
     await capture(client, "directory-mobile.png");
-    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.minimumChipHeight < 44 || !directoryMobile.found || directoryMobile.overflow > 8) {
-      throw new Error(`Mobile directory failed: ${JSON.stringify(directoryMobile)}`);
+    const expectedMenu = ["Find help", "Directory", "How listings are checked", "Sources", "Transparency"];
+    const expectedActions = ["Apple Maps", "Google Maps", "View details"];
+    const hasCall = directoryMobile.actionLabels?.some((label) => label.startsWith("Call "));
+    const hasAllActions = expectedActions.every((label) => directoryMobile.actionLabels?.includes(label));
+    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.minimumChipHeight < 44 || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || directoryMobile.overflow > 8) {
+      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions })}`);
     }
 
-    console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, phone/map next steps, above-fold task flow, private map deep-link, mobile directory search, touch targets, no overflow, and screenshots.`);
+    console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, phone/map next steps, complete five-link navigation, explicit Call/Apple Maps/Google Maps/View details search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
   } finally {
     client?.close();
     await stopProcess(browser);
