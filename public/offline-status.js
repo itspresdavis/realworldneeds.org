@@ -71,6 +71,7 @@ if (notice) {
         actions.append(actionLink("Apple Maps", maps.apple));
         actions.append(actionLink("Google Maps", maps.google));
       }
+      actions.append(actionLink("View details", link.href, "is-details"));
 
       link.before(wrapper);
       wrapper.append(link, actions);
