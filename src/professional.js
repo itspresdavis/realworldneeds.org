@@ -17,10 +17,18 @@ function rewriteNavigation() {
     <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
     <a href="/directory">Directory</a>
     <a href="/editorial-policy">How listings are checked</a>
+    <a href="/sources">Sources</a>
     <a href="/transparency">Transparency</a>
   `;
   if (desktop) desktop.innerHTML = links;
   if (mobile) mobile.innerHTML = links;
+
+  const menuSummary = document.querySelector(".site-menu > summary");
+  if (menuSummary) {
+    menuSummary.textContent = "Menu";
+    menuSummary.setAttribute("aria-label", "Open navigation menu");
+    menuSummary.setAttribute("title", "Menu");
+  }
 
   const action = document.querySelector(".header-action");
   if (action) {

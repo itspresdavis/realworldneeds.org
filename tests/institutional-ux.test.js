@@ -46,7 +46,7 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
 test("whole-catalog directory search uses a static privacy-preserving contextual index", async () => {
   const client = await text("public/directory.js");
   const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(searchIndex.schemaVersion, "1.2");
+  assert.equal(searchIndex.schemaVersion, "1.3");
   assert.equal(searchIndex.resourceCount, resources.length);
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
@@ -60,7 +60,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.match(client, /MAX_RESULTS = 60/);
   assert.match(client, /Escape/);
   for (const record of searchIndex.records.slice(0, 10)) {
-    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "name", "place", "search"].sort());
+    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "place", "search"].sort());
   }
   const usIndex = searchIndex.records.findIndex((record) => record.country === "United States");
   assert.ok(usIndex >= 0);
