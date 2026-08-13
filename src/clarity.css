@@ -501,7 +501,7 @@ body.rwn-professional {
   .rwn-professional .finder-intro p { font-size: .91rem; }
   .quick-needs { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .quick-need { min-height: 46px; }
-  .rwn-professional .globe-stage { min-height: min(31rem, 64svh); margin-top: .4rem; border-radius: 12px; }
+  .rwn-professional .globe-stage { min-height: min(30rem, 60svh); margin-top: .4rem; border-radius: 12px; }
   .rwn-professional .globe-meta { top: .75rem; right: .8rem; left: .8rem; }
   .rwn-professional .globe-meta__tools .region-menu { display: none; }
   .rwn-professional .globe-controls { right: .7rem; bottom: .7rem; }
