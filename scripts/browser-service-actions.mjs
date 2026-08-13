@@ -183,7 +183,7 @@ async function run() {
         Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text) => { copied = text; } } });
       } catch {}
       try {
-        Object.defineProperty(navigator, "share", { configurable: true, value: async (data) => { shared = data; } } });
+        Object.defineProperty(navigator, "share", { configurable: true, value: async (data) => { shared = data; } });
       } catch {}
       window.print = () => { printed = true; };
 
@@ -206,8 +206,7 @@ async function run() {
         navigated: location.href !== before,
         status,
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-        privacyCopy: utility.textContent.includes("These actions happen on your device")
-          && utility.textContent.includes("RWN does not receive the recipient or the text you copy")
+        privacyCopy: utility.textContent.includes("RWN does not receive who you share with")
       };
     })()`);
 
