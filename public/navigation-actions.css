@@ -216,6 +216,13 @@
   .rwn-page-menu { display:block; }
   .legal-header.rwn-unified-header { overflow:visible; }
   .legal-header.rwn-unified-header > nav { display:none; }
+  .legal-header.rwn-unified-header .rwn-page-menu nav {
+    display:grid !important;
+    max-width:none !important;
+    overflow:hidden !important;
+    white-space:normal !important;
+  }
+  .legal-header.rwn-unified-header .rwn-page-menu nav a { display:flex !important; }
 
   .rwn-professional .site-menu > summary { width:auto !important; height:auto !important; }
 }
@@ -223,6 +230,7 @@
 @media (max-width:650px) {
   .legal-header.rwn-unified-header { min-height:66px; }
   .legal-header.rwn-unified-header .legal-brand small { display:block !important; }
+  .legal-header.rwn-unified-header .rwn-page-menu nav a { display:flex !important; }
   .directory-shell > .directory-downloads[aria-label="Breadcrumb"] span[aria-current="page"] { display:none; }
 
   .directory-quick-actions { display:grid; grid-template-columns:1fr 1fr; }
