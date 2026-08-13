@@ -14,13 +14,13 @@ const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 @media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
 </style>`;
 const PUBLIC_PAGE_DENSITY_STYLE = `<style data-rwn-public-density>
-.legal-brand__mark{display:block;object-fit:cover;background:none!important;color:transparent}
+.legal-brand__mark{display:block;object-fit:contain;color:transparent}
 .legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:clamp(2.6rem,4.5vw,4.5rem) clamp(1rem,4vw,4rem) clamp(2.2rem,3.8vw,3.6rem)}
 .legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{margin-top:.6rem;font-size:clamp(2.45rem,4.5vw,4.15rem);font-weight:620;line-height:1.01;letter-spacing:-.047em}
 .legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{margin-top:.9rem;font-size:clamp(.98rem,1.3vw,1.08rem);line-height:1.62}
 .legal-meta,#directory>.legal-hero .legal-meta,#service>.legal-hero .legal-meta{margin-top:1.05rem}
 @media(max-width:820px){.legal-hero,#directory>.legal-hero,#service>.legal-hero{padding:2.25rem 1rem 2rem}.legal-hero h1,#directory>.legal-hero h1,#service>.legal-hero h1{font-size:clamp(2.15rem,9vw,3.2rem);line-height:1.02;letter-spacing:-.043em}.legal-hero__lede,#directory>.legal-hero .legal-hero__lede,#service>.legal-hero .legal-hero__lede{font-size:1rem;line-height:1.56}}
-@media(max-width:600px){#directory>.legal-hero{padding:1.4rem 1rem 1.25rem}#directory>.legal-hero h1{margin-top:.4rem;font-size:clamp(2.05rem,9.6vw,2.55rem);line-height:1.03;letter-spacing:-.04em}#directory>.legal-hero .legal-hero__lede{margin-top:.65rem;font-size:.94rem;line-height:1.5}#directory>.legal-hero .legal-meta{display:none}.directory-shell{padding-top:1.15rem}}
+@media(max-width:600px){#directory>.legal-hero{padding:1.8rem 1rem 1.6rem}#directory>.legal-hero h1{margin-top:.4rem;font-size:clamp(2.05rem,9.6vw,2.75rem);line-height:1.03;letter-spacing:-.04em}#directory>.legal-hero .legal-hero__lede{margin-top:.65rem;font-size:.94rem;line-height:1.5}#directory>.legal-hero .legal-meta{display:none}.directory-shell{padding-top:1.15rem}}
 </style>`;
 const DIRECTORY_HEADING = "Browse free essential services by need and location.";
 const DIRECTORY_DESCRIPTION = "Search food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Review the source and contact details before you go.";
@@ -121,7 +121,8 @@ function enhanceHome(html, release) {
 
 function enhanceGeneratedPage(html, release) {
   html = html
-    .replaceAll('<span class="legal-brand__mark">RWN</span>', '<img class="legal-brand__mark" src="/rwn-mark.svg" alt="" width="34" height="34" decoding="async" />')
+    .replaceAll('<span class="legal-brand__mark">RWN</span>', '<img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" />')
+    .replaceAll('<img class="legal-brand__mark" src="/rwn-mark.svg" alt="" width="34" height="34" decoding="async" />', '<img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" />')
     .replaceAll("Find free essential services without using the globe.", DIRECTORY_HEADING)
     .replaceAll("Browse food assistance, shelter, health care, hygiene, clothing, drinking water, and local resource finders. Every listing stays connected to its original source.", DIRECTORY_DESCRIPTION);
 

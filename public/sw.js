@@ -9,6 +9,7 @@ const CORE_ASSETS = [
   "/directory.js",
   "/offline-status.js",
   "/data/search-index.json",
+  "/brand/rwn-logo-192.png",
   "/rwn-mark.svg",
   "/site.webmanifest"
 ];
@@ -94,6 +95,7 @@ self.addEventListener("fetch", (event) => {
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/professional-pages.css"
     || url.pathname === "/legal.css"
+    || url.pathname === "/brand/rwn-logo-192.png"
     || url.pathname === "/rwn-mark.svg"
     || url.pathname === "/site.webmanifest";
 

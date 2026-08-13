@@ -34,6 +34,30 @@ test("RWN publishes one crawlable brand mark across favicon, manifest, organizat
   assert.ok(logo.length > 5000, "canonical app logo should contain production image data");
 });
 
+test("every major public page family carries the same official RWN logo in its visible header", async () => {
+  const sampleService = resources.find((resource) => resource.id === "whitechapel-mission") || resources[0];
+  const pages = [
+    "dist/directory/index.html",
+    `dist/service/${sampleService.id}/index.html`,
+    "dist/transparency.html",
+    "dist/privacy.html",
+    "dist/editorial-policy.html",
+    "dist/accessibility.html",
+    "dist/sources/index.html",
+    "dist/404.html"
+  ];
+
+  for (const path of pages) {
+    const html = await text(path);
+    assert.match(
+      html,
+      /<img class="legal-brand__mark" src="\/brand\/rwn-logo-192\.png" alt="" width="192" height="192" decoding="async" \/>/,
+      `${path} must use the official RWN logo in its visible header`
+    );
+    assert.doesNotMatch(html, /<span class="legal-brand__mark">RWN<\/span>/, `${path} must not fall back to a text placeholder logo`);
+  }
+});
+
 test("service landing pages surface reviewed next steps before the caution/detail block", async () => {
   const samples = [
     resources.find((resource) => resource.kind === "direct" && resource.phone),
