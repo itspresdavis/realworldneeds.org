@@ -27,7 +27,7 @@ test("directory search results expose direct actions without turning the record 
   assert.match(client, /maps\.apple\.com\/\?daddr=/);
   assert.match(client, /google\.com\/maps\/dir\/\?api=1&destination=/);
   assert.match(client, /actionLink\("View details"/);
-  assert.match(client, /aria-label`, `Actions for|setAttribute\("aria-label", `Actions for/);
+  assert.match(client, /setAttribute\("aria-label",\s*`Actions for/);
 });
 
 test("directory visual system stays registry-first and action-led", async () => {
