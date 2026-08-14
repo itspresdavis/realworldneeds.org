@@ -23,14 +23,18 @@ test("production globe starts calm, zooms deeply, and preserves ordinary page sc
   assert.ok(wheel.indexOf("return;") < wheel.indexOf("event.preventDefault()"), "ordinary wheel scrolling must escape before preventDefault");
 });
 
-test("globe points communicate listing type instead of rendering every record as the same dot", async () => {
+test("globe points communicate listing type without category-colored visual noise", async () => {
   const points = await readFile("src/globe-points.js", "utf8");
   assert.match(points, /attribute float pointKind/);
+  assert.match(points, /attribute float pointDensity/);
+  assert.match(points, /RWN_POINT_COLORS/);
   assert.match(points, /resourcePointKind/);
   assert.match(points, /isDirect/);
   assert.match(points, /isLocator/);
   assert.match(points, /isNetwork/);
-  assert.match(points, /outerRing/);
+  assert.match(points, /consolidateResources/);
+  assert.match(points, /THREE\.NormalBlending/);
+  assert.doesNotMatch(points, /categories\[resource\.category\]\.color/);
 });
 
 test("homepage uses one final presentation system and plain organizational language", async () => {

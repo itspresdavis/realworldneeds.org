@@ -25,19 +25,21 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });
 
-test("globe points communicate service type and stay legible through deep zoom", async () => {
+test("globe points communicate service type and reduce density as one semantic system", async () => {
   const points = await text("src/globe-points.js");
 
   assert.match(points, /attribute float pointOpacity/);
   assert.match(points, /attribute float pointKind/);
-  assert.match(points, /deepViewCalm = 1\.0 - smoothstep\(4\.8, 10\.0, uZoom\) \* 0\.24/);
-  assert.match(points, /outerRing/);
-  assert.match(points, /resource\.kind === "locator"\) return 0\.82/);
-  assert.match(points, /return 0\.68/);
+  assert.match(points, /attribute float pointDensity/);
+  assert.match(points, /RWN_POINT_COLORS/);
+  assert.match(points, /densityGridDegrees/);
+  assert.match(points, /consolidateResources/);
   assert.match(points, /resourcePointKind/);
   assert.match(points, /isDirect/);
   assert.match(points, /isLocator/);
   assert.match(points, /isNetwork/);
+  assert.match(points, /THREE\.NormalBlending/);
+  assert.doesNotMatch(points, /AdditiveBlending/);
 });
 
 test("institutional presentation is restrained and motion-safe", async () => {
