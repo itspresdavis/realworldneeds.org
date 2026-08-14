@@ -5,6 +5,7 @@ const clear=root.querySelector("[data-directory-clear]");
 const count=root.querySelector("[data-directory-count]");
 const chips=root.querySelector("[data-directory-categories]");
 const shell=root.closest(".directory-shell");
+const breadcrumb=shell?.querySelector('.directory-downloads[aria-label="Breadcrumb"]');if(breadcrumb)Object.assign(breadcrumb.style,{display:"flex",justifyContent:"flex-start",textAlign:"left"});
 const pageRecords=[...document.querySelectorAll(".directory-records > .directory-record")];
 const collator=new Intl.Collator(undefined,{sensitivity:"base"});
 const MAX_RESULTS=60;
