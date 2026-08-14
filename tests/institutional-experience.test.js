@@ -30,9 +30,10 @@ test("globe points communicate service type and stay legible through deep zoom",
 
   assert.match(points, /attribute float pointOpacity/);
   assert.match(points, /attribute float pointKind/);
-  assert.match(points, /deepViewCalm = 1\.0 - smoothstep\(5\.0, 8\.0, uZoom\) \* 0\.10/);
-  assert.match(points, /resource\.kind === "locator"\) return 0\.86/);
+  assert.match(points, /deepViewCalm = 1\.0 - smoothstep\(4\.8, 10\.0, uZoom\) \* 0\.24/);
+  assert.match(points, /outerRing/);
   assert.match(points, /resource\.kind === "locator"\) return 0\.82/);
+  assert.match(points, /return 0\.68/);
   assert.match(points, /resourcePointKind/);
   assert.match(points, /isDirect/);
   assert.match(points, /isLocator/);

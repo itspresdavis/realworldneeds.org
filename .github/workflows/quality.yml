@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -31,6 +31,10 @@ jobs:
       - name: Install Chrome
         id: chrome
         uses: browser-actions/setup-chrome@v1
+      - name: Crash-test real globe touch input
+        run: node scripts/browser-globe-touch-v4.mjs
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Verify rendered site
         run: npm run test:browser:qa
         env:
