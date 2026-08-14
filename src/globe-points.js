@@ -6,6 +6,24 @@ const RWN_POINT_COLORS = {
   network: "#5b8094"
 };
 
+const POINT_OVERLAY_STYLE_ID = "rwn-globe-point-overlay";
+
+function installPointOverlayContract() {
+  if (document.getElementById(POINT_OVERLAY_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = POINT_OVERLAY_STYLE_ID;
+  style.textContent = `
+.globe-stage.has-gpu-points .globe-pin > span{opacity:.001!important;background:transparent!important;box-shadow:none!important;transition:opacity 90ms ease,border-color 90ms ease,transform 90ms ease!important}
+.globe-stage.has-gpu-points .globe-pin.globe-cluster > span{opacity:.001!important;border-color:transparent!important}
+.globe-stage.has-gpu-points .globe-pin:not(.is-selected):is(:hover,:focus-visible)>span{opacity:.72!important;border:2px solid rgba(255,255,255,.92)!important;background:rgba(7,83,141,.14)!important;box-shadow:0 0 0 3px rgba(7,83,141,.22)!important}
+.globe-stage.has-gpu-points .globe-pin.is-selected>span{opacity:1!important;border:2px solid #fff!important;background:rgba(33,138,61,.18)!important;box-shadow:0 0 0 4px rgba(33,138,61,.34)!important;transform:scale(1.08)!important}
+.globe-stage.has-gpu-points .globe-pin>strong{max-width:min(15rem,42vw)!important;border:1px solid rgba(205,222,217,.24)!important;border-radius:6px!important;background:rgba(4,24,34,.94)!important;box-shadow:0 8px 22px rgba(0,0,0,.22)!important}
+.globe-stage.has-gpu-points .globe-cluster>strong small{color:rgba(220,233,229,.72)!important}
+@media(prefers-reduced-motion:reduce){.globe-stage.has-gpu-points .globe-pin>span{transition:none!important}}
+`;
+  document.head.append(style);
+}
+
 const VERTEX_SHADER = `
   attribute vec3 pointColor;
   attribute float pointScale;
@@ -29,9 +47,9 @@ const VERTEX_SHADER = `
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * viewPosition;
 
-    float perspective = clamp(2.80 / max(1.08, -viewPosition.z), 0.76, 1.34);
-    float closeLift = mix(0.90, 1.12, smoothstep(1.5, 6.5, uZoom));
-    float densityLift = 1.0 + min(0.24, log2(max(1.0, pointDensity)) * 0.055);
+    float perspective = clamp(2.90 / max(1.06, -viewPosition.z), 0.80, 1.42);
+    float closeLift = mix(0.96, 1.34, smoothstep(1.35, 7.5, uZoom));
+    float densityLift = 1.0 + min(0.28, log2(max(1.0, pointDensity)) * 0.06);
     gl_PointSize = uPointSize * pointScale * perspective * closeLift * densityLift * uPixelRatio;
   }
 `;
@@ -51,29 +69,29 @@ const FRAGMENT_SHADER = `
 
     float aa = 1.0 - smoothstep(0.455, 0.50, radius);
     float outer = 1.0 - smoothstep(0.405, 0.48, radius);
-    float keyline = smoothstep(0.31, 0.35, radius) * (1.0 - smoothstep(0.395, 0.44, radius));
-    float innerDisc = 1.0 - smoothstep(0.0, 0.275, radius);
-    float innerRing = smoothstep(0.13, 0.205, radius) * (1.0 - smoothstep(0.285, 0.355, radius));
-    float centerDot = 1.0 - smoothstep(0.0, 0.09, radius);
+    float keyline = smoothstep(0.30, 0.345, radius) * (1.0 - smoothstep(0.405, 0.455, radius));
+    float innerDisc = 1.0 - smoothstep(0.0, 0.285, radius);
+    float innerRing = smoothstep(0.115, 0.185, radius) * (1.0 - smoothstep(0.285, 0.355, radius));
+    float centerDot = 1.0 - smoothstep(0.0, 0.105, radius);
 
     float isDirect = 1.0 - step(0.5, vPointKind);
     float isLocator = step(0.5, vPointKind) * (1.0 - step(1.5, vPointKind));
     float isNetwork = step(1.5, vPointKind);
 
     float semanticShape = isDirect * innerDisc
-      + isLocator * innerRing
-      + isNetwork * max(innerRing * 0.72, centerDot * 0.72);
+      + isLocator * max(innerRing, centerDot * 0.42)
+      + isNetwork * max(innerRing * 0.78, centerDot * 0.82);
 
-    float worldCalm = mix(0.74, 1.0, smoothstep(1.3, 4.5, uZoom));
-    float densityConfidence = 0.88 + min(0.12, log2(max(1.0, vPointDensity)) * 0.03);
-    float alpha = max(semanticShape, keyline * 0.82) * aa * vPointOpacity * uOpacity * worldCalm * densityConfidence;
-    if (alpha < 0.025) discard;
+    float worldCalm = mix(0.82, 1.0, smoothstep(1.2, 4.4, uZoom));
+    float densityConfidence = 0.90 + min(0.10, log2(max(1.0, vPointDensity)) * 0.028);
+    float alpha = max(semanticShape, keyline * 0.94) * aa * vPointOpacity * uOpacity * worldCalm * densityConfidence;
+    if (alpha < 0.02) discard;
 
-    vec3 darkEdge = vec3(0.008, 0.050, 0.070);
-    vec3 lightKeyline = vec3(0.94, 0.98, 0.97);
+    vec3 darkEdge = vec3(0.006, 0.038, 0.055);
+    vec3 lightKeyline = vec3(0.97, 0.99, 0.985);
     vec3 color = vPointColor;
-    color = mix(color, lightKeyline, keyline * 0.82);
-    color = mix(color, darkEdge, (1.0 - outer) * 0.88);
+    color = mix(color, lightKeyline, keyline * 0.92);
+    color = mix(color, darkEdge, (1.0 - outer) * 0.90);
 
     gl_FragColor = vec4(color, alpha);
   }
@@ -83,23 +101,19 @@ function resourceVector(resource, radius = 1.009) {
   const latitude = THREE.MathUtils.degToRad(Number(resource.lat));
   const longitude = THREE.MathUtils.degToRad(Number(resource.lng));
   const cosLat = Math.cos(latitude);
-  return [
-    radius * cosLat * Math.sin(longitude),
-    radius * Math.sin(latitude),
-    radius * cosLat * Math.cos(longitude)
-  ];
+  return [radius * cosLat * Math.sin(longitude), radius * Math.sin(latitude), radius * cosLat * Math.cos(longitude)];
 }
 
 function resourcePointScale(resource) {
   if (resource.kind === "direct") return 1;
-  if (resource.kind === "locator") return 0.92;
-  return 0.82;
+  if (resource.kind === "locator") return 0.98;
+  return 0.90;
 }
 
 function resourcePointOpacity(resource) {
   if (resource.kind === "direct") return 1;
-  if (resource.kind === "locator") return 0.84;
-  return 0.66;
+  if (resource.kind === "locator") return 0.92;
+  return 0.78;
 }
 
 function resourcePointKind(resource) {
@@ -148,9 +162,7 @@ function consolidateResources(resources, zoom) {
     current.density += 1;
     const currentPriority = representativePriority(current.resource);
     const candidatePriority = representativePriority(resource);
-    if (candidatePriority > currentPriority || (candidatePriority === currentPriority && resource.id < current.resource.id)) {
-      current.resource = resource;
-    }
+    if (candidatePriority > currentPriority || (candidatePriority === currentPriority && resource.id < current.resource.id)) current.resource = resource;
   }
   return [...cells.values()];
 }
@@ -190,8 +202,7 @@ function buildGeometry(entries) {
 
 function rebuildForZoom(points, zoom) {
   if (!points) return;
-  const allResources = points.userData.allResources || [];
-  const entries = consolidateResources(allResources, zoom);
+  const entries = consolidateResources(points.userData.allResources || [], zoom);
   const previousGeometry = points.geometry;
   points.geometry = buildGeometry(entries);
   points.userData.resources = entries.map(({ resource }) => resource);
@@ -200,14 +211,15 @@ function rebuildForZoom(points, zoom) {
 }
 
 export function createGlobePointLayer(resources, _categories, { pixelRatio = 1 } = {}) {
+  installPointOverlayContract();
   const material = new THREE.ShaderMaterial({
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     uniforms: {
-      uPointSize: { value: window.innerWidth <= 600 ? 6.2 : 5.7 },
+      uPointSize: { value: window.innerWidth <= 600 ? 8.1 : 7.4 },
       uPixelRatio: { value: Math.min(2, Math.max(1, pixelRatio)) },
       uZoom: { value: 1 },
-      uOpacity: { value: 0.94 }
+      uOpacity: { value: 0.98 }
     },
     transparent: true,
     depthTest: true,
@@ -228,11 +240,10 @@ export function createGlobePointLayer(resources, _categories, { pixelRatio = 1 }
 export function replaceGlobePointResources(points, resources, _categories) {
   if (!points) return;
   points.userData.allResources = [...resources];
-  const zoom = points.material?.uniforms?.uZoom?.value || 1;
-  rebuildForZoom(points, zoom);
+  rebuildForZoom(points, points.material?.uniforms?.uZoom?.value || 1);
 }
 
-export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.94 } = {}) {
+export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.98 } = {}) {
   if (!points?.material?.uniforms) return;
   const nextBucket = densityBucketKey(zoom);
   if (points.userData.densityBucket !== nextBucket) rebuildForZoom(points, zoom);
