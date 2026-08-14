@@ -92,7 +92,7 @@ name.textContent=record.name;place.textContent=record.place;main.append(name,pla
 meta.textContent=`${record.categoryLabels.join(" · ")} · checked ${record.checked}${navigator.onLine?"":" · reconnect for full details"}`;
 link.append(main,meta);
 const actions=document.createElement("nav");actions.className="directory-global-result-actions";actions.setAttribute("aria-label",`Actions for ${record.name}`);
-if(record.phone){const number=record.phone.replace(/[^+\d]/g,"");actions.append(actionLink("Call",`tel:${number}`,"is-call",`Call ${record.name} at ${record.phone}`));}
+if(record.phone){const number=record.phone.replace(/[^+\d]/g,"");actions.append(actionLink(`Call ${record.phone}`,`tel:${number}`,"is-call",`Call ${record.name} at ${record.phone}`));}
 if(record.kind==="direct"&&Number.isFinite(record.lat)&&Number.isFinite(record.lng)){
 const coordinate=`${record.lat},${record.lng}`;
 actions.append(actionLink("Apple Maps",`https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(record.name)}`,"is-map",`Get directions to ${record.name} in Apple Maps`));
