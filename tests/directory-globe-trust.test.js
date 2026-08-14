@@ -23,7 +23,7 @@ test("directory search results expose direct actions without turning the record 
   const client = await text("public/directory.js");
   assert.match(client, /directory-global-result-wrap/);
   assert.match(client, /directory-global-result-actions/);
-  assert.match(client, /actionLink\("Call"/);
+  assert.match(client, /actionLink\(`Call \$\{record\.phone\}`/);
   assert.match(client, /maps\.apple\.com\/\?daddr=/);
   assert.match(client, /google\.com\/maps\/dir\/\?api=1&destination=/);
   assert.match(client, /actionLink\("View details"/);
