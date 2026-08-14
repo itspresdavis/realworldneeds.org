@@ -1,5 +1,4 @@
 const root=document.querySelector("[data-directory-search]");
-
 if(root){
 const input=root.querySelector("[data-directory-query]");
 const clear=root.querySelector("[data-directory-clear]");
@@ -13,126 +12,29 @@ const currentScope=location.pathname.replace(/\/page\/\d+\/?$/,"").replace(/\/$/
 const releaseVersion=new URL(import.meta.url).searchParams.get("v")||"";
 const searchIndexUrl=`/data/search-index.json${releaseVersion?`?v=${encodeURIComponent(releaseVersion)}`:""}`;
 const normalize=value=>String(value||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase().replace(/[^a-z0-9+]+/g," ").trim();
-const aliases=new Map(Object.entries({
-meals:"food",meal:"food",pantry:"food",pantries:"food",groceries:"food",comida:"food",nourriture:"food",
-drinking:"water",hydration:"water",agua:"water",eau:"water",
-housing:"shelter",homeless:"shelter",bed:"shelter",albergue:"shelter",refugio:"shelter",alojamiento:"shelter",abri:"shelter",
-shower:"hygiene",showers:"hygiene",laundry:"hygiene",toiletries:"hygiene",ducha:"hygiene",duchas:"hygiene",lavanderia:"hygiene",douche:"hygiene",
-clothes:"clothing",shoes:"clothing",blanket:"clothing",ropa:"clothing",roupas:"clothing",vetements:"clothing",
-doctor:"health",clinic:"health",clinics:"health",dental:"health",medical:"health",healthcare:"health",salud:"health",saude:"health",sante:"health",clinica:"health"
-}));
+const aliases=new Map(Object.entries({meals:"food",meal:"food",pantry:"food",pantries:"food",groceries:"food",comida:"food",nourriture:"food",drinking:"water",hydration:"water",agua:"water",eau:"water",housing:"shelter",homeless:"shelter",bed:"shelter",albergue:"shelter",refugio:"shelter",alojamiento:"shelter",abri:"shelter",shower:"hygiene",showers:"hygiene",laundry:"hygiene",toiletries:"hygiene",ducha:"hygiene",duchas:"hygiene",lavanderia:"hygiene",douche:"hygiene",clothes:"clothing",shoes:"clothing",blanket:"clothing",ropa:"clothing",roupas:"clothing",vetements:"clothing",doctor:"health",clinic:"health",clinics:"health",dental:"health",medical:"health",healthcare:"health",salud:"health",saude:"health",sante:"health",clinica:"health"}));
 const noise=new Set(["a","an","the","for","to","of","please","find","finding","need","needs","help","free","near","nearby","me","my","local","around","ayuda","gratis","cerca","aide","gratuit","ajuda","perto"]);
 const queryTokens=value=>normalize(value).split(/\s+/).filter(token=>token&&!noise.has(token)).map(token=>aliases.get(token)||token);
 let categoryLabels=[...new Set(pageRecords.flatMap(record=>[...record.querySelectorAll(".directory-aid li")].map(item=>item.textContent.trim())).filter(Boolean))].sort((a,b)=>collator.compare(a,b));
 let activeCategory="",catalogPromise,generation=0;
-
 const connectivityNotice=document.createElement("div");
-connectivityNotice.id="offlineDirectoryNotice";
-connectivityNotice.className="policy-note warning-note";
-connectivityNotice.setAttribute("role","status");
-connectivityNotice.tabIndex=-1;
-connectivityNotice.hidden=true;
-connectivityNotice.innerHTML="<p><strong>Offline mode.</strong> You can search the saved public directory, but current availability and service-detail pages require a connection. Reconnect before traveling or relying on a listing.</p>";
-root.insertAdjacentElement("beforebegin",connectivityNotice);
-
+connectivityNotice.id="offlineDirectoryNotice";connectivityNotice.className="policy-note warning-note";connectivityNotice.setAttribute("role","status");connectivityNotice.tabIndex=-1;connectivityNotice.hidden=true;connectivityNotice.innerHTML="<p><strong>Offline mode.</strong> You can search the saved public directory, but current availability and service-detail pages require a connection. Reconnect before traveling or relying on a listing.</p>";root.insertAdjacentElement("beforebegin",connectivityNotice);
 const results=document.createElement("section");
-results.className="directory-global-results";
-results.hidden=true;
-results.setAttribute("aria-label","Full directory search results");
-results.innerHTML='<div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" data-global-list></div>';
-root.insertAdjacentElement("afterend",results);
+results.className="directory-global-results";results.hidden=true;results.setAttribute("aria-label","Full directory search results");results.innerHTML='<div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" data-global-list></div>';root.insertAdjacentElement("afterend",results);
 const resultList=results.querySelector("[data-global-list]");
 const resultSummary=results.querySelector("[data-global-summary]");
 const showConnectivityState=()=>{connectivityNotice.hidden=navigator.onLine;};
 const scopedRecords=payload=>currentScope==="/directory"?payload.records:(payload.scopes[currentScope]||[]).map(index=>payload.records[index]).filter(Boolean);
-
-const renderChips=()=>{
-if(!chips)return;
-const expected=[["All help",""],...categoryLabels.map(label=>[label,label])];
-const current=[...chips.querySelectorAll("[data-directory-category]")];
-if(current.length!==expected.length||current.some((button,index)=>button.dataset.directoryCategory!==expected[index][1])){
-const fragment=document.createDocumentFragment();
-for(const [label,value] of expected){const button=document.createElement("button");button.type="button";button.dataset.directoryCategory=value;button.textContent=label;fragment.append(button);}
-chips.replaceChildren(fragment);
-}
-for(const button of chips.querySelectorAll("[data-directory-category]"))button.setAttribute("aria-pressed",String(normalize(button.dataset.directoryCategory)===activeCategory));
-};
-
-const syncCategoryLabels=payload=>{
-const full=[...new Set(scopedRecords(payload).flatMap(record=>record.categoryLabels||[]).filter(Boolean))].sort((a,b)=>collator.compare(a,b));
-if(full.length===categoryLabels.length&&full.every((label,index)=>label===categoryLabels[index]))return;
-categoryLabels=full;renderChips();
-};
-
-const loadCatalog=()=>{
-catalogPromise||=fetch(searchIndexUrl,{credentials:"same-origin",cache:"force-cache"})
-.then(response=>{if(!response.ok)throw new Error(`Search index unavailable (${response.status})`);return response.json();})
-.then(payload=>{if(!Array.isArray(payload.records)||!payload.scopes)throw new Error("Search index is invalid");return payload;});
-return catalogPromise;
-};
-
-const clearGlobalResults=()=>{
-results.hidden=true;resultList.replaceChildren();shell?.classList.remove("has-global-search");
-if(count)count.textContent=`${pageRecords.length.toLocaleString()} listings on this page`;
-};
-const scoreRecord=(record,tokens)=>{
-const name=normalize(record.name),place=normalize(record.place);
-if(!tokens.every(token=>record.search.includes(token)))return-1;
-return tokens.reduce((score,token)=>score+(name===token?25:name.startsWith(token)?16:name.includes(token)?10:place.includes(token)?7:2),0);
-};
-const actionLink=(label,href,className,ariaLabel)=>{
-const link=document.createElement("a");link.href=href;link.textContent=label;link.className=className||"";link.setAttribute("aria-label",ariaLabel);if(href.startsWith("http"))link.rel="noopener noreferrer";return link;
-};
-
-const resultRow=record=>{
-const wrap=document.createElement("div");wrap.className="directory-global-result-wrap";
-const link=document.createElement("a");link.className="directory-global-result";link.href=`/service/${encodeURIComponent(record.id)}`;
-const main=document.createElement("span"),name=document.createElement("strong"),place=document.createElement("span"),meta=document.createElement("small");
-name.textContent=record.name;place.textContent=record.place;main.append(name,place);
-meta.textContent=`${record.categoryLabels.join(" · ")} · checked ${record.checked}${navigator.onLine?"":" · reconnect for full details"}`;
-link.append(main,meta);
-const actions=document.createElement("nav");actions.className="directory-global-result-actions";actions.setAttribute("aria-label",`Actions for ${record.name}`);
-if(record.phone){const number=record.phone.replace(/[^+\d]/g,"");actions.append(actionLink(`Call ${record.phone}`,`tel:${number}`,"is-call",`Call ${record.name} at ${record.phone}`));}
-if(record.kind==="direct"&&Number.isFinite(record.lat)&&Number.isFinite(record.lng)){
-const coordinate=`${record.lat},${record.lng}`;
-actions.append(actionLink("Apple Maps",`https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(record.name)}`,"is-map",`Get directions to ${record.name} in Apple Maps`));
-actions.append(actionLink("Google Maps",`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`,"is-map",`Get directions to ${record.name} in Google Maps`));
-}
-actions.append(actionLink("View details",link.href,"is-details",`View details for ${record.name}`));wrap.append(link,actions);
-if(!navigator.onLine){link.setAttribute("aria-describedby",connectivityNotice.id);link.addEventListener("click",event=>{event.preventDefault();connectivityNotice.hidden=false;connectivityNotice.focus({preventScroll:true});connectivityNotice.scrollIntoView({block:"center",behavior:"auto"});});}
-return wrap;
-};
-
-const apply=async()=>{
-const tokens=queryTokens(input?.value||"");
-const filtering=Boolean(tokens.length||activeCategory),currentGeneration=++generation;
-if(clear)clear.hidden=!filtering;root.classList.toggle("has-filter",filtering);
-if(!filtering){clearGlobalResults();return;}
-if(count)count.textContent="Searching this directory…";
-try{
-const payload=await loadCatalog();if(currentGeneration!==generation)return;syncCategoryLabels(payload);
-const scoped=scopedRecords(payload);
-const matches=scoped.filter(record=>!activeCategory||record.categoryLabels.some(label=>normalize(label)===activeCategory)).map(record=>({record,score:scoreRecord(record,tokens)})).filter(({score})=>score>=0).sort((left,right)=>right.score-left.score||collator.compare(left.record.name,right.record.name));
-resultList.replaceChildren(...matches.slice(0,MAX_RESULTS).map(({record})=>resultRow(record)));results.hidden=false;shell?.classList.add("has-global-search");
-const shown=Math.min(matches.length,MAX_RESULTS);
-resultSummary.textContent=matches.length>shown?`${matches.length.toLocaleString()} matches · showing the first ${shown}`:`${matches.length.toLocaleString()} matches across ${scoped.length.toLocaleString()} listings`;
-if(count)count.textContent=matches.length?`${matches.length.toLocaleString()} matching listings${navigator.onLine?"":" · offline copy"}`:"No matching listings";
-}catch{if(currentGeneration!==generation)return;clearGlobalResults();if(count)count.textContent="Full-directory search is temporarily unavailable. Use the interactive finder or browse this page.";}
-};
-
+const renderChips=()=>{if(!chips)return;const expected=[["All help",""],...categoryLabels.map(label=>[label,label])];const current=[...chips.querySelectorAll("[data-directory-category]")];if(current.length!==expected.length||current.some((button,index)=>button.dataset.directoryCategory!==expected[index][1])){const fragment=document.createDocumentFragment();for(const [label,value] of expected){const button=document.createElement("button");button.type="button";button.dataset.directoryCategory=value;button.textContent=label;fragment.append(button);}chips.replaceChildren(fragment);}for(const button of chips.querySelectorAll("[data-directory-category]"))button.setAttribute("aria-pressed",String(normalize(button.dataset.directoryCategory)===activeCategory));};
+const syncCategoryLabels=payload=>{const full=[...new Set(scopedRecords(payload).flatMap(record=>record.categoryLabels||[]).filter(Boolean))].sort((a,b)=>collator.compare(a,b));if(full.length===categoryLabels.length&&full.every((label,index)=>label===categoryLabels[index]))return;categoryLabels=full;renderChips();};
+const loadCatalog=()=>{catalogPromise||=fetch(searchIndexUrl,{credentials:"same-origin",cache:"force-cache"}).then(response=>{if(!response.ok)throw new Error(`Search index unavailable (${response.status})`);return response.json();}).then(payload=>{if(!Array.isArray(payload.records)||!payload.scopes)throw new Error("Search index is invalid");return payload;});return catalogPromise;};
+const clearGlobalResults=()=>{results.hidden=true;resultList.replaceChildren();shell?.classList.remove("has-global-search");if(count)count.textContent=`${pageRecords.length.toLocaleString()} listings on this page`;};
+const scoreRecord=(record,tokens)=>{const name=normalize(record.name),place=normalize(record.place);if(!tokens.every(token=>record.search.includes(token)))return-1;return tokens.reduce((score,token)=>score+(name===token?25:name.startsWith(token)?16:name.includes(token)?10:place.includes(token)?7:2),0);};
+const actionLink=(label,href,className,ariaLabel)=>{const link=document.createElement("a");link.href=href;link.textContent=label;link.className=className||"";link.setAttribute("aria-label",ariaLabel);if(href.startsWith("http"))link.rel="noopener noreferrer";return link;};
+const resultRow=record=>{const wrap=document.createElement("div");wrap.className="directory-global-result-wrap";const link=document.createElement("a");link.className="directory-global-result";link.href=`/service/${encodeURIComponent(record.id)}`;const main=document.createElement("span"),name=document.createElement("strong"),place=document.createElement("span"),meta=document.createElement("small");name.textContent=record.name;place.textContent=` — ${record.place}`;main.append(name,place);meta.textContent=`${record.categoryLabels.join(" · ")} · checked ${record.checked}${navigator.onLine?"":" · reconnect for full details"}`;link.append(main,meta);const actions=document.createElement("nav");actions.className="directory-global-result-actions";actions.setAttribute("aria-label",`Actions for ${record.name}`);if(record.phone){const number=record.phone.replace(/[^+\d]/g,"");actions.append(actionLink(`Call ${record.phone}`,`tel:${number}`,"is-call",`Call ${record.name} at ${record.phone}`));}if(record.kind==="direct"&&Number.isFinite(record.lat)&&Number.isFinite(record.lng)){const coordinate=`${record.lat},${record.lng}`;actions.append(actionLink("Apple Maps",`https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(record.name)}`,"is-map",`Get directions to ${record.name} in Apple Maps`));actions.append(actionLink("Google Maps",`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`,"is-map",`Get directions to ${record.name} in Google Maps`));}actions.append(actionLink("View details",link.href,"is-details",`View details for ${record.name}`));wrap.append(link,actions);if(!navigator.onLine){link.setAttribute("aria-describedby",connectivityNotice.id);link.addEventListener("click",event=>{event.preventDefault();connectivityNotice.hidden=false;connectivityNotice.focus({preventScroll:true});connectivityNotice.scrollIntoView({block:"center",behavior:"auto"});});}return wrap;};
+const apply=async()=>{const tokens=queryTokens(input?.value||"");const filtering=Boolean(tokens.length||activeCategory),currentGeneration=++generation;if(clear)clear.hidden=!filtering;root.classList.toggle("has-filter",filtering);if(!filtering){clearGlobalResults();return;}if(count)count.textContent="Searching this directory…";try{const payload=await loadCatalog();if(currentGeneration!==generation)return;syncCategoryLabels(payload);const scoped=scopedRecords(payload);const matches=scoped.filter(record=>!activeCategory||record.categoryLabels.some(label=>normalize(label)===activeCategory)).map(record=>({record,score:scoreRecord(record,tokens)})).filter(({score})=>score>=0).sort((left,right)=>right.score-left.score||collator.compare(left.record.name,right.record.name));resultList.replaceChildren(...matches.slice(0,MAX_RESULTS).map(({record})=>resultRow(record)));results.hidden=false;shell?.classList.add("has-global-search");const shown=Math.min(matches.length,MAX_RESULTS),matchWord=matches.length===1?"match":"matches",listingWord=scoped.length===1?"listing":"listings";resultSummary.textContent=matches.length>shown?`${matches.length.toLocaleString()} ${matchWord} · showing the first ${shown}`:`${matches.length.toLocaleString()} ${matchWord} across ${scoped.length.toLocaleString()} ${listingWord}`;if(count)count.textContent=matches.length?`${matches.length.toLocaleString()} matching ${matches.length===1?"listing":"listings"}${navigator.onLine?"":" · offline copy"}`:"No matching listings";}catch{if(currentGeneration!==generation)return;clearGlobalResults();if(count)count.textContent="Full-directory search is temporarily unavailable. Use the interactive finder or browse this page.";}};
 const reset=()=>{generation+=1;if(input)input.value="";activeCategory="";renderChips();clearGlobalResults();root.classList.remove("has-filter");if(clear)clear.hidden=true;input?.focus();};
 let inputTimer;
-input?.addEventListener("focus",()=>{loadCatalog().then(syncCategoryLabels).catch(()=>{});},{once:true});
-input?.addEventListener("input",()=>{clearTimeout(inputTimer);inputTimer=setTimeout(apply,80);});
-input?.addEventListener("keydown",event=>{if(event.key==="Escape"){event.preventDefault();reset();}});
-clear?.addEventListener("click",reset);
-chips?.addEventListener("click",event=>{const button=event.target.closest("[data-directory-category]");if(!button)return;activeCategory=normalize(button.dataset.directoryCategory);renderChips();apply();});
-document.addEventListener("keydown",event=>{if(event.key!=="/"||event.metaKey||event.ctrlKey||event.altKey)return;if(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement||event.target?.isContentEditable)return;event.preventDefault();input?.focus();});
-const connectivityChanged=()=>{showConnectivityState();if(!results.hidden)apply();};
-window.addEventListener("online",connectivityChanged);window.addEventListener("offline",connectivityChanged);showConnectivityState();renderChips();clearGlobalResults();
+input?.addEventListener("focus",()=>{loadCatalog().then(syncCategoryLabels).catch(()=>{});},{once:true});input?.addEventListener("input",()=>{clearTimeout(inputTimer);inputTimer=setTimeout(apply,80);});input?.addEventListener("keydown",event=>{if(event.key==="Escape"){event.preventDefault();reset();}});clear?.addEventListener("click",reset);chips?.addEventListener("click",event=>{const button=event.target.closest("[data-directory-category]");if(!button)return;activeCategory=normalize(button.dataset.directoryCategory);renderChips();apply();});document.addEventListener("keydown",event=>{if(event.key!=="/"||event.metaKey||event.ctrlKey||event.altKey)return;if(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement||event.target?.isContentEditable)return;event.preventDefault();input?.focus();});const connectivityChanged=()=>{showConnectivityState();if(!results.hidden)apply();};window.addEventListener("online",connectivityChanged);window.addEventListener("offline",connectivityChanged);showConnectivityState();renderChips();clearGlobalResults();
 }
-
-if("serviceWorker" in navigator&&window.isSecureContext){
-const register=()=>navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(()=>{});
-if(document.readyState==="complete")register();else window.addEventListener("load",register,{once:true});
-}
+if("serviceWorker" in navigator&&window.isSecureContext){const register=()=>navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(()=>{});if(document.readyState==="complete")register();else window.addEventListener("load",register,{once:true});}
