@@ -398,7 +398,7 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find free help near you.</h1>
+              <h1>Find essential services near you.</h1>
               <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
             </div>
 
@@ -406,7 +406,7 @@ function shell() {
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search a place or service" autocomplete="off">
+                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by need, service, or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>

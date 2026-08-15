@@ -53,6 +53,7 @@
         .preboot-finder a { display:inline-flex; min-height:2.75rem; align-items:center; padding:.58rem .7rem; border:1px solid #cdd7d3; border-radius:6px; background:#fff; color:#294149; font:650 .75rem/1 system-ui,sans-serif; text-decoration:none; }
         .preboot-finder__directory { margin-top:1.15rem!important; }
         .preboot-finder__directory a, .preboot-finder__trust a { min-height:auto; border:0; padding:0; background:transparent; color:#07538d; text-decoration:underline; text-underline-offset:3px; }
+        .preboot-finder__status { margin-top:1rem!important; color:#67777c!important; font-size:.72rem!important; }
         .preboot-finder__trust { font-size:.74rem!important; }
       }
       @media (max-width:600px) {
@@ -72,9 +73,7 @@
         .preboot-finder { min-height:auto; padding:2rem .9rem 2.4rem; }
         .preboot-finder h1 { max-width:17ch; font-size:clamp(1.9rem,8vw,2.35rem); line-height:1.03; }
         .preboot-finder p { margin-top:.6rem; font-size:.84rem; line-height:1.5; }
-        .preboot-finder nav { flex-wrap:nowrap; overflow-x:auto; margin-top:.85rem; scrollbar-width:none; }
-        .preboot-finder nav::-webkit-scrollbar { display:none; }
-        .preboot-finder nav a { flex:0 0 auto; }
+        .preboot-finder nav { flex-wrap:wrap; margin-top:.85rem; }
       }
       @media (prefers-reduced-transparency: reduce) {
         .site-header, .globe-cluster-tray { -webkit-backdrop-filter:none; backdrop-filter:none; }
@@ -133,15 +132,16 @@
       <main class="preboot-finder" id="preboot-finder">
         <div class="preboot-finder__inner">
           <h1>Find essential services near you.</h1>
-          <p>Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>
+          <p>Search by need, service, or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>
           <nav aria-label="Browse help by need">
             <a href="/directory/help/food">Food</a>
-            <a href="/directory/help/shelter">Shelter</a>
-            <a href="/directory/help/health">Health care</a>
-            <a href="/directory/help/hygiene">Hygiene</a>
-            <a href="/directory/help/clothing">Clothing</a>
             <a href="/directory/help/water">Water</a>
+            <a href="/directory/help/shelter">Shelter</a>
+            <a href="/directory/help/clothing">Clothing</a>
+            <a href="/directory/help/hygiene">Hygiene</a>
+            <a href="/directory/help/health">Health care</a>
           </nav>
+          <p class="preboot-finder__status" role="status">Preparing the interactive finder. Browse by need while it loads.</p>
           <p class="preboot-finder__directory"><a href="/directory">Browse the full directory</a></p>
           <p class="preboot-finder__trust"><a href="/editorial-policy">How listings are checked</a> · <a href="/transparency">Transparency</a> · <a href="/accessibility">Accessibility</a></p>
         </div>

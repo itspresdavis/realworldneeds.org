@@ -52,7 +52,7 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it."
+    "Search by need, service, or place. Listings include provider contact details, the original source, and the date RWN checked it."
   );
 
   const status = document.getElementById("locationStatus");

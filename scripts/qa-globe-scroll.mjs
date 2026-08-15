@@ -187,7 +187,9 @@ try {
 } finally {
   socket.close();
   chrome.kill("SIGKILL");
-  await rm(profile, { recursive: true, force: true });
+  // Chromium can release profile files just after its parent exits; retry so a
+  // passing globe test cannot fail solely during temporary-profile cleanup.
+  await rm(profile, { recursive: true, force: true, maxRetries: 12, retryDelay: 150 });
 }
 
 for (const result of results) {

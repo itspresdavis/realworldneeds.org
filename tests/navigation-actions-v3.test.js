@@ -55,6 +55,17 @@ test("service pages make call and one clear directions choice immediate while pr
   assert.match(next, /href="\/#resource=/);
 });
 
+test("resource-finder service pages do not promise directions and explain their non-walk-in status", async () => {
+  const resource = resources.find((item) => item.kind === "locator" || item.kind === "network");
+  assert.ok(resource);
+  const html = await text(`dist/service/${resource.id}/index.html`);
+  const next = html.match(/<nav class="service-next-steps"[\s\S]*?<\/nav>/)?.[0] || "";
+  assert.doesNotMatch(next, /Get directions/);
+  assert.doesNotMatch(next, /class="is-map is-directions"/);
+  assert.match(next, /not a walk-in location/);
+  assert.match(next, /Official source/);
+});
+
 test("whole-directory search index carries only the fields needed for immediate actions", async () => {
   const payload = JSON.parse(await text("dist/data/search-index.json"));
   assert.equal(payload.schemaVersion, "1.3");

@@ -171,17 +171,25 @@ function directoryQuickActions(resource) {
 
 function serviceActions(resource) {
   const links = [];
+  const isDirectLocation = resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng);
+  const isFinder = resource.kind === "locator" || resource.kind === "network";
+  const nextStep = isDirectLocation
+    ? (resource.phone ? "Call, get directions, or verify current details" : "Get directions or verify current details")
+    : (resource.phone ? "Call or verify current details" : "Verify current details");
+  const context = isFinder
+    ? `<span class="service-next-steps__context">Official ${resource.kind === "locator" ? "resource finder" : "service network"} — not a walk-in location.</span>`
+    : "";
   if (resource.phone) {
     const number = resource.phone.replace(/[^+\d]/g, "");
     links.push(`<a class="is-call" href="tel:${escapeHtml(number)}"><strong>Call</strong><span>${escapeHtml(resource.phone)}</span></a>`);
   }
-  if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+  if (isDirectLocation) {
     const maps = mapsFor(resource);
     links.push(`<a class="is-map is-directions" href="${escapeHtml(maps.google)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open a route in your maps app</span></a>`);
   }
   links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`);
   links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  return `<nav class="service-next-steps" aria-label="Contact or get directions for this service"><div><span>Next step</span><strong>${resource.phone ? "Call, get directions, or verify current details" : "Get directions or verify current details"}</strong></div><div>${links.join("")}</div></nav>`;
+  return `<nav class="service-next-steps" aria-label="${isDirectLocation ? "Contact or get directions" : "Contact or verify current details"} for this service"><div><span>Next step</span><strong>${nextStep}</strong>${context}</div><div>${links.join("")}</div></nav>`;
 }
 
 function enhanceActionOrientation(html) {
@@ -221,7 +229,6 @@ function enhanceHome(html, release) {
     .replaceAll("Real World Needs | Find Free Food, Shelter, Health Care & Essential Help", HOME_TITLE)
     .replaceAll("Find free food, shelter, health care, clothing, hygiene support, drinking water, and other essential services in one searchable directory.", HOME_DESCRIPTION)
     .replaceAll("Search free essential services and go directly to the original organization or public source. Find food, shelter, health care, clothing, hygiene support, drinking water, and more.", HOME_DESCRIPTION)
-    .replace("<h1>Find free help near you.</h1>", "<h1>Find essential services near you.</h1>")
     .replace(
       "<p>Real World Needs helps you find food, shelter, health care, showers and hygiene support, clothing, drinking water, and other essentials. Every listing stays connected to the organization or public source behind it.</p>",
       "<p>Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>"
