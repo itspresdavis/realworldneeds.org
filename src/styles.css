@@ -5114,6 +5114,11 @@ svg {
   z-index: 6;
 }
 .globe-fallback p { margin: 0; }
+.globe-fallback__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .globe-fallback__action {
   display: inline-flex;
   align-items: center;
@@ -5126,6 +5131,21 @@ svg {
   text-decoration: none;
 }
 .globe-fallback__action:hover { background: #59e3d8; }
+.globe-fallback__retry {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(220, 236, 232, 0.46);
+  border-radius: 999px;
+  background: transparent;
+  color: #dcece8;
+  font: inherit;
+  font-weight: 650;
+}
+.globe-fallback__retry:hover,
+.globe-fallback__retry:focus-visible {
+  border-color: #dcece8;
+  background: rgba(220, 236, 232, 0.1);
+}
 .globe-stage.is-globe-unavailable .globe-canvas,
 .globe-stage.is-globe-unavailable .globe-pin-layer,
 .globe-stage.is-globe-unavailable .globe-controls,

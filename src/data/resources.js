@@ -1413,6 +1413,6 @@ export const trustPrinciples = [
   },
   {
     title: "Privacy comes first",
-    text: "You do not need an account. Your exact location stays on your device, and we do not use advertising trackers or marketing cookies."
+    text: "You do not need an account. If you choose location, RWN uses it in your browser to sort nearby listings; for U.S. meal searches, the USDA receives only an approximate area. RWN does not use advertising trackers or marketing cookies."
   }
 ];

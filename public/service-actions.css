@@ -118,8 +118,7 @@
   .service-utility-actions,
   .legal-header,
   .legal-footer,
-  .directory-downloads,
-  .related-services {
+  .directory-downloads {
     display: none !important;
   }
 
@@ -128,10 +127,9 @@
     box-shadow: none !important;
   }
 
-  #service a[href^="http"]::after {
-    content: " (" attr(href) ")";
-    overflow-wrap: anywhere;
-    font-size: .85em;
-    font-weight: 400;
+  #service .related-services {
+    display: block !important;
+    margin-top: 1.5rem;
+    break-inside: avoid;
   }
 }

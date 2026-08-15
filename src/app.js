@@ -142,6 +142,7 @@ const state = {
   userLocation: null,
   userLocationAccuracy: null,
   userCountry: null,
+  locationRecovery: "",
   rotationLon: -8,
   rotationLat: 12,
   targetLon: null,
@@ -218,6 +219,7 @@ let globeLastReadoutUpdate = 0;
 let globeCloseViewActive = false;
 let globeServicePoints = null;
 let globePointSignature = "";
+let globeContextLost = false;
 const globeRaycaster = new THREE.Raycaster();
 const globePointerNdc = new THREE.Vector2();
 const globeProjectionVector = new THREE.Vector3();
@@ -391,14 +393,16 @@ function shell() {
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
             </div>
+            <a class="jump-results" id="jumpResults" href="#results" aria-label="Skip the map and see matching services"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
 
             <div class="location-actions">
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
               <button class="location-clear" id="clearLocation" type="button" hidden>Clear</button>
             </div>
             <p class="location-status" id="locationStatus" aria-live="polite">Nearby service locations appear first. Regional resource finders appear after them.</p>
+            <p class="location-recovery" id="locationRecovery" role="status" aria-live="polite" hidden></p>
             <p class="live-source-status" id="liveSourceStatus">In the United States, location search also includes current USDA summer meal sites.</p>
-            <p class="location-privacy">Your exact location stays on your device. For U.S. meal searches, the USDA receives only an approximate area. <a href="/privacy#location">How location works</a></p>
+            <p class="location-privacy">Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">How location works</a></p>
             <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN does not provide emergency response. <a href="/terms#urgent-help">Safety notice</a></p>
 
             <details class="filter-disclosure">
@@ -444,9 +448,9 @@ function shell() {
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-fallback" id="globeFallback" hidden>
-              <p><strong>The interactive map needs WebGL,</strong> which this browser or device has turned off.</p>
+              <p id="globeFallbackMessage"><strong>The interactive map needs WebGL,</strong> which this browser or device has turned off.</p>
               <p>Every listing is still available as text, with the same contact details, sources and review dates.</p>
-              <a class="globe-fallback__action" href="/directory">Open the text directory</a>
+              <div class="globe-fallback__actions"><a class="globe-fallback__action" href="/directory">Open the text directory</a><button class="globe-fallback__retry" id="retryGlobe" type="button" hidden>Try the interactive map again</button></div>
             </div>
             <div class="globe-controls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
@@ -468,7 +472,7 @@ function shell() {
           <p role="note">${icon.info}<span>If someone is in immediate danger, contact local emergency services. RWN does not provide emergency response.</span></p>
         </div>
 
-        <div class="results-section">
+        <div class="results-section" id="results">
           <div class="results-heading">
             <div><span class="section-kicker">Search results</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
             <div class="results-tools">
@@ -605,6 +609,7 @@ function renderLocationState() {
   const button = document.getElementById("locateMe");
   const clear = document.getElementById("clearLocation");
   const status = document.getElementById("locationStatus");
+  const recovery = document.getElementById("locationRecovery");
   if (!button || !clear || !status) return;
   const active = Boolean(state.userLocation);
   button.classList.toggle("has-location", active);
@@ -613,7 +618,16 @@ function renderLocationState() {
   clear.hidden = !active;
   if (!active) {
     status.textContent = "Nearby service locations appear first. Regional resource finders appear after them.";
+    if (recovery) {
+      recovery.hidden = !state.locationRecovery;
+      recovery.textContent = state.locationRecovery;
+    }
     return;
+  }
+  state.locationRecovery = "";
+  if (recovery) {
+    recovery.hidden = true;
+    recovery.textContent = "";
   }
   const accuracy = state.userLocationAccuracy ? `Location accuracy about ${Math.round(state.userLocationAccuracy).toLocaleString()} m.` : "";
   const country = state.userCountry ? ` Resource finders for ${state.userCountry} appear after nearby locations.` : "";
@@ -803,6 +817,7 @@ function renderResults() {
   const count = document.getElementById("resultCount");
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
+  const matchingResultCount = document.getElementById("matchingResultCount");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
   document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Public requests" : state.savedOnly ? "Saved services" : state.userLocation ? "Help near you" : "Find a service";
   count.textContent = state.viewMode === "aid"
@@ -811,6 +826,7 @@ function renderResults() {
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
     : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type."}</p></div>`;
+  if (matchingResultCount) matchingResultCount.textContent = `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
 }
 
@@ -958,6 +974,7 @@ function clearUserLocation() {
   state.liveNationalCount = null;
   state.liveSourceStatus = "idle";
   state.liveSourceError = "";
+  state.locationRecovery = "";
   document.getElementById("locateMe")?.classList.remove("has-location", "is-loading");
   updateFilters();
 }
@@ -1269,6 +1286,18 @@ function initThreeGlobe() {
   globeStageElement = canvas?.closest(".globe-stage") || null;
   globePinLayerElement = document.getElementById("pinLayer");
   globeReadoutElement = document.getElementById("globeReadout");
+  if (canvas && !canvas.dataset.rwnContextRecovery) {
+    canvas.dataset.rwnContextRecovery = "true";
+    canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      globeContextLost = true;
+      state.autoRotate = false;
+      reportGlobeUnavailable("The interactive map paused because this device lost its graphics context. You can keep using text results or try the map again.", true);
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      recoverGlobeContext();
+    });
+  }
   const updateGlobeViewport = () => {
     const rect = canvas?.getBoundingClientRect();
     if (!rect) return;
@@ -1414,15 +1443,61 @@ function rebuildConnections() {
 // replaced with a direct route into the text directory rather than a
 // lower-fidelity drawing, so every visitor still reaches the listings.
 let globeUnavailableReported = false;
-function reportGlobeUnavailable() {
-  if (globeUnavailableReported) return;
+function reportGlobeUnavailable(message = "Interactive map unavailable on this device", retry = false) {
+  if (globeUnavailableReported && !retry) return;
   globeUnavailableReported = true;
   const stage = globeStageElement || document.querySelector(".globe-stage");
   if (stage) stage.classList.add("is-globe-unavailable");
   const status = document.getElementById("globeReadout");
-  if (status) status.textContent = "Interactive map unavailable on this device";
+  if (status) status.textContent = message;
   const fallback = document.getElementById("globeFallback");
   if (fallback) fallback.hidden = false;
+  const fallbackMessage = document.getElementById("globeFallbackMessage");
+  if (fallbackMessage) fallbackMessage.textContent = message;
+  const retryButton = document.getElementById("retryGlobe");
+  if (retryButton) retryButton.hidden = !retry;
+}
+
+function resetGlobeContextResources() {
+  globeRenderer?.dispose();
+  globeRenderer = null;
+  globeScene = null;
+  globeCamera = null;
+  globeWorld = null;
+  globeSurface = null;
+  globeBorders = null;
+  globeCountryHighlight = null;
+  globeGraticule = null;
+  globeAtmosphere = null;
+  globeLight = null;
+  globeFocusLight = null;
+  connectionGroup = null;
+  connectionParticles = [];
+  connectionSignature = "";
+  globeServicePoints = null;
+  globePointSignature = "";
+}
+
+function recoverGlobeContext() {
+  if (!globeCanvasElement) return;
+  resetGlobeContextResources();
+  globeContextLost = false;
+  globeUnavailableReported = false;
+  globeStageElement?.classList.remove("is-globe-unavailable");
+  const fallback = document.getElementById("globeFallback");
+  if (fallback) fallback.hidden = true;
+  const retryButton = document.getElementById("retryGlobe");
+  if (retryButton) retryButton.hidden = true;
+  try {
+    initThreeGlobe();
+    rebuildCountryBorders();
+    syncGlobePointLayer();
+    requestAnimationFrame(animateGlobe);
+    notify("Interactive map restored");
+  } catch {
+    globeContextLost = true;
+    reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
+  }
 }
 
 function renderThreeGlobe(width, height, now) {
@@ -1664,6 +1739,7 @@ function advanceGlobe(now) {
 }
 
 function animateGlobe(now) {
+  if (globeContextLost) return;
   if (!state.globeVisible || document.hidden) {
     lastFrame = now;
     requestAnimationFrame(animateGlobe);
@@ -2057,9 +2133,12 @@ function bindEvents() {
       return;
     }
     if (!navigator.geolocation) {
+      state.locationRecovery = "Location is not available in this browser. Search by city, ZIP or postcode instead.";
+      renderLocationState();
       notify("Location is not available in this browser");
       return;
     }
+    state.locationRecovery = "";
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
@@ -2085,9 +2164,12 @@ function bindEvents() {
       notify(nearby ? `Found ${nearby.toLocaleString()} service ${nearby === 1 ? "location" : "locations"} within 250 km` : "No service location is listed nearby yet. Showing regional resource finders next.");
     }, (error) => {
       button.classList.remove("is-loading");
+      state.locationRecovery = error.code === 1
+        ? "Location permission was not granted. Search by city, ZIP or postcode instead, or change this site’s location permission in your browser settings."
+        : "We could not get a nearby location. Try again, check browser settings, or search by city, ZIP or postcode instead.";
       renderLocationState();
-      notify(error.code === 1 ? "Location permission was not granted" : "A precise location was not available; try again or check browser settings");
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+      notify(error.code === 1 ? "Location permission was not granted" : "A nearby location was not available; try again or search by place");
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   });
 
   const canvas = document.getElementById("globeCanvas");
@@ -2484,6 +2566,10 @@ function bindEvents() {
     event.currentTarget.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
     event.currentTarget.setAttribute("aria-label", event.currentTarget.title);
     state.interactionUntil = 0;
+  });
+  document.getElementById("retryGlobe")?.addEventListener("click", () => {
+    globeContextLost = true;
+    recoverGlobeContext();
   });
 
   const siteMenu = document.querySelector(".site-menu");

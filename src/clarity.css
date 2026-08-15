@@ -767,7 +767,8 @@ body.rwn-professional main { display: block; }
   display: inline-flex;
   min-height: 44px;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: .65rem;
   margin-top: .9rem;
   padding: .62rem .85rem;
   border: 1px solid var(--rwn-green-dark);
@@ -778,6 +779,24 @@ body.rwn-professional main { display: block; }
   font-weight: 720;
   line-height: 1.15;
   text-decoration: none;
+}
+.rwn-professional .jump-results small {
+  padding: .14rem .38rem;
+  border: 1px solid rgba(255,255,255,.48);
+  border-radius: 999px;
+  color: rgba(255,255,255,.92);
+  font-size: .61rem;
+  font-weight: 760;
+  line-height: 1;
+}
+.rwn-professional .location-recovery {
+  margin: .55rem 0 0;
+  padding: .55rem .65rem;
+  border-left: 3px solid var(--rwn-blue);
+  background: #edf5f9;
+  color: #234c61;
+  font-size: .7rem;
+  line-height: 1.45;
 }
 .rwn-professional .jump-results:hover,
 .rwn-professional .jump-results:focus-visible {

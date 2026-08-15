@@ -62,7 +62,7 @@ function rewriteFinderCopy() {
   if (live) live.textContent = "In the United States, location search can also load current USDA summer meal sites.";
 
   const privacy = document.querySelector(".location-privacy");
-  if (privacy) privacy.innerHTML = `Your exact location stays in your browser. <a href="/privacy#location">Read how location works</a>.`;
+  if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Read how location works</a>.`;
 
   const safety = document.querySelector(".finder-safety");
   if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not an emergency service.`;
