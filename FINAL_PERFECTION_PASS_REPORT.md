@@ -96,6 +96,10 @@ The complete browser suite passed, including browser chaos, finder interaction, 
 
 The complete release gate passed **170/170** tests. Focused final-perfection contracts passed for canonical copy, preboot wrapping, and capability-aware resource-finder actions.
 
+## Production Verification
+
+Vercel deployed commit `171db0a9` to production with state `READY`. Fresh uncached checks of both `realworldneeds.org` and the deployment URL confirmed the canonical finder heading and search guidance. The live Los Angeles Regional Food Bank resource-finder detail page showed **Verify current details** and **Official resource finder — not a walk-in location**, with no unsupported Directions action.
+
 ## Before/After Evidence
 
 Before this pass, the source finder, runtime refinements, and static preboot shell used different search language; the 320 px preboot core-need row could scroll horizontally; and a resource finder without a verified destination still said “Get directions.” After this pass, wording is canonical, the static core-need row wraps in priority order, and resource finders explain their non-walk-in status beside an honest verification action.

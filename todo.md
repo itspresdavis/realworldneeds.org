@@ -13,4 +13,4 @@
 - [x] Implement, test, and deploy the selected changes to the live Real World Needs production site.
 - [x] Read the newly attached prompt and document its requirements for the correct RWN-WEB repository.
 - [x] Audit the prompt-affected surfaces and implement only the highest-value brand-preserving changes.
-- [ ] Run full regression and browser verification, then deploy the verified prompt-driven update to production.
+- [x] Run full regression and browser verification, then deploy the verified prompt-driven update to production.
