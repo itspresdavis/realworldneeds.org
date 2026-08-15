@@ -1,10 +1,10 @@
 const QUICK_TYPES = [
   ["food", "Food"],
+  ["water", "Water"],
   ["shelter", "Shelter"],
-  ["health", "Health care"],
-  ["hygiene", "Hygiene"],
   ["clothing", "Clothing"],
-  ["water", "Water"]
+  ["hygiene", "Hygiene"],
+  ["health", "Health care"]
 ];
 
 function layerButtons() {
@@ -60,7 +60,7 @@ function installQuickNeeds() {
   container.setAttribute("role", "group");
   container.setAttribute("aria-label", "Common service filters");
   container.innerHTML = `
-    <p class="quick-needs__label">Common needs</p>
+    <p class="quick-needs__label">Core needs</p>
     ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
     <button class="quick-need quick-need--all" type="button" data-quick-type="all" aria-pressed="true">All</button>
   `;

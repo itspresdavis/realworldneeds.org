@@ -784,10 +784,11 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidDots = allTypes(resource).map((type) => `<i style="--dot:${categories[type].color}" title="${categories[type].label}"></i>`).join("");
+  const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b></small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b>${openAccess}</small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>

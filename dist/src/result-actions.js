@@ -1,4 +1,4 @@
-import { resources } from "./data/resources.js?v=93a81e8ba210";
+import { resources } from "./data/resources.js?v=93bf6b9efaa9";
 
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
 

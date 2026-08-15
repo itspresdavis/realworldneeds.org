@@ -2449,6 +2449,22 @@ svg {
   font-weight: 850;
 }
 
+.resource-row__open-access {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.28rem;
+  border: 1px solid color-mix(in srgb, #087a43, transparent 45%);
+  border-radius: 999px;
+  color: #087a43;
+  font-size: 0.54rem;
+  font-style: normal;
+  font-weight: 820;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  vertical-align: 0.06rem;
+}
+
 .resource-row__aid {
   display: flex;
   flex-wrap: wrap;

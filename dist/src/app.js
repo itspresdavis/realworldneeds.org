@@ -1,9 +1,9 @@
 import * as THREE from "/vendor/three.module.js";
-import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js?v=93a81e8ba210";
-import { clusterProjectedEntries } from "./utils/globe-clustering.js?v=93a81e8ba210";
-import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js?v=93a81e8ba210";
-import { freeAccessLabel, freeAccessModels } from "./data/free-access.js?v=93a81e8ba210";
-import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js?v=93a81e8ba210";
+import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js?v=93bf6b9efaa9";
+import { clusterProjectedEntries } from "./utils/globe-clustering.js?v=93bf6b9efaa9";
+import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js?v=93bf6b9efaa9";
+import { freeAccessLabel, freeAccessModels } from "./data/free-access.js?v=93bf6b9efaa9";
+import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js?v=93bf6b9efaa9";
 import {
   cameraDistanceForSphere,
   createInitialTypeSet,
@@ -18,21 +18,21 @@ import {
   resourceSearchScore,
   THREE_SPHERE_TEXTURE_OFFSET,
   toRad
-} from "./utils/geo.js?v=93a81e8ba210";
+} from "./utils/geo.js?v=93bf6b9efaa9";
 import {
   classifyGlobeDragIntent,
   globeViewProfile,
   pinchZoom,
   pointPickThresholdWorld,
   pointerDistance
-} from "./utils/gesture.js?v=93a81e8ba210";
-import { classifyWheelIntent, wheelZoomFactor } from "./utils/globe-zoom.js?v=93a81e8ba210";
+} from "./utils/gesture.js?v=93bf6b9efaa9";
+import { classifyWheelIntent, wheelZoomFactor } from "./utils/globe-zoom.js?v=93bf6b9efaa9";
 import {
   clearResourceFromUrl,
   privateResourceUrl,
   resourceIdFromUrl,
   SAVED_RESOURCES_KEY
-} from "./utils/privacy.js?v=93a81e8ba210";
+} from "./utils/privacy.js?v=93bf6b9efaa9";
 
 const DEFAULT_RESOURCE = null;
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -784,10 +784,11 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidDots = allTypes(resource).map((type) => `<i style="--dot:${categories[type].color}" title="${categories[type].label}"></i>`).join("");
+  const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b></small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b>${openAccess}</small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidDots}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>

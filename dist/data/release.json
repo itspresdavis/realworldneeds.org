@@ -1,8 +1,8 @@
 {
-  "release": "93a81e8ba210",
+  "release": "93bf6b9efaa9",
   "resourceCount": 2019,
   "directoryPageSize": 60,
-  "generatedAt": "2026-08-15T04:08:02.815Z",
+  "generatedAt": "2026-08-15T04:47:14.766Z",
   "directoryRelease": "f1c7abb15f9a",
   "sourceLedger": {
     "structuredSourceFamilies": 4,
@@ -12,6 +12,6 @@
   },
   "serviceActionRelease": "8bbcabad459a",
   "directoryResilienceRelease": "45c675d92dc8",
-  "presentationRelease": "93a81e8ba210",
+  "presentationRelease": "93bf6b9efaa9",
   "offlineRelease": "768951aae83b"
 }
