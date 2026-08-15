@@ -798,6 +798,9 @@ body.rwn-professional main { display: block; }
   font-size: .7rem;
   line-height: 1.45;
 }
+.rwn-professional :is(.location-recovery button,.results-empty__reset){min-height:32px;margin-top:.35rem;padding:.3rem .5rem;border:1px solid currentColor;border-radius:5px;background:transparent;color:inherit;font:inherit;font-weight:720}
+.rwn-professional .location-recovery button{margin-left:.2rem}
+.rwn-professional :is(.location-recovery button,.results-empty__reset):is(:hover,:focus-visible){background:#fff}
 .rwn-professional .jump-results:hover,
 .rwn-professional .jump-results:focus-visible {
   border-color: var(--rwn-green);

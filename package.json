@@ -16,7 +16,9 @@
     "refresh:data:ny-wic": "node scripts/refresh-new-york-wic.mjs",
     "refresh:data:trussell": "node scripts/refresh-trussell-foodbanks.mjs",
     "refresh:data": "npm run refresh:data:ma-wic && npm run refresh:data:ny-wic",
-    "qa:globe-scroll": "node scripts/qa-globe-scroll.mjs"
+    "qa:globe-scroll": "node scripts/qa-globe-scroll.mjs",
+    "qa:interaction": "node scripts/browser-institutional.mjs",
+    "qa:abuse": "node scripts/browser-chaos.mjs"
   },
   "dependencies": {
     "three": "0.185.1"

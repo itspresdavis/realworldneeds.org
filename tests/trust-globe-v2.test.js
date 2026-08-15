@@ -9,7 +9,7 @@ test("production globe starts calm, zooms deeply, and preserves ordinary page sc
   assert.match(app, /const DEFAULT_RESOURCE = null/);
   assert.match(app, /const initialResource = resources\.some\([^\n]+\) \? requestedResource : null/);
   assert.match(app, /autoRotate: false/);
-  assert.match(app, /inspectorOpen: Boolean\(initialResource\)/);
+  assert.match(app, /inspectorOpen: Boolean\(initialResource \|\| initialFinderHistory\?\.selectedId\)/);
   assert.match(app, /PerspectiveCamera\(42, 1, 0\.02, 100\)/);
   assert.match(app, /globeViewProfile\(state\.zoom \* state\.ambientZoom/);
   assert.match(app, /minimumCameraDistance/);

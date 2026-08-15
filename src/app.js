@@ -122,17 +122,34 @@ function loadSavedResources() {
 
 const requestedResource = resourceIdFromUrl(window.location.href);
 const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : null;
+const FINDER_HISTORY_KEY = "rwnFinder";
+const FINDER_QUERY_LIMIT = 180;
+const initialFinderHistory = window.history.state?.[FINDER_HISTORY_KEY] || null;
+
+function sanitizeFinderQuery(value) {
+  return String(value || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, FINDER_QUERY_LIMIT);
+}
+
+function finderTypesFromHistory(value) {
+  if (!Array.isArray(value)) return createInitialTypeSet();
+  const types = value.filter((type) => resourceTypes.includes(type));
+  return new Set(types);
+}
+
+function finderAccessFromHistory(value) {
+  return ["all", "direct", "discovery"].includes(value) ? value : "all";
+}
 
 if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
 }
 
 const state = {
-  query: "",
+  query: sanitizeFinderQuery(initialFinderHistory?.query),
   viewMode: "aid",
-  accessMode: "all",
-  activeTypes: createInitialTypeSet(),
-  selectedId: initialResource,
+  accessMode: finderAccessFromHistory(initialFinderHistory?.accessMode),
+  activeTypes: finderTypesFromHistory(initialFinderHistory?.activeTypes),
+  selectedId: initialResource || (resources.some((resource) => resource.id === initialFinderHistory?.selectedId) ? initialFinderHistory.selectedId : null),
   filtered: resources,
   liveResources: [],
   liveSourceStatus: "idle",
@@ -143,6 +160,7 @@ const state = {
   userLocationAccuracy: null,
   userCountry: null,
   locationRecovery: "",
+  locationRetryAvailable: false,
   rotationLon: -8,
   rotationLat: 12,
   targetLon: null,
@@ -173,8 +191,8 @@ const state = {
   globeVisible: true,
   ambientZoom: 1,
   savedIds: loadSavedResources(),
-  savedOnly: false,
-  inspectorOpen: Boolean(initialResource),
+  savedOnly: Boolean(initialFinderHistory?.savedOnly),
+  inspectorOpen: Boolean(initialResource || initialFinderHistory?.selectedId),
   clusterIds: []
 };
 
@@ -388,7 +406,7 @@ function shell() {
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" placeholder="Search a place or service" autocomplete="off">
+                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search a place or service" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
@@ -543,6 +561,37 @@ function notify(message) {
   notify.timeoutId = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
 }
 
+function finderHistorySnapshot() {
+  return {
+    query: state.query,
+    accessMode: state.accessMode,
+    activeTypes: [...state.activeTypes],
+    savedOnly: state.savedOnly,
+    selectedId: state.selectedId || null,
+    inspectorOpen: Boolean(state.inspectorOpen && state.selectedId)
+  };
+}
+
+function writeFinderHistory(mode = "replace") {
+  const url = state.selectedId
+    ? privateResourceUrl(window.location.href, state.selectedId)
+    : clearResourceFromUrl(window.location.href);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ [FINDER_HISTORY_KEY]: finderHistorySnapshot() }, "", url);
+}
+
+function restoreFinderHistory(historyState) {
+  const snapshot = historyState?.[FINDER_HISTORY_KEY];
+  state.query = sanitizeFinderQuery(snapshot?.query);
+  state.accessMode = finderAccessFromHistory(snapshot?.accessMode);
+  state.activeTypes = finderTypesFromHistory(snapshot?.activeTypes);
+  state.savedOnly = Boolean(snapshot?.savedOnly);
+  state.selectedId = resources.some((resource) => resource.id === snapshot?.selectedId) ? snapshot.selectedId : null;
+  state.inspectorOpen = Boolean(snapshot?.inspectorOpen && state.selectedId);
+  const input = document.getElementById("resourceSearch");
+  if (input) input.value = state.query;
+  updateFilters();
+}
+
 function renderStatic() {
   document.getElementById("layerList").innerHTML = resourceTypes.map((type) => {
     const category = categories[type];
@@ -620,11 +669,22 @@ function renderLocationState() {
     status.textContent = "Nearby service locations appear first. Regional resource finders appear after them.";
     if (recovery) {
       recovery.hidden = !state.locationRecovery;
-      recovery.textContent = state.locationRecovery;
+      recovery.replaceChildren();
+      if (state.locationRecovery) {
+        recovery.append(document.createTextNode(state.locationRecovery));
+        if (state.locationRetryAvailable) {
+          const retry = document.createElement("button");
+          retry.id = "retryLocation";
+          retry.type = "button";
+          retry.textContent = "Try again";
+          recovery.append(" ", retry);
+        }
+      }
     }
     return;
   }
   state.locationRecovery = "";
+  state.locationRetryAvailable = false;
   if (recovery) {
     recovery.hidden = true;
     recovery.textContent = "";
@@ -678,7 +738,9 @@ function renderControls() {
     button.setAttribute("aria-pressed", String(active));
     button.disabled = !aidMode;
   });
-  document.getElementById("resourceSearch").disabled = !aidMode;
+  const search = document.getElementById("resourceSearch");
+  search.disabled = !aidMode;
+  if (document.activeElement !== search && search.value !== state.query) search.value = state.query;
   document.getElementById("clearSearch").hidden = !state.query;
   document.getElementById("locateMe").disabled = !aidMode;
   renderLocationState();
@@ -825,12 +887,12 @@ function renderResults() {
     : "No public requests are listed";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
-    : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type."}</p></div>`;
+    : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type. RWN may not have every service."}</p>${state.viewMode === "aid" ? '<button class="results-empty__reset" id="clearFinderFilters" type="button">Clear search and filters</button>' : ""}</div>`;
   if (matchingResultCount) matchingResultCount.textContent = `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
 }
 
-function setSelected(id, focus = true, reveal = "panel") {
+function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
   state.selectedId = id;
   state.inspectorOpen = true;
   state.clusterIds = [];
@@ -840,7 +902,7 @@ function setSelected(id, focus = true, reveal = "panel") {
   renderResults();
   renderClusterTray();
   pinSignature = "";
-  window.history.replaceState({}, "", privateResourceUrl(window.location.href, id));
+  writeFinderHistory(historyMode);
   if (reveal) {
     const target = reveal === "map" ? document.querySelector(".globe-stage") : document.getElementById("resourcePanel");
     const bounds = target?.getBoundingClientRect();
@@ -975,8 +1037,24 @@ function clearUserLocation() {
   state.liveSourceStatus = "idle";
   state.liveSourceError = "";
   state.locationRecovery = "";
+  state.locationRetryAvailable = false;
   document.getElementById("locateMe")?.classList.remove("has-location", "is-loading");
   updateFilters();
+}
+
+function clearFinderFilters({ focus = true, historyMode = "replace" } = {}) {
+  clearUserLocation();
+  state.query = "";
+  state.accessMode = "all";
+  state.activeTypes = createInitialTypeSet();
+  state.savedOnly = false;
+  state.selectedId = null;
+  state.inspectorOpen = false;
+  const input = document.getElementById("resourceSearch");
+  if (input) input.value = "";
+  updateFilters();
+  writeFinderHistory(historyMode);
+  if (focus) input?.focus();
 }
 
 async function loadLiveResourcesNearUser() {
@@ -2006,38 +2084,43 @@ async function loadLandGeometry() {
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
-  let searchFilterFrame = null;
+  let searchFilterTimer = null;
   const flushSearchFilter = () => {
-    searchFilterFrame = null;
+    searchFilterTimer = null;
     if (pendingSearchValue === state.query) return;
     state.query = pendingSearchValue;
     updateFilters();
+    writeFinderHistory();
   };
   const scheduleSearchFilter = (value) => {
     pendingSearchValue = value;
-    if (searchFilterFrame !== null) return;
-    searchFilterFrame = requestAnimationFrame(flushSearchFilter);
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    searchFilterTimer = window.setTimeout(flushSearchFilter, 48);
   };
   searchInput.addEventListener("input", (event) => {
-    scheduleSearchFilter(event.target.value);
+    const next = sanitizeFinderQuery(event.target.value);
+    if (event.target.value !== next) event.target.value = next;
+    scheduleSearchFilter(next);
   });
   searchInput.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
-    if (searchFilterFrame !== null) cancelAnimationFrame(searchFilterFrame);
-    searchFilterFrame = null;
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    searchFilterTimer = null;
     pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
     updateFilters();
+    writeFinderHistory();
   });
   document.getElementById("clearSearch").addEventListener("click", () => {
-    if (searchFilterFrame !== null) cancelAnimationFrame(searchFilterFrame);
-    searchFilterFrame = null;
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    searchFilterTimer = null;
     pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
     searchInput.focus();
     updateFilters();
+    writeFinderHistory();
   });
 
   let catalogFilterFrame = null;
@@ -2046,6 +2129,7 @@ function bindEvents() {
     catalogFilterFrame = requestAnimationFrame(() => {
       catalogFilterFrame = null;
       updateFilters();
+      writeFinderHistory();
     });
   };
 
@@ -2079,6 +2163,7 @@ function bindEvents() {
   document.getElementById("resourceGrid").addEventListener("click", (event) => {
     const button = event.target.closest("[data-resource-id]");
     if (button) setSelected(button.dataset.resourceId, true, "map");
+    if (event.target.closest("#clearFinderFilters")) clearFinderFilters();
   });
 
   document.getElementById("pinLayer").addEventListener("click", (event) => {
@@ -2118,10 +2203,17 @@ function bindEvents() {
     clearUserLocation();
     notify("Saved services and location sorting cleared");
   });
+  window.addEventListener("rwn:offline-unavailable", () => {
+    notify("Offline saving is unavailable. The directory still works online.");
+  });
 
   document.getElementById("clearLocation").addEventListener("click", () => {
     clearUserLocation();
     notify("Location sorting cleared");
+  });
+
+  document.getElementById("locationRecovery").addEventListener("click", (event) => {
+    if (event.target.closest("#retryLocation")) document.getElementById("locateMe")?.click();
   });
 
   document.getElementById("locateMe").addEventListener("click", () => {
@@ -2134,11 +2226,13 @@ function bindEvents() {
     }
     if (!navigator.geolocation) {
       state.locationRecovery = "Location is not available in this browser. Search by city, ZIP or postcode instead.";
+      state.locationRetryAvailable = false;
       renderLocationState();
       notify("Location is not available in this browser");
       return;
     }
     state.locationRecovery = "";
+    state.locationRetryAvailable = false;
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
@@ -2167,6 +2261,7 @@ function bindEvents() {
       state.locationRecovery = error.code === 1
         ? "Location permission was not granted. Search by city, ZIP or postcode instead, or change this site’s location permission in your browser settings."
         : "We could not get a nearby location. Try again, check browser settings, or search by city, ZIP or postcode instead.";
+      state.locationRetryAvailable = Boolean(navigator.geolocation);
       renderLocationState();
       notify(error.code === 1 ? "Location permission was not granted" : "A nearby location was not available; try again or search by place");
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
@@ -2573,13 +2668,26 @@ function bindEvents() {
   });
 
   const siteMenu = document.querySelector(".site-menu");
-  siteMenu.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => siteMenu.removeAttribute("open")));
+  const siteMenuSummary = siteMenu?.querySelector("summary");
+  const closeSiteMenu = ({ restoreFocus = false } = {}) => {
+    if (!siteMenu?.open) return;
+    siteMenu.removeAttribute("open");
+    if (restoreFocus) siteMenuSummary?.focus();
+  };
+  siteMenu?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => closeSiteMenu()));
   document.addEventListener("click", (event) => {
-    if (siteMenu.open && !siteMenu.contains(event.target)) siteMenu.removeAttribute("open");
+    if (siteMenu?.open && !siteMenu.contains(event.target)) closeSiteMenu({ restoreFocus: true });
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") siteMenu.removeAttribute("open");
+    if (event.key === "Escape" && siteMenu?.open) {
+      event.preventDefault();
+      closeSiteMenu({ restoreFocus: true });
+    }
   });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900) closeSiteMenu();
+  }, { passive: true });
+  window.addEventListener("popstate", (event) => restoreFinderHistory(event.state));
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
   const sections = ["finder", "about", "standards"].map((id) => document.getElementById(id));
@@ -2611,6 +2719,7 @@ shell();
 renderStatic();
 updateFilters();
 bindEvents();
+writeFinderHistory();
 initThreeGlobe();
 loadEarthImagery();
 loadLandGeometry();

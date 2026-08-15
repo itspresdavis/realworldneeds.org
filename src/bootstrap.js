@@ -33,8 +33,13 @@ const clearOfflineData = async () => {
   navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_RWN_OFFLINE" });
 };
 
+const reportOfflineUnavailable = () => {
+  document.documentElement.dataset.offlineSaving = "unavailable";
+  window.dispatchEvent(new CustomEvent("rwn:offline-unavailable"));
+};
+
 document.getElementById("clearBrowserData")?.addEventListener("click", () => {
-  clearOfflineData().catch(() => {});
+  clearOfflineData().catch(reportOfflineUnavailable);
 });
 
 import("./telemetry.js")
@@ -43,6 +48,6 @@ import("./telemetry.js")
 
 if ("serviceWorker" in navigator && window.isSecureContext) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(reportOfflineUnavailable);
   }, { once: true });
 }

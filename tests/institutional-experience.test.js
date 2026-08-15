@@ -20,7 +20,7 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   assert.doesNotMatch(refinement, /globe-guide|Tap a glow for details|has-used-globe|No account|No paywall/);
   assert.doesNotMatch(bootstrap, /click\(\).*toggleMotion|pause globe rotation/i);
   assert.match(app, /autoRotate: false/);
-  assert.match(app, /inspectorOpen: Boolean\(initialResource\)/);
+  assert.match(app, /inspectorOpen: Boolean\(initialResource \|\| initialFinderHistory\?\.selectedId\)/);
   assert.match(presentation, /touch-action:pan-y/);
   assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });

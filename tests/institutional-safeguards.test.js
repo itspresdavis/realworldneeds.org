@@ -5,6 +5,7 @@ import test from "node:test";
 const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const accessibility = await readFile(new URL("../src/accessibility.js", import.meta.url), "utf8");
 const professional = await readFile(new URL("../src/professional.js", import.meta.url), "utf8");
+const bootstrap = await readFile(new URL("../src/bootstrap.js", import.meta.url), "utf8");
 const serviceActionsCss = await readFile(new URL("../public/service-actions.css", import.meta.url), "utf8");
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const builtIndex = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
@@ -42,6 +43,14 @@ test("service print retains related fallback resources without raw URL clutter",
 
 test("maintainers have a standard package test command", () => {
   assert.equal(packageJson.scripts.test, "npm run build && node --test");
+});
+
+test("offline cache and service-worker failures stay fail-open and report availability truthfully", () => {
+  assert.match(bootstrap, /CustomEvent\("rwn:offline-unavailable"\)/);
+  assert.match(bootstrap, /clearOfflineData\(\)\.catch\(reportOfflineUnavailable\)/);
+  assert.match(bootstrap, /serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)\.catch\(reportOfflineUnavailable\)/);
+  assert.match(app, /rwn:offline-unavailable/);
+  assert.match(app, /Offline saving is unavailable\. The directory still works online\./);
 });
 
 test("fresh HTML versions un-hashed runtime assets so custom domains cannot reuse stale CSS or modules", () => {

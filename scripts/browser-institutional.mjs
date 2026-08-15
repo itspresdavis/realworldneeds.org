@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const HOST = "http://127.0.0.1:4178";
-const CDP_PORT = 9228;
+const SERVER_PORT = 4178 + Math.floor(Math.random() * 200);
+const HOST = `http://127.0.0.1:${SERVER_PORT}`;
+const CDP_PORT = 9228 + Math.floor(Math.random() * 200);
 const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
 const QA_DIR = "qa-screenshots";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -125,7 +126,7 @@ async function capture(client, name) {
 async function run() {
   const chrome = findChrome();
   const profile = await mkdtemp(join(tmpdir(), "rwn-institutional-"));
-  const server = spawn(process.execPath, ["scripts/serve.mjs", "4178"], { stdio: ["ignore", "pipe", "pipe"] });
+  const server = spawn(process.execPath, ["scripts/serve.mjs", String(SERVER_PORT)], { stdio: ["ignore", "pipe", "pipe"] });
   let browser;
   let client;
   const exceptions = [];
@@ -206,6 +207,76 @@ async function run() {
       return { filtered, cleared: input.value === "" };
     })()`);
     if (searchBehavior.filtered < 1 || !searchBehavior.cleared) throw new Error(`Homepage search mechanics failed: ${JSON.stringify(searchBehavior)}`);
+
+    const recoveryAndHistory = await evaluate(client, `(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const input = document.getElementById("resourceSearch");
+      input.value = "x".repeat(260) + " shelter";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(80);
+      const bounded = input.value.length <= 180;
+
+      input.value = "zzzzqqqq-no-such-service";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(320);
+      const reset = document.getElementById("clearFinderFilters");
+      const empty = Boolean(reset);
+      const emptyDebug = { query: input.value, count: document.getElementById("resultCount")?.textContent || "", cards: document.querySelectorAll(".resource-card").length, grid: document.getElementById("resourceGrid")?.textContent?.trim().slice(0, 120) || "" };
+      reset?.click();
+      await wait(320);
+      const resetRestored = input.value === "" && document.querySelectorAll(".result-row-link").length > 0 && document.activeElement === input;
+
+      input.value = "food";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(160);
+      const beforeHash = location.hash;
+      const beforeState = structuredClone(history.state);
+      beforeState.rwnFinder = {
+        ...beforeState.rwnFinder,
+        query: "food",
+        accessMode: "all",
+        activeTypes: ["food", "water", "shelter", "hygiene", "clothing", "health", "referral"],
+        savedOnly: false,
+        selectedId: null,
+        inspectorOpen: false
+      };
+      const changed = structuredClone(beforeState);
+      changed.rwnFinder.query = "water";
+      changed.rwnFinder.activeTypes = ["water"];
+      changed.rwnFinder.selectedId = null;
+      changed.rwnFinder.inspectorOpen = false;
+      history.pushState(changed, "", location.pathname + location.search + beforeHash);
+      dispatchEvent(new PopStateEvent("popstate", { state: changed }));
+      await wait(80);
+      history.replaceState(beforeState, "", location.pathname + location.search + beforeHash);
+      dispatchEvent(new PopStateEvent("popstate", { state: beforeState }));
+      await wait(160);
+      const afterBack = { input: input.value, hash: location.hash };
+      return { bounded, empty, emptyDebug, resetRestored, beforeHash, restoredWater: document.querySelectorAll('.layer-toggle[data-type="water"][aria-pressed="true"]').length === 1, afterBack };
+    })()`);
+    if (!recoveryAndHistory.bounded || !recoveryAndHistory.empty || !recoveryAndHistory.resetRestored || !recoveryAndHistory.restoredWater || recoveryAndHistory.afterBack.input !== "food" || recoveryAndHistory.afterBack.hash !== recoveryAndHistory.beforeHash) {
+      throw new Error(`Finder recovery or history restoration failed: ${JSON.stringify(recoveryAndHistory)}`);
+    }
+
+    const locationRetry = await evaluate(client, `(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const original = navigator.geolocation;
+      let attempts = 0;
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: { getCurrentPosition: (_success, failure) => { attempts += 1; failure({ code: 2 }); } }
+      });
+      document.getElementById("locateMe")?.click();
+      await wait(50);
+      const retry = document.getElementById("retryLocation");
+      retry?.click();
+      await wait(50);
+      Object.defineProperty(navigator, "geolocation", { configurable: true, value: original });
+      return { attempts, hasRetry: Boolean(retry), recoveryText: document.getElementById("locationRecovery")?.textContent || "" };
+    })()`);
+    if (locationRetry.attempts !== 2 || !locationRetry.hasRetry || !/try again|search by city/i.test(locationRetry.recoveryText)) {
+      throw new Error(`Location retry failed: ${JSON.stringify(locationRetry)}`);
+    }
     await capture(client, "institutional-desktop.png");
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -235,10 +306,25 @@ async function run() {
     if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y" || mobile.quickCount !== 7 || mobile.quickTargets.some((target) => target.height < 40 || target.right > 391) || !mobile.jumpVisible || !mobile.jumpBeforeLocation || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
       throw new Error(`Institutional mobile homepage failed: ${JSON.stringify(mobile)}`);
     }
+
+    const mobileMenu = await evaluate(client, `(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const menu = document.querySelector(".site-menu");
+      const summary = menu?.querySelector("summary");
+      summary?.click();
+      await wait(30);
+      const opened = Boolean(menu?.open);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      await wait(30);
+      return { opened, closed: !menu?.open, focusReturned: document.activeElement === summary };
+    })()`);
+    if (!mobileMenu.opened || !mobileMenu.closed || !mobileMenu.focusReturned) {
+      throw new Error(`Mobile menu dismissal failed: ${JSON.stringify(mobileMenu)}`);
+    }
     await capture(client, "institutional-mobile.png");
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);
-    console.log("Institutional desktop/mobile browser QA passed.");
+    console.log("Interaction QA passed: desktop/mobile finder, input bounds, no-result recovery, history restoration, location retry, menu focus, and established globe layout.");
   } finally {
     client?.close();
     await stopProcess(browser);
