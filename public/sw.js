@@ -27,10 +27,22 @@ async function putIfUsable(cache, key, response) {
 
 async function warmCore() {
   const cache = await caches.open(CACHE_NAME);
-  await Promise.allSettled(CORE_ASSETS.map(async (path) => {
-    const response = await fetch(path, { cache: "reload", credentials: "same-origin" });
-    await putIfUsable(cache, path, response);
-  }));
+  try {
+    await Promise.all(CORE_ASSETS.map(async (path) => {
+      const response = await fetch(path, { cache: "reload", credentials: "same-origin" });
+      if (!response || !response.ok || response.type === "opaque") {
+        throw new Error(`Unable to cache required offline asset: ${path}`);
+      }
+      await putIfUsable(cache, path, response);
+      if (!await cache.match(cacheKeyFor(path))) {
+        throw new Error(`Required offline asset was not stored: ${path}`);
+      }
+    }));
+  } catch (error) {
+    // A partially warmed cache must never become the active offline release.
+    await caches.delete(CACHE_NAME);
+    throw error;
+  }
 }
 
 self.addEventListener("install", (event) => {

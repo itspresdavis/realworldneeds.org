@@ -14,3 +14,6 @@
 - [x] Read the newly attached prompt and document its requirements for the correct RWN-WEB repository.
 - [x] Audit the prompt-affected surfaces and implement only the highest-value brand-preserving changes.
 - [x] Run full regression and browser verification, then deploy the verified prompt-driven update to production.
+- [x] Complete a fresh live-site visual and flow audit across desktop, tablet, and mobile breakpoints.
+- [x] Stress-test startup, finder, directory, service, globe, offline, navigation, and error-recovery paths for production-readiness gaps.
+- [ ] Implement, validate, and deploy only the verified high-impact readiness fixes in the correct RWN-WEB repository.

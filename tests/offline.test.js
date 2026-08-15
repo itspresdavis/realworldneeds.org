@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 
 const read = (path) => readFile(path, "utf8");
 
@@ -74,6 +75,63 @@ test("offline cache IDs rotate with release inputs and purge older RWN caches", 
   assert.doesNotMatch(worker, /__RWN_OFFLINE_RELEASE__/);
   assert.match(release.offlineRelease || "", /^[a-f0-9]{12}$/);
   assert.match(worker, /name\.startsWith\(CACHE_PREFIX\) && name !== CACHE_NAME/);
+});
+
+async function runInstall({ failedPath = null } = {}) {
+  const handlers = new Map();
+  const stored = new Map();
+  let skipped = false;
+  let deleted = false;
+  const source = await read("public/sw.js");
+  const cache = {
+    async put(key, response) { stored.set(key.url, response); },
+    async match(key) { return stored.get(key.url); },
+  };
+  const context = {
+    URL,
+    Request,
+    Response,
+    console,
+    self: {
+      location: { origin: "https://rwn.test" },
+      addEventListener(type, handler) { handlers.set(type, handler); },
+      async skipWaiting() { skipped = true; },
+    },
+    caches: {
+      async open() { return cache; },
+      async delete() { deleted = true; stored.clear(); return true; },
+      async keys() { return []; },
+    },
+    async fetch(path) {
+      if (path === failedPath) return new Response("missing", { status: 503 });
+      return new Response("ok", { status: 200 });
+    },
+  };
+  vm.runInNewContext(source, context, { filename: "sw.js" });
+  let installPromise;
+  handlers.get("install")({ waitUntil(promise) { installPromise = promise; } });
+  try {
+    await installPromise;
+    return { error: null, skipped, deleted, stored };
+  } catch (error) {
+    return { error, skipped, deleted, stored };
+  }
+}
+
+test("offline installation fails closed and removes a partial cache when a required core asset fails", async () => {
+  const result = await runInstall({ failedPath: "/data/search-index.json" });
+  assert.ok(result.error, "a failed required asset must reject installation");
+  assert.equal(result.skipped, false, "an incomplete cache must never activate");
+  assert.equal(result.deleted, true, "partial core cache must be removed");
+  assert.equal(result.stored.size, 0, "partial core cache must not remain available");
+});
+
+test("offline installation activates only after every required core asset is cached", async () => {
+  const result = await runInstall();
+  assert.equal(result.error, null);
+  assert.equal(result.deleted, false);
+  assert.equal(result.skipped, true, "a complete cache can activate immediately");
+  assert.equal(result.stored.size, 10, "all required offline assets must be stored");
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {
