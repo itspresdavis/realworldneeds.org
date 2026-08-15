@@ -17,10 +17,18 @@ test("production globe starts calm, zooms deeply, and preserves ordinary page sc
   assert.match(app, /pointPickThresholdWorld/);
   assert.match(app, /classifyGlobeDragIntent/);
 
-  const wheel = app.match(/canvas\.addEventListener\("wheel", \(event\) => \{([\s\S]*?)\}, \{ passive: false \}\);/)?.[1] || "";
-  assert.match(wheel, /if \(!\(event\.ctrlKey \|\| event\.metaKey\)\) return/);
+  // Wheel ownership is resolved per gesture by classifyWheelIntent. The
+  // invariant that matters is that the listener returns without calling
+  // preventDefault unless that decision was "zoom".
+  const wheel = app.match(/globeStage\.addEventListener\("wheel", \(event\) => \{([\s\S]*?)\}, \{ passive: false \}\);/)?.[1] || "";
+  assert.match(wheel, /classifyWheelIntent\(/);
+  assert.match(wheel, /if \(intent !== "zoom"\) return;/);
   assert.match(wheel, /event\.preventDefault\(\)/);
-  assert.ok(wheel.indexOf("return;") < wheel.indexOf("event.preventDefault()"), "ordinary wheel scrolling must escape before preventDefault");
+  assert.ok(
+    wheel.indexOf('if (intent !== "zoom") return;') < wheel.indexOf("event.preventDefault()"),
+    "ordinary wheel scrolling must escape before preventDefault"
+  );
+  assert.match(wheel, /zoomTowardPointer\(/);
 });
 
 test("globe points communicate listing type without category-colored visual noise", async () => {

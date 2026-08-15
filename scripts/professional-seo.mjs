@@ -9,10 +9,11 @@ const resourcesById = new Map(resources.map((resource) => [resource.id, resource
 const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 .directory-strip,.accountability,#openInspector{display:none!important}
 .globe-canvas{touch-action:none;overscroll-behavior:contain}
-.globe-pin-layer{transition:opacity 100ms linear}
-.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{opacity:0;pointer-events:none}
+.globe-pin>strong,.globe-cluster>strong{transition:opacity 120ms linear}
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{pointer-events:none}
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin>strong,.globe-stage.has-gpu-points.is-globe-moving .globe-cluster>strong{opacity:0}
 @media(max-width:900px){.globe-canvas{touch-action:pan-y;overscroll-behavior-y:auto}}
-@media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
+@media(prefers-reduced-motion:reduce){.globe-pin>strong,.globe-cluster>strong{transition:none}}
 </style>`;
 const CRITICAL_PAGE_STYLE = `<style data-rwn-page-critical>
 .directory-category-chips button{min-height:44px!important}

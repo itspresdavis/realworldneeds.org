@@ -24,7 +24,7 @@
     <meta name="twitter:title" content="Find Essential Services Near You | Real World Needs" />
     <meta name="twitter:description" content="Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing." />
     <meta name="twitter:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
-    <link rel="stylesheet" href="/src/styles.css?v=6ed89ade14d2" />
+    <link rel="stylesheet" href="/src/styles.css?v=a6ff8ebff57e" />
     <style>
       @media screen {
         .globe-stage { contain: paint; }
@@ -73,7 +73,7 @@
         .site-header, .globe-cluster-tray { -webkit-backdrop-filter:none; backdrop-filter:none; }
       }
     </style>
-    <link rel="modulepreload" href="/src/app.js?v=6ed89ade14d2" />
+    <link rel="modulepreload" href="/src/app.js?v=a6ff8ebff57e" />
     <link rel="modulepreload" href="/vendor/three.module.js" />
     <link rel="preload" as="image" href="/media/earth-blue-marble.jpg" type="image/jpeg" fetchpriority="high" />
     <link rel="canonical" href="https://www.realworldneeds.org/" />
@@ -120,15 +120,16 @@
       }
     </script>
     <title>Find Essential Services Near You | Real World Needs</title>
-    <link rel="stylesheet" href="/src/clarity.css?v=6ed89ade14d2" />
-  <link rel="stylesheet" href="/navigation-actions.css?v=6ed89ade14d2" />
+    <link rel="stylesheet" href="/src/clarity.css?v=a6ff8ebff57e" />
+  <link rel="stylesheet" href="/navigation-actions.css?v=a6ff8ebff57e" />
   <style data-rwn-critical-shell>
 .directory-strip,.accountability,#openInspector{display:none!important}
 .globe-canvas{touch-action:none;overscroll-behavior:contain}
-.globe-pin-layer{transition:opacity 100ms linear}
-.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{opacity:0;pointer-events:none}
+.globe-pin>strong,.globe-cluster>strong{transition:opacity 120ms linear}
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer{pointer-events:none}
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin>strong,.globe-stage.has-gpu-points.is-globe-moving .globe-cluster>strong{opacity:0}
 @media(max-width:900px){.globe-canvas{touch-action:pan-y;overscroll-behavior-y:auto}}
-@media(prefers-reduced-motion:reduce){.globe-pin-layer{transition:none}}
+@media(prefers-reduced-motion:reduce){.globe-pin>strong,.globe-cluster>strong{transition:none}}
 </style>
   <meta name="twitter:image:alt" content="Real World Needs essential services directory" />
   <link rel="sitemap" href="/sitemap.xml" type="application/xml" />
@@ -158,6 +159,6 @@
         <a href="/directory">Use the directory</a> to browse listings, contact details, sources, and map locations.
       </div>
     </noscript>
-    <script type="module" src="/src/bootstrap.js?v=6ed89ade14d2"></script>
+    <script type="module" src="/src/bootstrap.js?v=a6ff8ebff57e"></script>
   </body>
 </html>

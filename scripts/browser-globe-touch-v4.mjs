@@ -192,14 +192,24 @@ async function run() {
     const active = await evaluate(client, `(() => {
       const stage=document.querySelector('.globe-stage');
       const layer=document.getElementById('pinLayer');
-      return { moving:stage?.classList.contains('is-globe-moving') || false, pinOpacity:Number(getComputedStyle(layer).opacity || 0) };
+      const label=layer.querySelector('.globe-pin > strong');
+      return {
+        moving:stage?.classList.contains('is-globe-moving') || false,
+        pinOpacity:Number(getComputedStyle(layer).opacity || 0),
+        mounted:layer.children.length,
+        labelOpacity:label?Number(getComputedStyle(label).opacity || 0):0
+      };
     })()`);
     await touch(client, "touchEnd", []);
     await sleep(320);
     const afterDigest = await cropDigest(client, horizontal.rect);
     const horizontalEnd = await evaluate(client, `({ scrollY, moving:document.querySelector('.globe-stage')?.classList.contains('is-globe-moving') || false, pinOpacity:Number(getComputedStyle(document.getElementById('pinLayer')).opacity || 0) })`);
     if (Math.abs(horizontalEnd.scrollY - horizontal.scrollY) > 18) throw new Error(`Horizontal globe drag moved the page by ${Math.abs(horizontalEnd.scrollY - horizontal.scrollY)}px.`);
-    if (!active.moving || active.pinOpacity > .2) throw new Error(`Moving globe did not suppress stale HTML targets: ${JSON.stringify(active)}`);
+    // Markers stay mounted and keep tracking their coordinates while the globe
+    // moves; only the text label chrome fades, so nothing flickers in and out.
+    if (!active.moving) throw new Error(`Horizontal drag did not register as globe motion: ${JSON.stringify(active)}`);
+    if (active.pinOpacity < .85) throw new Error(`Marker layer was hidden wholesale during motion: ${JSON.stringify(active)}`);
+    if (active.mounted > 0 && active.labelOpacity > .2) throw new Error(`Stale marker labels stayed visible during motion: ${JSON.stringify(active)}`);
     if (beforeDigest === afterDigest) throw new Error("Horizontal touch left the rendered globe pixel-identical.");
     if (horizontalEnd.moving || horizontalEnd.pinOpacity < .85) throw new Error(`Touch release did not promptly stabilize service targets: ${JSON.stringify(horizontalEnd)}`);
 

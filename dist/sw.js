@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "rwn-offline-";
-const CACHE_NAME = "rwn-offline-ce40eb9013c9";
+const CACHE_NAME = "rwn-offline-e32e28ccf3b5";
 
 const CORE_ASSETS = [
   "/directory",

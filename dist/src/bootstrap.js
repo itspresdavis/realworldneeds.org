@@ -1,8 +1,8 @@
-const appReady = import("./app.js?v=6ed89ade14d2");
-const refinementReady = import("./refinement.js?v=6ed89ade14d2");
-const professionalReady = import("./professional.js?v=6ed89ade14d2");
-const accessibilityReady = import("./accessibility.js?v=6ed89ade14d2");
-const resultActionsReady = import("./result-actions.js?v=6ed89ade14d2");
+const appReady = import("./app.js?v=a6ff8ebff57e");
+const refinementReady = import("./refinement.js?v=a6ff8ebff57e");
+const professionalReady = import("./professional.js?v=a6ff8ebff57e");
+const accessibilityReady = import("./accessibility.js?v=a6ff8ebff57e");
+const resultActionsReady = import("./result-actions.js?v=a6ff8ebff57e");
 
 // The application owns its DOM and state. Presentation and accessibility
 // install only after app initialization so startup is deterministic.
@@ -37,7 +37,7 @@ document.getElementById("clearBrowserData")?.addEventListener("click", () => {
   clearOfflineData().catch(() => {});
 });
 
-import("./telemetry.js?v=6ed89ade14d2")
+import("./telemetry.js?v=a6ff8ebff57e")
   .then(({ startTelemetry }) => startTelemetry())
   .catch(() => {});
 

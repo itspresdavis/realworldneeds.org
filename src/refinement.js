@@ -100,10 +100,10 @@ function improveFilterSummary() {
 
 function refineGlobeInstructions() {
   const help = document.getElementById("globeHelp");
-  if (help) help.textContent = "Drag or use arrow keys to rotate. Pinch, use plus and minus, or hold Control or Command while scrolling to zoom. Normal scrolling moves the page. Select a country or service point for details.";
+  if (help) help.textContent = "Drag or use arrow keys to rotate. Zoom by double-clicking, pinching, pressing plus and minus, or holding Control or Command while scrolling. Ordinary scrolling always moves the page. Select a country or service point for details.";
 
   const hint = document.querySelector(".globe-gesture-hint");
-  if (hint) hint.textContent = "Drag to rotate · Pinch or use + / − to zoom";
+  if (hint) hint.textContent = "Drag to rotate · Double-click, pinch or + / − to zoom";
 
   const stage = document.querySelector(".globe-stage");
   if (stage) stage.setAttribute("data-map-version", "2");

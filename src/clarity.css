@@ -504,8 +504,13 @@ body.rwn-professional main { display: block; }
 
 .globe-stage.has-gpu-points .globe-pin:not(.is-selected):not(:hover):not(:focus-visible) > strong { opacity: 0; visibility: hidden; }
 .globe-stage.has-gpu-points .globe-pin:not(.is-selected):not(.globe-cluster) > span { opacity: .001; }
-.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer { opacity: 0; pointer-events: none; }
-.rwn-professional .globe-pin-layer { transition: opacity 100ms linear; }
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer { pointer-events: none; }
+/* While the globe moves the markers keep tracking their coordinates; only the
+   text chrome fades, so nothing pops in and out of existence mid-gesture. */
+.globe-stage.has-gpu-points.is-globe-moving .globe-pin > strong,
+.globe-stage.has-gpu-points.is-globe-moving .globe-cluster > strong { opacity: 0; }
+.rwn-professional .globe-pin > strong,
+.rwn-professional .globe-cluster > strong { transition: opacity 120ms linear; }
 
 .rwn-professional .globe-pin > strong,
 .rwn-professional .globe-cluster > strong {

@@ -26,6 +26,7 @@ import {
   pointPickThresholdWorld,
   pointerDistance
 } from "./utils/gesture.js";
+import { classifyWheelIntent, wheelZoomFactor } from "./utils/globe-zoom.js";
 import {
   clearResourceFromUrl,
   privateResourceUrl,
@@ -40,8 +41,68 @@ const MIN_GLOBE_ZOOM = 0.82;
 // behind the sphere and simply skip drawing instead of guessing a position.
 const OFFSCREEN_POINT = Object.freeze({ x: -1e6, y: -1e6, z: -1 });
 
+// The map only claims the wheel after the visitor has actually used it, so a
+// first-time reader scrolling down the page is never interrupted.
+let globeEngaged = false;
+function markGlobeEngaged() {
+  globeEngaged = true;
+  globeStageElement?.classList.add("is-engaged");
+}
+
+// Zooming toward the pointer keeps the place under the cursor pinned, which is
+// what makes deep zoom feel like a map rather than a slideshow of scales.
+function zoomTowardPointer(factor, clientX, clientY) {
+  const maximum = maxGlobeZoom();
+  const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, state.targetZoom * factor));
+  const anchor = clientX === undefined ? null : globeCoordinateAtClientPoint(clientX, clientY);
+  state.targetZoom = nextZoom;
+  if (!anchor) return;
+  // Nudge the rotation so the anchored coordinate drifts toward the centre in
+  // proportion to how much closer the camera moved.
+  const pull = Math.max(0, Math.min(0.62, (nextZoom / Math.max(0.0001, state.zoom) - 1) * 1.35));
+  if (pull <= 0.001) return;
+  const lonGap = normalizeLongitude(anchor.lng - state.rotationLon);
+  const latGap = anchor.lat - state.rotationLat;
+  state.rotationLon = normalizeLongitude(state.rotationLon + lonGap * pull);
+  state.rotationLat = clampGlobeLatitude(state.rotationLat + latGap * pull);
+  state.targetLon = null;
+  state.targetLat = null;
+  state.velocityLon = 0;
+  state.velocityLat = 0;
+}
+
 function maxGlobeZoom() {
   return window.innerWidth <= 600 ? 8.0 : 12.0;
+}
+
+// Latitude is clamped short of the poles so the horizon never flips over, but
+// far enough to reach Arctic and Antarctic services.
+const MAX_GLOBE_LATITUDE = 82;
+function clampGlobeLatitude(value) {
+  return Math.max(-MAX_GLOBE_LATITUDE, Math.min(MAX_GLOBE_LATITUDE, value));
+}
+
+// Resolves a viewport point to the coordinate under it. Returns null when the
+// ray misses the globe, so callers can fall back to plain centred zoom.
+function globeCoordinateAtClientPoint(clientX, clientY) {
+  if (!globeRenderer || !globeCamera || !globeWorld || !globeSurface) return null;
+  const rect = globeRenderer.domElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  globePointerNdc.set(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
+  );
+  globeWorld.updateMatrixWorld(true);
+  globeCamera.updateMatrixWorld(true);
+  globeRaycaster.setFromCamera(globePointerNdc, globeCamera);
+  const hit = globeRaycaster.intersectObject(globeSurface, false)[0];
+  if (!hit) return null;
+  globeInverseWorldMatrix.copy(globeWorld.matrixWorld).invert();
+  globeProjectionVector.copy(hit.point).applyMatrix4(globeInverseWorldMatrix).normalize();
+  return {
+    lat: Math.asin(THREE.MathUtils.clamp(globeProjectionVector.y, -1, 1)) * 180 / Math.PI,
+    lng: Math.atan2(globeProjectionVector.x, globeProjectionVector.z) * 180 / Math.PI
+  };
 }
 
 function initialResultCount() {
@@ -152,10 +213,9 @@ let globeReadoutElement = null;
 let globeViewportWidth = 1;
 let globeViewportHeight = 1;
 let globeLastPinUpdate = 0;
+let lastPinClusters = [];
 let globeLastReadoutUpdate = 0;
 let globeCloseViewActive = false;
-let globePageScrollUntil = 0;
-let globeLastScrollFrame = 0;
 let globeServicePoints = null;
 let globePointSignature = "";
 const globeRaycaster = new THREE.Raycaster();
@@ -397,7 +457,7 @@ function shell() {
             </div>
             <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
             <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
-            <p class="globe-gesture-hint" aria-hidden="true">Drag to explore · Pinch or scroll to zoom</p>
+            <p class="globe-gesture-hint" aria-hidden="true">Drag to rotate · Double-click, pinch or + / − to zoom</p>
           </section>
 
           <aside class="resource-panel" id="resourcePanel" aria-live="polite"></aside>
@@ -1475,9 +1535,16 @@ function renderPins(width, height, now = performance.now()) {
   const moving = ambientMotion || state.dragging || state.pinching || Math.abs(state.velocityLon) > 0.18 || Math.abs(state.velocityLat) > 0.18 || Math.abs(state.targetZoom - state.zoom) > 0.008 || state.targetLon !== null;
   const gpuPointsActive = Boolean(globeServicePoints);
   globeStageElement?.classList.toggle("is-globe-moving", gpuPointsActive && moving);
-  if (gpuPointsActive && moving) return;
-  const minInterval = gpuPointsActive ? 90 : moving ? 42 : 70;
-  if (now - globeLastPinUpdate < minInterval) return;
+  // Labels stay mounted and keep tracking their coordinates while the globe
+  // moves. Only the label chrome fades (in CSS), so nothing pops in and out.
+  // Clustering is the expensive half, so it is recomputed less often during
+  // motion while positions still update every frame.
+  const minInterval = moving ? (gpuPointsActive ? 120 : 60) : 70;
+  const positionsOnly = now - globeLastPinUpdate < minInterval;
+  if (positionsOnly) {
+    repositionPins(width, height);
+    return;
+  }
   globeLastPinUpdate = now;
   const layer = globePinLayerElement || document.getElementById("pinLayer");
   const selected = selectedResource();
@@ -1503,15 +1570,35 @@ function renderPins(width, height, now = performance.now()) {
     pinSignature = signature;
   }
 
-  clusters.forEach((cluster) => {
+  placePins(clusters, selected?.id || null);
+  lastPinClusters = clusters;
+}
+
+function placePins(clusters, selectedId) {
+  for (const cluster of clusters) {
     const key = cluster.members.map((resource) => resource.id).join(",");
     const button = pinElements.get(key);
-    if (!button) return;
+    if (!button) continue;
     button.style.transform = `translate3d(${cluster.x}px, ${cluster.y}px, 0) scale(${0.74 + Math.max(0, cluster.z) * 0.28})`;
     button.style.opacity = String(0.5 + cluster.z * 0.5);
     button.style.pointerEvents = "auto";
-    button.style.zIndex = String(cluster.members.some((resource) => resource.id === selected?.id) ? 1000 : Math.round(cluster.z * 100));
-  });
+    button.style.zIndex = String(cluster.members.some((resource) => resource.id === selectedId) ? 1000 : Math.round(cluster.z * 100));
+  }
+}
+
+// Re-projects the existing labels without re-running clustering, so labels
+// track the surface smoothly between the heavier clustering passes.
+function repositionPins(width, height) {
+  if (!lastPinClusters.length || !pinElements.size) return;
+  for (const cluster of lastPinClusters) {
+    const anchor = cluster.members[0];
+    if (!anchor) continue;
+    const point = projectResourceGlobePoint(anchor, width, height);
+    cluster.x = point.x;
+    cluster.y = point.y;
+    cluster.z = point.z;
+  }
+  placePins(lastPinClusters, state.selectedId);
 }
 
 function formatCoordinate(value, positive, negative) {
@@ -1560,7 +1647,7 @@ function advanceGlobe(now) {
     }
   } else if (!state.dragging && !state.pinching) {
     state.rotationLon = normalizeLongitude(state.rotationLon + state.velocityLon * dt);
-    state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + state.velocityLat * dt));
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + state.velocityLat * dt);
     const friction = Math.pow(0.055, dt);
     state.velocityLon *= friction;
     state.velocityLat *= friction;
@@ -1584,13 +1671,6 @@ function animateGlobe(now) {
   const canvas = globeCanvasElement || document.getElementById("globeCanvas");
   const width = globeViewportWidth;
   const height = globeViewportHeight;
-  const pageScrolling = now < globePageScrollUntil && !state.dragging && !state.pinching;
-  if (pageScrolling && now - globeLastScrollFrame < 52) {
-    lastFrame = now;
-    requestAnimationFrame(animateGlobe);
-    return;
-  }
-  if (pageScrolling) globeLastScrollFrame = now;
   advanceGlobe(now);
 
   const interactionSettled = !state.dragging
@@ -2074,6 +2154,7 @@ function bindEvents() {
     state.pointerMoved = false;
     state.pointerTime = event.timeStamp || performance.now();
     globeGestureHadMultiplePointers = false;
+    markGlobeEngaged();
     prepareGlobeInteraction();
   });
 
@@ -2121,7 +2202,7 @@ function bindEvents() {
     const lonDelta = -dx * 0.30 * interactionScale;
     const latDelta = dy * 0.22 * interactionScale;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
-    state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + latDelta));
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
     const pointerNow = event.timeStamp || performance.now();
     const pointerDt = Math.max(8, Math.min(40, pointerNow - (state.pointerTime || pointerNow - 16))) / 1000;
     const sampledVelocityLon = lonDelta / pointerDt;
@@ -2197,6 +2278,7 @@ function bindEvents() {
       state.dragging = false;
       state.pointerMoved = true;
       globeGestureHadMultiplePointers = true;
+      markGlobeEngaged();
       prepareGlobeInteraction();
       event.preventDefault();
       return;
@@ -2271,7 +2353,7 @@ function bindEvents() {
     const lonDelta = -dx * 0.30 * interactionScale;
     const latDelta = dy * 0.22 * interactionScale;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
-    state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + latDelta));
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
     state.targetLon = null;
     state.targetLat = null;
     state.pointerMoved = true;
@@ -2300,23 +2382,52 @@ function bindEvents() {
     resetTouchFallback();
   }, { passive: true });
 
-  canvas.addEventListener("wheel", (event) => {
-    if (!(event.ctrlKey || event.metaKey)) return;
+  // Wheel ownership is decided per gesture from its shape, so the page keeps
+  // scrolling normally and the map only claims the wheel when the visitor
+  // clearly means the map. See src/utils/globe-zoom.js for the rules.
+  let wheelOwner = null;
+  let lastWheelTime = 0;
+  globeStage.addEventListener("wheel", (event) => {
+    const now = event.timeStamp || performance.now();
+    // Never interfere with the globe's own scrollable chrome.
+    if (isGlobeChrome(event.target)) return;
+    const doc = document.documentElement;
+    const maxScroll = Math.max(0, doc.scrollHeight - window.innerHeight);
+    const intent = classifyWheelIntent({
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      engaged: globeEngaged,
+      pageAtTop: window.scrollY <= 1,
+      pageAtBottom: window.scrollY >= maxScroll - 1,
+      activeOwner: wheelOwner,
+      timeSinceLastWheel: now - lastWheelTime
+    });
+    lastWheelTime = now;
+    wheelOwner = intent;
+    if (intent !== "zoom") return;
     event.preventDefault();
-    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom * Math.exp(-event.deltaY * 0.00165)));
+    // Horizontal gestures carry their magnitude in deltaX; a rightward swipe
+    // (positive deltaX) zooms in, matching how map surfaces behave elsewhere.
+    const zoomDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : -event.deltaX;
+    const factor = wheelZoomFactor(zoomDelta, { precise: event.ctrlKey || event.metaKey });
+    zoomTowardPointer(factor, event.clientX, event.clientY);
     state.interactionUntil = performance.now() + 5000;
   }, { passive: false });
-  canvas.addEventListener("dblclick", () => {
-    state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.28);
+  canvas.addEventListener("dblclick", (event) => {
+    markGlobeEngaged();
+    zoomTowardPointer(1.6, event.clientX, event.clientY);
     state.interactionUntil = performance.now() + 5000;
   });
   canvas.addEventListener("keydown", (event) => {
+    markGlobeEngaged();
     const baseStep = event.shiftKey ? 12 : 5;
     const step = baseStep / Math.pow(Math.max(1, state.zoom), 0.7);
     if (event.key === "ArrowLeft") state.rotationLon = normalizeLongitude(state.rotationLon - step);
     else if (event.key === "ArrowRight") state.rotationLon = normalizeLongitude(state.rotationLon + step);
-    else if (event.key === "ArrowUp") state.rotationLat = Math.max(-58, state.rotationLat + step);
-    else if (event.key === "ArrowDown") state.rotationLat = Math.min(58, state.rotationLat - step);
+    else if (event.key === "ArrowUp") state.rotationLat = clampGlobeLatitude(state.rotationLat + step);
+    else if (event.key === "ArrowDown") state.rotationLat = clampGlobeLatitude(state.rotationLat - step);
     else if (event.key === "+" || event.key === "=") state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.2);
     else if (event.key === "-" || event.key === "_") state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / 1.2);
     else if (event.key === "Home") {
@@ -2344,8 +2455,18 @@ function bindEvents() {
     event.preventDefault();
   });
 
-  document.getElementById("zoomIn").addEventListener("click", () => { const step = state.targetZoom < 4 ? 1.22 : 1.14; state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * step); state.interactionUntil = performance.now() + 5000; });
-  document.getElementById("zoomOut").addEventListener("click", () => { const step = state.targetZoom <= 4 ? 1.22 : 1.14; state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / step); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomIn").addEventListener("click", () => {
+    markGlobeEngaged();
+    const step = state.targetZoom < 4 ? 1.22 : 1.14;
+    state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * step);
+    state.interactionUntil = performance.now() + 5000;
+  });
+  document.getElementById("zoomOut").addEventListener("click", () => {
+    markGlobeEngaged();
+    const step = state.targetZoom <= 4 ? 1.22 : 1.14;
+    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / step);
+    state.interactionUntil = performance.now() + 5000;
+  });
   document.getElementById("resetGlobe").addEventListener("click", () => {
     document.getElementById("regionFocus").value = "world";
     focusRegion("world");
@@ -2386,7 +2507,6 @@ function bindEvents() {
     });
   };
   window.addEventListener("scroll", () => {
-    globePageScrollUntil = performance.now() + 140;
     if (!navigationFrame) navigationFrame = window.requestAnimationFrame(updateCurrentSection);
   }, { passive: true });
   updateCurrentSection();
