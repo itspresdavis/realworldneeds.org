@@ -1,8 +1,8 @@
-import { expansionResources } from "./resource-expansion.js?v=b8e4d515a52f";
-import { massachusettsWicResources } from "./generated/massachusetts-wic.js?v=b8e4d515a52f";
-import { newYorkWicResources } from "./generated/new-york-wic.js?v=b8e4d515a52f";
-import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js?v=b8e4d515a52f";
-import { withFreeAccess } from "./free-access.js?v=b8e4d515a52f";
+import { expansionResources } from "./resource-expansion.js?v=6ed89ade14d2";
+import { massachusettsWicResources } from "./generated/massachusetts-wic.js?v=6ed89ade14d2";
+import { newYorkWicResources } from "./generated/new-york-wic.js?v=6ed89ade14d2";
+import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js?v=6ed89ade14d2";
+import { withFreeAccess } from "./free-access.js?v=6ed89ade14d2";
 
 export const categories = {
   food: {

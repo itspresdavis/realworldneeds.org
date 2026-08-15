@@ -1,4 +1,4 @@
-import { resourceTypes } from "../data/resources.js?v=b8e4d515a52f";
+import { resourceTypes } from "../data/resources.js?v=6ed89ade14d2";
 
 export const THREE_SPHERE_TEXTURE_OFFSET = 0.25;
 

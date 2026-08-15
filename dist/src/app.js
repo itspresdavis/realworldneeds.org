@@ -1,9 +1,9 @@
 import * as THREE from "/vendor/three.module.js";
-import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js?v=b8e4d515a52f";
-import { clusterProjectedEntries } from "./utils/globe-clustering.js?v=b8e4d515a52f";
-import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js?v=b8e4d515a52f";
-import { freeAccessLabel, freeAccessModels } from "./data/free-access.js?v=b8e4d515a52f";
-import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js?v=b8e4d515a52f";
+import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js?v=6ed89ade14d2";
+import { clusterProjectedEntries } from "./utils/globe-clustering.js?v=6ed89ade14d2";
+import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js?v=6ed89ade14d2";
+import { freeAccessLabel, freeAccessModels } from "./data/free-access.js?v=6ed89ade14d2";
+import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js?v=6ed89ade14d2";
 import {
   cameraDistanceForSphere,
   createInitialTypeSet,
@@ -18,24 +18,27 @@ import {
   resourceSearchScore,
   THREE_SPHERE_TEXTURE_OFFSET,
   toRad
-} from "./utils/geo.js?v=b8e4d515a52f";
+} from "./utils/geo.js?v=6ed89ade14d2";
 import {
   classifyGlobeDragIntent,
   globeViewProfile,
   pinchZoom,
   pointPickThresholdWorld,
   pointerDistance
-} from "./utils/gesture.js?v=b8e4d515a52f";
+} from "./utils/gesture.js?v=6ed89ade14d2";
 import {
   clearResourceFromUrl,
   privateResourceUrl,
   resourceIdFromUrl,
   SAVED_RESOURCES_KEY
-} from "./utils/privacy.js?v=b8e4d515a52f";
+} from "./utils/privacy.js?v=6ed89ade14d2";
 
 const DEFAULT_RESOURCE = null;
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MIN_GLOBE_ZOOM = 0.82;
+// Returned when the globe has no camera yet, so callers treat the point as
+// behind the sphere and simply skip drawing instead of guessing a position.
+const OFFSCREEN_POINT = Object.freeze({ x: -1e6, y: -1e6, z: -1 });
 
 function maxGlobeZoom() {
   return window.innerWidth <= 600 ? 8.0 : 12.0;
@@ -202,14 +205,6 @@ const countryNameAliases = {
   "United States": "United States of America"
 };
 
-const mapLabels = [
-  { label: "NORTH AMERICA", lat: 43, lng: -105 },
-  { label: "SOUTH AMERICA", lat: -17, lng: -60 },
-  { label: "EUROPE", lat: 51, lng: 17 },
-  { label: "AFRICA", lat: 6, lng: 21 },
-  { label: "ASIA", lat: 43, lng: 88 },
-  { label: "OCEANIA", lat: -24, lng: 138 }
-];
 
 function allTypes(resource) {
   return [resource.category, ...(resource.secondaryCategories || [])];
@@ -388,6 +383,11 @@ function shell() {
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
+            <div class="globe-fallback" id="globeFallback" hidden>
+              <p><strong>The interactive map needs WebGL,</strong> which this browser or device has turned off.</p>
+              <p>Every listing is still available as text, with the same contact details, sources and review dates.</p>
+              <a class="globe-fallback__action" href="/directory">Open the text directory</a>
+            </div>
             <div class="globe-controls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">${icon.plus}</button>
@@ -955,7 +955,7 @@ function cachedResourceVector(resource) {
 }
 
 function projectResourceGlobePoint(resource, width, height) {
-  if (!globeWorld || !globeCamera) return projectPoint(resource.lat, resource.lng, width, height);
+  if (!globeWorld || !globeCamera) return OFFSCREEN_POINT;
   globeProjectionVector.copy(cachedResourceVector(resource)).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
   const depth = globeProjectionVector.z / scale;
@@ -984,40 +984,6 @@ function syncGlobePointLayer() {
   globePointSignature = nextSignature;
 }
 
-function texturePoint(lng, lat, width, height) {
-  return {
-    x: ((lng + 180) / 360) * width,
-    y: ((90 - lat) / 180) * height
-  };
-}
-
-function drawTextureRing(ctx, ring, width, height, fill, stroke) {
-  if (ring.length < 3) return;
-  const unwrapped = [];
-  let previous = ring[0][0];
-  let offset = 0;
-  for (const [longitude, latitude] of ring) {
-    const delta = longitude - previous;
-    if (delta > 180) offset -= 360;
-    if (delta < -180) offset += 360;
-    unwrapped.push([longitude + offset, latitude]);
-    previous = longitude;
-  }
-  for (const copy of [-360, 0, 360]) {
-    ctx.beginPath();
-    unwrapped.forEach(([longitude, latitude], index) => {
-      const point = texturePoint(longitude + copy, latitude, width, height);
-      if (index === 0) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-    });
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.strokeStyle = stroke;
-    ctx.stroke();
-  }
-}
-
 function createGlobeTexture() {
   const canvas = document.createElement("canvas");
   const activeEarthImage = earthDetailTextureImage?.complete && earthDetailTextureImage.naturalWidth > 0
@@ -1043,13 +1009,6 @@ function createGlobeTexture() {
     ocean.addColorStop(1, "#041623");
     ctx.fillStyle = ocean;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  if (!hasEarthImagery) {
-    state.landRings.forEach((ring, index) => {
-      const palette = ["#28514f", "#2d5854", "#244a4b", "#315b55"];
-      drawTextureRing(ctx, ring, canvas.width, canvas.height, palette[index % palette.length], "rgba(176, 218, 203, 0.24)");
-    });
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -1270,6 +1229,7 @@ function initThreeGlobe() {
   } catch (error) {
     console.error("WebGL globe could not be initialized.", error);
     globeRenderer = null;
+    reportGlobeUnavailable();
     return;
   }
   globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -1389,6 +1349,21 @@ function rebuildConnections() {
   });
 }
 
+// The interactive globe requires WebGL. When it is unavailable the map is
+// replaced with a direct route into the text directory rather than a
+// lower-fidelity drawing, so every visitor still reaches the listings.
+let globeUnavailableReported = false;
+function reportGlobeUnavailable() {
+  if (globeUnavailableReported) return;
+  globeUnavailableReported = true;
+  const stage = globeStageElement || document.querySelector(".globe-stage");
+  if (stage) stage.classList.add("is-globe-unavailable");
+  const status = document.getElementById("globeReadout");
+  if (status) status.textContent = "Interactive map unavailable on this device";
+  const fallback = document.getElementById("globeFallback");
+  if (fallback) fallback.hidden = false;
+}
+
 function renderThreeGlobe(width, height, now) {
   if (!globeRenderer) return false;
   const canvas = globeRenderer.domElement;
@@ -1448,7 +1423,7 @@ function renderThreeGlobe(width, height, now) {
 }
 
 function projectGlobePoint(lat, lng, width, height) {
-  if (!globeWorld || !globeCamera) return projectPoint(lat, lng, width, height);
+  if (!globeWorld || !globeCamera) return OFFSCREEN_POINT;
   const worldPoint = latLngVector(lat, lng, 1.009).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
   const depth = worldPoint.z / scale;
@@ -1460,198 +1435,11 @@ function projectGlobePoint(lat, lng, width, height) {
   };
 }
 
-function projectPoint(lat, lng, width, height) {
-  const radius = Math.min(width, height) * 0.405 * state.zoom * state.ambientZoom;
-  const centerX = width * 0.5;
-  const centerY = height * 0.51;
-  const latitude = toRad(lat);
-  const diff = toRad(lng - state.rotationLon);
-  const centerLat = toRad(state.rotationLat);
-  const cosLat = Math.cos(latitude);
-  const z = Math.sin(centerLat) * Math.sin(latitude) + Math.cos(centerLat) * cosLat * Math.cos(diff);
-  return {
-    x: centerX + radius * cosLat * Math.sin(diff),
-    y: centerY - radius * (Math.cos(centerLat) * Math.sin(latitude) - Math.sin(centerLat) * cosLat * Math.cos(diff)),
-    z,
-    radius,
-    centerX,
-    centerY
-  };
-}
-
-function vectorFor(resource) {
-  const lat = toRad(resource.lat);
-  const lng = toRad(resource.lng);
-  return { x: Math.cos(lat) * Math.cos(lng), y: Math.sin(lat), z: Math.cos(lat) * Math.sin(lng) };
-}
-
-function projectVector(vector, width, height) {
-  const radius = Math.min(width, height) * 0.405 * state.zoom * state.ambientZoom;
-  const lon = toRad(state.rotationLon);
-  const lat = toRad(state.rotationLat);
-  const equatorFront = vector.x * Math.cos(lon) + vector.z * Math.sin(lon);
-  const z = Math.cos(lat) * equatorFront + Math.sin(lat) * vector.y;
-  return {
-    x: width * 0.5 + radius * (vector.z * Math.cos(lon) - vector.x * Math.sin(lon)),
-    y: height * 0.51 - radius * (Math.cos(lat) * vector.y - Math.sin(lat) * equatorFront),
-    z
-  };
-}
-
-function slerp(a, b, t) {
-  const dot = Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y + a.z * b.z));
-  const omega = Math.acos(dot);
-  if (omega < 0.0001) return a;
-  const sinOmega = Math.sin(omega);
-  const left = Math.sin((1 - t) * omega) / sinOmega;
-  const right = Math.sin(t * omega) / sinOmega;
-  return { x: a.x * left + b.x * right, y: a.y * left + b.y * right, z: a.z * left + b.z * right };
-}
-
-function drawVisiblePath(ctx, points, width, height, close = false) {
-  let active = false;
-  let visibleCount = 0;
-  ctx.beginPath();
-  for (const coordinate of points) {
-    const point = projectPoint(coordinate[1], coordinate[0], width, height);
-    if (point.z <= 0.015) {
-      active = false;
-      continue;
-    }
-    if (!active) {
-      ctx.moveTo(point.x, point.y);
-      active = true;
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
-    visibleCount += 1;
-  }
-  if (close && visibleCount > 3) ctx.closePath();
-  return visibleCount;
-}
-
-function drawGraticule(ctx, width, height) {
-  ctx.save();
-  for (let lat = -60; lat <= 60; lat += 20) {
-    const points = [];
-    for (let lng = -180; lng <= 180; lng += 4) points.push([lng, lat]);
-    drawVisiblePath(ctx, points, width, height);
-    ctx.strokeStyle = lat === 0 ? "rgba(160, 221, 211, 0.19)" : "rgba(160, 211, 204, 0.09)";
-    ctx.lineWidth = lat === 0 ? 0.9 : 0.6;
-    ctx.stroke();
-  }
-  for (let lng = -180; lng < 180; lng += 20) {
-    const points = [];
-    for (let lat = -88; lat <= 88; lat += 3) points.push([lng, lat]);
-    drawVisiblePath(ctx, points, width, height);
-    ctx.strokeStyle = lng === 0 ? "rgba(160, 221, 211, 0.19)" : "rgba(160, 211, 204, 0.09)";
-    ctx.lineWidth = lng === 0 ? 0.9 : 0.6;
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawLand(ctx, width, height) {
-  ctx.save();
-  ctx.lineJoin = "round";
-  for (const ring of state.landRings) {
-    const visible = drawVisiblePath(ctx, ring, width, height, true);
-    if (visible > 3) {
-      ctx.fillStyle = "rgba(117, 157, 146, 0.2)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(187, 224, 211, 0.42)";
-      ctx.lineWidth = 0.65;
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-}
-
-function drawMapLabels(ctx, width, height) {
-  if (state.zoom < 0.9) return;
-  ctx.save();
-  ctx.fillStyle = "rgba(196, 224, 216, 0.28)";
-  ctx.font = "700 9px Inter, ui-sans-serif, system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const item of mapLabels) {
-    const point = projectPoint(item.lat, item.lng, width, height);
-    if (point.z < 0.58) continue;
-    ctx.globalAlpha = Math.min(1, (point.z - 0.52) * 2.2);
-    ctx.fillText(item.label, point.x, point.y);
-  }
-  ctx.restore();
-}
-
 function connectionDestinations(selected) {
   return state.filtered
     .filter((resource) => resource.id !== selected.id && resource.category === selected.category)
     .sort((a, b) => distanceKm(selected.lat, selected.lng, a.lat, a.lng) - distanceKm(selected.lat, selected.lng, b.lat, b.lng))
     .slice(0, 3);
-}
-
-function drawConnections(ctx, width, height, now) {
-  const selected = selectedResource();
-  if (!selected || state.viewMode !== "aid") return;
-  const destinations = connectionDestinations(selected);
-  const start = vectorFor(selected);
-  destinations.forEach((resource, index) => {
-    const end = vectorFor(resource);
-    ctx.beginPath();
-    let drawing = false;
-    for (let step = 0; step <= 52; step += 1) {
-      const progress = step / 52;
-      const vector = slerp(start, end, progress);
-      const lift = 1 + Math.sin(progress * Math.PI) * 0.075;
-      const point = projectVector({ x: vector.x * lift, y: vector.y * lift, z: vector.z * lift }, width, height);
-      if (point.z <= 0.02) {
-        drawing = false;
-        continue;
-      }
-      if (!drawing) ctx.moveTo(point.x, point.y);
-      else ctx.lineTo(point.x, point.y);
-      drawing = true;
-    }
-    ctx.strokeStyle = `${categories[resource.category].color}52`;
-    ctx.lineWidth = 1.1;
-    ctx.stroke();
-
-    if (!reduceMotion) {
-      const progress = ((now * 0.00008 + index * 0.17) % 1);
-      const vector = slerp(start, end, progress);
-      const lift = 1 + Math.sin(progress * Math.PI) * 0.075;
-      const particle = projectVector({ x: vector.x * lift, y: vector.y * lift, z: vector.z * lift }, width, height);
-      if (particle.z > 0.04) {
-        ctx.beginPath();
-        ctx.arc(particle.x, particle.y, 2, 0, Math.PI * 2);
-        ctx.fillStyle = categories[resource.category].color;
-        ctx.shadowColor = categories[resource.category].color;
-        ctx.shadowBlur = 10;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-    }
-  });
-}
-
-function drawUserLocation(ctx, width, height, now) {
-  if (!state.userLocation) return;
-  const point = projectPoint(state.userLocation.lat, state.userLocation.lng, width, height);
-  if (point.z <= 0.03) return;
-  const pulse = reduceMotion ? 12 : 10 + Math.sin(now * 0.004) * 2;
-  ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.arc(point.x, point.y, pulse, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(point.x - 4, point.y);
-  ctx.lineTo(point.x + 4, point.y);
-  ctx.moveTo(point.x, point.y - 4);
-  ctx.lineTo(point.x, point.y + 4);
-  ctx.stroke();
-  ctx.restore();
 }
 
 function subsolarPoint(date) {
@@ -1662,85 +1450,6 @@ function subsolarPoint(date) {
     lat: -23.44 * Math.cos(toRad((360 / 365.24) * (dayOfYear + 10))),
     lng: normalizeLongitude(180 - utcHours * 15)
   };
-}
-
-function drawSolarShading(ctx, width, height, centerX, centerY, radius) {
-  const sun = subsolarPoint(new Date());
-  const point = projectPoint(sun.lat, sun.lng, width, height);
-  const dx = (point.x - centerX) / radius;
-  const dy = (point.y - centerY) / radius;
-  const directionLength = Math.hypot(dx, dy) || 1;
-  const directionX = dx / directionLength;
-  const directionY = dy / directionLength;
-  const centerNight = Math.max(0, -point.z) * 0.24;
-  const lightX = centerX + directionX * radius;
-  const lightY = centerY + directionY * radius;
-  const darkX = centerX - directionX * radius;
-  const darkY = centerY - directionY * radius;
-  const gradient = ctx.createLinearGradient(lightX, lightY, darkX, darkY);
-  gradient.addColorStop(0, `rgba(0, 6, 14, ${0.08 + centerNight})`);
-  gradient.addColorStop(0.46, `rgba(0, 7, 16, ${0.02 + centerNight})`);
-  gradient.addColorStop(0.58, `rgba(0, 7, 16, ${0.18 + centerNight})`);
-  gradient.addColorStop(1, `rgba(0, 5, 13, ${0.58 + centerNight})`);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-}
-
-function drawGlobe(ctx, width, height, now) {
-  const projected = projectPoint(0, state.rotationLon, width, height);
-  const { radius, centerX, centerY } = projected;
-  ctx.clearRect(0, 0, width, height);
-
-  const glow = ctx.createRadialGradient(centerX, centerY, radius * 0.8, centerX, centerY, radius * 1.22);
-  glow.addColorStop(0, "rgba(38, 131, 146, 0.06)");
-  glow.addColorStop(0.82, "rgba(33, 174, 160, 0.11)");
-  glow.addColorStop(1, "rgba(33, 174, 160, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius * 1.23, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-  ctx.clip();
-
-  const ocean = ctx.createRadialGradient(centerX - radius * 0.27, centerY - radius * 0.32, radius * 0.05, centerX, centerY, radius);
-  ocean.addColorStop(0, "#17465a");
-  ocean.addColorStop(0.48, "#0a2d41");
-  ocean.addColorStop(1, "#031522");
-  ctx.fillStyle = ocean;
-  ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-
-  drawGraticule(ctx, width, height);
-  drawLand(ctx, width, height);
-  drawMapLabels(ctx, width, height);
-  drawSolarShading(ctx, width, height, centerX, centerY, radius);
-  drawConnections(ctx, width, height, now);
-  drawUserLocation(ctx, width, height, now);
-
-  const shade = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
-  shade.addColorStop(0, "rgba(0, 8, 17, 0.3)");
-  shade.addColorStop(0.42, "rgba(0, 8, 17, 0.015)");
-  shade.addColorStop(1, "rgba(0, 8, 17, 0.24)");
-  ctx.fillStyle = shade;
-  ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-  ctx.restore();
-
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(100, 219, 203, 0.42)";
-  ctx.lineWidth = 1.4;
-  ctx.shadowColor = "rgba(47, 210, 199, 0.3)";
-  ctx.shadowBlur = 18;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius + 3, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(111, 231, 212, 0.12)";
-  ctx.lineWidth = 5;
-  ctx.stroke();
 }
 
 function clusterVisibleResources(width, height) {
@@ -1903,15 +1612,8 @@ function animateGlobe(now) {
   }
 
   if (!renderThreeGlobe(width, height, now)) {
-    const dprCap = width < 720 ? (state.zoom > 2.5 ? 1.6 : 1.4) : (state.zoom > 2.5 ? 2 : 1.75);
-  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-    }
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawGlobe(ctx, width, height, now);
+    reportGlobeUnavailable();
+    return;
   }
   renderPins(width, height, now);
   updateGlobeReadout(now);
@@ -1967,14 +1669,14 @@ function focusCluster(ids) {
   const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(Boolean);
   if (!members.length) return;
   state.clusterIds = members.map((resource) => resource.id);
-  const vector = members.reduce((sum, resource) => {
-    const point = vectorFor(resource);
-    return { x: sum.x + point.x, y: sum.y + point.y, z: sum.z + point.z };
-  }, { x: 0, y: 0, z: 0 });
-  const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
-  const normalized = { x: vector.x / length, y: vector.y / length, z: vector.z / length };
-  state.targetLon = Math.atan2(normalized.z, normalized.x) * 180 / Math.PI;
-  const latitude = Math.asin(normalized.y) * 180 / Math.PI;
+  const centroid = members.reduce(
+    (sum, resource) => sum.add(latLngVector(resource.lat, resource.lng, 1)),
+    new THREE.Vector3()
+  );
+  if (centroid.lengthSq() < 1e-9) centroid.copy(latLngVector(members[0].lat, members[0].lng, 1));
+  centroid.normalize();
+  state.targetLon = Math.atan2(centroid.x, centroid.z) * 180 / Math.PI;
+  const latitude = Math.asin(THREE.MathUtils.clamp(centroid.y, -1, 1)) * 180 / Math.PI;
   state.targetLat = Math.max(-65, Math.min(65, latitude));
   state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 2.8 : 3.4);
   state.velocityLon = 0;
