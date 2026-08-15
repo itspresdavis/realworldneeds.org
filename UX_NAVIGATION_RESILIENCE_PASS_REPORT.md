@@ -20,6 +20,8 @@ This pass applied the user-provided product-quality prompt to **`Anlos0516/RWN-W
 
 The full release gate passed with **166/166** automated tests. Browser verification passed for desktop and mobile finder interaction, rapid search/filter churn, input bounds, no-result recovery, non-sensitive history restoration, location retry, mobile menu focus, service routes, offline navigation, reduced motion, and source/action flows. The dedicated globe suite passed **15/15** checks, including ordinary page wheel scrolling, modifier/horizontal zoom behavior, 11.63× deep zoom, marker continuity, no horizontal overflow, and no console errors or uncaught exceptions.
 
+Vercel marked production `READY` for commit `6a46e95f`. Direct custom-domain inspection also confirmed the release-hashed CSS and module graph loaded, the professional/refined/accessibility/result-action classes were active, the finder rendered results, and the protected globe canvas was live. An initial browser capture occurred during startup and showed the intentional fallback markup; subsequent DOM inspection confirmed this was capture timing rather than a production rendering failure.
+
 ## Deliberately deferred items
 
 This static public directory has no authenticated feedback, correction-submission, partner, notification, or user-account backend. Those flows were not fabricated. The existing correction-channel handoff remains the safe implementation plan once RWN supplies a monitored official contact route and governance owner. The public no-JavaScript shell remains intentionally minimal; substantial parity work should be scheduled with measured first-load and accessibility acceptance criteria rather than inserted speculatively.

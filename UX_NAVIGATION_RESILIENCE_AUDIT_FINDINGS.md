@@ -30,3 +30,7 @@ The finder now bounds text input to 180 cleaned characters and uses a short canc
 Location failure feedback now provides an explicit retry control when the platform can retry. The native mobile menu closes on Escape, outside click, or desktop breakpoint change and returns focus to its summary trigger on Escape/outside dismissal. Offline cache/service-worker registration remains fail-open but now emits a clear status-toast warning if offline saving is unavailable.
 
 Post-implementation validation passed: 166/166 release tests, the complete browser resilience suite, dedicated interaction QA, and 15/15 globe regression checks. Interaction QA now covers input bounds, no-result recovery, popstate restoration, location retry, menu focus return, and the established globe layout.
+
+## Live-production verification hold
+
+After the `6a46e95f` deployment reached Vercel `READY`, the initial browser capture showed the intended no-JavaScript fallback during startup, so delivery was paused and the live asset graph was inspected instead of relying on the Vercel state alone. The custom domain loaded release-hashed `styles.css`, `clarity.css`, `app.js`, and `bootstrap.js`; the initialized document had the professional/refined/accessibility/result-action classes, a rendered search input and results surface, five root children, and a live 797 px globe canvas. This was a startup-capture timing artifact, not a stale-asset or runtime failure.
