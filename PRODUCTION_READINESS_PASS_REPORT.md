@@ -20,6 +20,10 @@ RWN’s identity remains coherent and distinct: the branded header, restrained g
 
 The release gate passed **172/172** tests. The full browser resilience suite passed, including offline navigation, rapid finder churn, reduced-motion behavior, WebGL context loss/recovery, direct service action paths, directory pagination and 404 recovery. The dedicated globe suite passed all **15** checks at 11.62× deep zoom without horizontal overflow, console errors, or page-scroll interference. Runtime dependency audit found zero production vulnerabilities.
 
+## Production Verification
+
+Vercel deployed the readiness correction at commit `a4afb1c5` with production state `READY`. A fresh production fetch of `https://realworldneeds.org/sw.js` confirmed the versioned worker now rejects any unusable required core asset, verifies each stored cache entry, deletes an incomplete new cache, and calls `skipWaiting()` only after a full cache warmup. The production homepage continued to expose the full finder, core needs, directory fallback, and detailed globe context.
+
 ## Production Limitations
 
 The service is a static public directory. It cannot guarantee provider hours, capacity, eligibility, or availability; the site continues to surface source and review context and directs visitors to confirm before travel. It also does not impersonate a support desk: listing corrections, feedback, accounts, messaging, notifications, and operational monitoring require RWN-approved backend ownership before they should be added.
