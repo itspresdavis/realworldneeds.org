@@ -212,19 +212,27 @@ async function run() {
     await navigate(client, `${HOST}/`);
     const mobile = await evaluate(client, `(() => {
       const canvas = document.getElementById("globeCanvas");
-      const quick = document.querySelector(".quick-need");
+      const quickNeeds = [...document.querySelectorAll(".quick-need")];
+      const jump = document.querySelector(".jump-results");
+      const location = document.querySelector(".location-actions");
       const globe = document.querySelector(".globe-stage");
       const header = document.querySelector(".site-header");
+      const jumpRect = jump?.getBoundingClientRect();
+      const locationRect = location?.getBoundingClientRect();
       return {
         noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
         touchAction: canvas ? getComputedStyle(canvas).touchAction : "missing",
-        quickTarget: quick ? Math.round(quick.getBoundingClientRect().height) : 0,
+        quickCount: quickNeeds.length,
+        quickTargets: quickNeeds.map((node) => ({ height: Math.round(node.getBoundingClientRect().height), right: Math.round(node.getBoundingClientRect().right) })),
+        jumpVisible: Boolean(jumpRect && locationRect && jumpRect.height >= 44 && jumpRect.width >= locationRect.width - 1),
+        jumpDimensions: { width: Math.round(jumpRect?.width || 0), height: Math.round(jumpRect?.height || 0), locationWidth: Math.round(locationRect?.width || 0), display: jump ? getComputedStyle(jump).display : "missing", visibility: jump ? getComputedStyle(jump).visibility : "missing" },
+        jumpBeforeLocation: Boolean(jumpRect && locationRect && jumpRect.top < locationRect.top),
         globeHeight: globe ? Math.round(globe.getBoundingClientRect().height) : 0,
         headerHeight: header ? Math.round(header.getBoundingClientRect().height) : 0,
         resultLinks: document.querySelectorAll(".result-row-link").length
       };
     })()`);
-    if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y" || mobile.quickTarget < 44 || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
+    if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y" || mobile.quickCount !== 7 || mobile.quickTargets.some((target) => target.height < 40 || target.right > 391) || !mobile.jumpVisible || !mobile.jumpBeforeLocation || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
       throw new Error(`Institutional mobile homepage failed: ${JSON.stringify(mobile)}`);
     }
     await capture(client, "institutional-mobile.png");

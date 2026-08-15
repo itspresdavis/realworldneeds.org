@@ -761,3 +761,46 @@ body.rwn-professional main { display: block; }
   .rwn-professional .site-footer { display:none !important; }
   .rwn-professional .results-section { padding:0; }
 }
+
+/* Urgent-help flow: the map is optional discovery, not a gate before listings. */
+.rwn-professional .jump-results {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-top: .9rem;
+  padding: .62rem .85rem;
+  border: 1px solid var(--rwn-green-dark);
+  border-radius: 6px;
+  background: var(--rwn-green-dark);
+  color: #fff;
+  font-size: .76rem;
+  font-weight: 720;
+  line-height: 1.15;
+  text-decoration: none;
+}
+.rwn-professional .jump-results:hover,
+.rwn-professional .jump-results:focus-visible {
+  border-color: var(--rwn-green);
+  background: var(--rwn-green);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(33, 138, 61, .14);
+}
+
+@media (max-width: 600px) {
+  .rwn-professional .quick-needs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .42rem;
+  }
+  .rwn-professional .quick-needs__label { grid-column: 1 / -1; }
+  .rwn-professional .quick-need {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    padding-inline: .35rem;
+    white-space: normal;
+  }
+  .rwn-professional .quick-need--all { grid-column: span 3; }
+  .rwn-professional .jump-results { width: 100%; margin-top: 1rem; }
+}

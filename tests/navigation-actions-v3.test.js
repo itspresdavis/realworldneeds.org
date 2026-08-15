@@ -43,14 +43,14 @@ test("directory rows put urgent actions first and keep verification detail one d
   assert.doesNotMatch(record, /directory-quick-actions/);
 });
 
-test("service pages make call and preferred map choices immediate while preserving source verification", async () => {
+test("service pages make call and one clear directions choice immediate while preserving source verification", async () => {
   const resource = resources.find((item) => item.kind === "direct" && item.phone) || resources.find((item) => item.kind === "direct");
   assert.ok(resource);
   const html = await text(`dist/service/${resource.id}/index.html`);
   const next = html.match(/<nav class="service-next-steps"[\s\S]*?<\/nav>/)?.[0] || "";
   if (resource.phone) assert.match(next, /class="is-call"[^>]+href="tel:/);
-  assert.match(next, /class="is-map"[^>]+maps\.apple\.com\/\?daddr=/);
-  assert.match(next, /class="is-map"[^>]+google\.com\/maps\/dir\/\?api=1&amp;destination=/);
+  assert.match(next, /class="is-map is-directions"[^>]+google\.com\/maps\/dir\/\?api=1&amp;destination=/);
+  assert.doesNotMatch(next, /maps\.apple\.com\/\?daddr=/);
   assert.match(next, /class="is-primary"[^>]*>[\s\S]*?<strong>Official source<\/strong>/);
   assert.match(next, /href="\/#resource=/);
 });

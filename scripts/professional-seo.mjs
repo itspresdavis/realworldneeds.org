@@ -177,12 +177,11 @@ function serviceActions(resource) {
   }
   if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
     const maps = mapsFor(resource);
-    links.push(`<a class="is-map" href="${escapeHtml(maps.apple)}" rel="noopener noreferrer"><strong>Apple Maps</strong><span>Get directions</span></a>`);
-    links.push(`<a class="is-map" href="${escapeHtml(maps.google)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Get directions</span></a>`);
+    links.push(`<a class="is-map is-directions" href="${escapeHtml(maps.google)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open a route in your maps app</span></a>`);
   }
   links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`);
   links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  return `<nav class="service-next-steps" aria-label="Contact or get directions for this service"><div><span>Next step</span><strong>${resource.phone ? "Call, get directions, or verify details" : "Get directions or verify details"}</strong></div><div>${links.join("")}</div></nav>`;
+  return `<nav class="service-next-steps" aria-label="Contact or get directions for this service"><div><span>Next step</span><strong>${resource.phone ? "Call, get directions, or verify current details" : "Get directions or verify current details"}</strong></div><div>${links.join("")}</div></nav>`;
 }
 
 function enhanceActionOrientation(html) {

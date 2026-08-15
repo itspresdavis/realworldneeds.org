@@ -1,4 +1,4 @@
-import { resourceTypes } from "../data/resources.js?v=779d86ae15fb";
+import { resourceTypes } from "../data/resources.js?v=93a81e8ba210";
 
 export const THREE_SPHERE_TEXTURE_OFFSET = 0.25;
 
@@ -105,6 +105,9 @@ function normalizedText(value) {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    // Keep common public-utility terms intact when punctuation would otherwise
+    // split them into weak, ambiguous tokens (for example, “Wi-Fi” → “wi fi”).
+    .replace(/wi[\s-]?fi\b/g, "wifi")
     .replace(/[^a-z0-9+]+/g, " ")
     .trim();
 }
@@ -121,7 +124,15 @@ const searchAliases = new Map(Object.entries({
   ropa: "clothing", roupas: "clothing", vetement: "clothing", vetements: "clothing",
   doctor: "health", doctors: "health", clinic: "health", clinics: "health", dental: "health", dentist: "health", medical: "health", mental: "health", healthcare: "health",
   salud: "health", saude: "health", sante: "health", medico: "health", medica: "health", clinica: "health", clinique: "health",
-  directory: "referral", directories: "referral", locator: "referral", navigation: "referral", benefits: "referral", advice: "referral", casework: "referral"
+  directory: "referral", directories: "referral", locator: "referral", navigation: "referral", benefits: "referral", advice: "referral", casework: "referral",
+  diapers: "diaper", chargers: "charging", charger: "charging", wifi: "wifi", nyc: "new york city"
+}));
+
+// Small, deliberate corrections for high-frequency need words. This is not a
+// broad fuzzy matcher: ambiguous corrections can send someone seeking urgent
+// help to the wrong category, so only obvious single-word slips are accepted.
+const commonNeedTypos = new Map(Object.entries({
+  foood: "food", shleter: "shelter", sheltor: "shelter", watre: "water", clohtes: "clothing", hygene: "hygiene"
 }));
 
 const queryNoise = new Set([
@@ -143,7 +154,7 @@ function searchTokens(value) {
 function querySearchTokens(value) {
   return rawTokens(value)
     .filter((token) => !queryNoise.has(token))
-    .map((token) => searchAliases.get(token) || token);
+    .map((token) => commonNeedTypos.get(token) || searchAliases.get(token) || token);
 }
 
 const resourceSearchFieldCache = new WeakMap();
@@ -159,6 +170,8 @@ function resourceSearchFields(resource) {
     name: normalizedText(resource.name),
     place: normalizedText([resource.city, resource.country, resource.region, resource.address].join(" ")),
     source: normalizedText(resource.sourceName),
+    primaryType: normalizedText(resource.category),
+    types: new Set(searchTokens(types.join(" "))),
     detail: normalizedText([
       resource.summary,
       services.join(" "),
@@ -195,6 +208,10 @@ export function resourceSearchScore(resource, query) {
   if (!tokens.every((token) => fields.tokens.has(token) || fields.all.includes(token))) return -1;
 
   return tokens.reduce((score, token) => {
+    // Category intent must outrank incidental text. A person typing “water”
+    // should see water access before foodbanks named after Waterbeach.
+    if (fields.primaryType === token) return score + 40;
+    if (fields.types.has(token)) return score + 30;
     if (fields.name === token) return score + 20;
     if (fields.name.startsWith(token)) return score + 12;
     if (fields.name.includes(token)) return score + 8;

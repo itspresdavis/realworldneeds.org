@@ -355,8 +355,10 @@ async function run() {
     client?.close();
     browser?.kill("SIGTERM");
     server.kill("SIGTERM");
-    await sleep(100);
-    await rm(profile, { recursive: true, force: true });
+    // Chromium can release profile files just after its parent exits; retry so a
+    // passing browser test cannot be reported as a false cleanup failure.
+    await sleep(250);
+    await rm(profile, { recursive: true, force: true, maxRetries: 12, retryDelay: 150 });
   }
 }
 

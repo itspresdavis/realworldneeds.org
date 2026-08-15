@@ -187,7 +187,7 @@ async function run() {
     const sourceMatches = normalizedUrl(desktop.primaryHref) === normalizedUrl(resource.sourceUrl);
     const phoneAction = resource.phone ? desktop.phoneHref.startsWith("tel:") : true;
     const privateMapLink = desktop.interactiveHref.startsWith("/#resource=") && !desktop.interactiveHref.includes("?resource=");
-    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions < 2 || desktop.overflow > 8) {
+    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions !== 1 || desktop.overflow > 8) {
       throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink })}`);
     }
 
@@ -269,7 +269,7 @@ async function run() {
       throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions })}`);
     }
 
-    console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, phone/map next steps, complete five-link navigation, explicit Call/Apple Maps/Google Maps/View details search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
+    console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, one clear Directions path, phone contact, current-source verification, directory search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
   } finally {
     client?.close();
     await stopProcess(browser);

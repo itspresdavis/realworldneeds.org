@@ -118,6 +118,31 @@ try {
   check("search replaces the paged list cleanly", search.pagedRecordsHidden, JSON.stringify(search));
   check("search reports a result count", /\d/.test(search.countText), search.countText);
 
+  const semanticSearch = await evaluate(`(async () => {
+    const input = document.querySelector('[data-directory-query]');
+    const run = async (query) => {
+      input.value = query;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const rows = [...document.querySelectorAll('.directory-global-result')];
+      return {
+        rows: rows.length,
+        firstName: rows[0]?.querySelector('strong')?.textContent || '',
+        firstMeta: rows[0]?.querySelector('small')?.textContent || ''
+      };
+    };
+    return {
+      wifi: await run('wifi'),
+      nycShelter: await run('NYC shelter'),
+      typo: await run('shleter'),
+      water: await run('water')
+    };
+  })()`);
+  check("directory finds the verified free Wi-Fi utility", semanticSearch.wifi.rows > 0 && /LinkNYC/i.test(semanticSearch.wifi.firstName), JSON.stringify(semanticSearch.wifi));
+  check("directory understands NYC as New York City", semanticSearch.nycShelter.rows > 0, JSON.stringify(semanticSearch.nycShelter));
+  check("directory recovers an obvious shelter typo", semanticSearch.typo.rows > 0, JSON.stringify(semanticSearch.typo));
+  check("directory ranks water access ahead of incidental place names", /Water/i.test(semanticSearch.water.firstMeta), JSON.stringify(semanticSearch.water));
+
   const cleared = await evaluate(`(async () => {
     const input = document.querySelector('[data-directory-query]');
     input.value = '';
@@ -134,9 +159,9 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 700));
     const visible = [...document.querySelectorAll('.directory-record')].filter((node) => node.offsetParent !== null).length;
     const body = document.body.innerText;
-    return { visible, hasGuidance: /no (?:match|result|listing)/i.test(body) };
+    return { visible, hasGuidance: /no (?:match|result|listing)/i.test(body), hasRecovery: Boolean(document.querySelector('.directory-global-empty button')) };
   })()`);
-  check("a search with no matches explains itself", noMatch.visible === 0 && noMatch.hasGuidance, JSON.stringify(noMatch));
+  check("a search with no matches explains itself", noMatch.visible === 0 && noMatch.hasGuidance && noMatch.hasRecovery, JSON.stringify(noMatch));
 
   // --- Tap target sizes on mobile ---
   await goto("/directory", 390, 844, 3, true);

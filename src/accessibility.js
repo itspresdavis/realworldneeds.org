@@ -63,7 +63,8 @@ function installResultLandmark() {
     const link = document.createElement("a");
     link.className = "jump-results";
     link.href = "#results";
-    link.textContent = "View results";
+    link.textContent = "See matching services";
+    link.setAttribute("aria-label", "Skip the map and see matching services");
     quickNeeds.insertAdjacentElement("afterend", link);
   }
 }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createInitialTypeSet, distanceKm, matchesResource } from "../src/utils/geo.js";
+import { createInitialTypeSet, distanceKm, matchesResource, resourceSearchScore } from "../src/utils/geo.js";
 import { resources } from "../src/data/resources.js";
 
 const allTypes = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
@@ -45,4 +45,25 @@ test("common multilingual need words map to reviewed service categories", () => 
   assert.equal(matchesResource(hygiene, "duchas", createInitialTypeSet()), true);
   assert.equal(matchesResource(health, "santé", createInitialTypeSet()), true);
   assert.equal(matchesResource(clothing, "vêtements", createInitialTypeSet()), true);
+});
+
+test("common utility words, city aliases, and obvious need typos recover useful listings", () => {
+  const linkNyc = resources.find((resource) => resource.id === "linknyc-free-wifi");
+  const diaperBank = resources.find((resource) => resource.id === "national-diaper-bank-network");
+  const nycShelter = resources.find((resource) => resource.id === "nyc-shelter-intake-coalition");
+  const food = resources.find((resource) => allTypes(resource).includes("food"));
+  const shelter = resources.find((resource) => allTypes(resource).includes("shelter"));
+  assert.ok(linkNyc && diaperBank && nycShelter && food && shelter);
+  assert.equal(matchesResource(linkNyc, "wifi", createInitialTypeSet()), true);
+  assert.equal(matchesResource(diaperBank, "diapers", createInitialTypeSet()), true);
+  assert.equal(matchesResource(nycShelter, "NYC shelter", createInitialTypeSet()), true);
+  assert.equal(matchesResource(food, "foood", createInitialTypeSet()), true);
+  assert.equal(matchesResource(shelter, "shleter", createInitialTypeSet()), true);
+});
+
+test("a category-intent match outranks an incidental place-name match", () => {
+  const waterService = resources.find((resource) => allTypes(resource).includes("water"));
+  const incidentalWater = resources.find((resource) => !allTypes(resource).includes("water") && /water/i.test(resource.name));
+  assert.ok(waterService && incidentalWater);
+  assert.ok(resourceSearchScore(waterService, "water") > resourceSearchScore(incidentalWater, "water"));
 });

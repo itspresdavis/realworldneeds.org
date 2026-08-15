@@ -6,6 +6,7 @@ const normalize = (value) => String(value || "")
   .normalize("NFKD")
   .replace(/[\u0300-\u036f]/g, "")
   .toLowerCase()
+  .replace(/wi[\s-]?fi\b/g, "wifi")
   .replace(/[^a-z0-9+]+/g, " ")
   .trim();
 
