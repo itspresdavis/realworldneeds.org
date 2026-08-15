@@ -2,9 +2,18 @@
   "schemaVersion": "1.2",
   "minimumListings": 3,
   "minimumCategoryListings": 3,
-  "pageCount": 120,
-  "categoryPageCount": 246,
+  "pageCount": 123,
+  "categoryPageCount": 248,
   "cities": [
+    {
+      "city": "Sydney",
+      "country": "Australia",
+      "administrativeArea": null,
+      "count": 3,
+      "lastmod": "2026-08-14",
+      "path": "/directory/local/australia/sydney",
+      "categories": []
+    },
     {
       "city": "Vancouver",
       "country": "Canada",
@@ -1442,8 +1451,8 @@
       "city": "London",
       "country": "United Kingdom",
       "administrativeArea": null,
-      "count": 32,
-      "lastmod": "2026-08-07",
+      "count": 33,
+      "lastmod": "2026-08-14",
       "path": "/directory/local/united-kingdom/london",
       "categories": [
         {
@@ -1710,8 +1719,8 @@
       "city": "Nottingham",
       "country": "United Kingdom",
       "administrativeArea": null,
-      "count": 4,
-      "lastmod": "2026-08-07",
+      "count": 5,
+      "lastmod": "2026-08-14",
       "path": "/directory/local/united-kingdom/nottingham",
       "categories": [
         {
@@ -2307,6 +2316,23 @@
       ]
     },
     {
+      "city": "United Kingdom",
+      "country": "United Kingdom",
+      "administrativeArea": null,
+      "count": 7,
+      "lastmod": "2026-08-14",
+      "path": "/directory/local/united-kingdom/united-kingdom",
+      "categories": [
+        {
+          "type": "referral",
+          "label": "Navigation",
+          "count": 4,
+          "lastmod": "2026-08-14",
+          "path": "/directory/local/united-kingdom/united-kingdom/help/referral"
+        }
+      ]
+    },
+    {
       "city": "Watford",
       "country": "United Kingdom",
       "administrativeArea": null,
@@ -2622,8 +2648,8 @@
       "city": "Boston",
       "country": "United States",
       "administrativeArea": "MA",
-      "count": 16,
-      "lastmod": "2026-08-05",
+      "count": 17,
+      "lastmod": "2026-08-14",
       "path": "/directory/local/united-states/boston",
       "categories": [
         {
@@ -2657,8 +2683,8 @@
         {
           "type": "clothing",
           "label": "Clothing",
-          "count": 3,
-          "lastmod": "2026-08-05",
+          "count": 4,
+          "lastmod": "2026-08-14",
           "path": "/directory/local/united-states/boston/help/clothing"
         }
       ]
@@ -2808,11 +2834,20 @@
       ]
     },
     {
+      "city": "New York City",
+      "country": "United States",
+      "administrativeArea": null,
+      "count": 4,
+      "lastmod": "2026-08-14",
+      "path": "/directory/local/united-states/new-york-city",
+      "categories": []
+    },
+    {
       "city": "New York",
       "country": "United States",
       "administrativeArea": "NY",
-      "count": 15,
-      "lastmod": "2026-08-05",
+      "count": 16,
+      "lastmod": "2026-08-14",
       "path": "/directory/local/united-states/new-york",
       "categories": [
         {
@@ -2825,8 +2860,8 @@
         {
           "type": "referral",
           "label": "Navigation",
-          "count": 14,
-          "lastmod": "2026-08-05",
+          "count": 15,
+          "lastmod": "2026-08-14",
           "path": "/directory/local/united-states/new-york/help/referral"
         }
       ]
@@ -2883,23 +2918,30 @@
       "city": "United States",
       "country": "United States",
       "administrativeArea": null,
-      "count": 4,
-      "lastmod": "2026-08-04",
+      "count": 9,
+      "lastmod": "2026-08-14",
       "path": "/directory/local/united-states/united-states",
       "categories": [
         {
           "type": "food",
           "label": "Food",
-          "count": 4,
-          "lastmod": "2026-08-04",
+          "count": 6,
+          "lastmod": "2026-08-14",
           "path": "/directory/local/united-states/united-states/help/food"
         },
         {
           "type": "referral",
           "label": "Navigation",
-          "count": 4,
-          "lastmod": "2026-08-04",
+          "count": 6,
+          "lastmod": "2026-08-14",
           "path": "/directory/local/united-states/united-states/help/referral"
+        },
+        {
+          "type": "health",
+          "label": "Health",
+          "count": 4,
+          "lastmod": "2026-08-14",
+          "path": "/directory/local/united-states/united-states/help/health"
         }
       ]
     },

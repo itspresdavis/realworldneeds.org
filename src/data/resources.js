@@ -1,4 +1,5 @@
 import { expansionResources } from "./resource-expansion.js";
+import { verifiedExpansionResources } from "./verified-expansion.js";
 import { massachusettsWicResources } from "./generated/massachusetts-wic.js";
 import { newYorkWicResources } from "./generated/new-york-wic.js";
 import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js";
@@ -1289,6 +1290,7 @@ const reviewedResources = [
   ...countryHelpDirectories,
   ...expandedResources,
   ...expansionResources,
+  ...verifiedExpansionResources,
   ...massachusettsWicResources,
   ...newYorkWicResources,
   ...trussellFoodbankResources

@@ -58,5 +58,12 @@ test("source ledger structured data describes a collection without inventing end
   const list = graph.find((node) => node["@type"] === "ItemList");
   assert.equal(collection?.url, "https://www.realworldneeds.org/sources");
   assert.equal(list?.numberOfItems, sourceRegistry.length + unregisteredSourceGroups().size);
-  assert.doesNotMatch(JSON.stringify(data), /partner|sponsor|endorsedBy/i);
+  // RWN must never claim a relationship with the organizations it lists. The check
+  // targets endorsement *claims* rather than the substring "partner", because
+  // genuine source URLs and operator descriptions legitimately contain words like
+  // "service-partners" (Cradles to Crayons) or "in partnership with Thames Water".
+  const serialized = JSON.stringify(data);
+  assert.doesNotMatch(serialized, /"(?:sponsor|funder|partner|endorsedBy|affiliation)"\s*:/i);
+  assert.doesNotMatch(serialized, /RWN[^"]{0,40}(?:partners? with|sponsored by|endorsed by)/i);
+  assert.doesNotMatch(serialized, /(?:our|RWN's) (?:partners?|sponsors?)/i);
 });

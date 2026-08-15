@@ -1,17 +1,17 @@
 {
-  "release": "a6ff8ebff57e",
-  "resourceCount": 1984,
+  "release": "779d86ae15fb",
+  "resourceCount": 2019,
   "directoryPageSize": 80,
-  "generatedAt": "2026-08-15T00:50:38.612Z",
+  "generatedAt": "2026-08-15T01:36:26.504Z",
   "directoryRelease": "7d8ac6491991",
   "sourceLedger": {
     "structuredSourceFamilies": 4,
-    "originalSourceGroups": 75,
-    "totalSourceGroups": 79,
-    "lastmod": "2026-08-07"
+    "originalSourceGroups": 107,
+    "totalSourceGroups": 111,
+    "lastmod": "2026-08-14"
   },
   "serviceActionRelease": "8bbcabad459a",
   "directoryResilienceRelease": "45c675d92dc8",
-  "presentationRelease": "a6ff8ebff57e",
-  "offlineRelease": "e32e28ccf3b5"
+  "presentationRelease": "779d86ae15fb",
+  "offlineRelease": "2e619bf5c368"
 }

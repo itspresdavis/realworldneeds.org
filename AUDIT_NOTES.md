@@ -71,3 +71,21 @@ Root causes for the ctrl-wheel page movement: the handler is attached to `#globe
 1. `npm run build` runs 11 sequential node scripts, two of which are 47 string patches over `dist/src/app.js`.
 2. `vendor/three.module.js` (366 KB) + `vendor/three.core.min.js` (386 KB) are **both** downloaded: 752 KB of Three.js for a globe that uses spheres, lines, points and one shader. A hand-rolled subset or `three` tree-shaken bundle would be a fraction.
 3. `npm run check` requires Node 24 (`engines`), sandbox/CI mismatch risk; local Node 22 works but `npm ci` warns EBADENGINE.
+
+## P5 — Catalog composition (the "verified places for free utilities" gap)
+
+1,984 records, but the distribution is extremely lopsided:
+
+| Category | Records | Share |
+| --- | --- | --- |
+| Food | 1,820 | 91.7% |
+| Navigation / referral | 126 | 6.4% |
+| Shelter | 20 | 1.0% |
+| Hygiene | 14 | 0.7% |
+| Water | 3 | 0.2% |
+| Clothing | 1 | 0.05% |
+| Health | 0 (primary) | 0% |
+
+By country: United Kingdom 1,415, United States 423, Canada 9, Australia 7, New Zealand 7, then single digits. Kinds: 1,840 direct, 139 locator, 5 network.
+
+So the site presents itself as a seven-category essential-services directory while being, in practice, a UK/US food-bank directory. **Health has zero primary records, clothing has one, water has three.** Expanding coverage means adding authoritative, nationally-scoped records for the starved categories — free clinics, public drinking water and cooling/warming centres, showers and laundry, clothing banks, and free public utilities like libraries and public wifi — each with a real HTTPS source, exact or clearly-labelled coverage semantics, and explicit no-cost language to satisfy `validate-data.mjs`.
