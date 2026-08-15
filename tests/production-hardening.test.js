@@ -55,14 +55,14 @@ test("production app output cannot render numeric cluster badges", async () => {
 test("directory pages cap DOM size and expose crawlable geographic pages", async () => {
   const firstPage = await text("dist/directory/index.html");
   const recordCount = (firstPage.match(/<article class="directory-record"/g) || []).length;
-  assert.equal(recordCount, 80);
+  assert.equal(recordCount, 60);
   assert.match(firstPage, /Browse by need/);
   assert.match(firstPage, /Browse by region/);
   assert.match(firstPage, /Browse by country/);
   assert.match(firstPage, /href="\/directory\/united-states"/);
 
   const secondPage = await text("dist/directory/page/2/index.html");
-  assert.ok((secondPage.match(/<article class="directory-record"/g) || []).length <= 80);
+  assert.ok((secondPage.match(/<article class="directory-record"/g) || []).length <= 60);
   assert.match(secondPage, /Page 2 of/);
 
   const us = await text("dist/directory/united-states/index.html");
@@ -75,8 +75,9 @@ test("help-by-need pages are canonical, structured, and source connected", async
   assert.match(food, /rel="canonical" href="https:\/\/www\.realworldneeds\.org\/directory\/help\/food"/);
   assert.match(food, /"@type":"CollectionPage"/);
   assert.match(food, /"@type":"ItemList"/);
-  assert.match(food, /Full listing details/);
-  assert.match(food, /Visit original source/);
+  assert.match(food, /Open listing/);
+  assert.match(food, /Official source/);
+  assert.match(food, /directory-record__more/);
 
   const manifest = JSON.parse(await text("dist/data/resources/index.json"));
   assert.ok(Array.isArray(manifest.categories));

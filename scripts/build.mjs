@@ -6,7 +6,10 @@ import { freeAccessLabel } from "../src/data/free-access.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 
-const DIRECTORY_PAGE_SIZE = 80;
+// A page of 80 expanded records created a 34,000px scroll. Sixty compact
+// records keeps a browse page purposeful while whole-catalog search remains
+// available for every listing.
+const DIRECTORY_PAGE_SIZE = 60;
 const SITE_ORIGIN = "https://www.realworldneeds.org";
 const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
@@ -80,6 +83,18 @@ function breadcrumbs(items) {
   return `<nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a>${items.map((item) => item.href ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>` : `<span aria-current="page">${escapeHtml(item.label)}</span>`).join("")}</nav>`;
 }
 
+function directoryRecordActions(resource, coordinate) {
+  const links = [];
+  if (resource.phone) {
+    links.push(`<a class="is-call" href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">Call ${escapeHtml(resource.phone)}</a>`);
+  }
+  if (resource.kind === "direct") {
+    links.push(`<a class="is-directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Directions</a>`);
+  }
+  links.push(`<a class="is-details" href="/service/${encodeURIComponent(resource.id)}">Open listing</a>`);
+  return `<nav class="directory-record__actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Actions for ${escapeHtml(resource.name)}">${links.join("")}</nav>`;
+}
+
 function resourceRecord(resource) {
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
@@ -87,15 +102,16 @@ function resourceRecord(resource) {
     ? `<div><dt>Phone</dt><dd><a href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">${escapeHtml(resource.phone)}</a></dd></div>`
     : "";
   const maps = resource.kind === "direct"
-    ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>`
+    ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a>`
     : "";
+  const addressLabel = resource.kind === "direct" ? "Address" : "Coverage";
   return `<article class="directory-record" id="${escapeHtml(resource.id)}">
     <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
-    <p>${escapeHtml(resource.summary)}</p>
+    <p class="directory-record__summary">${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
-    <dl><div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div><div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div><div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl>
-    <p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p>
-    <div class="directory-links"><a href="/service/${encodeURIComponent(resource.id)}">Full listing details</a><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></div>
+    <div class="directory-record__facts" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
+    ${directoryRecordActions(resource, coordinate)}
+    <details class="directory-record__more"><summary>Hours, location &amp; verification</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl><p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></nav></div></details>
   </article>`;
 }
 

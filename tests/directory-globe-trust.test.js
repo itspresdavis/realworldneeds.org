@@ -33,9 +33,9 @@ test("directory search results expose direct actions without turning the record 
 test("directory visual system stays registry-first and action-led", async () => {
   const directoryCss = await text("public/directory-enhancements.css");
   const actionCss = await text("public/navigation-actions.css");
-  assert.match(directoryCss, /Search is a tool surface, not a promotional card/);
+  assert.match(directoryCss, /\.directory-search-tools\{[\s\S]*border-top:1px\s+solid/);
   assert.match(directoryCss, /\.directory-record\s*\{[\s\S]*border-radius:\s*0\s*!important/);
-  assert.match(directoryCss, /\.directory-category-chips button\s*\{[\s\S]*border:\s*1px solid/);
+  assert.match(directoryCss, /\.directory-category-chips button\s*\{[\s\S]*border:\s*1px\s+solid/);
   assert.match(actionCss, /\.directory-quick-actions \.is-call/);
   assert.match(actionCss, /\.directory-global-result-actions \.is-call/);
   assert.match(actionCss, /grid-column:1\/-1/);

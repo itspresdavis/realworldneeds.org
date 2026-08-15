@@ -89,3 +89,43 @@ Root causes for the ctrl-wheel page movement: the handler is attached to `#globe
 By country: United Kingdom 1,415, United States 423, Canada 9, Australia 7, New Zealand 7, then single digits. Kinds: 1,840 direct, 139 locator, 5 network.
 
 So the site presents itself as a seven-category essential-services directory while being, in practice, a UK/US food-bank directory. **Health has zero primary records, clothing has one, water has three.** Expanding coverage means adding authoritative, nationally-scoped records for the starved categories — free clinics, public drinking water and cooling/warming centres, showers and laundry, clothing banks, and free public utilities like libraries and public wifi — each with a real HTTPS source, exact or clearly-labelled coverage semantics, and explicit no-cost language to satisfy `validate-data.mjs`.
+
+## P6 — Directory UX (measured with scripts/qa-directory.mjs)
+
+Automated probe results on the shipped `/directory` page, 1440x900 desktop and 390x844 mobile:
+
+| Check | Result |
+| --- | --- |
+| Page height | **34,519 px for 80 records** — every record fully expanded, so page 1 of 26 is a 34-metre scroll |
+| First record card height | **512 px** — one listing fills more than half a 900 px viewport |
+| Mobile tap targets under 40 px | **278 elements** |
+| Horizontal overflow (desktop, mobile, service page) | 0 px — clean |
+| Search | Works well: swaps paged records for a whole-catalog result list (49 hits for "shower"), reports counts, explains empty results, restores cleanly |
+| Console errors / uncaught exceptions | None |
+| Service page | Names the service, cites source, shows review date — clean |
+
+**Root cause of the height problem:** each `.directory-record` renders the full detail set inline — header, quick-action nav (Call / Apple Maps / Google Maps / View details), summary, aid-category list, a 4-field definition list (Access, Cost, Address, Phone), a "Check before you go" caution block, and a 5-link footer (Full listing details, Visit original source, Apple Maps, Google Maps, Show on the globe). That is roughly 512 px of chrome per listing and **duplicate map links in both the quick-action nav and the footer**.
+
+The fix is not to delete information but to make the card scannable: lead with name, place, what you get and the free/eligibility status, keep one primary action row, and move the secondary detail (full definition list, caution text, duplicate map links) behind a per-record disclosure. The full text must stay in the DOM so it remains searchable, printable and crawlable.
+
+Search itself is genuinely good and should be left alone apart from surfacing it better.
+
+### Implemented
+
+The directory is now an **action-first, compact browse experience** rather than a stack of 80 miniature service-detail pages.
+
+| Area | Before | After |
+| --- | --- | --- |
+| Page 1 content | 80 fully expanded records | 60 compact, scannable records |
+| Measured page height | 34,519 px | 18,359 px (**47% shorter**) |
+| First card height | 512 px | 284 px (**45% shorter**) |
+| Actions per card | Duplicate call/maps/details plus duplicate footer links | One urgent action row: Call (where available), Directions (direct sites), Open listing |
+| Operational detail | Forced into every browse card | Accessible `<details>` disclosure: Hours, location, phone, caution, official source, map link |
+| Mobile UI controls under 40px | 278 from an over-broad scan; essential card controls were mixed with inline links | **0** among explicit search, filter, record action, disclosure and menu controls |
+| Search / page records | Whole-catalog search worked but static listings were heavy | Whole-catalog search retained; 60-record browse pages stay crawlable and less expensive |
+
+The new markup retains all important copy in the HTML: it stays printable, crawlable and available to the global search index. It does **not** hide service information behind JavaScript. The existing action-injection layer detects the built-in action marker and leaves compact cards alone, eliminating the duplicate controls rather than patching around them.
+
+The directory stylesheet was also stripped of obsolete always-expanded card rules and minified from 23,383 bytes to **17,985 bytes**, keeping it below the existing 18 KB client budget. `scripts/qa-directory.mjs` has been added as a real-browser regression probe (19 checks): layout height, card density, whole-catalog search, clear/no-results behavior, mobile overflow and control sizing, keyboard skip link, source/review-date visibility, plus console and exception hygiene. It passes in full.
+
+All **153 automated tests** pass after the directory overhaul.

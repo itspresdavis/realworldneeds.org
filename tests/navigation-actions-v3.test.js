@@ -27,8 +27,8 @@ test("public pages share one task-first navigation order and an explicit mobile 
   }
 });
 
-test("directory rows put call and map directions ahead of secondary details", async () => {
-  const firstPage = resources.slice(0, 80);
+test("directory rows put urgent actions first and keep verification detail one disclosure away", async () => {
+  const firstPage = resources.slice(0, 60);
   const resource = firstPage.find((item) => item.kind === "direct" && item.phone) || firstPage.find((item) => item.kind === "direct");
   assert.ok(resource, "a first-page direct service is required for action QA");
   const html = await text("dist/directory/index.html");
@@ -36,9 +36,11 @@ test("directory rows put call and map directions ahead of secondary details", as
   const record = html.match(new RegExp(`<article class="directory-record"[^>]*>[\\s\\S]*?href="/service/${encodedId}"[\\s\\S]*?</article>`))?.[0] || "";
   assert.match(record, new RegExp(`data-rwn-actions="${resource.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   if (resource.phone) assert.match(record, /href="tel:/);
-  assert.match(record, /maps\.apple\.com\/\?daddr=/);
   assert.match(record, /google\.com\/maps\/dir\/\?api=1&amp;destination=/);
-  assert.match(record, />View details<\/a>/);
+  assert.match(record, />Open listing<\/a>/);
+  assert.match(record, /<details class="directory-record__more">/);
+  assert.match(record, />Official source<\/a>/);
+  assert.doesNotMatch(record, /directory-quick-actions/);
 });
 
 test("service pages make call and preferred map choices immediate while preserving source verification", async () => {
