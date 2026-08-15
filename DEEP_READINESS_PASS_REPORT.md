@@ -28,3 +28,7 @@ The offline core package is smaller by the deferred 1.34 MB search index; full d
 ## Honest operating boundary
 
 No local audit can certify a specific daily-user number. What this pass does establish is that the website is a static, cacheable deployment with no core database, user session, write API, or per-visitor backend dependency; therefore the primary traffic scaling concern is edge/CDN distribution rather than application-server capacity. Before claiming a numeric traffic guarantee, RWN should add production synthetic monitoring, CDN analytics, alerting, an incident owner, and a multi-region load test aligned to its real traffic forecast.
+
+## Production deployment
+
+Commit `9fa1f52d` deployed to the RWN-WEB production target with Vercel state `READY` at `rwn-c79c1et9q-anlos.vercel.app`. Fresh custom-domain extraction confirmed the full finder, 2,019 matching services, core-need controls, detailed map context, text-directory route, and generated directory’s new **View listings** shortcut are live.
