@@ -1,54 +1,384 @@
+import { expansionResources } from "./resource-expansion.js?v=b8e4d515a52f";
+import { massachusettsWicResources } from "./generated/massachusetts-wic.js?v=b8e4d515a52f";
+import { newYorkWicResources } from "./generated/new-york-wic.js?v=b8e4d515a52f";
+import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js?v=b8e4d515a52f";
+import { withFreeAccess } from "./free-access.js?v=b8e4d515a52f";
+
 export const categories = {
   food: {
     label: "Food",
     color: "#38c878",
     glow: "rgba(56, 200, 120, 0.42)",
-    description: "Free meals, food parcels, pantries, and food-assistance locators."
+    description: "Meals, groceries, food pantries, and places to find food assistance."
   },
   water: {
     label: "Water",
     color: "#48b8ff",
     glow: "rgba(72, 184, 255, 0.42)",
-    description: "Drinking-water access or seasonal hydration support."
+    description: "Drinking water and seasonal heat-relief services."
   },
   shelter: {
     label: "Shelter",
     color: "#9f83ff",
     glow: "rgba(159, 131, 255, 0.42)",
-    description: "Emergency shelter, temporary housing, and housing navigation."
+    description: "Emergency shelter, temporary housing, and help finding a safe place to stay."
   },
   hygiene: {
     label: "Hygiene",
     color: "#2fd2c7",
     glow: "rgba(47, 210, 199, 0.42)",
-    description: "Showers, laundry, toilets, toiletries, and personal-care support."
+    description: "Showers, laundry, toilets, toiletries, and personal care."
   },
   clothing: {
     label: "Clothing",
     color: "#5d91ff",
     glow: "rgba(93, 145, 255, 0.42)",
-    description: "Free clothing, shoes, blankets, and everyday essentials."
+    description: "Clothing, shoes, blankets, and other essentials."
   },
   health: {
     label: "Health",
     color: "#ff6f7f",
     glow: "rgba(255, 111, 127, 0.42)",
-    description: "Medical, dental, mental-health, and recovery support."
+    description: "Medical, dental, mental health, and recovery services."
   },
   referral: {
     label: "Navigation",
     color: "#ffb548",
     glow: "rgba(255, 181, 72, 0.42)",
-    description: "Official search tools, casework, and referrals to nearby help."
+    description: "Resource finders, caseworkers, and referrals to local services."
   }
 };
 
 export const resourceTypes = Object.keys(categories);
 
-const REVIEW_DATE = "2026-08-03";
+const REVIEW_DATE = "2026-08-04";
 const verified = (record) => ({ lastChecked: REVIEW_DATE, ...record });
 
-export const resources = [
+const unhcrCountryHelp = ({ slug, country, city, region, lat, lng }) => verified({
+  id: `unhcr-help-${slug}`,
+  name: `UNHCR HELP — ${country}`,
+  city,
+  country,
+  region,
+  lat,
+  lng,
+  category: "referral",
+  secondaryCategories: ["shelter", "health"],
+  kind: "locator",
+  accessType: "Online country guidance",
+  costNote: "Free official information",
+  address: `Countrywide online guidance — marker shown at ${city} for geographic context`,
+  summary: `Official, locally applicable information for refugees and asylum-seekers in ${country}, including protection, services, rights, and ways to contact help.`,
+  services: ["Local help contacts", "Asylum and protection information", "Health and education guidance", "Shelter and support referrals"],
+  availabilityNote: "Available online. Eligibility, office hours, and service availability vary by place and situation; use the country page for current local contacts.",
+  sourceName: "UNHCR HELP",
+  sourceKind: "United Nations country help portal",
+  sourceUrl: `https://help.unhcr.org/${slug}/`,
+  sourceDetail: "UNHCR's official country HELP page publishes locally applicable asylum, protection, contact, and service information."
+});
+
+const countryHelpDirectories = [
+  ["france", "France", "Paris", "Europe", 48.8566, 2.3522],
+  ["germany", "Germany", "Berlin", "Europe", 52.52, 13.405],
+  ["belgium", "Belgium", "Brussels", "Europe", 50.8503, 4.3517],
+  ["austria", "Austria", "Vienna", "Europe", 48.2082, 16.3738],
+  ["hungary", "Hungary", "Budapest", "Europe", 47.4979, 19.0402],
+  ["greece", "Greece", "Athens", "Europe", 37.9838, 23.7275],
+  ["cyprus", "Cyprus", "Nicosia", "Europe", 35.1856, 33.3823],
+  ["italy", "Italy", "Rome", "Europe", 41.9028, 12.4964],
+  ["spain", "Spain", "Madrid", "Europe", 40.4168, -3.7038],
+  ["portugal", "Portugal", "Lisbon", "Europe", 38.7223, -9.1393],
+  ["poland", "Poland", "Warsaw", "Europe", 52.2297, 21.0122],
+  ["romania", "Romania", "Bucharest", "Europe", 44.4268, 26.1025],
+  ["bulgaria", "Bulgaria", "Sofia", "Europe", 42.6977, 23.3219],
+  ["moldova", "Moldova", "Chisinau", "Europe", 47.0105, 28.8638],
+  ["georgia", "Georgia", "Tbilisi", "Asia", 41.7151, 44.8271],
+  ["ukraine", "Ukraine", "Kyiv", "Europe", 50.4501, 30.5234],
+  ["switzerland", "Switzerland", "Bern", "Europe", 46.948, 7.4474],
+  ["turkiye", "Türkiye", "Ankara", "Asia", 39.9334, 32.8597],
+  ["jordan", "Jordan", "Amman", "Asia", 31.9539, 35.9106],
+  ["lebanon", "Lebanon", "Beirut", "Asia", 33.8938, 35.5018],
+  ["pakistan", "Pakistan", "Islamabad", "Asia", 33.6844, 73.0479],
+  ["afghanistan", "Afghanistan", "Kabul", "Asia", 34.5553, 69.2075],
+  ["thailand", "Thailand", "Bangkok", "Asia", 13.7563, 100.5018],
+  ["indonesia", "Indonesia", "Jakarta", "Asia", -6.2088, 106.8456],
+  ["japan", "Japan", "Tokyo", "Asia", 35.6762, 139.6503],
+  ["kenya", "Kenya", "Nairobi", "Africa", -1.2921, 36.8219],
+  ["uganda", "Uganda", "Kampala", "Africa", 0.3476, 32.5825],
+  ["nigeria", "Nigeria", "Abuja", "Africa", 9.0765, 7.3986],
+  ["egypt", "Egypt", "Cairo", "Africa", 30.0444, 31.2357],
+  ["ethiopia", "Ethiopia", "Addis Ababa", "Africa", 8.9806, 38.7578],
+  ["rwanda", "Rwanda", "Kigali", "Africa", -1.9441, 30.0619],
+  ["southsudan", "South Sudan", "Juba", "Africa", 4.8594, 31.5713],
+  ["mexico", "Mexico", "Mexico City", "North America", 19.4326, -99.1332],
+  ["brazil", "Brazil", "Brasilia", "South America", -15.7939, -47.8828],
+  ["argentina", "Argentina", "Buenos Aires", "South America", -34.6037, -58.3816],
+  ["chile", "Chile", "Santiago", "South America", -33.4489, -70.6693],
+  ["peru", "Peru", "Lima", "South America", -12.0464, -77.0428],
+  ["ecuador", "Ecuador", "Quito", "South America", -0.1807, -78.4678],
+  ["costarica", "Costa Rica", "San Jose", "North America", 9.9281, -84.0907],
+  ["panama", "Panama", "Panama City", "North America", 8.9824, -79.5199],
+  ["guatemala", "Guatemala", "Guatemala City", "North America", 14.6349, -90.5069],
+  ["elsalvador", "El Salvador", "San Salvador", "North America", 13.6929, -89.2182]
+].map(([slug, country, city, region, lat, lng]) => unhcrCountryHelp({ slug, country, city, region, lat, lng }));
+
+const expandedResources = [
+  verified({
+    id: "ask-izzy-australia",
+    name: "Ask Izzy",
+    city: "Australia-wide",
+    country: "Australia",
+    region: "Oceania",
+    lat: -25.2744,
+    lng: 133.7751,
+    category: "referral",
+    secondaryCategories: ["food", "shelter", "health", "hygiene", "clothing"],
+    kind: "locator",
+    accessType: "Free anonymous online search",
+    costNote: "Free to use",
+    address: "Online service covering Australia",
+    summary: "A free, anonymous service finder for housing, food, health care, counselling, safety, money help, clothing, showers, and other everyday needs.",
+    services: ["Housing and shelter search", "Food support", "Health and counselling", "Clothing, showers, and practical help"],
+    availabilityNote: "Available online. Contact a listed provider to confirm eligibility, capacity, hours, and access before travel.",
+    sourceName: "Ask Izzy by Infoxchange",
+    sourceKind: "Official nonprofit service directory",
+    sourceUrl: "https://askizzy.org.au/",
+    sourceDetail: "Ask Izzy's official search covers housing, food, health, counselling, safety, and everyday-needs services across Australia."
+  }),
+  verified({
+    id: "soliguide-france",
+    name: "Soliguide",
+    city: "France-wide",
+    country: "France",
+    region: "Europe",
+    lat: 46.2276,
+    lng: 2.2137,
+    category: "referral",
+    secondaryCategories: ["food", "water", "shelter", "health", "hygiene", "clothing"],
+    kind: "locator",
+    accessType: "Online and mobile service search",
+    costNote: "Free to use",
+    address: "Online service covering supported areas in France",
+    summary: "A multilingual solidarity map for nearby meals, drinking water, shelters, day centres, showers, laundry, clothing, health care, and administrative support.",
+    services: ["Meals and food parcels", "Shelter and day centres", "Showers, laundry, and clothing", "Health and social support"],
+    availabilityNote: "Coverage and schedules are updated by area. Open each listing for its current hours and contact instructions.",
+    sourceName: "Soliguide",
+    sourceKind: "Official nonprofit service directory",
+    sourceUrl: "https://soliguide.fr/",
+    sourceDetail: "Soliguide's official directory searches mapped solidarity services by need and location."
+  }),
+  verified({
+    id: "bahnhofsmission-germany",
+    name: "Bahnhofsmission Germany",
+    city: "Germany-wide",
+    country: "Germany",
+    region: "Europe",
+    lat: 51.1657,
+    lng: 10.4515,
+    category: "referral",
+    secondaryCategories: ["food", "water", "clothing", "health"],
+    kind: "locator",
+    accessType: "Station finder and walk-in support",
+    costNote: "Immediate help is free",
+    address: "Around 100 railway-station missions across Germany",
+    summary: "A nationwide finder for station missions offering immediate help without registration, including food, drink, clothing, first aid, a safe place, travel assistance, and local referrals.",
+    services: ["Food, drink, and clothing", "Immediate and emergency help", "First aid and safe space", "Travel support and local referrals"],
+    availabilityNote: "Opening hours differ by station. Use the official finder to choose a location and check its current hours.",
+    sourceName: "Bahnhofsmission Deutschland",
+    sourceKind: "Official nonprofit network",
+    sourceUrl: "https://www.bahnhofsmission.de/",
+    sourceDetail: "The official network and Deutsche Bahn describe immediate, free help and provide locations and opening hours for station missions."
+  }),
+  verified({
+    id: "centro-pop-brazil",
+    name: "Centro POP Brazil",
+    city: "Brazil-wide",
+    country: "Brazil",
+    region: "South America",
+    lat: -14.235,
+    lng: -51.9253,
+    category: "referral",
+    secondaryCategories: ["food", "hygiene", "clothing", "health"],
+    kind: "locator",
+    accessType: "Government centre finder",
+    costNote: "Free; documents are not required for first access",
+    address: "Centro POP locations in participating Brazilian municipalities",
+    phone: "121",
+    summary: "Brazil's public reference centres for people experiencing homelessness, with meals, personal hygiene, laundry, document support, belongings storage, and referrals.",
+    services: ["Meals", "Showers and laundry", "Document and benefits support", "Health, housing, and work referrals"],
+    availabilityNote: "Centres generally operate at least eight hours a day on five weekdays, but each municipality sets its location and schedule. Use the government finder or call 121.",
+    sourceName: "Brazil Ministry of Development and Social Assistance",
+    sourceKind: "Government service",
+    sourceUrl: "https://www.gov.br/pt-br/servicos/acessar-centro-pop-centro-de-referencia-especializado-para-populacao-em-situacao-de-rua",
+    sourceDetail: "The official federal service page explains eligibility, free immediate access, typical hours, services, and the national location finder."
+  }),
+  verified({
+    id: "buenos-aires-linea-108",
+    name: "Buenos Aires Línea 108",
+    city: "Buenos Aires",
+    country: "Argentina",
+    region: "South America",
+    lat: -34.6037,
+    lng: -58.3816,
+    category: "referral",
+    secondaryCategories: ["shelter", "food", "health"],
+    kind: "locator",
+    accessType: "24-hour phone support",
+    costNote: "City social-support line",
+    address: "Citywide telephone and outreach service",
+    phone: "108",
+    hours: "Available 24 hours a day",
+    summary: "Buenos Aires' immediate social-assistance line for people and families experiencing homelessness or severe vulnerability, with professional outreach and service referrals.",
+    services: ["Street outreach", "Homelessness assistance", "Shelter and social-service referrals", "Addiction information and guidance"],
+    availabilityNote: "Call 108 within Buenos Aires. Emergency medical, fire, or police situations should use the appropriate local emergency number.",
+    sourceName: "Buenos Aires City Government",
+    sourceKind: "Government hotline",
+    sourceUrl: "https://buenosaires.gob.ar/gcaba_historico/desarrollohumanoyhabitat/inclusion-social-y-atencion-inmediata/linea-108",
+    sourceDetail: "The official city page states that Línea 108 operates 24 hours and routes homelessness and vulnerability cases to professional teams."
+  }),
+  verified({
+    id: "samusocial-brussels",
+    name: "Samusocial Brussels",
+    city: "Brussels",
+    country: "Belgium",
+    region: "Europe",
+    lat: 50.8388,
+    lng: 4.337,
+    category: "shelter",
+    secondaryCategories: ["health", "hygiene", "referral"],
+    kind: "network",
+    accessType: "Emergency phone, outreach, and reception centres",
+    costNote: "Free emergency assistance",
+    address: "Boulevard Poincaré 68-70, 1070 Brussels",
+    phone: "0800 99 340",
+    hours: "Emergency phone available 24 hours a day",
+    summary: "Free emergency help for people without shelter in Brussels through accommodation, mobile outreach teams, medical care, and psychosocial support.",
+    services: ["Emergency accommodation", "Mobile outreach", "Medical care", "Psychosocial support and referrals"],
+    availabilityNote: "Call the free number for current intake and placement. The map marker represents the coordinating organization, not guaranteed bed availability.",
+    sourceName: "Samusocial Brussels",
+    sourceKind: "Official provider network",
+    sourceUrl: "https://samusocial.be/missions-et-dispositifs/",
+    sourceDetail: "The official provider page describes free emergency shelter, outreach, medical, and psychosocial services; Brussels city information lists the emergency contact."
+  }),
+  verified({
+    id: "mexico-dif-food-assistance",
+    name: "DIF Food Assistance Programs",
+    city: "Mexico-wide",
+    country: "Mexico",
+    region: "North America",
+    lat: 19.4326,
+    lng: -99.1332,
+    category: "food",
+    secondaryCategories: ["referral"],
+    kind: "locator",
+    accessType: "State DIF program referral",
+    costNote: "Eligibility is set by each state program",
+    address: "State DIF offices throughout Mexico",
+    summary: "Mexico's DIF network routes eligible children, families, older people, people with disabilities, and households affected by emergencies to public food-assistance programs.",
+    services: ["School meals", "Food support for young children", "Assistance for vulnerable people", "Temporary food support after emergencies"],
+    availabilityNote: "Contact the DIF system in your state for current rules, required documents, application locations, and schedules.",
+    sourceName: "Sistema Nacional DIF",
+    sourceKind: "Government program network",
+    sourceUrl: "https://www.gob.mx/difnacional/acciones-y-programas/estrategia-integral-de-asistencia-social-alimentaria",
+    sourceDetail: "The official national page describes the food-assistance programs and directs people to their state DIF office for access."
+  }),
+  verified({
+    id: "centro-pop-sobral",
+    name: "Centro POP Sobral",
+    city: "Sobral",
+    country: "Brazil",
+    region: "South America",
+    lat: -3.6897,
+    lng: -40.3494,
+    category: "hygiene",
+    secondaryCategories: ["food", "clothing", "health", "referral"],
+    kind: "direct",
+    accessType: "Walk-in public service",
+    costNote: "Free services",
+    address: "Avenida Dom José, 2147, Centro, Sobral, Ceará",
+    hours: "Monday–Friday, 8:00 AM–12:00 PM and 1:00–5:00 PM",
+    summary: "A public day centre for people experiencing homelessness, offering meals, showers, laundry, multidisciplinary support, documents, benefits, and referrals.",
+    services: ["Meals", "Showers and laundry", "Documents and benefits", "Health, housing, and recovery referrals"],
+    availabilityNote: "The official municipal page lists weekday daytime hours. Outreach operates separately in the evening; confirm holiday changes before travel.",
+    sourceName: "Sobral Municipal Government",
+    sourceKind: "Government service site",
+    sourceUrl: "https://sedhas.sobral.ce.gov.br/equipamento/centro-pop",
+    sourceDetail: "The official municipal page lists the address, service hours, meals, hygiene, laundry, multidisciplinary support, and referral services."
+  }),
+  verified({
+    id: "centro-pop-sao-vicente",
+    name: "Centro POP São Vicente",
+    city: "São Vicente",
+    country: "Brazil",
+    region: "South America",
+    lat: -23.9651,
+    lng: -46.3916,
+    category: "hygiene",
+    secondaryCategories: ["food", "clothing", "referral"],
+    kind: "direct",
+    accessType: "Walk-in public service",
+    costNote: "Free; lack of documents does not prevent access",
+    address: "Avenida Capitão-Mor Aguiar, 436, Centro, São Vicente, São Paulo",
+    phone: "(13) 3467-9301",
+    hours: "Monday–Friday, 8:00 AM–7:00 PM",
+    summary: "A public centre for people experiencing homelessness with breakfast, afternoon food, showers, clean clothing, technical support, and referrals.",
+    services: ["Breakfast and afternoon food", "Showers and clean clothing", "Technical social support", "Training and service referrals"],
+    availabilityNote: "The city page lists immediate, free weekday access. Call before travel to confirm holiday hours and current on-site capacity.",
+    sourceName: "São Vicente Municipal Government",
+    sourceKind: "Government service site",
+    sourceUrl: "https://www.saovicente.sp.gov.br/carta-de-servicos/beneficios-e-cadastros-sociais/assistencia-a-populacao-em-situacao-de-rua-centro-pop",
+    sourceDetail: "The official city service page lists the address, phone, weekday hours, no-document access, hygiene, clothing, food, and support."
+  }),
+  verified({
+    id: "centro-pop-carapicuiba",
+    name: "Centro POP Carapicuíba",
+    city: "Carapicuíba",
+    country: "Brazil",
+    region: "South America",
+    lat: -23.5235,
+    lng: -46.8348,
+    category: "hygiene",
+    secondaryCategories: ["clothing", "health", "referral"],
+    kind: "direct",
+    accessType: "Walk-in public service",
+    costNote: "Free services",
+    address: "Avenida Fernanda, 154, Centro, Carapicuíba, São Paulo",
+    phone: "(11) 4164-2806",
+    hours: "Monday–Friday, 8:00 AM–5:00 PM",
+    summary: "A public reference centre for people experiencing homelessness, with personal hygiene, clothing and shoes, document support, medical referrals, and social reintegration help.",
+    services: ["Personal hygiene", "Clothing and shoes", "Document support", "Medical and social referrals"],
+    availabilityNote: "The official municipal page lists weekday hours. Call ahead to confirm current access and holiday changes.",
+    sourceName: "Carapicuíba Municipal Government",
+    sourceKind: "Government service site",
+    sourceUrl: "https://www.carapicuiba.sp.gov.br/departamento/view/23/centro-pop",
+    sourceDetail: "The official city page lists the address, phone, opening hours, hygiene, clothing, document, and medical-referral services."
+  }),
+  verified({
+    id: "strazsa-tanya-hungary",
+    name: "Strázsa Tanya",
+    city: "Szabadszállás",
+    country: "Hungary",
+    region: "Europe",
+    lat: 46.8929,
+    lng: 19.2735,
+    category: "shelter",
+    secondaryCategories: ["food", "health", "referral"],
+    kind: "direct",
+    accessType: "Contact provider for placement",
+    costNote: "Support for eligible refugees",
+    address: "6080 Szabadszállás, Alsószőlők 2702/2, Hungary",
+    phone: "+36 20 368 5215",
+    summary: "Countrywide short-term accommodation plus food assistance, health access, psychosocial support, education, and employment guidance for eligible refugees.",
+    services: ["Short-term accommodation", "Food and household items", "Health and psychosocial support", "Education and employment guidance"],
+    availabilityNote: "Contact the provider before travel to confirm eligibility and available accommodation. UNHCR's Hungary helpline is listed on the official source page.",
+    sourceName: "UNHCR Hungary partner directory",
+    sourceKind: "UN-listed service provider",
+    sourceUrl: "https://help.unhcr.org/hungary/partners/strazsa-tanya-turisztikai-kepzo-es-kozhasznu-szocialis-szovetkezet/",
+    sourceDetail: "UNHCR's official partner listing gives the address, phone, service area, short-term accommodation, food, health, education, and employment support."
+  })
+];
+
+const reviewedResources = [
   verified({
     id: "bowery-mission",
     name: "The Bowery Mission",
@@ -447,6 +777,7 @@ export const resources = [
     costNote: "All listed services free",
     address: "212 Whitechapel Road, London E1 1BJ",
     phone: "020 7247 8281",
+    hours: "Breakfast daily from 8:00 AM; weekday showers 7:00–10:00 AM; weekday advice 8:00 AM–3:00 PM",
     summary: "A free day centre offering breakfast, showers, clothing, advice, computers, medical support, and shelter referrals.",
     services: ["Free breakfast", "Showers and clothing", "Housing and benefits advice", "Medical and computer access"],
     availabilityNote: "The day centre is open on weekdays and service times differ. Review the current official schedule before travel.",
@@ -719,6 +1050,7 @@ export const resources = [
     costNote: "Free essentials; cafe prices may apply",
     address: "29 Hughes Street, Potts Point NSW 2011",
     phone: "(02) 9581 9121",
+    hours: "Monday–Friday 9:00 AM–9:00 PM; Saturday 9:00 AM–4:00 PM; Sunday 9:00 AM–3:00 PM",
     summary: "Showers, emergency clothing, housing and crisis-accommodation referrals, clinics, and a safe community space.",
     services: ["Showers and toiletries", "Emergency clothing", "Housing referrals", "Health, legal, and counselling clinics"],
     availabilityNote: "Wayside's community services are open daily, but clinics and specific support have schedules. Confirm before travel.",
@@ -742,6 +1074,7 @@ export const resources = [
     costNote: "Free essentials; cafe prices may apply",
     address: "77 Roscoe Street, Bondi Beach NSW 2026",
     phone: "(02) 9581 9104",
+    hours: "Monday–Friday 9:00 AM–3:00 PM",
     summary: "A welcoming community centre with showers, toiletries, emergency clothing, support, activities, and scheduled clinics.",
     services: ["Showers and toiletries", "Emergency clothing", "Care coordination", "Community clinics and activities"],
     availabilityNote: "Open weekdays; clinic and activity schedules vary. Review the official Bondi page before travel.",
@@ -952,24 +1285,132 @@ export const resources = [
     sourceKind: "Official network",
     sourceUrl: "https://www.bancodealimentos.org.co/",
     sourceDetail: "The official site lists the Bogotá location and describes food recovery and distribution through social organizations."
-  })
+  }),
+  ...countryHelpDirectories,
+  ...expandedResources,
+  ...expansionResources,
+  ...massachusettsWicResources,
+  ...newYorkWicResources,
+  ...trussellFoodbankResources
 ];
+
+const FREE_ACCESS_EXCLUSIONS = new Set([
+  "banco-bogota",
+  "boston-health-homeless",
+  "buenos-aires-linea-108",
+  "foodforward-sa",
+  "goonj",
+  "hrsa-health-center-finder",
+  "mexico-dif-food-assistance",
+  "strazsa-tanya-hungary",
+  "uturn-claremont",
+  "uturn-hope-exchange",
+  "uturn-johannesburg",
+  "uturn-muizenberg",
+  "uturn-pretoria",
+  "uturn-strand",
+  "uturn-wynberg"
+]);
+
+const BOSTON_FREE_CORE_IDS = new Set([
+  "southampton-shelter",
+  "woods-mullen-shelter",
+  "pine-street-mens-inn",
+  "pine-street-yawkey",
+  "boston-night-center",
+  "st-francis-house-boston",
+  "rosies-place-boston",
+  "womens-lunch-place",
+  "bridge-over-troubled-waters",
+  "whittier-day-engagement",
+  "cardinal-medeiros-day"
+]);
+
+function auditedResource(resource) {
+  let next = { ...resource };
+
+  if (next.datasetId === "massachusetts-wic-locations" || next.datasetId === "new-york-wic-sites") {
+    next.secondaryCategories = ["referral"];
+  }
+
+  if (BOSTON_FREE_CORE_IDS.has(next.id)) {
+    next.costNote = "Free core homelessness services";
+    next.secondaryCategories = (next.secondaryCategories || []).filter((type) => type !== "health");
+  }
+
+  const refinements = {
+    "father-joes-day-center": { secondaryCategories: ["food", "hygiene", "referral"] },
+    "la-regional-food-bank": {
+      kind: "locator",
+      locationPrecision: "coverage",
+      costNote: "Free food-help locator; partner eligibility rules vary"
+    },
+    "global-foodbanking-network": { kind: "locator", locationPrecision: "coverage" },
+    "foodbank-nsw-act": {
+      kind: "locator",
+      locationPrecision: "coverage",
+      costNote: "Free food-help locator; partner eligibility and access rules vary"
+    },
+    "wayside-kings-cross": {
+      secondaryCategories: ["clothing", "shelter", "referral"],
+      costNote: "Free showers, toiletries, emergency clothing, and support"
+    },
+    "wayside-bondi": {
+      secondaryCategories: ["clothing", "referral"],
+      costNote: "Free showers, toiletries, emergency clothing, and support"
+    },
+    "third-space-brisbane": {
+      secondaryCategories: ["clothing", "shelter", "referral"],
+      costNote: "Free showers, clothing support, and service navigation",
+      summary: "A seven-day drop-in center with hot showers, clothing and emergency relief, a safe place to rest, and housing navigation.",
+      services: ["Hot showers and day rest", "Clothing and emergency relief", "Housing and tenancy support"]
+    },
+    "auckland-homeground": {
+      secondaryCategories: ["referral"],
+      costNote: "Free meals and food parcels",
+      summary: "Auckland City Mission's HomeGround provides free community meals, food parcels, and a route to wider social support.",
+      services: ["Free community meals", "Food parcels", "Social-service navigation"]
+    },
+    "willing-hearts": { secondaryCategories: ["referral"] },
+    "evelyne-saller-centre": {
+      secondaryCategories: ["referral"],
+      costNote: "Free showers and laundry",
+      summary: "A City of Vancouver centre for low-income and at-risk adults with free showers, laundry, and practical community support.",
+      services: ["Free showers", "Free laundry", "Practical community support"]
+    },
+    "vancouver-homeless-services": { secondaryCategories: ["shelter", "hygiene"] },
+    "nz-family-services-directory": { secondaryCategories: [] },
+    "tafel-germany-finder": { category: "referral", secondaryCategories: [] }
+  };
+
+  if (refinements[next.id]) next = { ...next, ...refinements[next.id] };
+  next.secondaryCategories = [...new Set(next.secondaryCategories || [])].filter((type) => type !== next.category);
+  return withFreeAccess(next);
+}
+
+export const resources = reviewedResources
+  .filter((resource) => !FREE_ACCESS_EXCLUSIONS.has(resource.id))
+  .map(auditedResource);
 
 export const trustPrinciples = [
   {
-    title: "Go to the source",
-    text: "Every listing links to the provider, government service, or official network behind the information."
+    title: "No hidden cost claims",
+    text: "We publish a listing only when the source shows a free service, a free option, or a free way to find help. Eligibility is always shown."
   },
   {
-    title: "See how to access it",
-    text: "Walk-in, appointment, referral, voucher, locator, and partner-network services are clearly labeled."
+    title: "Original sources",
+    text: "Every listing links to the provider, public agency, or recognized network that published the information."
   },
   {
-    title: "Know when it was checked",
-    text: "Every listing shows when RWN reviewed the source and reminds you to confirm details before visiting."
+    title: "Clear next steps",
+    text: "We tell you whether to walk in, call, make an appointment, get a referral, or use an official resource finder."
   },
   {
-    title: "Your location stays private",
-    text: "There are no accounts, intake forms, analytics, or marketing cookies. Optional location stays in this browser session."
+    title: "Dates you can see",
+    text: "Every listing shows when we last checked the source. Because services change, we recommend confirming before you travel."
+  },
+  {
+    title: "Privacy comes first",
+    text: "You do not need an account. Your exact location stays on your device, and we do not use advertising trackers or marketing cookies."
   }
 ];

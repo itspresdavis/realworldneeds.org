@@ -4,8 +4,10 @@ import { readFile } from "node:fs/promises";
 
 const text = (path) => readFile(path, "utf8");
 
-test("production globe uses the audited deep-view profile", async () => {
-  const app = await text("dist/src/app.js");
+// These assertions run against src/ because the source is now the single
+// truth for globe behavior. dist/ is checked only for build parity.
+test("globe source uses the audited deep-view profile", async () => {
+  const app = await text("src/app.js");
   assert.match(app, /return window\.innerWidth <= 600 \? 8\.0 : 12\.0/);
   assert.match(app, /globeViewProfile\(state\.zoom \* state\.ambientZoom/);
   assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288/);
@@ -14,8 +16,15 @@ test("production globe uses the audited deep-view profile", async () => {
   assert.match(app, /deepTextureIntent/);
 });
 
-test("single-touch map ownership distinguishes scroll, rotation and pinch", async () => {
+test("build output preserves the source globe profile without post-build patching", async () => {
   const app = await text("dist/src/app.js");
+  assert.match(app, /return window\.innerWidth <= 600 \? 8\.0 : 12\.0/);
+  assert.match(app, /globeViewProfile\(state\.zoom \* state\.ambientZoom/);
+  assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288/);
+});
+
+test("single-touch map ownership distinguishes scroll, rotation and pinch", async () => {
+  const app = await text("src/app.js");
   const css = await text("dist/src/clarity.css");
   assert.match(app, /const startedOnMap = event\.pointerType === "touch" \? !isGlobeChrome\(event\.target\) : startedOnCanvas/);
   assert.match(app, /startedOnMap,/);
@@ -33,15 +42,21 @@ test("single-touch map ownership distinguishes scroll, rotation and pinch", asyn
 });
 
 test("service point picking scales from screen space instead of a fixed world radius", async () => {
-  const app = await text("dist/src/app.js");
+  const app = await text("src/app.js");
   assert.match(app, /pointPickThresholdWorld/);
   assert.match(app, /viewportHeight: rect\.height/);
   assert.doesNotMatch(app, /Points\.threshold = event\.pointerType === "touch" \? 0\.034 : 0\.022/);
 });
 
 test("HD globe loading remains bandwidth aware", async () => {
-  const app = await text("dist/src/app.js");
+  const app = await text("src/app.js");
   assert.match(app, /navigator\.connection\?\.saveData/);
   assert.match(app, /connectionType === "slow-2g" \|\| connectionType === "2g"/);
   assert.match(app, /window\.innerWidth <= 600 \? 4096 : 8192/);
+});
+
+test("the build no longer rewrites application source after bundling", async () => {
+  const pkg = JSON.parse(await text("package.json"));
+  assert.doesNotMatch(pkg.scripts.build, /globe-production|globe-touch-production/);
+  assert.doesNotMatch(pkg.scripts.check, /globe-production|globe-touch-production/);
 });

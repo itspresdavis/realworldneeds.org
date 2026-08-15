@@ -1,0 +1,17 @@
+{
+  "release": "b8e4d515a52f",
+  "resourceCount": 1984,
+  "directoryPageSize": 80,
+  "generatedAt": "2026-08-15T00:35:46.145Z",
+  "directoryRelease": "7d8ac6491991",
+  "sourceLedger": {
+    "structuredSourceFamilies": 4,
+    "originalSourceGroups": 75,
+    "totalSourceGroups": 79,
+    "lastmod": "2026-08-07"
+  },
+  "serviceActionRelease": "8bbcabad459a",
+  "directoryResilienceRelease": "45c675d92dc8",
+  "presentationRelease": "b8e4d515a52f",
+  "offlineRelease": "ce40eb9013c9"
+}

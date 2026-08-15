@@ -1,0 +1,48 @@
+const appReady = import("./app.js?v=b8e4d515a52f");
+const refinementReady = import("./refinement.js?v=b8e4d515a52f");
+const professionalReady = import("./professional.js?v=b8e4d515a52f");
+const accessibilityReady = import("./accessibility.js?v=b8e4d515a52f");
+const resultActionsReady = import("./result-actions.js?v=b8e4d515a52f");
+
+// The application owns its DOM and state. Presentation and accessibility
+// install only after app initialization so startup is deterministic.
+await appReady;
+
+const [
+  { installRefinements },
+  { installProfessionalPresentation },
+  { installAccessibility },
+  { installResultActions }
+] = await Promise.all([
+  refinementReady,
+  professionalReady,
+  accessibilityReady,
+  resultActionsReady
+]);
+
+installProfessionalPresentation();
+installRefinements();
+installAccessibility();
+installResultActions();
+
+const clearOfflineData = async () => {
+  if ("caches" in window) {
+    const names = await window.caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith("rwn-offline-")).map((name) => window.caches.delete(name)));
+  }
+  navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_RWN_OFFLINE" });
+};
+
+document.getElementById("clearBrowserData")?.addEventListener("click", () => {
+  clearOfflineData().catch(() => {});
+});
+
+import("./telemetry.js?v=b8e4d515a52f")
+  .then(({ startTelemetry }) => startTelemetry())
+  .catch(() => {});
+
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  }, { once: true });
+}

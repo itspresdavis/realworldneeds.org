@@ -1,0 +1,137 @@
+.service-utility-actions {
+  display: grid;
+  grid-template-columns: minmax(12rem, .85fr) minmax(18rem, 1.15fr);
+  gap: .8rem 1.2rem;
+  align-items: center;
+  margin: 0 0 1.25rem;
+  padding: .9rem 0;
+  border: 0;
+  border-top: 1px solid #d8e0dd;
+  border-bottom: 1px solid #d8e0dd;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.service-utility-actions__intro {
+  display: grid;
+  gap: .14rem;
+  min-width: 0;
+}
+
+.service-utility-actions__intro > span {
+  color: #17692d;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.service-utility-actions__intro > strong {
+  color: #081a22;
+  font-size: .86rem;
+  line-height: 1.35;
+}
+
+.service-utility-actions__intro > small {
+  max-width: 36rem;
+  color: #697a80;
+  font-size: .67rem;
+  line-height: 1.45;
+}
+
+.service-utility-actions__buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .4rem;
+}
+
+.service-utility-actions button {
+  min-height: 44px;
+  padding: .55rem .68rem;
+  border: 1px solid #c5d0cc;
+  border-radius: 7px;
+  background: #fff;
+  color: #07538d;
+  font: inherit;
+  font-size: .73rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.service-utility-actions button:hover {
+  border-color: #90aa9d;
+  background: #edf7ef;
+  color: #17692d;
+  box-shadow: none;
+  transform: none;
+}
+
+.service-utility-actions button:focus-visible {
+  outline: 3px solid rgba(7, 83, 141, .27);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+.service-utility-actions__status {
+  grid-column: 1 / -1;
+  min-height: 1rem;
+  margin: -.15rem 0 0;
+  color: #697a80;
+  font-size: .67rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .service-utility-actions {
+    grid-template-columns: 1fr;
+    margin-top: 0;
+    padding: .8rem 0;
+  }
+
+  .service-utility-actions__buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .service-utility-actions button {
+    min-height: 48px;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-utility-actions button {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .service-utility-actions,
+  .service-utility-actions button {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media print {
+  .service-utility-actions,
+  .legal-header,
+  .legal-footer,
+  .directory-downloads,
+  .related-services {
+    display: none !important;
+  }
+
+  #service .directory-shell,
+  #service .directory-record {
+    box-shadow: none !important;
+  }
+
+  #service a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    overflow-wrap: anywhere;
+    font-size: .85em;
+    font-weight: 400;
+  }
+}

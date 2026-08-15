@@ -10,7 +10,7 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   const refinement = await text("src/refinement.js");
   const bootstrap = await text("src/bootstrap.js");
   const presentation = await text("scripts/professional-seo.mjs");
-  const globeProduction = await text("scripts/globe-production.mjs");
+  const app = await text("src/app.js");
   const css = await text("src/clarity.css");
 
   assert.match(refinement, /input\.placeholder = "Search a service or place"/);
@@ -19,8 +19,8 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   assert.doesNotMatch(refinement, /scrollIntoView/);
   assert.doesNotMatch(refinement, /globe-guide|Tap a glow for details|has-used-globe|No account|No paywall/);
   assert.doesNotMatch(bootstrap, /click\(\).*toggleMotion|pause globe rotation/i);
-  assert.match(globeProduction, /autoRotate: false/);
-  assert.match(globeProduction, /inspectorOpen: Boolean\(initialResource\)/);
+  assert.match(app, /autoRotate: false/);
+  assert.match(app, /inspectorOpen: Boolean\(initialResource\)/);
   assert.match(presentation, /touch-action:pan-y/);
   assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });

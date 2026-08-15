@@ -19,7 +19,13 @@ import {
   THREE_SPHERE_TEXTURE_OFFSET,
   toRad
 } from "./utils/geo.js";
-import { pinchZoom, pointerDistance } from "./utils/gesture.js";
+import {
+  classifyGlobeDragIntent,
+  globeViewProfile,
+  pinchZoom,
+  pointPickThresholdWorld,
+  pointerDistance
+} from "./utils/gesture.js";
 import {
   clearResourceFromUrl,
   privateResourceUrl,
@@ -27,12 +33,12 @@ import {
   SAVED_RESOURCES_KEY
 } from "./utils/privacy.js";
 
-const DEFAULT_RESOURCE = "whitechapel-mission";
+const DEFAULT_RESOURCE = null;
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MIN_GLOBE_ZOOM = 0.82;
 
 function maxGlobeZoom() {
-  return window.innerWidth <= 600 ? 2.55 : 3.05;
+  return window.innerWidth <= 600 ? 8.0 : 12.0;
 }
 
 function initialResultCount() {
@@ -51,7 +57,7 @@ function loadSavedResources() {
 }
 
 const requestedResource = resourceIdFromUrl(window.location.href);
-const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : DEFAULT_RESOURCE;
+const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : null;
 
 if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
@@ -87,7 +93,7 @@ const state = {
   pinching: false,
   velocityLon: 0,
   velocityLat: 0,
-  autoRotate: !reduceMotion,
+  autoRotate: false,
   interactionUntil: 0,
   landRings: [],
   countryFeatures: [],
@@ -103,7 +109,7 @@ const state = {
   ambientZoom: 1,
   savedIds: loadSavedResources(),
   savedOnly: false,
-  inspectorOpen: true,
+  inspectorOpen: Boolean(initialResource),
   clusterIds: []
 };
 
@@ -378,7 +384,7 @@ function shell() {
               </div>
             </div>
             <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
-            <p class="sr-only" id="globeHelp">Rotate the globe by dragging or using arrow keys. Pinch with two fingers, use plus and minus, or use the mouse wheel to zoom. Select a country or any colored location marker for details. Higher-resolution national boundaries load automatically when you zoom closer.</p>
+            <p class="sr-only" id="globeHelp">Drag left or right to rotate. On touch screens, vertical swipes keep scrolling the page and two fingers zoom the globe. Use plus and minus, or hold Control or Command while scrolling, for precise zoom. Select a service point for details. Higher-detail boundaries and imagery load as you move closer.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
@@ -387,7 +393,7 @@ function shell() {
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">${icon.plus}</button>
               <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">${icon.minus}</button>
               <button type="button" id="resetGlobe" title="Reset globe view" aria-label="Reset globe view">${icon.reset}</button>
-              <button type="button" id="toggleMotion" title="Pause globe rotation" aria-label="Pause globe rotation">${icon.pause}</button>
+              <button type="button" id="toggleMotion" title="Resume globe rotation" aria-label="Resume globe rotation">${icon.play}</button>
             </div>
             <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
             <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
@@ -514,8 +520,9 @@ function updateFilters() {
   state.visibleResults = initialResultCount();
   state.clusterIds = [];
 
-  if (!state.filtered.some((resource) => resource.id === state.selectedId)) {
-    state.selectedId = state.filtered[0]?.id || null;
+  if (state.selectedId && !state.filtered.some((resource) => resource.id === state.selectedId)) {
+    state.selectedId = null;
+    state.inspectorOpen = false;
   }
 
   syncGlobePointLayer();
@@ -841,11 +848,11 @@ function downloadDirectory() {
 function focusGlobeOn(resource, immediate = false) {
   const exact = isExactServiceSite(resource);
   const view = exact
-    ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 1.72 : 1.9 }
+    ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 3.8 : 4.8 }
     : featureGlobeView(countryFeatureByName(resource.country), { lat: resource.lat, lng: resource.lng });
   state.targetLon = view.lng;
   state.targetLat = Math.max(-70, Math.min(70, view.lat));
-  const serviceZoom = exact ? (window.innerWidth <= 600 ? 1.72 : 1.9) : 1.22;
+  const serviceZoom = exact ? (window.innerWidth <= 600 ? 3.8 : 4.8) : 1.55;
   state.targetZoom = Math.min(maxGlobeZoom(), Math.max(view.zoom, serviceZoom));
   if (immediate) {
     state.rotationLon = state.targetLon;
@@ -868,7 +875,7 @@ function focusGlobeNearUser() {
   if (!state.userLocation) return;
   state.targetLon = state.userLocation.lng;
   state.targetLat = Math.max(-70, Math.min(70, state.userLocation.lat));
-  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.72 : 1.9);
+  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 3.4 : 4.2);
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = { ...state.userLocation };
@@ -942,7 +949,7 @@ function latLngVector(lat, lng, radius = 1) {
 function cachedResourceVector(resource) {
   let vector = globeResourceVectorCache.get(resource);
   if (vector) return vector;
-  vector = latLngVector(resource.lat, resource.lng, 1.035);
+  vector = latLngVector(resource.lat, resource.lng, 1.009);
   globeResourceVectorCache.set(resource, vector);
   return vector;
 }
@@ -1018,7 +1025,7 @@ function createGlobeTexture() {
     : earthTextureImage;
   const hasEarthImagery = activeEarthImage?.complete && activeEarthImage.naturalWidth > 0;
   const maximumTextureSize = globeRenderer?.capabilities.maxTextureSize || 4096;
-  const preferredWidth = earthDetailTextureReady ? 8192 : 5400;
+  const preferredWidth = earthDetailTextureReady ? (window.innerWidth <= 600 ? 4096 : 8192) : 4096;
   canvas.width = hasEarthImagery
     ? Math.min(preferredWidth, maximumTextureSize, activeEarthImage.naturalWidth)
     : 2048;
@@ -1072,8 +1079,10 @@ function loadEarthImagery() {
 }
 
 function loadDetailEarthImagery() {
-  if (earthDetailTextureRequested || window.innerWidth <= 900 || navigator.connection?.saveData) return;
-  if ((globeRenderer?.capabilities.maxTextureSize || 0) < 6144) return;
+  if (earthDetailTextureRequested || navigator.connection?.saveData || document.visibilityState === "hidden") return;
+  const connectionType = String(navigator.connection?.effectiveType || "").toLowerCase();
+  if (connectionType === "slow-2g" || connectionType === "2g") return;
+  if ((globeRenderer?.capabilities.maxTextureSize || 0) < 4096) return;
   earthDetailTextureRequested = true;
   const status = document.getElementById("globeDetailStatus");
   if (status && state.detailGeometryReady) status.textContent = "1:10m · loading HD surface…";
@@ -1270,7 +1279,7 @@ function initThreeGlobe() {
   globeRenderer.setClearColor(0x02131f, 0);
 
   globeScene = new THREE.Scene();
-  globeCamera = new THREE.PerspectiveCamera(42, 1, 0.015, 100);
+  globeCamera = new THREE.PerspectiveCamera(42, 1, 0.02, 100);
   globeCamera.position.set(0, 0, 3.2);
 
   globeWorld = new THREE.Group();
@@ -1280,7 +1289,7 @@ function initThreeGlobe() {
 
   const surfaceTexture = createGlobeTexture();
   globeSurface = new THREE.Mesh(
-    new THREE.SphereGeometry(1, window.innerWidth <= 600 ? 96 : 128, window.innerWidth <= 600 ? 64 : 80),
+    new THREE.SphereGeometry(1, window.innerWidth <= 600 ? 160 : 288, window.innerWidth <= 600 ? 112 : 180),
     new THREE.MeshStandardMaterial({
       map: surfaceTexture,
       emissiveMap: surfaceTexture,
@@ -1383,13 +1392,14 @@ function rebuildConnections() {
 function renderThreeGlobe(width, height, now) {
   if (!globeRenderer) return false;
   const canvas = globeRenderer.domElement;
-  const dpr = Math.min(window.devicePixelRatio || 1, width < 720 ? 1.25 : 1.5);
+  const dprCap = width < 720 ? (state.zoom > 2.5 ? 1.6 : 1.4) : (state.zoom > 2.5 ? 2 : 1.75);
+  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   updateGlobePointLayer(globeServicePoints, { zoom: state.zoom, pixelRatio: dpr, opacity: 0.96 });
   if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
     globeCamera.aspect = width / height;
-    globeBaseCameraDistance = cameraDistanceForSphere(globeCamera.fov, globeCamera.aspect, 1.055, 1.07);
+    globeBaseCameraDistance = cameraDistanceForSphere(42, globeCamera.aspect, 1.055, 1.07);
     globeCamera.updateProjectionMatrix();
   }
 
@@ -1397,7 +1407,12 @@ function renderThreeGlobe(width, height, now) {
   globeWorld.rotation.x = toRad(state.rotationLat);
   globeWorld.scale.setScalar(1);
   globeWorld.updateMatrixWorld(true);
-  globeCamera.position.z = Math.max(1.09, globeBaseCameraDistance / Math.max(1, state.zoom * state.ambientZoom));
+  const viewProfile = globeViewProfile(state.zoom * state.ambientZoom, { mobile: window.innerWidth <= 600 });
+  if (Math.abs(globeCamera.fov - viewProfile.fov) > 0.02) {
+    globeCamera.fov = viewProfile.fov;
+    globeCamera.updateProjectionMatrix();
+  }
+  globeCamera.position.z = Math.max(viewProfile.minimumCameraDistance, globeBaseCameraDistance / viewProfile.opticalZoom);
   globeCamera.updateMatrixWorld(true);
 
   if (globeBorders) {
@@ -1434,7 +1449,7 @@ function renderThreeGlobe(width, height, now) {
 
 function projectGlobePoint(lat, lng, width, height) {
   if (!globeWorld || !globeCamera) return projectPoint(lat, lng, width, height);
-  const worldPoint = latLngVector(lat, lng, 1.035).applyMatrix4(globeWorld.matrixWorld);
+  const worldPoint = latLngVector(lat, lng, 1.009).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
   const depth = worldPoint.z / scale;
   worldPoint.project(globeCamera);
@@ -1730,7 +1745,8 @@ function drawGlobe(ctx, width, height, now) {
 
 function clusterVisibleResources(width, height) {
   const selected = selectedResource();
-  const threshold = Math.max(22, (width < 600 ? 54 : 44) - (state.zoom - 0.86) * 16);
+  const minimumThreshold = state.zoom > 8 ? 6 : state.zoom > 5 ? 8 : 12;
+  const threshold = Math.max(minimumThreshold, (width < 600 ? 48 : 38) - Math.max(0, state.zoom - 0.86) * (state.zoom > 5 ? 5 : 7));
   const entries = [];
   let selectedEntry = null;
 
@@ -1874,17 +1890,21 @@ function animateGlobe(now) {
     && Math.abs(state.velocityLat) < 0.22
     && Math.abs(state.targetZoom - state.zoom) < 0.025
     && state.targetLon === null;
-  if (interactionSettled && (state.zoom > 1.28 || state.targetZoom > 1.28)) loadDetailGeometry();
-  if (interactionSettled && (state.zoom > 1.55 || state.targetZoom > 1.55)) loadDetailEarthImagery();
+  const deepBoundaryIntent = state.targetZoom > (window.innerWidth <= 600 ? 3.4 : 3.0);
+  if ((interactionSettled || deepBoundaryIntent) && (state.zoom > 1.35 || state.targetZoom > 1.35)) loadDetailGeometry();
+  const detailTextureZoom = window.innerWidth <= 600 ? 2.7 : 2.15;
+  const deepTextureIntent = state.targetZoom > (window.innerWidth <= 600 ? 4.2 : 3.6);
+  if ((interactionSettled || deepTextureIntent) && (state.zoom > detailTextureZoom || state.targetZoom > detailTextureZoom)) loadDetailEarthImagery();
 
-  const closeView = state.zoom > 1.72;
+  const closeView = state.zoom > 1.9;
   if (closeView !== globeCloseViewActive) {
     globeCloseViewActive = closeView;
     (globeStageElement || document.querySelector(".globe-stage"))?.classList.toggle("is-close-view", closeView);
   }
 
   if (!renderThreeGlobe(width, height, now)) {
-    const dpr = Math.min(window.devicePixelRatio || 1, width < 720 ? 1.25 : 1.5);
+    const dprCap = width < 720 ? (state.zoom > 2.5 ? 1.6 : 1.4) : (state.zoom > 2.5 ? 2 : 1.75);
+  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
@@ -1956,7 +1976,7 @@ function focusCluster(ids) {
   state.targetLon = Math.atan2(normalized.z, normalized.x) * 180 / Math.PI;
   const latitude = Math.asin(normalized.y) * 180 / Math.PI;
   state.targetLat = Math.max(-65, Math.min(65, latitude));
-  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 1.42 : 1.34);
+  state.targetZoom = Math.min(maxGlobeZoom(), window.innerWidth <= 600 ? 2.8 : 3.4);
   state.velocityLon = 0;
   state.velocityLat = 0;
   state.focusPoint = { lat: latitude, lng: state.targetLon };
@@ -2011,7 +2031,13 @@ function selectCountryFromPointer(event) {
   );
   globeWorld.updateMatrixWorld(true);
   globeCamera.updateMatrixWorld(true);
-  globeRaycaster.params.Points.threshold = event.pointerType === "touch" ? 0.034 : 0.022;
+  globeRaycaster.params.Points.threshold = pointPickThresholdWorld({
+    pointerType: event.pointerType,
+    zoom: state.zoom,
+    cameraDistance: globeCamera.position.z,
+    fov: globeCamera.fov,
+    viewportHeight: rect.height
+  });
   globeRaycaster.setFromCamera(globePointerNdc, globeCamera);
   const surfaceHit = globeRaycaster.intersectObject(globeSurface, false)[0];
   const pointHit = globeServicePoints ? globeRaycaster.intersectObject(globeServicePoints, false)[0] : null;
@@ -2305,6 +2331,9 @@ function bindEvents() {
     state.pinching = true;
     state.pointerMoved = true;
     globeGestureHadMultiplePointers = true;
+    for (const pointerId of activeGlobePointers.keys()) {
+      try { globeStage.setPointerCapture(pointerId); } catch {}
+    }
     pinchStartDistance = pointerDistance(activeGlobePointers.values());
     pinchStartZoom = state.targetZoom;
     prepareGlobeInteraction();
@@ -2312,15 +2341,20 @@ function bindEvents() {
 
   globeStage.addEventListener("pointerdown", (event) => {
     const startedOnCanvas = event.target === canvas;
-    const shouldTrack = event.pointerType === "touch" ? !isGlobeChrome(event.target) : startedOnCanvas;
-    if (!shouldTrack) return;
+    const startedOnMap = event.pointerType === "touch" ? !isGlobeChrome(event.target) : startedOnCanvas;
+    if (!startedOnMap) return;
 
     activeGlobePointers.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
-      startedOnCanvas
+      startedOnCanvas,
+      startedOnMap,
+      pointerType: event.pointerType,
+      handledRotation: false
     });
-    try { globeStage.setPointerCapture(event.pointerId); } catch {}
+    if (event.pointerType !== "touch") {
+      try { globeStage.setPointerCapture(event.pointerId); } catch {}
+    }
 
     if (activeGlobePointers.size >= 2) {
       beginPinch();
@@ -2328,8 +2362,8 @@ function bindEvents() {
       return;
     }
 
-    if (!startedOnCanvas) return;
-    state.dragging = true;
+    if (!startedOnMap) return;
+    state.dragging = event.pointerType !== "touch";
     state.pinching = false;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
@@ -2339,7 +2373,6 @@ function bindEvents() {
     state.pointerTime = event.timeStamp || performance.now();
     globeGestureHadMultiplePointers = false;
     prepareGlobeInteraction();
-    if (event.pointerType === "touch") event.preventDefault();
   });
 
   globeStage.addEventListener("pointermove", (event) => {
@@ -2364,12 +2397,27 @@ function bindEvents() {
       return;
     }
 
+    if (!state.dragging && pointer.pointerType === "touch") {
+      const intent = classifyGlobeDragIntent(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY);
+      if (intent === "scroll") {
+        activeGlobePointers.delete(event.pointerId);
+        return;
+      }
+      if (intent !== "rotate") return;
+      state.dragging = true;
+      try { globeStage.setPointerCapture(event.pointerId); } catch {}
+      event.preventDefault();
+      state.pointerX = event.clientX;
+      state.pointerY = event.clientY;
+      state.pointerTime = event.timeStamp || performance.now();
+    }
     if (!state.dragging) return;
     if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
     const dx = event.clientX - state.pointerX;
     const dy = event.clientY - state.pointerY;
-    const lonDelta = -dx * 0.30 / state.zoom;
-    const latDelta = dy * 0.22 / state.zoom;
+    const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
+    const lonDelta = -dx * 0.30 * interactionScale;
+    const latDelta = dy * 0.22 * interactionScale;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
     state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + latDelta));
     const pointerNow = event.timeStamp || performance.now();
@@ -2381,6 +2429,7 @@ function bindEvents() {
     state.pointerTime = pointerNow;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
+    pointer.handledRotation = true;
     if (event.pointerType === "touch") event.preventDefault();
   });
 
@@ -2404,7 +2453,7 @@ function bindEvents() {
     state.pinching = false;
     if (activeGlobePointers.size === 1) {
       const remaining = activeGlobePointers.values().next().value;
-      state.dragging = Boolean(remaining?.startedOnCanvas);
+      state.dragging = Boolean(remaining?.startedOnMap && remaining?.pointerType !== "touch");
       state.pointerX = remaining?.x || 0;
       state.pointerY = remaining?.y || 0;
       state.pointerStartX = state.pointerX;
@@ -2428,16 +2477,131 @@ function bindEvents() {
   globeStage.addEventListener("gesturestart", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gesturechange", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gestureend", preventNativePagePinch, { passive: false });
+  let touchFallbackState = null;
+  const touchListDistance = (touches) => {
+    if (touches.length < 2) return 0;
+    return Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
+  };
+  const resetTouchFallback = () => { touchFallbackState = null; };
   globeStage.addEventListener("touchstart", (event) => {
-    if (event.touches.length > 1 && !isGlobeChrome(event.target)) event.preventDefault();
+    if (isGlobeChrome(event.target)) return;
+    if (event.touches.length > 1) {
+      touchFallbackState = {
+        intent: "pinch",
+        pinchStartDistance: touchListDistance(event.touches),
+        pinchStartZoom: state.targetZoom
+      };
+      state.pinching = true;
+      state.dragging = false;
+      state.pointerMoved = true;
+      globeGestureHadMultiplePointers = true;
+      prepareGlobeInteraction();
+      event.preventDefault();
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch) return;
+    touchFallbackState = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      lastX: touch.clientX,
+      lastY: touch.clientY,
+      lastTime: event.timeStamp || performance.now(),
+      intent: "pending"
+    };
   }, { passive: false });
   globeStage.addEventListener("touchmove", (event) => {
-    if (event.touches.length > 1 && !isGlobeChrome(event.target)) event.preventDefault();
+    if (isGlobeChrome(event.target)) return;
+    if (event.touches.length > 1) {
+      if (!touchFallbackState || touchFallbackState.intent !== "pinch") {
+        touchFallbackState = {
+          intent: "pinch",
+          pinchStartDistance: touchListDistance(event.touches),
+          pinchStartZoom: state.targetZoom
+        };
+        state.pinching = true;
+        state.dragging = false;
+        state.pointerMoved = true;
+        globeGestureHadMultiplePointers = true;
+        prepareGlobeInteraction();
+      }
+      state.targetZoom = pinchZoom(
+        touchFallbackState.pinchStartZoom,
+        touchFallbackState.pinchStartDistance,
+        touchListDistance(event.touches),
+        MIN_GLOBE_ZOOM,
+        maxGlobeZoom()
+      );
+      state.velocityLon = 0;
+      state.velocityLat = 0;
+      state.interactionUntil = performance.now() + 5000;
+      event.preventDefault();
+      return;
+    }
+    const touch = event.touches[0];
+    const fallback = touchFallbackState;
+    if (!touch || !fallback || fallback.intent === "pinch") return;
+    if (fallback.intent === "pending") {
+      fallback.intent = classifyGlobeDragIntent(touch.clientX - fallback.startX, touch.clientY - fallback.startY);
+      if (fallback.intent === "scroll") return;
+      if (fallback.intent !== "rotate") return;
+      if (!state.dragging) {
+        state.dragging = true;
+        state.pinching = false;
+        state.pointerMoved = true;
+        prepareGlobeInteraction();
+      }
+      fallback.lastX = touch.clientX;
+      fallback.lastY = touch.clientY;
+      fallback.lastTime = event.timeStamp || performance.now();
+      event.preventDefault();
+      return;
+    }
+    if (fallback.intent !== "rotate") return;
+    const pointerPath = activeGlobePointers.size === 1 ? activeGlobePointers.values().next().value : null;
+    if (pointerPath?.handledRotation) {
+      event.preventDefault();
+      return;
+    }
+    const dx = touch.clientX - fallback.lastX;
+    const dy = touch.clientY - fallback.lastY;
+    const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
+    const lonDelta = -dx * 0.30 * interactionScale;
+    const latDelta = dy * 0.22 * interactionScale;
+    state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
+    state.rotationLat = Math.max(-58, Math.min(58, state.rotationLat + latDelta));
+    state.targetLon = null;
+    state.targetLat = null;
+    state.pointerMoved = true;
+    state.interactionUntil = performance.now() + 5000;
+    fallback.lastX = touch.clientX;
+    fallback.lastY = touch.clientY;
+    fallback.lastTime = event.timeStamp || performance.now();
+    event.preventDefault();
   }, { passive: false });
+  globeStage.addEventListener("touchend", (event) => {
+    if (event.touches.length === 0) {
+      state.dragging = false;
+      state.pinching = false;
+      state.velocityLon = 0;
+      state.velocityLat = 0;
+      pinchStartDistance = 0;
+      resetTouchFallback();
+    }
+  }, { passive: true });
+  globeStage.addEventListener("touchcancel", () => {
+    state.dragging = false;
+    state.pinching = false;
+    state.velocityLon = 0;
+    state.velocityLat = 0;
+    pinchStartDistance = 0;
+    resetTouchFallback();
+  }, { passive: true });
 
   canvas.addEventListener("wheel", (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
-    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom * Math.exp(-event.deltaY * 0.00135)));
+    state.targetZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maxGlobeZoom(), state.targetZoom * Math.exp(-event.deltaY * 0.00165)));
     state.interactionUntil = performance.now() + 5000;
   }, { passive: false });
   canvas.addEventListener("dblclick", () => {
@@ -2445,7 +2609,8 @@ function bindEvents() {
     state.interactionUntil = performance.now() + 5000;
   });
   canvas.addEventListener("keydown", (event) => {
-    const step = event.shiftKey ? 12 : 5;
+    const baseStep = event.shiftKey ? 12 : 5;
+    const step = baseStep / Math.pow(Math.max(1, state.zoom), 0.7);
     if (event.key === "ArrowLeft") state.rotationLon = normalizeLongitude(state.rotationLon - step);
     else if (event.key === "ArrowRight") state.rotationLon = normalizeLongitude(state.rotationLon + step);
     else if (event.key === "ArrowUp") state.rotationLat = Math.max(-58, state.rotationLat + step);
@@ -2477,8 +2642,8 @@ function bindEvents() {
     event.preventDefault();
   });
 
-  document.getElementById("zoomIn").addEventListener("click", () => { state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * 1.22); state.interactionUntil = performance.now() + 5000; });
-  document.getElementById("zoomOut").addEventListener("click", () => { state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / 1.22); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomIn").addEventListener("click", () => { const step = state.targetZoom < 4 ? 1.22 : 1.14; state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom * step); state.interactionUntil = performance.now() + 5000; });
+  document.getElementById("zoomOut").addEventListener("click", () => { const step = state.targetZoom <= 4 ? 1.22 : 1.14; state.targetZoom = Math.max(MIN_GLOBE_ZOOM, state.targetZoom / step); state.interactionUntil = performance.now() + 5000; });
   document.getElementById("resetGlobe").addEventListener("click", () => {
     document.getElementById("regionFocus").value = "world";
     focusRegion("world");
@@ -2507,7 +2672,7 @@ function bindEvents() {
   });
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
-  const sections = ["finder", "about", "standards", "accountability"].map((id) => document.getElementById(id));
+  const sections = ["finder", "about", "standards"].map((id) => document.getElementById(id));
   let navigationFrame = null;
   const updateCurrentSection = () => {
     navigationFrame = null;
@@ -2540,5 +2705,8 @@ bindEvents();
 initThreeGlobe();
 loadEarthImagery();
 loadLandGeometry();
-if (requestedResource === initialResource) focusGlobeOn(resources.find((resource) => resource.id === requestedResource));
+if (requestedResource && requestedResource === initialResource) {
+  const resource = resources.find((item) => item.id === requestedResource);
+  if (resource) focusGlobeOn(resource);
+}
 requestAnimationFrame(animateGlobe);

@@ -2,8 +2,29 @@
   "name": "Real World Needs",
   "short_name": "RWN",
   "description": "Find free essential services with original sources and practical access details.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#071926",
-  "theme_color": "#071926"
+  "orientation": "any",
+  "background_color": "#061824",
+  "theme_color": "#061824",
+  "icons": [
+    {
+      "src": "/rwn-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "medical", "food", "navigation"],
+  "shortcuts": [
+    { "name": "Find help", "short_name": "Find help", "description": "Open the RWN essential-services finder.", "url": "/#finder" },
+    { "name": "Find food help", "short_name": "Food", "description": "Browse reviewed food assistance listings.", "url": "/directory/help/food" },
+    { "name": "Find shelter", "short_name": "Shelter", "description": "Browse reviewed shelter and housing-help listings.", "url": "/directory/help/shelter" },
+    { "name": "Find health care", "short_name": "Health", "description": "Browse reviewed health-care assistance listings.", "url": "/directory/help/health" },
+    { "name": "Text directory", "short_name": "Directory", "description": "Open the lightweight text directory.", "url": "/directory" }
+  ]
 }
