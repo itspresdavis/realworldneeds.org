@@ -68,6 +68,8 @@ The audit also identified durable follow-up work: unify finder and directory sea
 
 No initial-transfer or Core Web Vital comparison is claimed because this pass intentionally avoided making artificial or unmeasured metric claims. The changes were small, task-path, resilience, and verification improvements rather than a bundle-reduction project.
 
+Final custom-domain verification succeeded after the cache-safe deployment: `realworldneeds.org` rendered the full established application, including the RWN header and globe canvas, and loaded the matching versioned source asset graph. The corrected location disclosure was present in the live DOM.
+
 ## Known limitations and deferred work
 
 The current directory still has uneven global category coverage, source-level rather than record-level freshness for many records, separate finder/directory search normalizers, in-memory filter/history state, and a 60-result directory cap. Offline support intentionally prioritizes text-directory availability; the full globe and service-detail experience still needs network access. The future correction workflow remains deferred until an owner, monitored endpoint, retention policy, and abuse process exist.
