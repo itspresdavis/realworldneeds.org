@@ -322,3 +322,5 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
   .directory-shell,.legal-layout { width:100%; padding:0; }
   .directory-record { break-inside:avoid; }
 }
+
+.directory-results-jump{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin:.85rem 0;padding:.72rem .82rem;border:1px solid #b8cbc2;border-left:3px solid #218a3d;border-radius:5px;background:#f8fbf9;color:#24434f;text-decoration:none}.directory-results-jump strong,.directory-results-jump small{display:block}.directory-results-jump strong{font-size:.76rem}.directory-results-jump small{margin-top:.12rem;color:#61757c;font-size:.65rem}.directory-results-jump>span:last-child{color:#17692d;font-size:1rem}.directory-results-jump:hover,.directory-results-jump:focus-visible{border-color:#218a3d;background:#f0f8f3}.directory-results-anchor{display:block;scroll-margin-top:1rem}

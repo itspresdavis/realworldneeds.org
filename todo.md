@@ -17,3 +17,6 @@
 - [x] Complete a fresh live-site visual and flow audit across desktop, tablet, and mobile breakpoints.
 - [x] Stress-test startup, finder, directory, service, globe, offline, navigation, and error-recovery paths for production-readiness gaps.
 - [x] Implement, validate, and deploy only the verified high-impact readiness fixes in the correct RWN-WEB repository.
+- [x] Establish visible-polish and static-scale readiness baselines while preserving RWN identity and globe behavior.
+- [x] Deep-audit live visual hierarchy, responsive layouts, interaction friction, accessibility, asset delivery, and static delivery capacity.
+- [ ] Implement, stress-test, and deploy only measured high-impact visual and performance improvements.

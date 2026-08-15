@@ -47,6 +47,7 @@ let globeEngaged = false;
 function markGlobeEngaged() {
   globeEngaged = true;
   globeStageElement?.classList.add("is-engaged");
+  wakeGlobe();
 }
 
 // Zooming toward the pointer keeps the place under the cursor pinned, which is
@@ -238,6 +239,7 @@ let globeCloseViewActive = false;
 let globeServicePoints = null;
 let globePointSignature = "";
 let globeContextLost = false;
+let globeFrameHandle = null;
 const globeRaycaster = new THREE.Raycaster();
 const globePointerNdc = new THREE.Vector2();
 const globeProjectionVector = new THREE.Vector3();
@@ -573,10 +575,14 @@ function finderHistorySnapshot() {
 }
 
 function writeFinderHistory(mode = "replace") {
+  const snapshot = finderHistorySnapshot();
+  const signature = JSON.stringify(snapshot);
+  if (mode === "push" && signature === writeFinderHistory.lastSignature) return;
   const url = state.selectedId
     ? privateResourceUrl(window.location.href, state.selectedId)
     : clearResourceFromUrl(window.location.href);
-  window.history[mode === "push" ? "pushState" : "replaceState"]({ [FINDER_HISTORY_KEY]: finderHistorySnapshot() }, "", url);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...(window.history.state || {}), [FINDER_HISTORY_KEY]: snapshot }, "", url);
+  writeFinderHistory.lastSignature = signature;
 }
 
 function restoreFinderHistory(historyState) {
@@ -590,6 +596,7 @@ function restoreFinderHistory(historyState) {
   const input = document.getElementById("resourceSearch");
   if (input) input.value = state.query;
   updateFilters();
+  writeFinderHistory.lastSignature = JSON.stringify(finderHistorySnapshot());
 }
 
 function renderStatic() {
@@ -908,7 +915,10 @@ function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
     const bounds = target?.getBoundingClientRect();
     const headerOffset = document.querySelector(".site-header")?.getBoundingClientRect().height || 0;
     if (target && bounds && (bounds.top < headerOffset || bounds.bottom > window.innerHeight)) {
-      if (reveal === "map") state.globeVisible = true;
+      if (reveal === "map") {
+        state.globeVisible = true;
+        wakeGlobe();
+      }
       target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
     }
   }
@@ -1042,7 +1052,7 @@ function clearUserLocation() {
   updateFilters();
 }
 
-function clearFinderFilters({ focus = true, historyMode = "replace" } = {}) {
+function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
   clearUserLocation();
   state.query = "";
   state.accessMode = "all";
@@ -1570,7 +1580,7 @@ function recoverGlobeContext() {
     initThreeGlobe();
     rebuildCountryBorders();
     syncGlobePointLayer();
-    requestAnimationFrame(animateGlobe);
+    wakeGlobe();
     notify("Interactive map restored");
   } catch {
     globeContextLost = true;
@@ -1816,11 +1826,25 @@ function advanceGlobe(now) {
   state.zoom += (state.targetZoom - state.zoom) * (1 - Math.exp(-dt * 8));
 }
 
+function pauseGlobe() {
+  if (globeFrameHandle === null) return;
+  window.cancelAnimationFrame(globeFrameHandle);
+  globeFrameHandle = null;
+}
+
+function wakeGlobe() {
+  if (globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
+  lastFrame = performance.now();
+  globeFrameHandle = window.requestAnimationFrame((now) => {
+    globeFrameHandle = null;
+    animateGlobe(now);
+  });
+}
+
 function animateGlobe(now) {
   if (globeContextLost) return;
   if (!state.globeVisible || document.hidden) {
     lastFrame = now;
-    requestAnimationFrame(animateGlobe);
     return;
   }
   const canvas = globeCanvasElement || document.getElementById("globeCanvas");
@@ -1852,7 +1876,7 @@ function animateGlobe(now) {
   }
   renderPins(width, height, now);
   updateGlobeReadout(now);
-  requestAnimationFrame(animateGlobe);
+  wakeGlobe();
 }
 
 function focusRegion(key, selectMatching = false) {
@@ -2085,12 +2109,34 @@ function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
   let searchFilterTimer = null;
+  let searchHistoryTimer = null;
+  const commitSearchHistory = () => {
+    searchHistoryTimer = null;
+    writeFinderHistory("push");
+  };
+  const scheduleSearchHistory = () => {
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchHistoryTimer = window.setTimeout(commitSearchHistory, 640);
+  };
+  const commitPendingSearch = () => {
+    if (searchFilterTimer !== null) {
+      window.clearTimeout(searchFilterTimer);
+      searchFilterTimer = null;
+    }
+    if (pendingSearchValue !== state.query) {
+      state.query = pendingSearchValue;
+      updateFilters();
+    }
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchHistoryTimer = null;
+    writeFinderHistory("push");
+  };
   const flushSearchFilter = () => {
     searchFilterTimer = null;
     if (pendingSearchValue === state.query) return;
     state.query = pendingSearchValue;
     updateFilters();
-    writeFinderHistory();
+    scheduleSearchHistory();
   };
   const scheduleSearchFilter = (value) => {
     pendingSearchValue = value;
@@ -2103,24 +2149,33 @@ function bindEvents() {
     scheduleSearchFilter(next);
   });
   searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      commitPendingSearch();
+      return;
+    }
     if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchFilterTimer = null;
+    searchHistoryTimer = null;
     pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
     updateFilters();
-    writeFinderHistory();
+    writeFinderHistory("push");
   });
+  searchInput.addEventListener("blur", commitPendingSearch);
   document.getElementById("clearSearch").addEventListener("click", () => {
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchFilterTimer = null;
+    searchHistoryTimer = null;
     pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
     searchInput.focus();
     updateFilters();
-    writeFinderHistory();
+    writeFinderHistory("push");
   });
 
   let catalogFilterFrame = null;
@@ -2129,7 +2184,7 @@ function bindEvents() {
     catalogFilterFrame = requestAnimationFrame(() => {
       catalogFilterFrame = null;
       updateFilters();
-      writeFinderHistory();
+      writeFinderHistory("push");
     });
   };
 
@@ -2194,6 +2249,7 @@ function bindEvents() {
   document.getElementById("toggleSaved").addEventListener("click", () => {
     state.savedOnly = !state.savedOnly;
     updateFilters();
+    writeFinderHistory("push");
   });
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
   document.getElementById("clearBrowserData").addEventListener("click", () => {
@@ -2709,9 +2765,15 @@ function bindEvents() {
   if ("IntersectionObserver" in window) {
     const globeObserver = new IntersectionObserver(([entry]) => {
       state.globeVisible = entry.isIntersecting;
+      if (state.globeVisible) wakeGlobe();
+      else pauseGlobe();
     }, { rootMargin: "160px" });
     globeObserver.observe(document.querySelector(".globe-stage"));
   }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) pauseGlobe();
+    else wakeGlobe();
+  });
 
 }
 
@@ -2727,4 +2789,4 @@ if (requestedResource && requestedResource === initialResource) {
   const resource = resources.find((item) => item.id === requestedResource);
   if (resource) focusGlobeOn(resource);
 }
-requestAnimationFrame(animateGlobe);
+wakeGlobe();

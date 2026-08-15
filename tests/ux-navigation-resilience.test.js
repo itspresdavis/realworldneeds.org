@@ -14,6 +14,17 @@ test("finder input is bounded and history stores only non-sensitive finder state
   assert.match(app, /function restoreFinderHistory/);
   assert.doesNotMatch(app, /rwnFinder[^\n]*lat/);
   assert.doesNotMatch(app, /rwnFinder[^\n]*lng/);
+  assert.match(app, /writeFinderHistory\("push"\)/);
+  assert.match(app, /const scheduleSearchHistory/);
+  assert.match(app, /searchInput\.addEventListener\("blur", commitPendingSearch\)/);
+});
+
+test("off-screen and hidden globe rendering can pause and resume without changing globe interaction contracts", () => {
+  assert.match(app, /let globeFrameHandle = null/);
+  assert.match(app, /function pauseGlobe/);
+  assert.match(app, /function wakeGlobe/);
+  assert.match(app, /document\.addEventListener\("visibilitychange"/);
+  assert.match(app, /if \(state\.globeVisible\) wakeGlobe\(\);/);
 });
 
 test("finder and location failures have deterministic recovery paths", () => {

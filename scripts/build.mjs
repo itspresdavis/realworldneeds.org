@@ -196,9 +196,10 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
         ${breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
         <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
+        <a class="directory-results-jump" href="#directory-results"><span><strong>View listings</strong><small>${items.length.toLocaleString()} ${items.length === 1 ? "listing" : "listings"} on this page · page ${page} of ${totalPages}</small></span><span aria-hidden="true">↓</span></a>
         ${browseMarkup}
         ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
-        <div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
+        <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
         ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
       </div>
     </main>

@@ -10,7 +10,9 @@ test("offline directory caches only public same-origin essentials", async () => 
   assert.match(sw, /const CACHE_PREFIX = "rwn-offline-"/);
   assert.match(sw, /__RWN_OFFLINE_RELEASE__/);
   assert.match(sw, /"\/directory"/);
-  assert.match(sw, /"\/data\/search-index\.json"/);
+  const coreAssets = sw.slice(sw.indexOf("const CORE_ASSETS"), sw.indexOf("];", sw.indexOf("const CORE_ASSETS")));
+  assert.doesNotMatch(coreAssets, /search-index/);
+  assert.match(sw, /const LAZY_DIRECTORY_ASSETS = \["\/data\/search-index\.json"\]/);
   assert.match(sw, /"\/offline-status\.js"/);
   assert.match(sw, /"\/professional-pages\.css"/);
   assert.match(sw, /"\/brand\/rwn-logo-192\.png"/);
@@ -119,7 +121,7 @@ async function runInstall({ failedPath = null } = {}) {
 }
 
 test("offline installation fails closed and removes a partial cache when a required core asset fails", async () => {
-  const result = await runInstall({ failedPath: "/data/search-index.json" });
+  const result = await runInstall({ failedPath: "/directory.js" });
   assert.ok(result.error, "a failed required asset must reject installation");
   assert.equal(result.skipped, false, "an incomplete cache must never activate");
   assert.equal(result.deleted, true, "partial core cache must be removed");
@@ -131,7 +133,7 @@ test("offline installation activates only after every required core asset is cac
   assert.equal(result.error, null);
   assert.equal(result.deleted, false);
   assert.equal(result.skipped, true, "a complete cache can activate immediately");
-  assert.equal(result.stored.size, 10, "all required offline assets must be stored");
+  assert.equal(result.stored.size, 9, "all required offline assets must be stored");
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {

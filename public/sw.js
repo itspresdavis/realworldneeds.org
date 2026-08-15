@@ -8,11 +8,14 @@ const CORE_ASSETS = [
   "/professional-pages.css",
   "/directory.js",
   "/offline-status.js",
-  "/data/search-index.json",
   "/brand/rwn-logo-192.png",
   "/rwn-mark.svg",
   "/site.webmanifest"
 ];
+
+// The index is useful after a visitor opens the directory, but it should not
+// delay or invalidate a first offline installation on a constrained network.
+const LAZY_DIRECTORY_ASSETS = ["/data/search-index.json"];
 
 const cacheKeyFor = (requestOrUrl) => {
   const url = new URL(typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url, self.location.origin);
@@ -101,7 +104,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const cacheable = url.pathname === "/data/search-index.json"
+  const cacheable = LAZY_DIRECTORY_ASSETS.includes(url.pathname)
     || url.pathname === "/directory.js"
     || url.pathname === "/offline-status.js"
     || url.pathname === "/directory-enhancements.css"
