@@ -213,6 +213,7 @@ let globeScene = null;
 let globeCamera = null;
 let globeWorld = null;
 let globeSurface = null;
+const globeLandMask = { value: null };
 let globeBorders = null;
 let globeCountryHighlight = null;
 let globeGraticule = null;
@@ -1224,18 +1225,18 @@ function loadDetailEarthImagery() {
   if ((globeRenderer?.capabilities.maxTextureSize || 0) < 4096) return;
   earthDetailTextureRequested = true;
   const status = document.getElementById("globeDetailStatus");
-  if (status && state.detailGeometryReady) status.textContent = "1:10m · loading HD surface…";
+  if (status && state.detailGeometryReady) status.textContent = "detailed · loading HD surface…";
   const image = new Image();
   image.decoding = "async";
   image.onload = () => {
     earthDetailTextureImage = image;
     earthDetailTextureReady = true;
     refreshGlobeSurface();
-    if (status) status.textContent = state.detailGeometryReady ? "1:10m · HD NASA" : "HD NASA surface";
+    if (status) status.textContent = state.detailGeometryReady ? "detailed · HD NASA" : "HD NASA surface";
     updateGlobeReadout();
   };
   image.onerror = () => {
-    if (status && state.detailGeometryReady) status.textContent = "1:10m boundaries";
+    if (status && state.detailGeometryReady) status.textContent = "detailed boundaries";
   };
   image.src = "/media/earth-blue-marble-detail.jpg";
 }
@@ -1291,6 +1292,46 @@ function createGraticule() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xa8c9c5, transparent: true, opacity: 0.045 }));
+}
+
+function updateGlobeLandMask() {
+  const features = state.detailGeometryReady ? state.detailCountryFeatures : state.countryFeatures;
+  const canvas = document.createElement("canvas");
+  const width = state.detailGeometryReady && window.innerWidth > 600 ? 4096 : 2048;
+  canvas.width = width; canvas.height = width / 2;
+  const ctx = canvas.getContext("2d");
+  // Before boundaries arrive, preserve the original imagery rather than guess.
+  ctx.fillStyle = features.length ? "#000" : "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  for (const feature of features) {
+    const polygons = feature.geometry?.type === "Polygon" ? [feature.geometry.coordinates]
+      : feature.geometry?.type === "MultiPolygon" ? feature.geometry.coordinates : [];
+    for (const polygon of polygons) {
+      for (const shift of [-width, 0, width]) {
+        ctx.beginPath();
+        for (const ring of polygon) {
+          let previousX = null;
+          ring.forEach(([lng, lat], index) => {
+            let x = (lng + 180) / 360 * width;
+            if (previousX !== null) {
+              while (x - previousX > width / 2) x -= width;
+              while (x - previousX < -width / 2) x += width;
+            }
+            previousX = x;
+            const y = (90 - lat) / 180 * canvas.height;
+            if (index === 0) ctx.moveTo(x + shift, y); else ctx.lineTo(x + shift, y);
+          });
+          ctx.closePath();
+        }
+        ctx.fill("evenodd");
+      }
+    }
+  }
+  const previous = globeLandMask.value;
+  globeLandMask.value = new THREE.CanvasTexture(canvas);
+  globeLandMask.value.wrapS = THREE.RepeatWrapping;
+  previous?.dispose();
 }
 
 function rebuildCountryBorders() {
@@ -1453,17 +1494,18 @@ function initThreeGlobe() {
       roughness: 0.94
     })
   );
-  // Bring dark NASA ocean pixels into the atlas palette without hiding land detail.
+  // Coastline geometry identifies water; image darkness is not a land mask.
   globeSurface.material.onBeforeCompile = (shader) => {
+    shader.uniforms.uLandMask = globeLandMask;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLandMask;');
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
       #include <map_fragment>
-      float landLight = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
-      float blueWater = step(diffuseColor.r * 1.1, diffuseColor.b)
-        * step(diffuseColor.g * 1.05, diffuseColor.b);
-      float ocean = (1.0 - smoothstep(0.001, 0.004, landLight)) * blueWater;
+      float land = texture2D(uLandMask, vMapUv).r;
+      float ocean = 1.0 - smoothstep(0.1, 0.9, land);
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.105, 0.17), ocean * 0.9);
     `);
   };
+  updateGlobeLandMask();
   globeWorld.add(globeSurface);
   syncGlobePointLayer();
   globeGraticule = createGraticule();
@@ -1797,7 +1839,7 @@ function updateGlobeReadout(now = performance.now()) {
   if (!readout) return;
   const zoomLabel = `${state.zoom.toFixed(state.zoom < 2 ? 1 : 2)}×`;
   const detailLabel = earthDetailTextureReady
-    ? "1:10m + HD NASA"
+    ? "detailed + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
     ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`
@@ -2101,7 +2143,7 @@ async function loadDetailGeometry() {
     if (status) status.textContent = "Standard boundaries · Data Saver";
     return;
   }
-  if (status) status.textContent = "Loading 1:10m boundaries…";
+  if (status) status.textContent = "Loading detailed boundaries…";
   try {
     const response = await fetch("/data/countries-detail.geojson", { cache: "force-cache" });
     if (!response.ok) throw new Error(`Detailed map data returned ${response.status}`);
@@ -2110,9 +2152,10 @@ async function loadDetailGeometry() {
     state.detailLandRings = data.features.flatMap((feature) => extractRings(feature.geometry));
     state.detailGeometryReady = true;
     rebuildCountryBorders();
+    updateGlobeLandMask();
     wakeGlobe();
     if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
-    if (status) status.textContent = earthDetailTextureReady ? "1:10m · HD NASA" : "1:10m boundaries";
+    if (status) status.textContent = earthDetailTextureReady ? "detailed · HD NASA" : "detailed boundaries";
     updateGlobeReadout();
   } catch (error) {
     console.warn("High-detail Natural Earth geometry could not be loaded.", error);
@@ -2128,6 +2171,7 @@ async function loadLandGeometry() {
     state.countryFeatures = data.features;
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
     rebuildCountryBorders();
+    updateGlobeLandMask();
     wakeGlobe();
     if (state.userLocation && !state.userCountry) {
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
