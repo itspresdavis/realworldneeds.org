@@ -1894,9 +1894,10 @@ function pauseGlobe() {
   globeFrameHandle = null;
 }
 
-function wakeGlobe() {
+function wakeGlobe(resetClock = true) {
   if (globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
-  lastFrame = performance.now();
+  // Reset only when waking from rest; moving frames include rendering time.
+  if (resetClock) lastFrame = performance.now();
   globeFrameHandle = window.requestAnimationFrame((now) => {
     globeFrameHandle = null;
     animateGlobe(now);
@@ -1938,7 +1939,7 @@ function animateGlobe(now) {
   }
   renderPins(width, height, now);
   updateGlobeReadout(now);
-  if (globeHasMotion(state)) wakeGlobe();
+  if (globeHasMotion(state)) wakeGlobe(false);
   else {
     state.velocityLon = 0; state.velocityLat = 0; state.zoom = state.targetZoom;
     globeStageElement?.classList.remove("is-globe-moving");
