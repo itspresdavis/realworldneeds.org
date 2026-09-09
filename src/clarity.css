@@ -876,3 +876,7 @@ body.rwn-professional main { display: block; }
   .rwn-professional.rwn-atlas .globe-readout { bottom: 5rem; max-width: calc(100% - 5rem); }
   .atlas-key { left: 1rem; right: 1rem; bottom: 1rem; gap: .4rem .75rem; font-size: .59rem; }
 }
+
+/* Keep the map key and controls legible over both land and open water. */
+.rwn-professional.rwn-atlas .globe-meta { background: #f8fcf5ed; border: 1px solid #c3d4c8; border-radius: 10px; padding: .5rem .65rem; }
+.rwn-professional.rwn-atlas .atlas-key { width: fit-content; max-width: calc(100% - 2.8rem); padding: .6rem .75rem; border-radius: 8px; background: #f8fcf5ed; border: 1px solid #c3d4c8; }

@@ -1458,7 +1458,9 @@ function initThreeGlobe() {
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
       #include <map_fragment>
       float landLight = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
-      float ocean = 1.0 - smoothstep(0.012, 0.085, landLight);
+      float blueWater = step(diffuseColor.r * 1.1, diffuseColor.b)
+        * step(diffuseColor.g * 1.05, diffuseColor.b);
+      float ocean = (1.0 - smoothstep(0.001, 0.004, landLight)) * blueWater;
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.105, 0.17), ocean * 0.9);
     `);
   };
@@ -1687,16 +1689,6 @@ function connectionDestinations(selected) {
     .filter((resource) => resource.id !== selected.id && resource.category === selected.category)
     .sort((a, b) => distanceKm(selected.lat, selected.lng, a.lat, a.lng) - distanceKm(selected.lat, selected.lng, b.lat, b.lng))
     .slice(0, 3);
-}
-
-function subsolarPoint(date) {
-  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
-  const dayOfYear = (date.getTime() - startOfYear) / 86400000;
-  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
-  return {
-    lat: -23.44 * Math.cos(toRad((360 / 365.24) * (dayOfYear + 10))),
-    lng: normalizeLongitude(180 - utcHours * 15)
-  };
 }
 
 function clusterVisibleResources(width, height) {
