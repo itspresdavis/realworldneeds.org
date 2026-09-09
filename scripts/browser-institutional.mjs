@@ -294,6 +294,7 @@ async function run() {
         noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1,
         touchAction: canvas ? getComputedStyle(canvas).touchAction : "missing",
         quickCount: quickNeeds.length,
+        actionTargets: [...document.querySelectorAll(".result-direct-action")].map((node) => Math.round(node.getBoundingClientRect().height)),
         quickTargets: quickNeeds.map((node) => ({ height: Math.round(node.getBoundingClientRect().height), right: Math.round(node.getBoundingClientRect().right) })),
         jumpVisible: Boolean(jumpRect && locationRect && jumpRect.height >= 44 && jumpRect.width >= locationRect.width - 1),
         jumpDimensions: { width: Math.round(jumpRect?.width || 0), height: Math.round(jumpRect?.height || 0), locationWidth: Math.round(locationRect?.width || 0), display: jump ? getComputedStyle(jump).display : "missing", visibility: jump ? getComputedStyle(jump).visibility : "missing" },
@@ -303,7 +304,7 @@ async function run() {
         resultLinks: document.querySelectorAll(".result-row-link").length
       };
     })()`);
-    if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y" || mobile.quickCount !== 7 || mobile.quickTargets.some((target) => target.height < 40 || target.right > 391) || !mobile.jumpVisible || !mobile.jumpBeforeLocation || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
+    if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y" || mobile.quickCount !== 7 || mobile.actionTargets.some((height) => height < 44) || mobile.quickTargets.some((target) => target.height < 40 || target.right > 391) || !mobile.jumpVisible || !mobile.jumpBeforeLocation || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
       throw new Error(`Institutional mobile homepage failed: ${JSON.stringify(mobile)}`);
     }
 
