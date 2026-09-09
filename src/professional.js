@@ -18,7 +18,7 @@ function rewriteNavigation() {
     <a href="/directory">Directory</a>
     <a href="/editorial-policy">How listings are checked</a>
     <a href="/sources">Sources</a>
-    <a href="/transparency">Transparency</a>
+    <a href="/join">Contribute</a>
   `;
   if (desktop) desktop.innerHTML = links;
   if (mobile) mobile.innerHTML = links;
@@ -52,7 +52,7 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Search by need, service, or place. Listings include provider contact details, the original source, and the date RWN checked it."
+    "A meal. A safe place to sleep. Someone who can help. Find practical support, with contact details and sources you can check."
   );
 
   const status = document.getElementById("locationStatus");
@@ -69,11 +69,19 @@ function rewriteFinderCopy() {
 }
 
 function rewriteMethodSections() {
-  setText(".about-rwn__heading h2", "What Real World Needs does.");
+  setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
   setText(
     ".about-rwn__heading p",
-    "RWN organizes public information about essential services and helps you reach the organization providing them. We do not decide eligibility, reserve services, or provide the listed services ourselves."
+    "Finding help can be hard enough. Real World Needs brings essential service information into one place, so you can spend less time searching and more time reaching the people who can help. The provider confirms eligibility and availability."
   );
+
+  const heading = document.querySelector('.about-rwn__heading');
+  if (heading && !heading.querySelector('.mission-drawing')) {
+    const drawing = document.createElement('img');
+    drawing.className = 'mission-drawing'; drawing.src = '/care-drawing.svg'; drawing.alt = ''; drawing.width = 420; drawing.height = 150; drawing.loading = 'lazy';
+    heading.append(drawing);
+    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
+  }
 
   const stepCopy = [
     ["Search", "Look by need or place. Use location only if you want nearby services sorted first."],
@@ -116,7 +124,7 @@ function simplifyStructure() {
   if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a>`;
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {

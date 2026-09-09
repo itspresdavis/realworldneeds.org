@@ -97,7 +97,7 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname === "/workspace" || url.pathname === "/join") return;
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirstNavigation(request));

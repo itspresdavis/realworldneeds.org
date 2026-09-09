@@ -5152,3 +5152,31 @@ svg {
 .globe-stage.is-globe-unavailable .globe-controls,
 .globe-stage.is-globe-unavailable .globe-legend,
 .globe-stage.is-globe-unavailable .globe-gesture-hint { display: none; }
+
+/* Editorial invitation uses a small original line illustration with fixed dimensions. */
+.mission-drawing{display:block;width:min(100%,300px);height:auto;margin:20px 0 2px}.contributor-invitation{display:inline-flex;align-items:center;min-height:44px;color:#205944;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:4px}.contributor-invitation:focus-visible{outline:3px solid #9b6b28;outline-offset:4px}
+.result-direct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .45rem 0 .9rem;
+}
+
+.result-direct-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: .55rem .85rem;
+  border: 1px solid #cbd6ce;
+  border-radius: 6px;
+  color: #284d37;
+  background: #fff;
+  font-size: .8rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.result-direct-action.is-primary { background: #edf5ef; }
+.result-direct-action:hover { background: #e2eee5; }
+.result-direct-action:focus-visible { outline: 3px solid #376b47; outline-offset: 3px; }

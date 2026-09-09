@@ -2,6 +2,9 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
+import accountHandler from '../api/account.js';
+import catalogHandler from '../api/catalog.js';
+import workspaceHandler from '../api/workspace.js';
 
 const root = resolve("dist");
 const port = Number(process.argv[2] || 5173);
@@ -57,6 +60,9 @@ async function existingFile(candidates) {
 }
 
 const server = createServer(async (request, response) => {
+  const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname;
+  const handler = { '/api/account': accountHandler, '/api/catalog': catalogHandler, '/api/workspace': workspaceHandler, '/workspace': workspaceHandler }[pathname];
+  if (handler) return handler(request, response);
   const candidates = candidatePaths(request.url || "/");
   if (!candidates.length) {
     response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });

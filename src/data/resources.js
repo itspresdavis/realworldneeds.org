@@ -1,3 +1,4 @@
+import { editorialOverrides, withheldLocationIds } from "./generated/editorial-overrides.js";
 import { expansionResources } from "./resource-expansion.js";
 import { verifiedExpansionResources } from "./verified-expansion.js";
 import { massachusettsWicResources } from "./generated/massachusetts-wic.js";
@@ -1390,9 +1391,19 @@ function auditedResource(resource) {
   return withFreeAccess(next);
 }
 
-export const resources = reviewedResources
+export const curatedResources = reviewedResources
   .filter((resource) => !FREE_ACCESS_EXCLUSIONS.has(resource.id))
   .map(auditedResource);
+
+// The database export records only editorial differences from the source catalog.
+// Both the globe and every generated page consume this same release snapshot.
+const editorialById = new Map(editorialOverrides.map(record => [record.id, record]));
+const withheld = new Set(withheldLocationIds);
+const curatedIds = new Set(curatedResources.map(record => record.id));
+export const resources = [
+  ...curatedResources.map(record => editorialById.get(record.id) || record),
+  ...editorialOverrides.filter(record => !curatedIds.has(record.id))
+].filter(record => !withheld.has(record.id));
 
 export const trustPrinciples = [
   {

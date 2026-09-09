@@ -55,8 +55,8 @@ test("homepage uses one final presentation system and plain organizational langu
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(presentation, /href=\"\/src\/professional\.css/);
   assert.match(copy, /Find essential services near you\./);
-  assert.match(copy, /Listings include provider contact details, the original source, and the date RWN checked it\./);
-  assert.match(copy, /What Real World Needs does\./);
+  assert.match(copy, /Find practical support, with contact details and sources you can check\./);
+  assert.match(copy, /Everyone deserves a clear next step\./);
   assert.doesNotMatch(refinement, /No account|No paywall|Original sources/);
 });
 

@@ -1,6 +1,6 @@
 # Real World Needs
 
-Real World Needs (RWN) is a static, privacy-minimizing directory for essential services. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
+Real World Needs (RWN) is a privacy-minimizing directory for essential services. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
 
 The product is deliberately split into two interfaces over the same reviewed catalog:
 
@@ -9,7 +9,9 @@ The product is deliberately split into two interfaces over the same reviewed cat
 
 ## Architecture
 
-The site is built as static output and deployed from `dist/` on Vercel. It has no account system, public intake form, donation flow, advertising SDK, or third-party analytics SDK.
+The public directory is built as static output and deployed from `dist/` on Vercel. Supabase stores the editorial catalog, contributor identities, private review notes, and immutable change history. Server functions provide HTTP-only authentication and a protected editor workspace. The public directory remains available without an account. There is no personal case-intake form, donation flow, advertising SDK, or third-party analytics SDK.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [the editor guide](docs/EDITOR_GUIDE.md), and [the Auth/catalog architecture](docs/AUTH_AND_CATALOG.md).
 
 The build generates:
 
@@ -26,9 +28,9 @@ The interactive homepage uses a single deterministic bootstrap sequence. The app
 
 ## Data and provenance
 
-The current catalog contains **1,984 reviewed source-backed records** plus a bounded live adapter for the official USDA Summer Meals source.
+The current catalog contains **2,019 source-backed records** plus a bounded live adapter for the official USDA Summer Meals source.
 
-Core records live in `src/data/resources.js` and reviewed generated modules under `src/data/generated/`. Published records must include stable identity, public place or coverage information, coordinates where appropriate, service type, practical access information, original HTTPS source, source name, and review date.
+Every record is also stored in Supabase `public.rwn_locations`. Database changes are audited and released through `npm run catalog:export`; `npm run catalog:verify` checks every field against the public snapshot. Core source records live in `src/data/resources.js` and reviewed generated modules under `src/data/generated/`. Published records must include stable identity, public place or coverage information, coordinates where appropriate, service type, practical access information, original HTTPS source, source name, and review date.
 
 The build and tests distinguish exact physical service sites from countrywide or network locators. Locator coordinates are never presented as walk-in addresses.
 
@@ -79,7 +81,8 @@ Connectivity is checked with an uncached same-origin release probe rather than t
 
 ## Privacy and security
 
-- Search and filtering are local to the browser.
+- Public directory search and filtering are local to the browser. Contributor workspace queries use authenticated APIs.
+- Contributor sessions use HTTP-only cookies and server-side user verification; row policies protect private notes and editor access.
 - Device location is requested only after an explicit action and held in memory.
 - Saved records store only service IDs in local storage.
 - Shared selected-service IDs use URL fragments rather than request paths.
