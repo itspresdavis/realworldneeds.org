@@ -1,5 +1,6 @@
 import * as THREE from "/vendor/three.module.js";
 import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
+import { globeHasMotion, globePointVisible, frameBufferMatches } from "./utils/globe-rendering.js";
 import { clusterProjectedEntries } from "./utils/globe-clustering.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import { freeAccessLabel, freeAccessModels } from "./data/free-access.js";
@@ -53,6 +54,7 @@ function markGlobeEngaged() {
 // Zooming toward the pointer keeps the place under the cursor pinned, which is
 // what makes deep zoom feel like a map rather than a slideshow of scales.
 function zoomTowardPointer(factor, clientX, clientY) {
+  wakeGlobe();
   const maximum = maxGlobeZoom();
   const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, state.targetZoom * factor));
   const anchor = clientX === undefined ? null : globeCoordinateAtClientPoint(clientX, clientY);
@@ -622,6 +624,7 @@ function kindLabel(resource) {
 }
 
 function updateFilters() {
+  wakeGlobe();
   const base = state.viewMode === "aid"
     ? availableResources().filter((resource) => matchesResource(resource, state.query, state.activeTypes))
     : [];
@@ -996,6 +999,7 @@ function downloadDirectory() {
 }
 
 function focusGlobeOn(resource, immediate = false) {
+  wakeGlobe();
   const exact = isExactServiceSite(resource);
   const view = exact
     ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 3.8 : 4.8 }
@@ -1163,6 +1167,15 @@ function createGlobeTexture() {
     ? Math.min(preferredWidth, maximumTextureSize, activeEarthImage.naturalWidth)
     : 2048;
   canvas.height = Math.round(canvas.width / 2);
+  if (hasEarthImagery && activeEarthImage.naturalWidth === canvas.width) {
+    const texture = new THREE.Texture(activeEarthImage);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.offset.x = THREE_SPHERE_TEXTURE_OFFSET;
+    texture.anisotropy = Math.min(8, globeRenderer?.capabilities.getMaxAnisotropy() || 1);
+    texture.needsUpdate = true;
+    return texture;
+  }
   const ctx = canvas.getContext("2d");
 
   if (hasEarthImagery) {
@@ -1196,7 +1209,7 @@ function loadEarthImagery() {
     earthTextureImage = image;
     if (globeSurface) {
       globeSurface.material.emissive.setHex(0xffffff);
-      globeSurface.material.emissiveIntensity = 0.2;
+      globeSurface.material.emissiveIntensity = 0.42;
       globeSurface.material.roughness = 0.94;
     }
     refreshGlobeSurface();
@@ -1366,7 +1379,7 @@ function updateGlobeTexture() {
 function refreshGlobeSurface() {
   if (!globeSurface) return;
   updateGlobeTexture();
-  rebuildCountryBorders();
+  wakeGlobe();
 }
 
 function initThreeGlobe() {
@@ -1400,6 +1413,7 @@ function initThreeGlobe() {
       if (!box) return;
       globeViewportWidth = Math.max(1, box.width);
       globeViewportHeight = Math.max(1, box.height);
+      wakeGlobe();
     });
     observer.observe(canvas);
   }
@@ -1434,11 +1448,20 @@ function initThreeGlobe() {
       emissiveMap: surfaceTexture,
       color: 0xffffff,
       emissive: 0xffffff,
-      emissiveIntensity: 0.2,
+      emissiveIntensity: 0.42,
       metalness: 0,
       roughness: 0.94
     })
   );
+  // Bring dark NASA ocean pixels into the atlas palette without hiding land detail.
+  globeSurface.material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
+      #include <map_fragment>
+      float landLight = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
+      float ocean = 1.0 - smoothstep(0.012, 0.085, landLight);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.105, 0.17), ocean * 0.9);
+    `);
+  };
   globeWorld.add(globeSurface);
   syncGlobePointLayer();
   globeGraticule = createGraticule();
@@ -1595,7 +1618,7 @@ function renderThreeGlobe(width, height, now) {
   const dprCap = width < 720 ? (state.zoom > 2.5 ? 1.6 : 1.4) : (state.zoom > 2.5 ? 2 : 1.75);
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   updateGlobePointLayer(globeServicePoints, { zoom: state.zoom, pixelRatio: dpr, opacity: 0.96 });
-  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+  if (!frameBufferMatches(canvas, width, height, dpr)) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
     globeCamera.aspect = width / height;
@@ -1627,9 +1650,8 @@ function renderThreeGlobe(width, height, now) {
     globeAtmosphere.scale.setScalar(atmosphereScale);
   }
 
-  const sun = subsolarPoint(new Date());
-  const sunPosition = latLngVector(sun.lat, sun.lng, 5).applyEuler(globeWorld.rotation);
-  globeLight.position.copy(sunPosition);
+  // An atlas must remain readable everywhere, independent of the time of day.
+  globeLight.position.set(-3, 3, 5);
   globeLight.target.position.set(0, 0, 0);
   globeLight.target.updateMatrixWorld();
 
@@ -1686,7 +1708,7 @@ function clusterVisibleResources(width, height) {
 
   for (const resource of state.filtered) {
     const point = projectResourceGlobePoint(resource, width, height);
-    if (point.z <= 0.03 || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
+    if (!globePointVisible(point.z, globeCamera.position.z) || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
     const entry = { resource, point };
     if (resource.id === selected?.id) selectedEntry = entry;
     else entries.push(entry);
@@ -1729,7 +1751,7 @@ function renderPins(width, height, now = performance.now()) {
         return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped listings"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} listings in this area<small>${kinds}</small></strong></button>`;
       }
       const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
-      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : kindLabel(resource)}</small></strong></button>`;
+      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Listed service location" : kindLabel(resource)}</small></strong></button>`;
     }).join("");
     pinElements = new Map([...layer.querySelectorAll("[data-globe-key]")].map((button) => [button.dataset.globeKey, button]));
     pinSignature = signature;
@@ -1746,7 +1768,9 @@ function placePins(clusters, selectedId) {
     if (!button) continue;
     button.style.transform = `translate3d(${cluster.x}px, ${cluster.y}px, 0) scale(${0.74 + Math.max(0, cluster.z) * 0.28})`;
     button.style.opacity = String(0.5 + cluster.z * 0.5);
-    button.style.pointerEvents = "auto";
+    const visible = globePointVisible(cluster.z, globeCamera.position.z);
+    button.style.visibility = visible ? "visible" : "hidden";
+    button.style.pointerEvents = visible ? "auto" : "none";
     button.style.zIndex = String(cluster.members.some((resource) => resource.id === selectedId) ? 1000 : Math.round(cluster.z * 100));
   }
 }
@@ -1756,18 +1780,21 @@ function placePins(clusters, selectedId) {
 function repositionPins(width, height) {
   if (!lastPinClusters.length || !pinElements.size) return;
   for (const cluster of lastPinClusters) {
-    const anchor = cluster.members[0];
-    if (!anchor) continue;
-    const point = projectResourceGlobePoint(anchor, width, height);
-    cluster.x = point.x;
-    cluster.y = point.y;
-    cluster.z = point.z;
+    let x = 0, y = 0, count = 0, depth = -1;
+    for (const resource of cluster.members) {
+      const point = projectResourceGlobePoint(resource, width, height);
+      if (!globePointVisible(point.z, globeCamera.position.z)) continue;
+      x += point.x; y += point.y; count += 1; depth = Math.max(depth, point.z);
+    }
+    cluster.x = count ? x / count : -1e6;
+    cluster.y = count ? y / count : -1e6;
+    cluster.z = depth;
   }
   placePins(lastPinClusters, state.selectedId);
 }
 
 function formatCoordinate(value, positive, negative) {
-  return `${Math.abs(value).toFixed(2)}°${value >= 0 ? positive : negative}`;
+  return `${Math.abs(value).toFixed(5)}°${value >= 0 ? positive : negative}`;
 }
 
 function updateGlobeReadout(now = performance.now()) {
@@ -1877,10 +1904,15 @@ function animateGlobe(now) {
   }
   renderPins(width, height, now);
   updateGlobeReadout(now);
-  wakeGlobe();
+  if (globeHasMotion(state)) wakeGlobe();
+  else {
+    state.velocityLon = 0; state.velocityLat = 0; state.zoom = state.targetZoom;
+    globeStageElement?.classList.remove("is-globe-moving");
+  }
 }
 
 function focusRegion(key, selectMatching = false) {
+  wakeGlobe();
   const view = regionViews[key] || regionViews.world;
   state.targetLon = view.lon;
   state.targetLat = view.lat;
@@ -1926,6 +1958,7 @@ function renderClusterTray() {
 }
 
 function focusCluster(ids) {
+  wakeGlobe();
   const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(Boolean);
   if (!members.length) return;
   state.clusterIds = members.map((resource) => resource.id);
@@ -2002,9 +2035,18 @@ function selectCountryFromPointer(event) {
   });
   globeRaycaster.setFromCamera(globePointerNdc, globeCamera);
   const surfaceHit = globeRaycaster.intersectObject(globeSurface, false)[0];
-  const pointHit = globeServicePoints ? globeRaycaster.intersectObject(globeServicePoints, false)[0] : null;
+  const hits = globeServicePoints ? globeRaycaster.intersectObject(globeServicePoints, false) : [];
+  // Choose the nearest visible screen point, not whichever candidate happens
+  // to sit closest to the camera along a broad picking ray.
+  const pointHit = hits.map((hit) => {
+    const resource = globeServicePoints.userData.resources?.[hit.index];
+    const point = resource && projectResourceGlobePoint(resource, rect.width, rect.height);
+    if (!point || !globePointVisible(point.z, globeCamera.position.z)) return null;
+    if (surfaceHit && hit.distance > surfaceHit.distance + 0.018) return null;
+    return { ...hit, screenDistance: Math.hypot(point.x - (event.clientX - rect.left), point.y - (event.clientY - rect.top)) };
+  }).filter(Boolean).sort((a, b) => a.screenDistance - b.screenDistance)[0];
 
-  if (pointHit && (!surfaceHit || pointHit.distance <= surfaceHit.distance + 0.06)) {
+  if (pointHit && (!surfaceHit || pointHit.distance <= surfaceHit.distance + 0.018)) {
     const resource = globeServicePoints.userData.resources?.[pointHit.index];
     if (resource) {
       const cluster = clusterVisibleResources(globeViewportWidth, globeViewportHeight)
@@ -2076,6 +2118,7 @@ async function loadDetailGeometry() {
     state.detailLandRings = data.features.flatMap((feature) => extractRings(feature.geometry));
     state.detailGeometryReady = true;
     rebuildCountryBorders();
+    wakeGlobe();
     if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
     if (status) status.textContent = earthDetailTextureReady ? "1:10m · HD NASA" : "1:10m boundaries";
     updateGlobeReadout();
@@ -2092,7 +2135,8 @@ async function loadLandGeometry() {
     const data = await response.json();
     state.countryFeatures = data.features;
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
-    refreshGlobeSurface();
+    rebuildCountryBorders();
+    wakeGlobe();
     if (state.userLocation && !state.userCountry) {
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
       state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
@@ -2714,12 +2758,15 @@ function bindEvents() {
     focusRegion("world");
   });
   document.getElementById("northGlobe").addEventListener("click", () => {
+    wakeGlobe();
+    state.targetLon = state.rotationLon;
     state.targetLat = 0;
     state.velocityLat = 0;
     state.interactionUntil = performance.now() + 5000;
   });
   document.getElementById("regionFocus").addEventListener("change", (event) => focusRegion(event.target.value, true));
   document.getElementById("toggleMotion").addEventListener("click", (event) => {
+    wakeGlobe();
     state.autoRotate = !state.autoRotate;
     event.currentTarget.innerHTML = state.autoRotate ? icon.pause : icon.play;
     event.currentTarget.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
@@ -2775,7 +2822,7 @@ function bindEvents() {
       state.globeVisible = entry.isIntersecting;
       if (state.globeVisible) wakeGlobe();
       else pauseGlobe();
-    }, { rootMargin: "160px" });
+    }, { rootMargin: "0px" });
     globeObserver.observe(document.querySelector(".globe-stage"));
   }
   document.addEventListener("visibilitychange", () => {

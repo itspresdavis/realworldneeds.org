@@ -25,15 +25,15 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });
 
-test("globe points communicate service type and reduce density as one semantic system", async () => {
+test("globe points communicate service type and preserve coordinates as one semantic system", async () => {
   const points = await text("src/globe-points.js");
 
   assert.match(points, /attribute float pointOpacity/);
   assert.match(points, /attribute float pointKind/);
   assert.match(points, /attribute float pointDensity/);
   assert.match(points, /RWN_POINT_COLORS/);
-  assert.match(points, /densityGridDegrees/);
-  assert.match(points, /consolidateResources/);
+  assert.doesNotMatch(points, /densityGridDegrees/);
+  assert.match(points, /locationEntries/);
   assert.match(points, /resourcePointKind/);
   assert.match(points, /isDirect/);
   assert.match(points, /isLocator/);

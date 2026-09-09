@@ -4,16 +4,16 @@ import { readFile, stat } from "node:fs/promises";
 
 const text = (path) => readFile(path, "utf8");
 
-test("globe point layer uses one semantic RWN marker language with adaptive density", async () => {
+test("globe point layer uses one semantic RWN marker language without discarding catalog coordinates", async () => {
   const source = await text("src/globe-points.js");
   assert.match(source, /RWN_POINT_COLORS/);
   assert.match(source, /direct:\s*"#45b64a"/);
   assert.match(source, /locator:\s*"#0b5f9e"/);
   assert.match(source, /network:\s*"#5b8094"/);
-  assert.match(source, /densityGridDegrees/);
-  assert.match(source, /consolidateResources/);
+  assert.match(source, /locationEntries/);
+  assert.doesNotMatch(source, /consolidateResources|Math.round\(lat \/ grid\)/);
   assert.match(source, /pointDensity/);
-  assert.match(source, /densityBucketKey/);
+  assert.match(source, /positions.set\(resourceVector\(resource\)/);
   assert.match(source, /THREE\.NormalBlending/);
   assert.doesNotMatch(source, /categories\[resource\.category\]\.color/);
   assert.doesNotMatch(source, /AdditiveBlending/);

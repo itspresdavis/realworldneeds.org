@@ -40,7 +40,7 @@ test("globe points communicate listing type without category-colored visual nois
   assert.match(points, /isDirect/);
   assert.match(points, /isLocator/);
   assert.match(points, /isNetwork/);
-  assert.match(points, /consolidateResources/);
+  assert.match(points, /locationEntries/);
   assert.match(points, /THREE\.NormalBlending/);
   assert.doesNotMatch(points, /categories\[resource\.category\]\.color/);
 });

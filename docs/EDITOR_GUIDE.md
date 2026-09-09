@@ -50,3 +50,9 @@ Before opening signup widely, configure production SMTP in Supabase and test del
 Contributors can export their notes and request deletion in account settings. Review `rwn_account_requests` regularly. To process a request, revoke the user's sessions in Supabase Auth, delete the Auth user, and verify that memberships, private notes, and the request cascaded away. Editorial audit evidence remains with the catalog. Never claim deletion is complete until the database checks confirm it.
 
 Do not put personal case details, private medical information, donor information, or credentials into catalog notes.
+
+## Coordinate review
+
+Open the [coordinate worklist](https://supabase.com/dashboard/project/cytfrxldixdapjaxcqzf/editor/25929). It distinguishes coverage markers from physical locations and flags shared points, rounded coordinates, and absent source precision declarations. These are review prompts, not automatic error classifications: multiple services can share a building.
+
+The initial audit found 1,796 source-declared locations without these flags, 26 listings sharing coordinates, 20 physical listings needing precision confirmation, and 177 coverage markers. Check the original source and address before changing coordinates. Never scatter overlapping markers or infer a street address from a network's coverage center. The globe preserves every supplied latitude and longitude; increased visual detail does not independently verify those source coordinates.
