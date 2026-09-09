@@ -12,11 +12,7 @@ function layerButtons() {
 }
 
 function setLayerSelection(type) {
-  for (const button of layerButtons()) {
-    const desired = type === "all" || button.dataset.type === type;
-    const active = button.getAttribute("aria-pressed") === "true";
-    if (active !== desired) button.click();
-  }
+  document.getElementById("layerList").dispatchEvent(new CustomEvent("rwn:select-need", { detail: { type } }));
 }
 
 function syncQuickNeeds(container) {
@@ -70,10 +66,9 @@ function installQuickNeeds() {
     const button = event.target.closest(".quick-need");
     if (!button) return;
     setLayerSelection(button.dataset.quickType);
-    syncQuickNeeds(container);
   });
 
-  layerList.addEventListener("click", () => queueMicrotask(() => syncQuickNeeds(container)));
+  document.addEventListener("rwn:filters-updated", () => syncQuickNeeds(container));
   syncQuickNeeds(container);
 }
 

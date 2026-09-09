@@ -651,6 +651,7 @@ function updateFilters() {
   renderResults();
   renderClusterTray();
   pinSignature = "";
+  document.dispatchEvent(new CustomEvent("rwn:filters-updated"));
 }
 
 function nearbyExactCount(maximumKm = 250) {
@@ -2187,6 +2188,13 @@ function bindEvents() {
       writeFinderHistory("push");
     });
   };
+
+  document.getElementById("layerList").addEventListener("rwn:select-need", (event) => {
+    const type = event.detail?.type;
+    if (type !== "all" && !resourceTypes.includes(type)) return;
+    state.activeTypes = type === "all" ? createInitialTypeSet() : new Set([type]);
+    scheduleCatalogFilterUpdate();
+  });
 
   document.getElementById("layerList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-type]");

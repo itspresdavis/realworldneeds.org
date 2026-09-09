@@ -307,6 +307,22 @@ async function run() {
       throw new Error(`Institutional mobile homepage failed: ${JSON.stringify(mobile)}`);
     }
 
+    const quickFilter = await evaluate(client, `(async () => {
+      const wait = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const choose = (type) => document.querySelector('[data-quick-type="' + type + '"]').click();
+      // Multiple choices before the next paint must resolve to the final choice.
+      choose("food"); choose("water");
+      await wait();
+      const water = document.querySelector('[data-quick-type="water"]').getAttribute("aria-pressed") === "true";
+      const active = [...document.querySelectorAll('.layer-toggle[aria-pressed="true"]')].map((button) => button.dataset.type);
+      choose("all");
+      await wait();
+      return { water, active, all: document.querySelector('[data-quick-type="all"]').getAttribute("aria-pressed") === "true" };
+    })()`);
+    if (!quickFilter.water || quickFilter.active.join(",") !== "water" || !quickFilter.all) {
+      throw new Error(`Quick filter state drifted: ${JSON.stringify(quickFilter)}`);
+    }
+
     const mobileMenu = await evaluate(client, `(async () => {
       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const menu = document.querySelector(".site-menu");

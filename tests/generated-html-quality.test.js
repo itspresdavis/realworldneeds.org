@@ -45,7 +45,10 @@ test("every generated HTML document keeps a clean crawl/index structure", async 
     if (h1s.length !== 1) failures.push(`${file}: expected exactly one H1, found ${h1s.length}`);
     if (duplicateIds.length) failures.push(`${file}: duplicate IDs ${duplicateIds.join(", ")}`);
 
-    if (isNotFound) {
+    if (file === "dist/join.html") {
+      if (!noindex) failures.push(`${file}: account entry must be noindex`);
+      if (canonicals.length) failures.push(`${file}: account entry must not declare an indexable canonical`);
+    } else if (isNotFound) {
       if (!noindex) failures.push(`${file}: 404 must be noindex`);
       if (canonicals.length) failures.push(`${file}: 404 should not declare an indexable canonical`);
     } else {
