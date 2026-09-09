@@ -2380,6 +2380,7 @@ function bindEvents() {
   const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .globe-cluster-tray"));
 
   const prepareGlobeInteraction = () => {
+    wakeGlobe();
     state.clusterIds = [];
     renderClusterTray();
     state.targetLon = null;
@@ -2462,6 +2463,7 @@ function bindEvents() {
       state.velocityLon = 0;
       state.velocityLat = 0;
       state.interactionUntil = performance.now() + 5000;
+      wakeGlobe();
       event.preventDefault();
       return;
     }
@@ -2474,6 +2476,7 @@ function bindEvents() {
       }
       if (intent !== "rotate") return;
       state.dragging = true;
+      wakeGlobe();
       try { globeStage.setPointerCapture(event.pointerId); } catch {}
       event.preventDefault();
       state.pointerX = event.clientX;
@@ -2499,6 +2502,7 @@ function bindEvents() {
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
     pointer.handledRotation = true;
+    wakeGlobe();
     if (event.pointerType === "touch") event.preventDefault();
   });
 
@@ -2605,6 +2609,7 @@ function bindEvents() {
       state.velocityLon = 0;
       state.velocityLat = 0;
       state.interactionUntil = performance.now() + 5000;
+      wakeGlobe();
       event.preventDefault();
       return;
     }
@@ -2628,6 +2633,7 @@ function bindEvents() {
       return;
     }
     if (fallback.intent !== "rotate") return;
+    wakeGlobe();
     const pointerPath = activeGlobePointers.size === 1 ? activeGlobePointers.values().next().value : null;
     if (pointerPath?.handledRotation) {
       event.preventDefault();
