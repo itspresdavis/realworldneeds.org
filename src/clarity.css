@@ -826,3 +826,57 @@ body.rwn-professional main { display: block; }
   .rwn-professional .quick-need--all { grid-column: span 3; }
   .rwn-professional .jump-results { width: 100%; margin-top: 1rem; }
 }
+
+
+/* Public atlas: readable geography and a continuous, ordinary page scroll. */
+.rwn-professional.rwn-atlas { --rwn-paper: #f5f4ee; --rwn-line: #d4ded5; }
+.rwn-professional.rwn-atlas .site-header { background: #fffef9; }
+.rwn-professional.rwn-atlas .finder { background: #f5f4ee; }
+.rwn-professional.rwn-atlas .finder-sidebar { padding-top: 1rem; }
+.rwn-professional.rwn-atlas .finder-intro::before {
+  content: "A GLOBAL DIRECTORY OF PRACTICAL HELP";
+  display: block; margin-bottom: 1.15rem; color: #426b4b;
+  font-size: .61rem; font-weight: 750; letter-spacing: .13em;
+}
+.rwn-professional.rwn-atlas .finder-intro h1 {
+  font-family: Georgia, "Times New Roman", serif !important;
+  font-size: clamp(2.55rem, 4vw, 4rem) !important;
+  line-height: 1.04 !important; letter-spacing: -.055em !important;
+  font-weight: 500 !important; color: #153c30;
+}
+.rwn-professional.rwn-atlas .finder-intro p { color: #56665b; font-size: .94rem; }
+.rwn-professional.rwn-atlas .finder-search input { border-color: #bccfbe; background: #fffefb; box-shadow: 0 4px 14px #173f3010; }
+.rwn-professional.rwn-atlas .quick-need { border-radius: 20px; background: #fffef9; border-color: #ced9cf; }
+.rwn-professional.rwn-atlas .quick-need[aria-pressed="true"] { background: #24583e; color: white; border-color: #24583e; }
+.rwn-professional.rwn-atlas .globe-stage {
+  background: radial-gradient(ellipse at 50% 38%, #eef7f4 0%, #dceae5 58%, #ceded9 100%) !important;
+  border: 1px solid #becfc6 !important; border-radius: 24px;
+  box-shadow: 0 18px 40px #143c3020; isolation: isolate;
+}
+.rwn-professional.rwn-atlas .globe-stage::before,
+.rwn-professional.rwn-atlas .globe-stage::after { display: none !important; }
+.rwn-professional.rwn-atlas .globe-meta strong { color: #244d40; }
+.rwn-professional.rwn-atlas .globe-meta__tools { color: #486155; }
+.rwn-professional.rwn-atlas .globe-meta select { background: #f8fcf9; color: #244d40; border-color: #bccfc3; }
+.rwn-professional.rwn-atlas .globe-controls { background: #f8fcf9; border-color: #b5cabc; box-shadow: 0 4px 18px #153c3015; backdrop-filter: none; }
+.rwn-professional.rwn-atlas .globe-controls button { color: #24543e; border-color: #d4e1d8; }
+.rwn-professional.rwn-atlas .globe-controls button:hover { color: #143d2a; background: #e0eee4; }
+.rwn-professional.rwn-atlas .globe-readout { bottom: 5.5rem; background: #f5faf6ed; color: #426052; border-color: #bbd1c1; backdrop-filter: none; }
+.rwn-professional.rwn-atlas .globe-readout strong { color: #234d38; }
+.atlas-key { position: absolute; bottom: 1.4rem; left: 1.4rem; right: 1.4rem; z-index: 8; display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: #214937; font-size: .65rem; pointer-events: none; }
+.atlas-key span { display: inline-flex; gap: .35rem; align-items: center; }
+.atlas-key i { width: 8px; height: 8px; border-radius: 50%; background: #45b64a; border: 1px solid #245639; }
+.atlas-key .atlas-key__area { background: transparent; border: 2px solid #0b5f9e; }
+.atlas-key small { flex-basis: 100%; font-size: .6rem; color: #536e5e; }
+.rwn-professional.rwn-atlas .about-rwn { background: #fffef9; }
+@media (max-width: 600px) {
+  .rwn-professional.rwn-atlas .finder-intro h1 { max-width: 15ch !important; font-size: 2.65rem !important; }
+  .rwn-professional.rwn-atlas .finder-intro::before { margin-bottom: .8rem; font-size: .55rem; }
+  .rwn-professional.rwn-atlas .globe-stage { border-radius: 18px; }
+  .rwn-professional.rwn-atlas .globe-readout { bottom: 5rem; max-width: calc(100% - 5rem); }
+  .atlas-key { left: 1rem; right: 1rem; bottom: 1rem; gap: .4rem .75rem; font-size: .59rem; }
+}
+
+/* Keep the map key and controls legible over both land and open water. */
+.rwn-professional.rwn-atlas .globe-meta { background: #f8fcf5ed; border: 1px solid #c3d4c8; border-radius: 10px; padding: .5rem .65rem; }
+.rwn-professional.rwn-atlas .atlas-key { width: fit-content; max-width: calc(100% - 2.8rem); padding: .6rem .75rem; border-radius: 8px; background: #f8fcf5ed; border: 1px solid #c3d4c8; }

@@ -122,49 +122,10 @@ function resourcePointKind(resource) {
   return 2;
 }
 
-function representativePriority(resource) {
-  if (resource.kind === "direct") return 3;
-  if (resource.kind === "locator") return 2;
-  return 1;
-}
-
-function densityGridDegrees(zoom) {
-  if (zoom >= 7.25) return 0;
-  if (zoom >= 5.25) return 0.16;
-  if (zoom >= 3.75) return 0.34;
-  if (zoom >= 2.55) return 0.72;
-  if (zoom >= 1.65) return 1.45;
-  return 3.2;
-}
-
-function densityBucketKey(zoom) {
-  const grid = densityGridDegrees(zoom);
-  return grid === 0 ? "all" : String(grid);
-}
-
-function consolidateResources(resources, zoom) {
-  const grid = densityGridDegrees(zoom);
-  if (!grid) return resources.map((resource) => ({ resource, density: 1 }));
-
-  const cells = new Map();
-  for (const resource of resources) {
-    const lat = Number(resource.lat);
-    const lng = Number(resource.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    const latitudeScale = Math.max(0.38, Math.cos(THREE.MathUtils.degToRad(lat)));
-    const lngGrid = Math.min(9, grid / latitudeScale);
-    const key = `${Math.round(lat / grid)}:${Math.round(lng / lngGrid)}`;
-    const current = cells.get(key);
-    if (!current) {
-      cells.set(key, { resource, density: 1 });
-      continue;
-    }
-    current.density += 1;
-    const currentPriority = representativePriority(current.resource);
-    const candidatePriority = representativePriority(resource);
-    if (candidatePriority > currentPriority || (candidatePriority === currentPriority && resource.id < current.resource.id)) current.resource = resource;
-  }
-  return [...cells.values()];
+// Every GPU vertex is an actual catalog coordinate at every zoom. Screen-space
+// grouping handles overlapping controls; it never moves or removes map points.
+function locationEntries(resources) {
+  return resources.map((resource) => ({ resource, density: 1 }));
 }
 
 function buildGeometry(entries) {
@@ -202,11 +163,11 @@ function buildGeometry(entries) {
 
 function rebuildForZoom(points, zoom) {
   if (!points) return;
-  const entries = consolidateResources(points.userData.allResources || [], zoom);
+  const entries = locationEntries(points.userData.allResources || []);
   const previousGeometry = points.geometry;
   points.geometry = buildGeometry(entries);
   points.userData.resources = entries.map(({ resource }) => resource);
-  points.userData.densityBucket = densityBucketKey(zoom);
+
   previousGeometry?.dispose();
 }
 
@@ -216,7 +177,7 @@ export function createGlobePointLayer(resources, _categories, { pixelRatio = 1 }
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     uniforms: {
-      uPointSize: { value: window.innerWidth <= 600 ? 8.1 : 7.4 },
+      uPointSize: { value: window.innerWidth <= 600 ? 7 : 6.4 },
       uPixelRatio: { value: Math.min(2, Math.max(1, pixelRatio)) },
       uZoom: { value: 1 },
       uOpacity: { value: 0.98 }
@@ -227,13 +188,13 @@ export function createGlobePointLayer(resources, _categories, { pixelRatio = 1 }
     blending: THREE.NormalBlending
   });
 
-  const entries = consolidateResources(resources, 1);
+  const entries = locationEntries(resources);
   const points = new THREE.Points(buildGeometry(entries), material);
   points.frustumCulled = false;
   points.renderOrder = 3;
   points.userData.allResources = [...resources];
   points.userData.resources = entries.map(({ resource }) => resource);
-  points.userData.densityBucket = densityBucketKey(1);
+
   return points;
 }
 
@@ -245,8 +206,7 @@ export function replaceGlobePointResources(points, resources, _categories) {
 
 export function updateGlobePointLayer(points, { zoom = 1, pixelRatio = 1, opacity = 0.98 } = {}) {
   if (!points?.material?.uniforms) return;
-  const nextBucket = densityBucketKey(zoom);
-  if (points.userData.densityBucket !== nextBucket) rebuildForZoom(points, zoom);
+
   points.material.uniforms.uZoom.value = zoom;
   points.material.uniforms.uPixelRatio.value = Math.min(2, Math.max(1, pixelRatio));
   points.material.uniforms.uOpacity.value = opacity;

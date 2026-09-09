@@ -149,7 +149,7 @@ test("country pages expose local directories through normal crawlable links", as
 test("interaction layers and search index stay within deliberate budgets", async () => {
   const budgets = [
     ["src/accessibility.js", 10_000],
-    ["src/clarity.css", 30_000],
+    ["src/clarity.css", 36_000],
     ["public/directory.js", 12_000],
     ["public/directory-enhancements.css", 18_000],
     ["dist/data/search-index.json", 1_500_000]

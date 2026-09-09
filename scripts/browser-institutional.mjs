@@ -277,6 +277,29 @@ async function run() {
     if (locationRetry.attempts !== 2 || !locationRetry.hasRetry || !/try again|search by city/i.test(locationRetry.recoveryText)) {
       throw new Error(`Location retry failed: ${JSON.stringify(locationRetry)}`);
     }
+    const coordinateFidelity = await evaluate(client, `(async () => {
+      const version = new URL(document.querySelector('script[src*="bootstrap"]').src).search;
+      const { resources } = await import('/src/data/resources.js' + version);
+      const { createGlobePointLayer, updateGlobePointLayer } = await import('/src/globe-points.js' + version);
+      const points = createGlobePointLayer(resources, {});
+      let maximumError = 0;
+      for (let i = 0; i < resources.length; i++) {
+        const positions = points.geometry.attributes.position;
+        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+        const lat = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
+        const lng = Math.atan2(x, z) * 180 / Math.PI;
+        maximumError = Math.max(maximumError, Math.abs(lat - resources[i].lat), Math.abs(lng - resources[i].lng));
+      }
+      const counts = [1, 3, 8, 12].map((zoom) => {
+        updateGlobePointLayer(points, { zoom });
+        return points.geometry.attributes.position.count;
+      });
+      points.geometry.dispose(); points.material.dispose();
+      return { catalog: resources.length, counts, maximumError };
+    })()`);
+    if (coordinateFidelity.counts.some((count) => count !== coordinateFidelity.catalog) || coordinateFidelity.maximumError > 0.00001) {
+      throw new Error(`Catalog coordinates changed in the renderer: ${JSON.stringify(coordinateFidelity)}`);
+    }
     await capture(client, "institutional-desktop.png");
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true, screenWidth: 390, screenHeight: 844 });
