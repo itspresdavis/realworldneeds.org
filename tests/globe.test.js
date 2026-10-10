@@ -100,7 +100,7 @@ test("expanded catalog preserves location precision and minimum coverage", () =>
   assert.ok(reviewedExpansion.every((resource) => resource.sourceUrl.startsWith("https://")));
   assert.equal(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").length, 101);
   assert.equal(resources.filter((resource) => resource.datasetId === "new-york-wic-sites").length, 293);
-  assert.equal(resources.filter((resource) => resource.datasetId === "trussell-food-bank-centres").length, 1398);
+  assert.equal(resources.filter((resource) => resource.datasetId === "trussell-food-bank-centres").length, 1373);
   assert.ok(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").every((resource) => resource.hours));
 });
 

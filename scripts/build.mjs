@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
 import { freeAccessLabel } from "../src/data/free-access.js";
+import { sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 
@@ -107,11 +108,12 @@ function resourceRecord(resource) {
   const addressLabel = resource.kind === "direct" ? "Address" : "Coverage";
   return `<article class="directory-record" id="${escapeHtml(resource.id)}">
     <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+    ${sourceClosureMarkup(resource)}
     <p class="directory-record__summary">${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
     <div class="directory-record__facts" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
     ${directoryRecordActions(resource, coordinate)}
-    <details class="directory-record__more"><summary>Hours, location &amp; verification</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl><p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></nav></div></details>
+    <details class="directory-record__more"><summary>Hours, location &amp; verification</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl><p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></nav></div></details>
   </article>`;
 }
 
@@ -303,7 +305,8 @@ function resourcePage(resource) {
     <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">${escapeHtml(kindLabel(resource))}</p><h1>${escapeHtml(resource.name)}</h1><p class="legal-hero__lede">${escapeHtml(resource.summary)}</p><div class="legal-meta"><span>${escapeHtml(place)}</span><span>${escapeHtml(freeAccessLabel(resource))}</span><span>Checked ${escapeHtml(resource.lastChecked)}</span></div></div></section>
     <div class="directory-shell">
       ${breadcrumbs([{ href: "/directory", label: "Directory" }, { label: resource.name }])}
-      <div class="policy-note"><p><strong>Confirm before you go.</strong> ${escapeHtml(resource.availabilityNote)}</p></div>
+      ${sourceClosureMarkup(resource)}
+      <div class="policy-note"><p><strong>Confirm before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p></div>
       <article class="directory-record">
         <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl>

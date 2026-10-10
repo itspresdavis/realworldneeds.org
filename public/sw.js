@@ -82,6 +82,33 @@ async function networkFirstNavigation(request) {
   }
 }
 
+// A catalog can lose public records between releases. Always bypass HTTP
+// copies, and let only the newest request replace this release's offline copy.
+// Explicit reloads from a replaced controller must never fall back to old data.
+let directoryRequest = 0;
+let directoryWrite = Promise.resolve();
+async function directoryIndex(request) {
+  const generation = ++directoryRequest;
+  const cache = await caches.open(CACHE_NAME).catch(() => null);
+  try {
+    const response = await fetch(cacheKeyFor(request), { cache: "reload", credentials: "same-origin" });
+    if (response.ok) {
+      if (cache) {
+        directoryWrite = directoryWrite.catch(() => {}).then(async () => {
+          if (generation === directoryRequest) await putIfUsable(cache, request, response);
+        });
+        await directoryWrite.catch(() => {});
+      }
+      return response;
+    }
+    if (request.cache === "reload") return response;
+  } catch (error) {
+    if (request.cache === "reload") throw error;
+  }
+  const saved = cache ? await cache.match(cacheKeyFor(request)).catch(() => null) : null;
+  return saved || new Response("Directory unavailable", { status: 503 });
+}
+
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const key = cacheKeyFor(request);
@@ -104,8 +131,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const cacheable = LAZY_DIRECTORY_ASSETS.includes(url.pathname)
-    || url.pathname === "/directory.js"
+  if (LAZY_DIRECTORY_ASSETS.includes(url.pathname)) {
+    event.respondWith(directoryIndex(request));
+    return;
+  }
+
+  const cacheable = url.pathname === "/directory.js"
     || url.pathname === "/offline-status.js"
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/professional-pages.css"

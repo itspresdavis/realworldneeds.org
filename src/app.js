@@ -4,6 +4,7 @@ import { globeHasMotion, globePointVisible, frameBufferMatches } from "./utils/g
 import { clusterProjectedEntries } from "./utils/globe-clustering.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
 import { freeAccessLabel, freeAccessModels } from "./data/free-access.js";
+import { sourceClosureMarkup, availabilityInstructions } from "./utils/source-status.js";
 import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js";
 import {
   cameraDistanceForSphere,
@@ -590,6 +591,13 @@ function writeFinderHistory(mode = "replace") {
 
 function restoreFinderHistory(historyState) {
   const snapshot = historyState?.[FINDER_HISTORY_KEY];
+  // Native in-page links create history entries without our finder snapshot.
+  // Keep the current search and attach it to the new entry so Back/Forward
+  // can restore it, while leaving the section fragment and scroll untouched.
+  if (!snapshot) {
+    window.history.replaceState({ ...(historyState || {}), [FINDER_HISTORY_KEY]: finderHistorySnapshot() }, "", window.location.href);
+    return;
+  }
   state.query = sanitizeFinderQuery(snapshot?.query);
   state.accessMode = finderAccessFromHistory(snapshot?.accessMode);
   state.activeTypes = finderTypesFromHistory(snapshot?.activeTypes);
@@ -820,6 +828,7 @@ function renderResourcePanel() {
     <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
+    ${sourceClosureMarkup(resource)}
     <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
@@ -840,7 +849,7 @@ function renderResourcePanel() {
         <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
       </div>
     </details>
-    <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before you go</strong>${resource.availabilityNote}</p></div>
+    <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before you go</strong>${availabilityInstructions(resource)}</p></div>
     <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
       ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
@@ -871,18 +880,19 @@ function renderResourcePanel() {
 function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
-  const aidDots = allTypes(resource).map((type) => `<i style="--dot:${categories[type].color}" title="${categories[type].label}"></i>`).join("");
+  const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
   const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
         <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b>${openAccess}</small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
-        <span class="resource-row__aid">${aidDots}</span>
+        <span class="resource-row__aid">${aidLabels}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>
         <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${reviewLabel(resource)}</time>
         <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
+      ${sourceClosureMarkup(resource)}
     </article>
   `;
 }

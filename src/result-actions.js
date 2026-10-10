@@ -32,7 +32,7 @@ function replaceResultTrigger(trigger, resource) {
   link.className = `${trigger.className || ""} result-row-link`.trim();
   link.href = `/service/${encodeURIComponent(resource.id)}`;
   link.innerHTML = trigger.innerHTML;
-  link.setAttribute("aria-label", `View details for ${resource.name}`);
+  // Let the visible name, location, help types and review text name the link.
   trigger.replaceWith(link);
   return link;
 }

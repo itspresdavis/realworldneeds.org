@@ -165,8 +165,17 @@ function safeProviderUrl(record) {
   }
 }
 
+function sourceHidesAddress(value) {
+  // Trussell currently sends "On"/"Off", but tolerate equivalent boolean flags.
+  // Unrecognized nonempty flags fail closed rather than exposing an address.
+  if (value === null || value === undefined || value === false) return false;
+  const flag = normalizeText(value)?.toLowerCase() || "";
+  return !["", "off", "false", "no", "0"].includes(flag);
+}
+
 function makeResource(record, sourcePage, checkedOn) {
-  if (record.hideAddressLink === true) return null;
+  if (sourceHidesAddress(record.hideAddressLink)) return null;
+  if (!normalizeText(record.address01) && !normalizeText(record.address02)) return null;
   const coordinates = parseCoordinates(record);
   if (!coordinates) return null;
 
@@ -214,6 +223,8 @@ function makeResource(record, sourcePage, checkedOn) {
     ...(phone ? { phone } : {}),
     ...(email ? { email } : {}),
     providerUrl,
+    collectionStatus,
+    collectionStatusCheckedOn: checkedOn,
     summary: `An official Trussell food-bank centre${groupTitle ? ` in the ${groupTitle} network` : ""} where people with an approved food-bank voucher can access a free emergency food parcel.`,
     services: [
       "Free emergency food parcel with voucher/referral",
@@ -369,6 +380,8 @@ function fromRow(row) {
     ...(phone ? { phone } : {}),
     ...(email ? { email } : {}),
     providerUrl,
+    collectionStatus,
+    collectionStatusCheckedOn: CHECKED_ON,
     summary: "An official Trussell food-bank centre where people with an approved food-bank voucher can access a free emergency food parcel.",
     services: ["Free emergency food parcel with voucher/referral", "Food-bank referral guidance"],
     eligibility: "A food-bank voucher/referral is required. A local referral partner assesses need and issues a voucher before emergency food is collected.",

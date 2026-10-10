@@ -33,9 +33,12 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
         return label && value ? `${label}: ${value}` : "";
       })
       .filter(Boolean);
+    const sourceStatus = document.querySelector("#service > .directory-shell > .source-status-notice");
+    const statusLines = sourceStatus ? [...sourceStatus.querySelectorAll("strong, p")].map((node) => node.textContent.trim()) : [];
     return [
       title,
       place,
+      ...statusLines,
       ...rows,
       `RWN listing: ${location.href}`,
       officialSource ? `Official source: ${officialSource}` : "",

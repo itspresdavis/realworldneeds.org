@@ -56,3 +56,11 @@ Do not put personal case details, private medical information, donor information
 Open the [coordinate worklist](https://supabase.com/dashboard/project/cytfrxldixdapjaxcqzf/editor/25929). It distinguishes coverage markers from physical locations and flags shared points, rounded coordinates, and absent source precision declarations. These are review prompts, not automatic error classifications: multiple services can share a building.
 
 The initial audit found 1,796 source-declared locations without these flags, 26 listings sharing coordinates, 20 physical listings needing precision confirmation, and 177 coverage markers. Check the original source and address before changing coordinates. Never scatter overlapping markers or infer a street address from a network's coverage center. The globe preserves every supplied latitude and longitude; increased visual detail does not independently verify those source coordinates.
+
+## Refreshing source snapshots
+
+`npm run refresh:data` runs the Massachusetts WIC, New York WIC, and Trussell importers in sequence. Each source also has its own `refresh:data:*` command. These commands fetch external sources and change local generated files; inspect the diff and run `npm run check` before publication. Trussell refreshes its paginated finder, so it can take longer than the WIC feeds. An earlier source may have changed locally if a later importer fails; review the complete diff rather than assuming an all-or-nothing refresh.
+
+Trussell's collection status and its snapshot date stay separate from current availability. “Closed” and “Temporarily closed” mean the source reported that status in the dated snapshot. They do not establish that a centre is closed today. Preserve these fields when reviewing editorial overrides. Other statuses are not proof that a service is open now.
+
+For New York WIC, `lastChecked` records when rows were fetched. The importer does not fetch an authoritative source update date, so new imports omit `sourceUpdatedAt` rather than reuse a hard-coded date. Existing historical snapshot/source-ledger dates are unchanged by this code fix; review the source ledger against the next actual refresh before release.

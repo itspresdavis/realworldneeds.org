@@ -111,6 +111,6 @@ test("source registry makes audit counts and refresh modes explicit", () => {
   assert.equal(sourceRegistry.find((source) => source.id === "usda-summer-meals-2026").activeRecordsAtAudit, 17442);
   assert.equal(sourceRegistry.find((source) => source.id === "massachusetts-wic-locations").recordCount, 101);
   assert.equal(sourceRegistry.find((source) => source.id === "new-york-wic-sites").recordCount, 293);
-  assert.equal(sourceRegistry.find((source) => source.id === "trussell-food-bank-centres").recordCount, 1398);
+  assert.equal(sourceRegistry.find((source) => source.id === "trussell-food-bank-centres").recordCount, 1373);
   assert.ok(sourceRegistry.every((source) => source.sourceUrl.startsWith("https://")));
 });

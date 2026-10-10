@@ -1,6 +1,7 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resources } from "../src/data/resources.js";
+import { sourceClosureMarkup, sourceClosureNotice } from "../src/utils/source-status.js";
 
 const HOME_TITLE = "Find Essential Services Near You | Real World Needs";
 const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing.";
@@ -173,7 +174,7 @@ function serviceActions(resource) {
   const links = [];
   const isDirectLocation = resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng);
   const isFinder = resource.kind === "locator" || resource.kind === "network";
-  const nextStep = isDirectLocation
+  const nextStep = sourceClosureNotice(resource) ? "Confirm availability before travel" : isDirectLocation
     ? (resource.phone ? "Call, get directions, or verify current details" : "Get directions or verify current details")
     : (resource.phone ? "Call or verify current details" : "Verify current details");
   const context = isFinder
@@ -200,7 +201,7 @@ function enhanceActionOrientation(html) {
     const id = decodeURIComponent(match[1]);
     const resource = resourcesById.get(id);
     if (!resource) return article;
-    return article.replace("</header>", `</header>\n    ${directoryQuickActions(resource)}`);
+    return article.replace("</header>", `</header>\n    ${sourceClosureMarkup(resource)}${directoryQuickActions(resource)}`);
   });
 
   const serviceId = canonicalPathFrom(html).match(/^\/service\/([^/]+)\/?$/)?.[1];

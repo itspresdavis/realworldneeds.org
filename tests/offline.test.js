@@ -29,7 +29,7 @@ test("offline directory caches only public same-origin essentials", async () => 
 
 test("offline registration is non-blocking and clear-browser-data removes offline caches", async () => {
   const bootstrap = await read("src/bootstrap.js");
-  const directory = await read("public/directory.js");
+  const directory = await read("public/directory.js") + await read("public/directory-results.js");
   assert.match(bootstrap, /serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
   assert.match(directory, /serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
   assert.match(bootstrap, /name\.startsWith\("rwn-offline-"\)/);
@@ -38,7 +38,7 @@ test("offline registration is non-blocking and clear-browser-data removes offlin
 });
 
 test("offline directory clearly warns that availability and service pages require reconnection", async () => {
-  const directory = await read("public/directory.js");
+  const directory = await read("public/directory.js") + await read("public/directory-results.js");
   assert.match(directory, /offlineDirectoryNotice/);
   assert.match(directory, /Offline mode\./);
   assert.match(directory, /current availability and service-detail pages require a connection/);

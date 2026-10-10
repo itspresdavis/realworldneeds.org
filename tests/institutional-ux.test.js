@@ -46,14 +46,14 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
 test("whole-catalog directory search uses a static privacy-preserving contextual index", async () => {
   const client = await text("public/directory.js");
   const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(searchIndex.schemaVersion, "1.3");
+  assert.equal(searchIndex.schemaVersion, "1.4");
   assert.equal(searchIndex.resourceCount, resources.length);
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
   assert.ok(searchIndex.scopes && typeof searchIndex.scopes === "object");
   assert.match(client, /new URL\(import\.meta\.url\)\.searchParams\.get\("v"\)/);
   assert.match(client, /searchIndexUrl\s*=\s*`\/data\/search-index\.json\$\{releaseVersion/);
-  assert.match(client, /fetch\(searchIndexUrl/);
+  assert.match(client, /fetch\(freshCatalog\?"\/data\/search-index\.json":searchIndexUrl,/);
   assert.match(client, /payload\.scopes\[currentScope\]/);
   assert.doesNotMatch(client, /XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
   assert.doesNotMatch(client, /input\?\.value.*searchIndexUrl|searchIndexUrl.*input\?\.value/);
@@ -151,6 +151,7 @@ test("interaction layers and search index stay within deliberate budgets", async
     ["src/accessibility.js", 10_000],
     ["src/clarity.css", 36_000],
     ["public/directory.js", 12_000],
+    ["public/directory-results.js", 4_000],
     ["public/directory-enhancements.css", 18_000],
     ["dist/data/search-index.json", 1_500_000]
   ];

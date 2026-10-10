@@ -20,7 +20,7 @@ test("globe point layer uses one semantic RWN marker language without discarding
 });
 
 test("directory search results expose direct actions without turning the record into one giant link", async () => {
-  const client = await text("public/directory.js");
+  const client = await text("public/directory.js") + await text("public/directory-results.js");
   assert.match(client, /directory-global-result-wrap/);
   assert.match(client, /directory-global-result-actions/);
   assert.match(client, /actionLink\(`Call \$\{record\.phone\}`/);
