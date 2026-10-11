@@ -17,19 +17,31 @@ export function assertFlingProof({ release, samples, start }) {
   }
 }
 
+// Finger movement is paced by elapsed real time, not by GPU acknowledgement.
+// CDP commands remain ordered on one connection and keep native timestamps.
+export async function dispatchNativeVerticalSwipe({ touch, sleep, start, step = 22, delay = 28 }) {
+  if(!start || !Number.isFinite(start.x) || !Number.isFinite(start.y) || start.y-step*5<12) throw new Error('Native vertical swipe would leave the device viewport.');
+  const point=(x,y)=>({x,y,id:0,radiusX:8,radiusY:8,force:1});
+  await touch('touchStart',[point(start.x,start.y)]);
+  const pending=[];
+  const queue=(type,points=[])=>pending.push((async()=>{
+    try {await touch(type,points);return {ok:true};} catch(error){return {ok:false,error};}
+  })());
+  for(let i=1;i<=5;i++) {
+    await sleep(delay);
+    queue('touchMove',[point(start.x+2,start.y-i*step)]);
+  }
+  queue('touchEnd');
+  const failed=(await Promise.all(pending)).find(result=>!result.ok);
+  if(failed)throw failed.error;
+}
+
 export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometry, sleep, observations }) {
   const call = (expression) => evaluate(client, expression);
   const point = (x, y) => ({ x, y, id: 0, radiusX: 8, radiusY: 8, force: 1 });
   const touch = (type, points = []) => client.call("Input.dispatchTouchEvent", { type, touchPoints: points });
-  const verticalSwipe = async (start, step = 22, delay = 28) => {
-    if(!start || !Number.isFinite(start.y) || start.y-step*5<12) throw new Error('Native vertical swipe would leave the device viewport.');
-    await touch('touchStart',[point(start.x,start.y)]);
-    for(let i=1;i<=5;i++) {
-      await touch('touchMove',[point(start.x+2,start.y-i*step)]);
-      await sleep(delay);
-    }
-    await touch('touchEnd');
-  };
+  const verticalSwipe = (start, step, delay) => dispatchNativeVerticalSwipe({touch,sleep,start,step,delay});
+  const pendingSwipes=[];
   const check = (ok, message, detail) => { if (!ok) throw new Error(`${message}: ${JSON.stringify(detail)}`); };
   const phase = (name) => call(`window.__rwnInterruptions.phase=${JSON.stringify(name)}`);
   const events = () => call("window.__rwnInterruptions.events");
@@ -81,8 +93,10 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
         const data=window.__rwnInterruptions;
         const row={phase:data.phase,type,at:performance.now(),eventAt:event.timeStamp,scrollY,
           trusted:event.isTrusted,target:event.target.id || event.target.className,pointerType:event.pointerType,pointerId:event.pointerId,
-          touches:event.touches?.length,cancelable:event.cancelable,prevented:event.defaultPrevented};
-        if(type==='touchstart' && data.activeProof) {
+          touches:event.touches?.length,x:event.touches?.[0]?.clientX,y:event.touches?.[0]?.clientY,
+          cancelable:event.cancelable,prevented:event.defaultPrevented};
+        if(type==='touchend' && data.activeProof && !data.activeProof.release) data.activeProof.onRelease(row);
+        if(type==='touchstart' && data.activeProof?.release) {
           row.flingSamples=data.activeProof.samples.slice(-2);
           data.activeProof.stop();data.activeProof=null;
         }
@@ -101,16 +115,22 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
       // Use the same native press/move/release path as the established vertical
       // scroll check. Chromium's high-level synthesizeScrollGesture produced
       // only a press/release with no movement in the verified CI environment.
-      await verticalSwipe(geometry.point);
-      const proof = await call(`new Promise((resolve,reject)=>{
-        const release=window.__rwnInterruptions.events.findLast(e=>e.phase==='fling-${cycle}' && e.type==='touchend');
+      // Observe the actual release and following frames while input command
+      // acknowledgements are still outstanding. Waiting for the GPU first
+      // could consume the entire short browser-owned inertia window.
+      await call(`window.__rwnFlingProofPromise=new Promise((resolve,reject)=>{
         const samples=[];let expired=false,ready=false;
-        const record={phase:'fling-${cycle}',release,samples,stop:()=>{expired=true;clearTimeout(deadline);}};
+        let deadline=setTimeout(()=>{expired=true;reject(new Error('Native vertical swipe did not release within 5 seconds'));},5000);
+        const record={phase:'fling-${cycle}',release:null,samples,stop:()=>{expired=true;clearTimeout(deadline);},onRelease:release=>{
+          record.release=release;clearTimeout(deadline);
+          deadline=setTimeout(()=>{expired=true;reject(new Error('Native fling precondition could not be established'));},1500);
+        }};
         (window.__rwnInterruptions.flingProofs ||= []).push(record);
         window.__rwnInterruptions.activeProof=record;
-        const deadline=setTimeout(()=>{expired=true;reject(new Error('Native fling precondition could not be established'));},1500);
         const sample=()=>{
           if(expired)return;
+          const release=record.release;
+          if(!release){requestAnimationFrame(sample);return;}
           const current={at:performance.now(),scrollY};samples.push(current);
           const previous=samples.at(-2);
           if(!ready && release && previous && previous.at>release.at && current.scrollY-previous.scrollY>=1 && current.scrollY-release.scrollY>=8) {
@@ -124,13 +144,26 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
           }
           requestAnimationFrame(sample);
         };requestAnimationFrame(sample);
-      })`);
+      });void window.__rwnFlingProofPromise.catch(()=>{});true`);
+      const proofPending = call('window.__rwnFlingProofPromise').then(proof=>({proof}),error=>({error}));
+      const swipePending=verticalSwipe(geometry.point).then(()=>null,error=>error);
+      pendingSwipes.push(swipePending);
+      const proofResult=await proofPending;
+      if(proofResult.error)throw proofResult.error;
+      const proof=proofResult.proof;
       check(proof.point, "Moving globe has no safe native touch target", proof);
       // No extra CDP round trip between the final moving sample and new input.
       // The first touch's observed time is checked below.
       await touch("touchStart", [point(proof.point.x, proof.point.y)]);
+      const swipeError=await swipePending;
+      if(swipeError)throw swipeError;
       const trace = await events();
       const start = trace.findLast(event => event.type === "touchstart");
+      const verticalMoves=trace.filter(event=>event.phase===`fling-${cycle}` && event.type==='touchmove' && event.at<proof.release.at);
+      check(verticalMoves.length>=2 && verticalMoves.every((event,index)=>event.trusted
+        && Math.abs(event.x-geometry.point.x-2)<.5 && event.y<geometry.point.y
+        && event.eventAt<=proof.release.eventAt && (!index || (event.y<verticalMoves[index-1].y && event.eventAt>=verticalMoves[index-1].eventAt))),
+        'Native vertical input did not preserve the ordered real-time swipe',verticalMoves);
       assertFlingProof({release:proof.release,samples:start?.flingSamples,start});
       const baseline = await state();
       for(let i=1;i<=5;i++) {
@@ -192,6 +225,7 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
     observations.interruptions.events=await events();
     console.log(`Globe native interruption evidence: ${JSON.stringify(observations.interruptions)}`);
   } finally {
+    observations.interruptions.swipeErrors=(await Promise.all(pendingSwipes)).filter(Boolean).map(error=>String(error.message || error));
     observations.interruptions.events=await events();
     observations.interruptions.flingProofs=await call('window.__rwnInterruptions.flingProofs || []');
     await call('window.__rwnInterruptions.activeProof?.stop();window.__rwnInterruptions.controller.abort()');
