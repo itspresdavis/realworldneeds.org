@@ -3,11 +3,13 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { assertFlingProof, dispatchNativeVerticalSwipe } from "../scripts/qa-globe-interruptions.mjs";
 
-const fixture=()=>({release:{type:'touchend',trusted:true,touches:0,at:100,scrollY:200},samples:[{at:116,scrollY:208},{at:133,scrollY:216}],start:{type:'touchstart',trusted:true,target:'globeCanvas',touches:1,at:140,scrollY:218}});
+const fixture=()=>({injectedTravel:22,initial:{type:'touchstart',trusted:true,target:'globeCanvas',touches:1,at:50,scrollY:180,y:415},release:{type:'touchend',trusted:true,touches:0,at:100,scrollY:200,y:393},samples:[{at:116,scrollY:208},{at:133,scrollY:216}],start:{type:'touchstart',trusted:true,target:'globeCanvas',touches:1,at:140,scrollY:218}});
 test('native fling proof requires motion after all fingers lift and an immediate canvas touch',()=>assert.doesNotThrow(()=>assertFlingProof(fixture())));
 test('settled scrolling, held fingers, stale samples and synthetic events cannot pass as a fling interruption',()=>{
   const invalid=[
     f=>f.release.trusted=false,f=>f.release.touches=1,f=>f.release.type='touchcancel',
+    f=>f.initial.trusted=false,f=>f.initial.y=NaN,f=>f.initial.y=380,
+    f=>f.injectedTravel=110,f=>f.injectedTravel=NaN,
     f=>f.samples=[],f=>f.samples[0].at=90,f=>f.samples[1].at=116,
     f=>{f.samples[1].at=1450;f.start.at=1455;},
     f=>f.samples[1].scrollY=208,f=>f.release.scrollY=210,f=>f.samples[1].scrollY=NaN,
@@ -17,13 +19,26 @@ test('settled scrolling, held fingers, stale samples and synthetic events cannot
   ];
   for(const mutate of invalid){const proof=fixture();mutate(proof);assert.throws(()=>assertFlingProof(proof));}
 });
+test('delayed compositor catch-up within finger travel cannot pass as inertia',()=>{
+  const proof=fixture();
+  proof.injectedTravel=36;
+  proof.release.y=379; // 36px finger travel, matching all 36px observed page travel.
+  assert.throws(()=>assertFlingProof(proof),/full delivered upward finger travel/);
+  proof.release.y=380; // A single rounding pixel above the ceiling is insufficient.
+  proof.injectedTravel=35;
+  assert.throws(()=>assertFlingProof(proof),/full delivered upward finger travel/);
+  proof.release.y=381;
+  proof.injectedTravel=34;
+  assert.doesNotThrow(()=>assertFlingProof(proof));
+});
 test('interruption QA uses native input without changing page scroll policy or weakening settled QA',async()=>{
   const source=await readFile(new URL('../scripts/qa-globe-interruptions.mjs',import.meta.url),'utf8');
   assert.match(source,/client\.call\("Input.dispatchTouchEvent", \{ type, touchPoints: points \}\)/);
   assert.match(source,/const swipePending=verticalSwipe\(geometry.point\)/);
   assert.match(source,/await call\(`window\.__rwnFlingProofPromise=new Promise/);
   assert.match(source,/const proofPending = call\([\s\S]*?const swipePending=verticalSwipe/);
-  assert.match(source,/assertFlingProof\(\{release:proof.release,samples:start\?\.flingSamples,start\}\)/);
+  assert.match(source,/assertFlingProof\(\{initial:proof.initial,release:proof.release,samples:start\?\.flingSamples,start,injectedTravel:proof.injectedTravel\}\)/);
+  assert.match(source,/current.scrollY-initial.scrollY>=Math.max\(fingerTravel,injectedTravel\)\+2/);
   assert.match(source,/Math\.abs\(pageDrift\)<=18/);
   assert.doesNotMatch(source,/\.dispatchEvent\(|\.preventDefault\(|\.style\.(touchAction|overflow)|scrollTo\(/);
   const runner=await readFile(new URL('../scripts/browser-globe-touch-v4.mjs',import.meta.url),'utf8');

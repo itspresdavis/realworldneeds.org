@@ -1,7 +1,11 @@
 // Native Chromium input regression, not physical-device/Safari coverage.
 // A fling is only accepted after the released touch has left the browser
 // scrolling on its own. Never manufacture momentum with scrollTo/DOM events.
-export function assertFlingProof({ release, samples, start }) {
+const NATIVE_SWIPE_STEPS=5;
+const FLING_STEP=22;
+const FLING_TRAVEL=NATIVE_SWIPE_STEPS*FLING_STEP;
+
+export function assertFlingProof({ initial, release, samples, start, injectedTravel }) {
   if (!release?.trusted || release.type !== "touchend" || release.touches !== 0) throw new Error("Fling has no trusted, fully released touch.");
   if (!Array.isArray(samples) || samples.length < 2) throw new Error("Fling needs two post-release frame samples.");
   const [before, after] = samples.slice(-2);
@@ -9,6 +13,13 @@ export function assertFlingProof({ release, samples, start }) {
     || before.at <= release.at || after.at <= before.at || after.at - before.at > 80
     || after.scrollY - before.scrollY < 1 || after.scrollY - release.scrollY < 8) {
     throw new Error("No genuine continuing post-release page fling was observed.");
+  }
+  const fingerTravel=initial?.y-release.y;
+  if(!initial?.trusted || initial.type!=='touchstart' || initial.target!=='globeCanvas' || initial.touches!==1
+    || ![initial.at,initial.scrollY,initial.y,release.y].every(Number.isFinite) || initial.at>=release.at
+    || !Number.isFinite(injectedTravel) || injectedTravel<=0 || Math.abs(fingerTravel-injectedTravel)>.5
+    || after.scrollY-initial.scrollY<Math.max(fingerTravel,injectedTravel)+2) {
+    throw new Error('Post-release scrolling did not exceed the full delivered upward finger travel.');
   }
   if (!start?.trusted || start.type !== "touchstart" || start.target !== "globeCanvas" || start.touches !== 1
     || !Number.isFinite(start.at) || start.at < after.at || start.at - after.at > 40
@@ -19,15 +30,15 @@ export function assertFlingProof({ release, samples, start }) {
 
 // Finger movement is paced by elapsed real time, not by GPU acknowledgement.
 // CDP commands remain ordered on one connection and keep native timestamps.
-export async function dispatchNativeVerticalSwipe({ touch, sleep, start, step = 22, delay = 28 }) {
-  if(!start || !Number.isFinite(start.x) || !Number.isFinite(start.y) || start.y-step*5<12) throw new Error('Native vertical swipe would leave the device viewport.');
+export async function dispatchNativeVerticalSwipe({ touch, sleep, start, step = FLING_STEP, delay = 28 }) {
+  if(!start || !Number.isFinite(start.x) || !Number.isFinite(start.y) || start.y-step*NATIVE_SWIPE_STEPS<12) throw new Error('Native vertical swipe would leave the device viewport.');
   const point=(x,y)=>({x,y,id:0,radiusX:8,radiusY:8,force:1});
   await touch('touchStart',[point(start.x,start.y)]);
   const pending=[];
   const queue=(type,points=[])=>pending.push((async()=>{
     try {await touch(type,points);return {ok:true};} catch(error){return {ok:false,error};}
   })());
-  for(let i=1;i<=5;i++) {
+  for(let i=1;i<=NATIVE_SWIPE_STEPS;i++) {
     await sleep(delay);
     queue('touchMove',[point(start.x+2,start.y-i*step)]);
   }
@@ -93,8 +104,10 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
         const data=window.__rwnInterruptions;
         const row={phase:data.phase,type,at:performance.now(),eventAt:event.timeStamp,scrollY,
           trusted:event.isTrusted,target:event.target.id || event.target.className,pointerType:event.pointerType,pointerId:event.pointerId,
-          touches:event.touches?.length,x:event.touches?.[0]?.clientX,y:event.touches?.[0]?.clientY,
+          touches:event.touches?.length,x:event.touches?.[0]?.clientX ?? event.changedTouches?.[0]?.clientX,
+          y:event.touches?.[0]?.clientY ?? event.changedTouches?.[0]?.clientY,
           cancelable:event.cancelable,prevented:event.defaultPrevented};
+        if(type==='touchstart' && data.activeProof && !data.activeProof.release) data.activeProof.initial=row;
         if(type==='touchend' && data.activeProof && !data.activeProof.release) data.activeProof.onRelease(row);
         if(type==='touchstart' && data.activeProof?.release) {
           row.flingSamples=data.activeProof.samples.slice(-2);
@@ -119,9 +132,10 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
       // acknowledgements are still outstanding. Waiting for the GPU first
       // could consume the entire short browser-owned inertia window.
       await call(`window.__rwnFlingProofPromise=new Promise((resolve,reject)=>{
+        const injectedTravel=${FLING_TRAVEL};
         const samples=[];let expired=false,ready=false;
         let deadline=setTimeout(()=>{expired=true;reject(new Error('Native vertical swipe did not release within 5 seconds'));},5000);
-        const record={phase:'fling-${cycle}',release:null,samples,stop:()=>{expired=true;clearTimeout(deadline);},onRelease:release=>{
+        const record={phase:'fling-${cycle}',initial:null,release:null,samples,stop:()=>{expired=true;clearTimeout(deadline);},onRelease:release=>{
           record.release=release;clearTimeout(deadline);
           deadline=setTimeout(()=>{expired=true;reject(new Error('Native fling precondition could not be established'));},1500);
         }};
@@ -131,16 +145,18 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
           if(expired)return;
           const release=record.release;
           if(!release){requestAnimationFrame(sample);return;}
+          const initial=record.initial,fingerTravel=initial?.y-release.y;
           const current={at:performance.now(),scrollY};samples.push(current);
           const previous=samples.at(-2);
-          if(!ready && release && previous && previous.at>release.at && current.scrollY-previous.scrollY>=1 && current.scrollY-release.scrollY>=8) {
+          if(!ready && release && previous && previous.at>release.at && current.scrollY-previous.scrollY>=1 && current.scrollY-release.scrollY>=8
+            && Math.abs(fingerTravel-injectedTravel)<=.5 && current.scrollY-initial.scrollY>=Math.max(fingerTravel,injectedTravel)+2) {
             const canvas=document.getElementById('globeCanvas'),rect=canvas.getBoundingClientRect();
             const points=[];
             for(const yf of [.45,.6,.3,.75]) for(const xf of [.25,.35,.45]) {
               const x=rect.left+rect.width*xf,y=rect.top+rect.height*yf;
               if(y>120 && y<innerHeight-90 && x+100<innerWidth-12 && document.elementFromPoint(x,y)===canvas) points.push({x,y});
             }
-            ready=true;resolve({release,samples,point:points[0] || null});
+            ready=true;resolve({initial,release,samples,injectedTravel,point:points[0] || null});
           }
           requestAnimationFrame(sample);
         };requestAnimationFrame(sample);
@@ -164,7 +180,7 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
         && Math.abs(event.x-geometry.point.x-2)<.5 && event.y<geometry.point.y
         && event.eventAt<=proof.release.eventAt && (!index || (event.y<verticalMoves[index-1].y && event.eventAt>=verticalMoves[index-1].eventAt))),
         'Native vertical input did not preserve the ordered real-time swipe',verticalMoves);
-      assertFlingProof({release:proof.release,samples:start?.flingSamples,start});
+      assertFlingProof({initial:proof.initial,release:proof.release,samples:start?.flingSamples,start,injectedTravel:proof.injectedTravel});
       const baseline = await state();
       for(let i=1;i<=5;i++) {
         await touch("touchMove",[point(proof.point.x+i*20,proof.point.y+2)]);
@@ -181,7 +197,7 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
       check(finalTrace.some(event=>event.type==='pointercancel' && event.trusted && event.pointerType==='touch'
         && event.pointerId===verticalPointer?.pointerId && event.at<proof.release.at),"Vertical page ownership did not produce a native pointercancel before release",finalTrace);
       if(cycle) check(finalTrace.some(event=>event.type==='touchcancel' && event.trusted),"Interrupted fling rotation did not receive touchcancel",finalTrace);
-      observations.interruptions[`fling${cycle}`]={release:proof.release,samples:start.flingSamples,start,pageDrift,changedPins:changedPins(baseline,active),cancelled:Boolean(cycle)};
+      observations.interruptions[`fling${cycle}`]={initial:proof.initial,release:proof.release,injectedTravel:proof.injectedTravel,readySamples:proof.samples,samples:start.flingSamples,start,pageDrift,changedPins:changedPins(baseline,active),cancelled:Boolean(cycle)};
       const next=await canvasGeometry(client,false);
       observations.interruptions[`repeated${cycle}`]=await rotate(next.point,`repeat-${cycle}`);
     }
