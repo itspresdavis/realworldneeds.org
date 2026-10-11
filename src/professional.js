@@ -150,6 +150,7 @@ export function installProfessionalPresentation() {
   document.documentElement.classList.add("rwn-professional");
   document.body.classList.add("rwn-professional", "rwn-atlas");
   const globe = document.querySelector('.globe-stage');
+  setText(".globe-meta > div:first-child strong", "Explore the map");
   if (globe && !globe.querySelector('.atlas-key')) {
     const key = document.createElement('div');
     key.className = 'atlas-key';

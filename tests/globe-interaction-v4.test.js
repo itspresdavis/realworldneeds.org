@@ -12,8 +12,8 @@ test("globe source uses the audited deep-view profile", async () => {
   assert.match(app, /globeViewProfile\(state\.zoom \* state\.ambientZoom/);
   assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288/);
   assert.match(app, /const dprCap = width < 720/);
-  assert.match(app, /deepBoundaryIntent/);
-  assert.match(app, /deepTextureIntent/);
+  assert.match(app, /interactionSettled && state\.zoom > 1\.35/);
+  assert.match(app, /interactionSettled && state\.zoom > detailTextureZoom/);
 });
 
 test("build output preserves the source globe profile without post-build patching", async () => {
@@ -26,16 +26,14 @@ test("build output preserves the source globe profile without post-build patchin
 test("single-touch map ownership distinguishes scroll, rotation and pinch", async () => {
   const app = await text("src/app.js");
   const css = await text("dist/src/clarity.css");
-  assert.match(app, /const startedOnMap = event\.pointerType === "touch" \? !isGlobeChrome\(event\.target\) : startedOnCanvas/);
-  assert.match(app, /startedOnMap,/);
+  assert.match(app, /event\.pointerType === "touch" \|\| event\.button !== 0/);
   assert.match(app, /classifyGlobeDragIntent/);
-  assert.match(app, /intent === "scroll"/);
   assert.match(app, /intent !== "rotate"/);
-  assert.match(app, /event\.pointerType !== "touch"/);
   assert.match(app, /setPointerCapture\(event\.pointerId\)/);
-  assert.match(app, /event\.touches\.length > 1/);
-  assert.match(app, /touchend[\s\S]{0,300}state\.dragging = false;[\s\S]{0,160}state\.pinching = false;/);
-  assert.match(app, /touchcancel[\s\S]{0,200}state\.dragging = false;[\s\S]{0,160}state\.pinching = false;/);
+  assert.match(app, /mapTouches\(event\.touches\)/);
+  assert.match(app, /lostpointercapture/);
+  assert.match(app, /touchcancel", resetGlobeInput/);
+  assert.match(app, /visibilitychange.*resetGlobeInput/);
   assert.match(css, /RWN globe touch-surface contract/);
   assert.match(css, /\.rwn-professional \.globe-stage \{ touch-action: pan-y; overscroll-behavior-y: auto; \}/);
   assert.match(css, /\.rwn-professional \.globe-pin \{ touch-action: pan-y; \}/);

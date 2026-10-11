@@ -1,19 +1,19 @@
 /* Real World Needs — shared public shell for directory, service, source and policy pages. */
 
 :root {
-  --page-blue: #07538d;
-  --page-blue-dark: #073a63;
-  --page-blue-deep: #061b2a;
-  --page-green: #218a3d;
-  --page-green-dark: #17692d;
+  --page-blue: #24583e;
+  --page-blue-dark: #153c30;
+  --page-blue-deep: #12392e;
+  --page-green: #356c4e;
+  --page-green-dark: #24583e;
   --page-green-soft: #edf7ef;
   --page-ink: #14262e;
-  --page-ink-strong: #081a22;
+  --page-ink-strong: #153c30;
   --page-muted: #5f7077;
-  --page-muted-light: #76858a;
+  --page-muted-light: #586b60;
   --page-line: #d8e0dd;
   --page-line-strong: #c5d0cc;
-  --page-paper: #f6f8f7;
+  --page-paper: #f5f4ee;
   --page-white: #ffffff;
   --page-max: 1120px;
   --page-wide: 1480px;
@@ -21,6 +21,7 @@
 
 html { background: var(--page-white); scroll-padding-top: 5rem; }
 body {
+  min-width: 0;
   margin: 0;
   background: var(--page-white);
   color: var(--page-ink);
@@ -32,7 +33,7 @@ body {
 }
 
 :where(a,button,input,select,summary,[tabindex]):focus-visible {
-  outline: 3px solid rgba(7,83,141,.27);
+  outline: 3px solid #356c4e;
   outline-offset: 3px;
 }
 
@@ -117,7 +118,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 #service > .legal-hero .legal-hero__lede { max-width:48rem; margin:.8rem 0 0; color:var(--page-muted); font-size:clamp(.94rem,1.2vw,1.04rem); line-height:1.62; }
 .legal-meta,
 #directory > .legal-hero .legal-meta,
-#service > .legal-hero .legal-meta { display:flex; flex-wrap:wrap; gap:.35rem 1rem; margin-top:.95rem; color:#77868b; font-size:.66rem; }
+#service > .legal-hero .legal-meta { display:flex; flex-wrap:wrap; gap:.35rem 1rem; margin-top:.95rem; color:#586b60; font-size:.8125rem; }
 .legal-meta span::before { width:.28rem; height:.28rem; background:#6ca681; }
 
 /* Policy / transparency reading layout */
@@ -131,7 +132,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 }
 .legal-toc { position:sticky; top:6rem; align-self:start; padding:.15rem 0; }
 .legal-toc strong { display:block; margin-bottom:.6rem; color:var(--page-ink-strong); font-size:.65rem; font-weight:720; text-transform:none; }
-.legal-toc a { display:block; padding:.38rem 0; color:#697a80; font-size:.77rem; line-height:1.35; text-decoration:none; }
+.legal-toc a { display:block; padding:.38rem 0; color:#586b60; font-size:.77rem; line-height:1.35; text-decoration:none; }
 .legal-toc a:hover,
 .legal-toc a:focus-visible { color:var(--page-blue); }
 .legal-content { min-width:0; max-width:50rem; }
@@ -181,7 +182,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .directory-shell { width:min(calc(100% - 2rem),var(--page-max)); margin:0 auto; padding:clamp(1.8rem,3.5vw,3.2rem) 0 clamp(4rem,6vw,6rem); }
 .directory-shell > .directory-downloads[aria-label="Breadcrumb"] { gap:.4rem .7rem; margin-bottom:1rem; padding:0 0 .8rem; border-bottom:1px solid var(--page-line); }
 .directory-shell > .directory-downloads[aria-label="Breadcrumb"] a,
-.directory-shell > .directory-downloads[aria-label="Breadcrumb"] span { min-height:auto; padding:0; border:0; background:transparent; color:#6d7d82; font-size:.7rem; font-weight:620; }
+.directory-shell > .directory-downloads[aria-label="Breadcrumb"] span { min-height:auto; padding:0; border:0; background:transparent; color:#586b60; font-size:.8125rem; font-weight:620; }
 .directory-shell > .directory-downloads[aria-label="Breadcrumb"] a:hover { background:transparent; color:var(--page-blue); }
 
 .directory-search-tools { margin:0 0 1.35rem; padding:.9rem; border:1px solid var(--page-line); border-radius:9px; background:var(--page-paper); box-shadow:none; }
@@ -219,7 +220,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .directory-aid li + li::before { margin-right:.5rem; color:#aab6b1; content:"·"; }
 .directory-record dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:.9rem; border-top:1px solid var(--page-line); }
 .directory-record dl div { padding:.72rem .8rem .72rem 0; border-bottom:1px solid var(--page-line); }
-.directory-record dt { color:#748389; font-size:.63rem; font-weight:700; letter-spacing:0; text-transform:none; }
+.directory-record dt { color:#586b60; font-size:.8125rem; font-weight:700; letter-spacing:0; text-transform:none; }
 .directory-record dd { margin:.2rem 0 0; color:var(--page-ink); font-size:.78rem; }
 .directory-record .directory-caution { padding:.72rem .8rem; border-left:2px solid #b97817; border-radius:0 6px 6px 0; background:#fff9ee; color:#604d2d; }
 .directory-links { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.8rem; }
@@ -236,7 +237,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .service-next-steps a:focus-visible { border-color:#8eae9d; }
 .service-next-steps a.is-primary { border-color:var(--page-blue); background:var(--page-blue); color:#fff; }
 .service-next-steps a strong { font-size:.72rem; font-weight:720; }
-.service-next-steps a span { margin-top:.1rem; color:#6f7f84; font-size:.62rem; }
+.service-next-steps a span { margin-top:.1rem; color:#586b60; font-size:.62rem; }
 .service-next-steps a.is-primary span { color:#dce9ef; }
 .service-accessibility { margin:1.1rem 0; padding:.85rem .95rem; border:1px solid #d8e1dd; border-radius:7px; background:var(--page-paper); }
 .service-accessibility strong { color:var(--page-ink-strong); font-size:.71rem; }
@@ -334,7 +335,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
   .directory-record { break-inside:avoid; }
 }
 
-.directory-results-jump{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin:.85rem 0;padding:.72rem .82rem;border:1px solid #b8cbc2;border-left:3px solid #218a3d;border-radius:5px;background:#f8fbf9;color:#24434f;text-decoration:none}.directory-results-jump strong,.directory-results-jump small{display:block}.directory-results-jump strong{font-size:.76rem}.directory-results-jump small{margin-top:.12rem;color:#61757c;font-size:.65rem}.directory-results-jump>span:last-child{color:#17692d;font-size:1rem}.directory-results-jump:hover,.directory-results-jump:focus-visible{border-color:#218a3d;background:#f0f8f3}.directory-results-anchor{display:block;scroll-margin-top:1rem}
+.directory-results-jump{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin:.85rem 0;padding:.72rem .82rem;border:1px solid #b8cbc2;border-left:3px solid #356c4e;border-radius:5px;background:#f8fbf9;color:#24434f;text-decoration:none}.directory-results-jump strong,.directory-results-jump small{display:block}.directory-results-jump strong{font-size:.76rem}.directory-results-jump small{margin-top:.12rem;color:#61757c;font-size:.65rem}.directory-results-jump>span:last-child{color:#24583e;font-size:1rem}.directory-results-jump:hover,.directory-results-jump:focus-visible{border-color:#356c4e;background:#f0f8f3}.directory-results-anchor{display:block;scroll-margin-top:1rem}
 
 /* Readable actions; keep long names clear of action groups at tablet widths. */
 #directory .directory-global-result-actions a { min-height:44px; font-size:.8125rem; }
@@ -342,3 +343,20 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
   #directory .directory-global-result-wrap { grid-template-columns:minmax(0,1fr); }
   #directory .directory-global-result-actions { justify-content:flex-start; }
 }
+
+/* The finder, directory and service handoff share one editorial hierarchy. */
+.legal-hero h1,
+#directory > .legal-hero h1,
+#service > .legal-hero h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -.035em;
+  line-height: 1.1;
+}
+#service > .legal-hero { background: #f5f4ee; }
+#service .legal-hero__inner { max-width: 1000px; }
+#service :is(.service-next-steps a strong, .service-utility-actions button) { font-size: .875rem; }
+#service .service-next-steps a span { font-size: .8125rem; white-space: normal; overflow: visible; }
+#service :is(.service-utility-actions__intro > small, .service-utility-actions__status) { font-size: .8125rem; }
+#service .service-utility-actions button { color: #24583e; }
+#service .directory-record { margin-top: 1.5rem; }

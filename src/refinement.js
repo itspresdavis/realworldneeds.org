@@ -86,6 +86,17 @@ function compactLocationNotes() {
   body.append(liveSourceStatus, privacy);
 }
 
+function groupFinderDisclosures() {
+  const location = document.querySelector(".finder-location-notes");
+  const filters = document.querySelector(".filter-disclosure");
+  if (!location || !filters || document.querySelector(".finder-disclosures")) return;
+  // Move existing nodes, preserving their event listeners and disclosure state.
+  const group = document.createElement("div");
+  group.className = "finder-disclosures";
+  location.before(group);
+  group.append(location, filters);
+}
+
 function improveFilterSummary() {
   const disclosure = document.querySelector(".filter-disclosure");
   const summary = disclosure?.querySelector("summary");
@@ -108,6 +119,7 @@ export function installRefinements() {
   improveSearch();
   installQuickNeeds();
   compactLocationNotes();
+  groupFinderDisclosures();
   improveFilterSummary();
   refineGlobeInstructions();
   document.documentElement.classList.add("rwn-refined");

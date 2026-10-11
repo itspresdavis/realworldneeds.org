@@ -1,0 +1,71 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+test("finder owns one map coordinate space and fixed-size controls", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.match(css, /\.rwn-professional \.globe-canvas,\s*\.rwn-professional \.globe-pin-layer\s*\{[^}]*inset: 4rem 0 4\.5rem;[^}]*height: calc\(100% - 8\.5rem\);/);
+  assert.match(css, /\.rwn-professional \.globe-controls\s*\{[^}]*top: auto;[^}]*transform: none;[^}]*grid-auto-rows: 44px;/);
+  assert.match(css, /\.rwn-professional \.globe-readout\s*\{[^}]*display: block !important;[^}]*clip-path: inset\(50%\);/);
+  assert.doesNotMatch(css, /A GLOBAL DIRECTORY OF PRACTICAL HELP/);
+});
+
+test("explanation sections reset inherited two-column layouts at every width", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.match(css, /\.rwn-professional \.about-rwn,\s*\.rwn-professional \.source-band\s*\{[^}]*display: block;[^}]*min-width: 0;/);
+  assert.match(css, /\.rwn-professional \.principle-grid \{ min-width: 0; max-width: none;/);
+  const browser = await readFile("scripts/browser-institutional.mjs", "utf8");
+  const contract = await readFile("scripts/qa-finder-presentation.mjs", "utf8");
+  assert.match(browser, /await verifyFinderPresentation\(/);
+  assert.match(contract, /\[320, 390, 500, 600, 760, 900, 901, 1024, 1180, 1440\]/);
+  assert.match(contract, /Real WebGL is required/);
+});
+
+test("finder, directory, and service pages keep a shared forest-green hierarchy", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  const pages = await readFile("public/professional-pages.css", "utf8");
+  const nav = await readFile("public/navigation-actions.css", "utf8");
+  assert.match(css, /--rwn-green-dark: #24583e/);
+  assert.match(pages, /--page-green-dark: #24583e/);
+  assert.match(nav, /--rwn-action-green-dark:#24583e/);
+  assert.match(css, /font-family: Georgia, "Times New Roman", serif/);
+  assert.match(pages, /#service > \.legal-hero h1 \{\s*font-family: Georgia/);
+});
+
+
+test("preboot style does not override the initialized finder design", async () => {
+  const html = await readFile("index.html", "utf8");
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.doesNotMatch(html, /\.finder-intro(?: h1| p)?\s*\{/);
+  assert.doesNotMatch(html, /\.quick-need\s*\{|\.location-status\s*\{|\.finder-safety\s*\{/);
+  assert.match(html, /\.preboot-finder h1\s*\{/);
+  assert.match(html, /\.globe-stage \{ contain: paint; \}/);
+  assert.match(html, /prefers-reduced-transparency/);
+  assert.match(css, /\.rwn-professional \.finder-intro \{[^}]*padding-left: 0; border-left: 0;/);
+});
+
+test("small directory and service metadata has readable text contrast", async () => {
+  const pages = await readFile("public/professional-pages.css", "utf8");
+  const finder = await readFile("src/clarity.css", "utf8");
+  const luminance = (hex) => {
+    const channels = hex.match(/[a-f\d]{2}/gi).map((value) => parseInt(value, 16) / 255);
+    const linear = channels.map((value) => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+    return linear.reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+  };
+  const ratio = (foreground, background) => {
+    const levels = [luminance(foreground), luminance(background)].sort((a, b) => a - b);
+    return (levels[1] + .05) / (levels[0] + .05);
+  };
+  for (const selector of [".directory-record dt", ".service-next-steps a span", ".legal-toc a"]) {
+    const rule = pages.slice(pages.indexOf(`${selector} {`)).split("}")[0];
+    const color = rule.match(/color:\s*(#[a-f\d]{6})/i)?.[1];
+    assert.ok(color, `${selector} exposes its foreground`);
+    for (const background of ["#ffffff", "#f5f4ee"]) {
+      assert.ok(ratio(color, background) >= 4.5, `${selector} against ${background} has normal-text contrast`);
+    }
+  }
+  assert.match(pages, /\.directory-record dt \{[^}]*font-size:\.8125rem/);
+  assert.match(pages, /#service \.service-next-steps a span \{ font-size: \.8125rem/);
+  assert.match(finder, /\.resource-list-head \{ color: #586b60; font-size: \.8125rem/);
+  assert.doesNotMatch(pages, /color:#(?:748389|6f7f84|77868b|697a80|6d7d82)/);
+});

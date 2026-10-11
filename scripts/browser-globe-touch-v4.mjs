@@ -92,6 +92,14 @@ async function navigate(client, url) {
   await sleep(650);
 }
 
+async function waitForExpression(client, expression, message) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try { if (await evaluate(client, expression)) return; } catch {}
+    await sleep(100);
+  }
+  throw new Error(message);
+}
+
 const touchPoint = (x, y, id = 0) => ({ x, y, id, radiusX: 8, radiusY: 8, force: 1 });
 const touch = (client, type, points) => client.call("Input.dispatchTouchEvent", { type, touchPoints: points });
 
@@ -155,6 +163,13 @@ async function run() {
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
     await client.call("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    await client.call("Page.addScriptToEvaluateOnNewDocument", { source: `
+      window.__rwnLongTasks = [];
+      window.__rwnInputTimings = [];
+      window.__rwnFrameSamples = {};
+      try { new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (entry.interactionId) window.__rwnInputTimings.push({type:entry.name,duration:entry.duration,inputDelay:entry.processingStart-entry.startTime}); }).observe({type:'event',durationThreshold:16,buffered:true}); } catch {}
+      try { new PerformanceObserver((list) => { for (const entry of list.getEntries()) window.__rwnLongTasks.push({ start: entry.startTime, duration: entry.duration }); }).observe({ type: 'longtask', buffered: true }); } catch {}
+    ` });
     await navigate(client, HOST);
 
     const ready = await evaluate(client, `new Promise((resolve) => {
@@ -167,6 +182,7 @@ async function run() {
       check();
     })`);
     if (!ready) throw new Error("Mobile globe did not initialize.");
+    const readyMs = await evaluate(client, "performance.now()");
 
     const vertical = await canvasGeometry(client);
     if (!vertical.point) throw new Error("No unobstructed WebGL touch point was available.");
@@ -184,6 +200,13 @@ async function run() {
 
     const horizontal = await canvasGeometry(client);
     const beforeDigest = await cropDigest(client, horizontal.rect);
+    await evaluate(client, `(() => {
+      window.__rwnSamplingFrames=true;
+      const deltas=[]; window.__rwnFrameSamples.horizontalDrag=deltas;
+      let last;
+      const frame=(now)=>{ if(last!==undefined)deltas.push(now-last); last=now; if(window.__rwnSamplingFrames && deltas.length<300)requestAnimationFrame(frame); };
+      requestAnimationFrame(frame);
+    })()`);
     await touch(client, "touchStart", [touchPoint(horizontal.point.x, horizontal.point.y)]);
     for (let i = 1; i <= 6; i += 1) {
       await touch(client, "touchMove", [touchPoint(horizontal.point.x + i * 22, horizontal.point.y + 2)]);
@@ -202,6 +225,7 @@ async function run() {
     })()`);
     await touch(client, "touchEnd", []);
     await sleep(320);
+    await evaluate(client, "window.__rwnSamplingFrames=false");
     const afterDigest = await cropDigest(client, horizontal.rect);
     const horizontalEnd = await evaluate(client, `({ scrollY, moving:document.querySelector('.globe-stage')?.classList.contains('is-globe-moving') || false, pinOpacity:Number(getComputedStyle(document.getElementById('pinLayer')).opacity || 0) })`);
     if (Math.abs(horizontalEnd.scrollY - horizontal.scrollY) > 18) throw new Error(`Horizontal globe drag moved the page by ${Math.abs(horizontalEnd.scrollY - horizontal.scrollY)}px.`);
@@ -224,6 +248,37 @@ async function run() {
     await sleep(700);
     const zoomAfter = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
     if (!(zoomAfter > zoomBefore + .08)) throw new Error(`Two-finger spread did not zoom (${zoomBefore} -> ${zoomAfter}).`);
+
+    // Lift one finger, then continue rotating with the other. This used to
+    // retain a stale pinch baseline and leave interaction state stuck.
+    const transition = await canvasGeometry(client);
+    await touch(client, "touchStart", [touchPoint(transition.point.x - 20, transition.point.y, 0), touchPoint(transition.point.x + 20, transition.point.y, 1)]);
+    await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0), touchPoint(transition.point.x + 35, transition.point.y, 1)]);
+    await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0)]);
+    for (let i = 1; i <= 4; i += 1) {
+      await touch(client, "touchMove", [touchPoint(transition.point.x - 35 + i * 18, transition.point.y, 0)]);
+      await sleep(30);
+    }
+    await touch(client, "touchEnd", []);
+    await sleep(900);
+    if (await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Pinch-to-drag transition left the globe moving.");
+
+    // Use the reset globe centre (land in western Africa) for an actual touch
+    // hit-test of the rendered sphere, rather than clicking a DOM marker.
+    await evaluate(client, "document.getElementById('resetGlobe').click()");
+    await sleep(1500);
+    const center = await evaluate(client, `(() => {
+      const c=document.getElementById('globeCanvas'); c.scrollIntoView({block:'center',behavior:'auto'});
+      const r=c.getBoundingClientRect();
+      const candidates=[[.5,.5],[.55,.45],[.6,.45],[.5,.4]].map(([xf,yf])=>({x:r.left+r.width*xf,y:r.top+r.height*yf}));
+      return candidates.find(({x,y})=>document.elementFromPoint(x,y)===c) || null;
+    })()`);
+    if (!center) throw new Error("Globe centre is covered by interface chrome; touch selection cannot be tested.");
+    await touch(client, "touchStart", [touchPoint(center.x, center.y)]);
+    await touch(client, "touchEnd", []);
+    await sleep(1600);
+    const picked = await evaluate(client, "document.querySelector('#globeReadout strong')?.textContent || ''");
+    if (!picked || picked === "World view") throw new Error(`Canvas touch did not select the country or service under it: ${picked}`);
 
     const deep = await evaluate(client, `new Promise((resolve) => {
       const button=document.getElementById('zoomIn');
@@ -253,6 +308,19 @@ async function run() {
     await sleep(450);
     const landscape = await evaluate(client, `(() => { const r=document.querySelector('.globe-stage')?.getBoundingClientRect(); return { overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), width:r?.width||0, height:r?.height||0, viewportWidth:innerWidth }; })()`);
     if (landscape.overflow > 8 || !landscape.width || !landscape.height || landscape.width > landscape.viewportWidth + 8) throw new Error(`Landscape globe layout failed: ${JSON.stringify(landscape)}`);
+    const performanceReport = await evaluate(client, `(() => ({
+      readyMs: ${readyMs},
+      longTasks: window.__rwnLongTasks || [],
+      inputTimings: window.__rwnInputTimings || [],
+      frameIntervals: window.__rwnFrameSamples || {},
+      navigation: performance.getEntriesByType('navigation').map(e=>({responseEnd:e.responseEnd,domContentLoaded:e.domContentLoadedEventEnd,load:e.loadEventEnd})),
+      globeAssets: performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration})),
+      device: {width:390,height:844,emulatedTouch:true,engine:'Chromium'}
+    }))()`);
+    if (performanceReport.globeAssets.some(asset => asset.name.endsWith('/earth-blue-marble-detail.jpg'))) throw new Error("Mobile close view downloaded the 8K desktop texture.");
+    await mkdir("qa-screenshots", { recursive: true });
+    await writeFile("qa-screenshots/globe-touch-performance.json", JSON.stringify(performanceReport, null, 2));
+    console.log(`Globe mobile performance evidence: ${JSON.stringify(performanceReport)}`);
     if (exceptions.length) throw new Error(`Globe touch QA emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -260,7 +328,41 @@ async function run() {
     await mkdir("qa-screenshots", { recursive: true });
     const shot = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     await writeFile("qa-screenshots/globe-touch-mobile.png", Buffer.from(shot.data, "base64"));
-    console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
+    // Continue the same mobile session from exploring the map to finding,
+    // saving, leaving and returning to a service. No real user data is used.
+    await evaluate(client, `(() => {
+      const input=document.getElementById('resourceSearch');
+      input.value='London'; input.dispatchEvent(new Event('input',{bubbles:true}));
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+    })()`);
+    await waitForExpression(client, "document.querySelector('#resourceGrid .result-row-link') && document.getElementById('resourceSearch').value === 'London'", "Search after globe gestures did not settle.");
+    const serviceUrl = await evaluate(client, "document.querySelector('#resourceGrid .result-row-link').href");
+    const serviceId = decodeURIComponent(new URL(serviceUrl).pathname.split('/').pop());
+    await navigate(client, serviceUrl);
+    await waitForExpression(client, "!!document.querySelector('[data-service-save]')", "Service saving control did not load.");
+    await evaluate(client, "document.querySelector('[data-service-save]').click()");
+    if (!await evaluate(client, "document.querySelector('[data-service-save]').getAttribute('aria-pressed') === 'true'")) throw new Error("Service could not be saved after map exploration.");
+    await evaluate(client, "history.back()");
+    await waitForExpression(client, "document.getElementById('resourceSearch')?.value === 'London'", "Back did not restore the search after leaving the map.");
+    await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
+    await sleep(350);
+    const returnedMap = await evaluate(client, `(() => {
+      const canvas=document.getElementById('globeCanvas');
+      const gl=canvas.getContext('webgl2') || canvas.getContext('webgl');
+      const zoom=Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]);
+      return {live:!!gl && !gl.isContextLost() && !document.querySelector('.globe-stage').classList.contains('is-globe-unavailable'),zoom};
+    })()`);
+    if (!returnedMap.live || !returnedMap.zoom) throw new Error(`Returning from a service left the globe unavailable: ${JSON.stringify(returnedMap)}`);
+    await evaluate(client, `document.getElementById('${returnedMap.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
+    await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${returnedMap.zoom}) > .02`, "The restored globe did not respond to zoom after Back.");
+    await navigate(client, `${HOST}/directory#saved`);
+    await waitForExpression(client, `!!document.querySelector('[data-saved-remove="${serviceId}"]')`, "Saved service did not appear in the directory.");
+    await navigate(client, "about:blank");
+    await navigate(client, `${HOST}/directory#saved`);
+    await waitForExpression(client, `!!document.querySelector('[data-saved-remove="${serviceId}"]')`, "Saved service was lost after leaving and returning.");
+    if (exceptions.length) throw new Error(`Mobile service journey emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
+    console.log("Connected mobile journey passed: globe touch interaction → search → service → save → Back restores query → leave and return to Saved.");
+    console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, canvas touch picking, pinch-to-drag recovery, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
   } finally {
     client?.close();
     await stop(browser);

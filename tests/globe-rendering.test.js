@@ -31,6 +31,7 @@ test('moving frames keep elapsed rendering time while waking from rest resets it
   const callbacks = [];
   const context = {
     globeFrameHandle: null, globeContextLost: false, lastFrame: 0,
+    globeRenderer: null, pendingDetailGeometry: null, pendingDetailImage: null,
     state: { globeVisible: true, dragging: false, pinching: false, velocityLon: 0, velocityLat: 0, zoom: 1, targetZoom: 1, targetLon: null },
     document: { hidden: false }, window: { innerWidth: 1440, requestAnimationFrame: callback => { callbacks.push(callback); return callbacks.length; } },
     performance: { now: () => context.clock }, clock: 1000,
