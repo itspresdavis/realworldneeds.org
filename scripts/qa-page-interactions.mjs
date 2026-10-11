@@ -2,6 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resources } from "../src/data/resources.js";
 import { waitForScrollStability } from "./qa-scroll-stability.mjs";
 
+export function hasIntermediateScrollSample(start, end, samples) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || Math.abs(end-start)<=2) return false;
+  const low = Math.min(start,end) + 1, high = Math.max(start,end) - 1;
+  return samples.some(value => Number.isFinite(value) && value > low && value < high);
+}
+
 // Native browser input and rendered geometry, rather than source-string claims.
 // Runs in existing CI Chrome; this is not a physical mobile-device benchmark.
 export async function verifyPageInteractions({ client, host, navigate, evaluate, capture }) {
@@ -121,7 +127,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       assert(arrived.hash === '#results' && arrived.active === 'results', 'Results anchor did not move native focus/hash', arrived);
       assert(arrived.target >= arrived.header + 10 && arrived.target <= arrived.header + 15, 'Anchor clearance is missing or doubled', arrived);
       assert(arrived.smooth === 'auto' && !arrived.overflow, 'Travel policy leaked into ordinary page behavior', arrived);
-      assert(new Set(samples.map(Math.round)).size > 2, 'Intentional anchor travel jumped instead of scrolling smoothly', samples);
+      assert(hasIntermediateScrollSample(initial.y,arrived.y,samples), 'Intentional anchor travel has no observed intermediate position', {start:initial.y,end:arrived.y,samples});
       await capture(client, `page-interactions-results-${width}.png`);
       await evaluate(client, 'history.back()');
       const back = await arrive(state=>state.hash===''&&Math.abs(state.y-initial.y)<=2, `Back at ${width}px`);
@@ -235,6 +241,28 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         assert(focus.active==='zoomOut'&&focus.width>=3&&focus.offset<=-3, 'Clipped globe group has no inset keyboard focus ring', focus);
         await capture(client,'page-interactions-globe-focus-320.png');
       }
+    }
+
+    for (const width of [320,1180]) {
+      await client.call('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:false});
+      await loadHome();
+      await evaluate(client, `document.querySelector('#resourceSearch').focus()`);
+      await client.call('Input.insertText',{text:'London'});
+      const searchState=()=>evaluate(client, `({value:document.querySelector('#resourceSearch').value,matches:Number(document.querySelector('#matchingResultCount').textContent.match(/[0-9,]+/)?.[0].replaceAll(',','')),focus:document.activeElement.id,hidden:document.querySelector('#clearSearch').hidden})`);
+      await arrive(state=>state.value==='London'&&state.matches>0&&state.matches<resources.length,'Populated search before Clear at '+width+'px',searchState,false);
+      const clear=await evaluate(client, `({value:document.querySelector('#resourceSearch').value,buttons:[...document.querySelectorAll('.search-box button')].filter(item=>item.getClientRects().length).map(item=>({id:item.id,label:item.getAttribute('aria-label'),w:item.getBoundingClientRect().width,h:item.getBoundingClientRect().height}))})`);
+      assert(clear.value==='London'&&clear.buttons.length===1&&clear.buttons[0].id==='clearSearch'&&clear.buttons[0].label==='Clear search'&&clear.buttons[0].w>=44&&clear.buttons[0].h>=44,'Populated search lacks one accessible44px Clear control',clear);
+      // Source guard covers the UA cancel pseudo-element; native preview and
+      // this focused populated-input screenshot verify actual duplicate paint.
+      await capture(client,`page-interactions-search-clear-${width}.png`);
+      await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      assert(await evaluate(client, `document.activeElement.id==='clearSearch'&&document.activeElement.matches(':focus-visible')`),'Keyboard missed the custom Clear control');
+      await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+      await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      const cleared=await arrive(state=>state.value===''&&state.matches===resources.length,'Restored search after Clear at '+width+'px',searchState,false);
+      assert(cleared.value===''&&cleared.focus==='resourceSearch'&&cleared.hidden,'Custom Clear failed or lost input focus',cleared);
+      evidence.push({label:'One search Clear at '+width+'px',clear,cleared});
     }
 
     for (const width of [320,1440]) {

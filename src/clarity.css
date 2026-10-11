@@ -242,6 +242,7 @@ body.rwn-professional main { display: block; }
   font-size: 1rem;
   font-weight: 520;
 }
+.rwn-professional #resourceSearch::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
 .rwn-professional .search-box input::placeholder { color: #65786c; }
 .rwn-professional .search-box:focus-within {
   border-color: #729a87;
@@ -734,7 +735,7 @@ body.rwn-professional main { display: block; }
   .rwn-professional .finder__grid,
   .rwn-professional .finder__grid.is-panel-collapsed,
   .rwn-professional .finder__grid:not(.is-panel-collapsed) { grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); gap: 1.5rem; }
-  .rwn-professional .globe-stage { height: 35rem; min-height: 0; }
+  .rwn-professional .globe-stage { height: 35rem; }
 }
 
 @media (max-width: 900px) {
@@ -769,7 +770,7 @@ body.rwn-professional main { display: block; }
   .rwn-professional .finder-intro,
   .rwn-professional .finder-intro p { max-width: 38rem; }
   .rwn-professional .finder-intro h1 { max-width: 13ch; font-size: clamp(2.45rem,7vw,3.6rem); }
-  .rwn-professional .globe-stage { height: 34rem; min-height: 0; }
+  .rwn-professional .globe-stage { height: 34rem; }
   .rwn-professional .globe-canvas { touch-action: pan-y; overscroll-behavior-y: auto; }
   .rwn-professional .resource-panel { grid-column: 1; }
 
@@ -798,8 +799,8 @@ body.rwn-professional main { display: block; }
   .rwn-professional .finder-intro p { margin-top:.8rem; font-size:.9375rem; line-height:1.6; }
   .rwn-professional .finder-search { margin-top:1.2rem; }
 
-  .rwn-professional .globe-stage { height: 27rem; min-height: 0; max-height: none; border-radius:14px; }
-  .rwn-professional .globe-meta { top:.65rem; right:.7rem; left:.7rem; }
+  .rwn-professional .globe-stage { height: 27rem; border-radius:14px; }
+  .rwn-professional .globe-meta { top:.65rem; right:.75rem; left:.75rem; }
   .rwn-professional .globe-meta > div:first-child { display:flex; }
   .rwn-professional .globe-meta__tools { margin-left:auto; }
   .rwn-professional .globe-controls { right:.65rem; bottom:5rem; }
@@ -906,7 +907,6 @@ body.rwn-professional main { display: block; }
 .rwn-professional :is(.mission-steps, .principle-grid) article { border-left: 0; }
 .rwn-professional :is(.mission-steps, .principle-grid) :is(article, article > div) { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-  .rwn-professional .globe-meta { left: .75rem; right: .75rem; }
   .rwn-professional .globe-meta strong { font-size: .8125rem; }
   .rwn-professional .region-menu select { max-width: 8rem; font-size: .75rem; }
   .rwn-professional .atlas-key { left: .75rem; right: .75rem; font-size: .6875rem; }

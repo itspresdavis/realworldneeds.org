@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { hasIntermediateScrollSample } from "../scripts/qa-page-interactions.mjs";
 
 const source = (await readFile(new URL("../src/page-interactions.js", import.meta.url), "utf8")).replace("export function", "function");
 function fixture({ reduced = false, visible = false, observerAvailable = true } = {}) {
@@ -41,6 +42,15 @@ test("one measured header clearance follows layout changes without moving the re
 });
 
 test("only intentional same-page navigation briefly opts into native smooth travel", () => {
+  assert.ok(hasIntermediateScrollSample(0,726,[699,726]));
+  assert.ok(hasIntermediateScrollSample(726,0,[699,0]));
+  for (const samples of [[726],[0,726],[-5,730],[.5,725.5],[NaN,Infinity]]) {
+    assert.equal(hasIntermediateScrollSample(0,726,samples),false,JSON.stringify(samples));
+  }
+  assert.equal(hasIntermediateScrollSample(726,726,[726]),false);
+  assert.equal(hasIntermediateScrollSample(0,Infinity,[699]),false);
+  assert.equal(hasIntermediateScrollSample(NaN,726,[699]),false);
+
   const f = fixture(); f.click();
   assert.equal(f.page.classList.contains("rwn-anchor-travel"), true);
   for (const callback of [...f.timers.values()]) callback();
@@ -109,6 +119,7 @@ test("no-JS content and control states have no hidden entrance prerequisite", as
   const skipStack = Number(css.match(/\.rwn-professional \.skip-link \{ z-index: (\d+);/)?.[1]);
   const headerStack = Number(css.match(/\.rwn-professional \.site-header \{[^}]*z-index: (\d+);/)?.[1]);
   assert.ok(skipStack > headerStack, "the focused skip link paints above the sticky header");
+  assert.match(css, /#resourceSearch::-webkit-search-cancel-button \{ -webkit-appearance: none; display: none; \}/, "native search cancel does not duplicate the accessible Clear button");
   assert.match(css, /\.filter-heading button \{[^}]*color: var\(--rwn-green-dark\);[^}]*font-size: \.8125rem;/);
   assert.match(css, /\.resource-panel :is\(p, dd, li, \.cost-scope\) \{ color: var\(--rwn-ink\);/);
   assert.match(css, /\.panel-precision strong/);
