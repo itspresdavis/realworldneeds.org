@@ -1,29 +1,44 @@
+import { isDirectoryStartupNavigationError } from "./qa-directory-startup.mjs";
+
 // Real browser regression for need + country, refresh and uncached history return.
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+export function directoryDiscoverySnapshot() {
+  const document = globalThis.document;
+  const pick = selector => document?.querySelector(selector);
+  return {
+    documentPresent: Boolean(document?.documentElement && document.body),
+    ready: Boolean(document?.documentElement && document.body && pick('.directory-global-results') && pick('[data-directory-category][aria-pressed="true"]')),
+    query: pick('[data-directory-query]')?.value,
+    country: pick('[data-directory-country]')?.value,
+    category: pick('[data-directory-category][aria-pressed="true"]')?.textContent,
+    rows: [...(document?.querySelectorAll('.directory-global-result') || [])].map(row => ({ href: row.getAttribute('href'), text: row.textContent })),
+    more: Boolean(pick('[data-directory-more]') && !pick('[data-directory-more]').hidden),
+    count: pick('[data-directory-count]')?.textContent,
+    focus: document?.activeElement?.getAttribute('href'), scroll: globalThis.scrollY ?? null,
+    focusedId: document?.activeElement?.id,
+    focusVisible: (() => { const rect = document?.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6; })(),
+    saved: pick('.directory-shell')?.classList.contains('has-saved-view'),
+    menuOpen: Boolean(pick('.rwn-page-menu[open]')),
+    path: globalThis.location?.pathname || '', href: globalThis.location?.href || '', history: globalThis.history?.state?.rwnDirectory,
+    heading: pick('h1')?.textContent, timeOrigin: globalThis.performance?.timeOrigin ?? null,
+    overflow: document?.documentElement ? document.documentElement.scrollWidth > globalThis.innerWidth + 1 : null,
+    empty: pick('.directory-global-empty')?.textContent
+  };
+}
+
 export async function verifyDirectoryDiscovery({ client, host, navigate, evaluate, capture }) {
-  const state = () => evaluate(client, `(() => ({
-    ready: Boolean(document.querySelector('.directory-global-results') && document.querySelector('[data-directory-category][aria-pressed="true"]')),
-    query: document.querySelector('[data-directory-query]')?.value,
-    country: document.querySelector('[data-directory-country]')?.value,
-    category: document.querySelector('[data-directory-category][aria-pressed="true"]')?.textContent,
-    rows: [...document.querySelectorAll('.directory-global-result')].map(row => ({ href: row.getAttribute('href'), text: row.textContent })),
-    more: !document.querySelector('[data-directory-more]')?.hidden,
-    count: document.querySelector('[data-directory-count]')?.textContent,
-    focus: document.activeElement?.getAttribute('href'), scroll: scrollY,
-    focusedId: document.activeElement?.id,
-    focusVisible: (() => { const rect = document.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.top >= (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6; })(),
-    saved: document.querySelector('.directory-shell')?.classList.contains('has-saved-view'),
-    menuOpen: Boolean(document.querySelector('.rwn-page-menu[open]')),
-    href: location.href, history: history.state?.rwnDirectory,
-    heading: document.querySelector('h1')?.textContent, timeOrigin: performance.timeOrigin,
-    overflow: document.documentElement?.scrollWidth > innerWidth + 1,
-    empty: document.querySelector('.directory-global-empty')?.textContent
-  }))()`);
+  const state = () => evaluate(client, `(${directoryDiscoverySnapshot.toString()})()`);
   const wait = async (condition, label) => {
     let latest;
     for (let i = 0; i < 120; i++) {
-      latest = await state(); if (condition(latest)) return latest; await sleep(50);
+      try { latest = await state(); }
+      catch (error) {
+        if (!error?.message?.startsWith("Runtime.evaluate: ") || !isDirectoryStartupNavigationError(error)) throw error;
+        await sleep(50); continue;
+      }
+      if (latest.documentPresent && Number.isFinite(latest.timeOrigin) && condition(latest)) return latest;
+      await sleep(50);
     }
     throw new Error(`${label}: ${JSON.stringify(latest)}`);
   };
@@ -53,6 +68,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     await client.call('Emulation.setDeviceMetricsOverride', { width, height: width < 600 ? 844 : 900, deviceScaleFactor: 1, mobile: width < 600 });
     await navigate(client, 'about:blank');
     await navigate(client, `${host}/directory`);
+    await wait(s => s.path === '/directory' && s.ready, 'Initial directory controls did not initialize on the destination page');
     await capture(client, `directory-discovery-start-${width}.png`);
     await evaluate(client, `(() => {
       const input = document.querySelector('[data-directory-query]'); window.__directoryInputs = [];
@@ -72,7 +88,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     const directoryId = directoryHistory.entries[directoryHistory.currentIndex].id;
     const target = before.rows[60].href;
     await click(`.directory-global-result[href="${target}"]`);
-    await wait(s => new URL(s.href).pathname === target && Boolean(s.heading), 'Native listing navigation failed');
+    await wait(s => s.path === target && Boolean(s.heading), 'Native listing navigation failed');
     const serviceHistory = await client.call('Page.getNavigationHistory');
     const serviceId = serviceHistory.entries[serviceHistory.currentIndex].id;
     await goEntry(directoryId);
@@ -84,7 +100,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     await wait(s => s.focus === target && s.scroll > 200, 'Reload did not restore listing focus and scroll');
     if (new URL(reloaded.href).search || new URL(reloaded.href).hash) throw new Error('Private filters leaked into the URL');
     await capture(client, `directory-discovery-return-${width}.png`);
-    await goEntry(serviceId); await wait(s => new URL(s.href).pathname === target && Boolean(s.heading), 'Forward did not return to the listing');
+    await goEntry(serviceId); await wait(s => s.path === target && Boolean(s.heading), 'Forward did not return to the listing');
     await goEntry(directoryId); await wait(s => s.rows.length === 120 && s.country === 'United States', 'Repeated Back lost filters');
 
     await client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: width / 2, y: 400, deltaY: 500, deltaX: 0 });
@@ -119,17 +135,19 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
   // Country-scoped pages have no redundant location dropdown. Their search
   // cannot silently widen to other countries; a sparse result offers alternatives.
   await navigate(client, `${host}/directory/france`);
+  await wait(s => s.path === '/directory/france' && s.ready, 'France directory controls did not initialize on the destination page');
   await type('zzzz-no-service-here');
   await wait(s => s.country === undefined && s.empty?.includes('browse global resource finders'), 'Scoped fallback is missing');
   await capture(client, 'directory-discovery-scoped-empty.png');
   await click('.directory-global-empty a[href="/directory"]');
-  await wait(s => new URL(s.href).pathname === '/directory' && s.ready && s.query === '' && s.rows.length === 0, 'Scoped full-directory recovery retained the failed search');
+  await wait(s => s.path === '/directory' && s.ready && s.query === '' && s.rows.length === 0, 'Scoped full-directory recovery retained the failed search');
   await navigate(client, `${host}/directory/global`);
+  await wait(s => s.path === '/directory/global' && s.ready, 'Global directory controls did not initialize on the destination page');
   await type('zzzz-no-service-here');
   await wait(s => Boolean(s.empty), 'Global scoped empty state is missing');
   if (await evaluate(client, `Boolean(document.querySelector('.directory-global-empty a[href="/directory/global"]'))`)) throw new Error('Global resource directory offers a self-restoring link');
   await click('.directory-global-empty a[href="/directory"]');
-  await wait(s => new URL(s.href).pathname === '/directory' && s.ready && s.query === '' && s.country === '', 'Global scoped recovery did not broaden to the directory');
+  await wait(s => s.path === '/directory' && s.ready && s.query === '' && s.country === '', 'Global scoped recovery did not broaden to the directory');
   await type('Drinking fountains for London');
   const finder = await wait(s => s.rows.length > 0, 'Finder example did not match');
   if (!finder.rows.some(row => row.text.includes('Help finder or referral · check coverage'))) throw new Error('A coverage finder appears to be a service location');
