@@ -174,7 +174,7 @@ async function run() {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const utility = document.querySelector("[data-service-utility]");
       const buttons = [...(utility?.querySelectorAll("button") || [])];
-      if (!utility || buttons.length !== 3) return { ok: false, reason: "handoff controls missing", buttonCount: buttons.length };
+      if (!utility || buttons.length !== 4) return { ok: false, reason: "handoff controls missing", buttonCount: buttons.length };
 
       let copied = "";
       let shared = null;

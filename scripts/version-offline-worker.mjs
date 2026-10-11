@@ -4,6 +4,10 @@ import { readFile, writeFile } from "node:fs/promises";
 const inputs = [
   "public/sw.js",
   "public/directory.js",
+  "public/saved-services.js",
+  "public/saved-loader.js",
+  "public/saved-services.css",
+  "src/utils/privacy.js",
   "public/directory-results.js",
   "public/offline-status.js",
   "public/directory-enhancements.css",

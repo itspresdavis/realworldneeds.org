@@ -34,7 +34,10 @@ import {
   clearResourceFromUrl,
   privateResourceUrl,
   resourceIdFromUrl,
-  SAVED_RESOURCES_KEY
+  SAVED_RESOURCES_KEY,
+  readSavedResources,
+  setResourceSaved,
+  clearSavedResources
 } from "./utils/privacy.js";
 
 const DEFAULT_RESOURCE = null;
@@ -118,8 +121,7 @@ function initialResultCount() {
 
 function loadSavedResources() {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(SAVED_RESOURCES_KEY) || "[]");
-    return new Set(saved.filter((id) => resources.some((resource) => resource.id === id)));
+    return new Set([...readSavedResources()].filter((id) => resources.some((resource) => resource.id === id)));
   } catch {
     return new Set();
   }
@@ -940,25 +942,22 @@ function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
   }
 }
 
-function persistSavedResources() {
-  try {
-    window.localStorage.setItem(SAVED_RESOURCES_KEY, JSON.stringify([...state.savedIds]));
-  } catch {
-    notify("Saved services are unavailable in this browser");
-  }
-}
-
 function toggleSavedResource(id) {
-  if (state.savedIds.has(id)) state.savedIds.delete(id);
-  else state.savedIds.add(id);
-  persistSavedResources();
+  try {
+    const saved = readSavedResources().has(id);
+    setResourceSaved(id, !saved);
+    state.savedIds = loadSavedResources();
+  } catch {
+    notify("Your saved list could not be changed. Check this browser’s storage settings and try again.");
+    return;
+  }
   if (state.savedOnly) updateFilters();
   else {
     renderControls();
     renderResourcePanel();
     renderResults();
   }
-  notify(state.savedIds.has(id) ? "Service saved in this browser" : "Service removed from saved");
+  notify(state.savedIds.has(id) ? "Service saved only in this browser" : "Service removed from saved");
 }
 
 async function copyText(value) {
@@ -2346,6 +2345,15 @@ function bindEvents() {
     renderResults();
   });
 
+  const refreshSavedResources = () => {
+    state.savedIds = loadSavedResources();
+    if (state.savedOnly) updateFilters();
+    else { renderControls(); renderResourcePanel(); }
+  };
+  window.addEventListener("pageshow", refreshSavedResources);
+  window.addEventListener("storage", (event) => {
+    if (event.key === SAVED_RESOURCES_KEY || event.key === null) refreshSavedResources();
+  });
   document.getElementById("toggleSaved").addEventListener("click", () => {
     state.savedOnly = !state.savedOnly;
     updateFilters();
@@ -2353,7 +2361,10 @@ function bindEvents() {
   });
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
   document.getElementById("clearBrowserData").addEventListener("click", () => {
-    window.localStorage.removeItem(SAVED_RESOURCES_KEY);
+    try { clearSavedResources(); } catch {
+      notify("Saved services could not be cleared. Check this browser’s storage settings and try again.");
+      return;
+    }
     state.savedIds.clear();
     state.savedOnly = false;
     clearUserLocation();

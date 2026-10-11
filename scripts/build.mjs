@@ -302,7 +302,7 @@ function resourcePage(resource) {
 <body>
   <a class="skip-link" href="#service">Skip to service details</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a></nav></header>
-  <main id="service">
+  <main id="service" data-service-id="${escapeHtml(resource.id)}">
     <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">${escapeHtml(kindLabel(resource))}</p><h1>${escapeHtml(resource.name)}</h1><p class="legal-hero__lede">${escapeHtml(resource.summary)}</p><div class="legal-meta"><span>${escapeHtml(place)}</span><span>${escapeHtml(freeAccessLabel(resource))}</span><span>Checked ${escapeHtml(resource.lastChecked)}</span></div></div></section>
     <div class="directory-shell">
       ${breadcrumbs([{ href: "/directory", label: "Directory" }, { label: resource.name }])}

@@ -7,6 +7,9 @@ const CORE_ASSETS = [
   "/directory-enhancements.css",
   "/professional-pages.css",
   "/directory.js",
+  "/saved-loader.js",
+  "/saved-services.js",
+  "/saved-services.css",
   "/offline-status.js",
   "/brand/rwn-logo-192.png",
   "/rwn-mark.svg",
@@ -137,6 +140,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   const cacheable = url.pathname === "/directory.js"
+    || url.pathname === "/saved-loader.js"
+    || url.pathname === "/saved-services.js"
+    || url.pathname === "/saved-services.css"
     || url.pathname === "/offline-status.js"
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/professional-pages.css"

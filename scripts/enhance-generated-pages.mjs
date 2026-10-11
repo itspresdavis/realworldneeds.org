@@ -132,7 +132,16 @@ function assetLinks(release, includeScript) {
 }
 
 function directorySearchMarkup() {
-  return `<section class="directory-search-tools" data-directory-search aria-label="Search this directory">
+  return `<section id="saved" class="saved-services" data-saved-services aria-labelledby="saved-services-heading">
+    <div class="saved-services__heading"><h2 id="saved-services-heading" tabindex="-1">Saved services</h2><a href="#directory-results">Browse directory</a></div>
+    <p class="saved-services__privacy">Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.</p>
+    <noscript><p>Turn on JavaScript to view or change saved services. You can still browse the directory below.</p></noscript>
+    <p data-saved-summary role="status" aria-live="polite"></p>
+    <div class="saved-services__tools"><button type="button" data-saved-clear aria-expanded="false" aria-controls="saved-clear-confirmation" hidden>Clear saved list</button><button type="button" data-saved-retry hidden>Try again</button></div>
+    <div id="saved-clear-confirmation" data-saved-confirmation hidden><p>Remove every saved service from this browser?</p><button type="button" data-saved-cancel>Keep list</button><button type="button" data-saved-confirm>Remove all saved services</button></div>
+    <div data-saved-list></div><button type="button" data-saved-more hidden>Show more saved services</button>
+    <p data-saved-status role="status" aria-live="polite"></p>
+  </section><section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
       <label class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></label>
       <button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button>
@@ -157,6 +166,7 @@ function enhanceCollectionPage(html, release) {
   }
   if (!html.includes("data-directory-search")) {
     const searchMarkup = directorySearchMarkup();
+    html = html.replace("</head>", `<link rel="stylesheet" href="/saved-services.css?v=${savedRelease}" /><script type="module" src="/saved-loader.js?v=${savedRelease}"></script>\n</head>`);
     const breadcrumb = /(<nav class="directory-downloads" aria-label="Breadcrumb">[\s\S]*?<\/nav>)/;
     html = breadcrumb.test(html)
       ? html.replace(breadcrumb, `$1\n        ${searchMarkup}`)
@@ -199,6 +209,18 @@ const resultRenderer = await readFile("dist/directory-results.js", "utf8");
 const rendererImport = 'import { createResultRow } from "./directory-results.js";';
 if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
 await writeFile("dist/directory.js", `${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${directoryEntry.replace(rendererImport, "")}`);
+// Load saved-list code only on an explicit #saved visit. Its compiled module
+// embeds the same storage helper and result renderer, keeping directory search
+// self-contained during upgrades from older offline workers.
+const privacySource = (await readFile("src/utils/privacy.js", "utf8")).replaceAll("export ", "");
+const savedSource = (await readFile("public/saved-services.js", "utf8")).replace(/^import[^\n]+\n/gm, "");
+await writeFile("dist/saved-services.js", `${privacySource}\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${savedSource}`);
+const savedHash = createHash("sha256");
+for (const path of ["dist/saved-loader.js", "dist/saved-services.js", "dist/saved-services.css", "dist/data/search-index.json"]) {
+  savedHash.update(path); savedHash.update(await readFile(path));
+}
+const savedRelease = savedHash.digest("hex").slice(0, 12);
+releaseInfo.savedServicesRelease = savedRelease;
 const directoryRelease = await directoryAssetRelease();
 releaseInfo.directoryRelease = directoryRelease;
 await writeFile("dist/data/release.json", `${JSON.stringify(releaseInfo, null, 2)}\n`);

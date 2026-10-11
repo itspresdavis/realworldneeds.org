@@ -35,7 +35,7 @@ test("data-only removal rotates finder, directory-index and offline URLs across 
     await writeFile(join(root, generatedPath), original);
     await build(root);
     const after = JSON.parse(await read(root, "dist/data/release.json"));
-    for (const key of ["release", "runtimeAssetRelease", "directoryRelease", "offlineRelease"]) {
+    for (const key of ["release", "runtimeAssetRelease", "directoryRelease", "savedServicesRelease", "offlineRelease"]) {
       assert.match(before[key], /^[a-f0-9]{12}$/);
       assert.notEqual(after[key], before[key], `${key} must rotate for data-only changes`);
     }
