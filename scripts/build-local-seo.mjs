@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
 import { freeAccessLabel } from "../src/data/free-access.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
+import { sourceCheckRange } from "./source-check-range.mjs";
 
 const SITE_ORIGIN = "https://www.realworldneeds.org";
 const MIN_CITY_LISTINGS = 3;
@@ -70,7 +71,7 @@ function placeSchema({ city, country, administrativeArea }) {
 
 function resourceCard(resource) {
   return `<article class="directory-record">
-    <header><div><p>${escapeHtml(resource.kind === "direct" ? "Service location" : "Resource finder")}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(formatResourcePlace(resource))}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+    <header><div><p>${escapeHtml(resource.kind === "direct" ? "Service location" : resource.kind === "locator" ? "Help finder or referral" : "Service network")}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(formatResourcePlace(resource))}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
     <p>${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Help categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
     <dl><div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div><div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div><div><dt>${resource.kind === "direct" ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}</dl>
@@ -227,7 +228,7 @@ function cityPage(info, items, canonicalPath, localCategories) {
   <a class="skip-link" href="#directory">Skip to local services</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
   <main id="directory">
-    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local directory</p><h1>Free essential services in ${escapeHtml(display)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Checked through ${escapeHtml(latestReview(items))}</span></div></div></section>
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local directory</p><h1>Free essential services in ${escapeHtml(display)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Source checks ${escapeHtml(sourceCheckRange(items.map(resource => resource.lastChecked)))}</span></div></div></section>
     <div class="directory-shell">
       <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(info.country)}</a><span aria-current="page">${escapeHtml(display)}</span></nav>
       <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
@@ -290,7 +291,7 @@ function cityCategoryPage(info, items, type, canonicalPath, parentPath, siblingC
   <a class="skip-link" href="#directory">Skip to ${escapeHtml(labelLower)} services</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
   <main id="directory">
-    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local ${escapeHtml(labelLower)} directory</p><h1>Find free ${escapeHtml(labelLower)} help in ${escapeHtml(display)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Checked through ${escapeHtml(latestReview(items))}</span></div></div></section>
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Local ${escapeHtml(labelLower)} directory</p><h1>Find free ${escapeHtml(labelLower)} help in ${escapeHtml(display)}.</h1><p class="legal-hero__lede">${escapeHtml(description)}</p><div class="legal-meta"><span>${items.length} reviewed listings</span><span>${directCount(items)} service locations</span><span>Original sources linked</span><span>Source checks ${escapeHtml(sourceCheckRange(items.map(resource => resource.lastChecked)))}</span></div></div></section>
     <div class="directory-shell">
       <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/directory">Directory</a><a href="/directory/${countrySlug}">${escapeHtml(info.country)}</a><a href="${escapeHtml(parentPath)}">${escapeHtml(display)}</a><span aria-current="page">${escapeHtml(category.label)}</span></nav>
       <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>

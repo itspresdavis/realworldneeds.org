@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
-import { freeAccessLabel } from "../src/data/free-access.js";
+import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
@@ -108,13 +108,13 @@ function resourceRecord(resource) {
     : "";
   const addressLabel = resource.kind === "direct" ? "Address" : "Coverage";
   return `<article class="directory-record" id="${escapeHtml(resource.id)}">
-    <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+    <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
     ${sourceClosureMarkup(resource)}
     <p class="directory-record__summary">${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
     <div class="directory-record__facts" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
     ${directoryRecordActions(resource, coordinate)}
-    <details class="directory-record__more"><summary>Hours, location &amp; verification</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl><p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></nav></div></details>
+    <details class="directory-record__more"><summary>Hours, location &amp; source</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl><p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></nav></div></details>
   </article>`;
 }
 
@@ -303,18 +303,18 @@ function resourcePage(resource) {
   <a class="skip-link" href="#service">Skip to service details</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a></nav></header>
   <main id="service" data-service-id="${escapeHtml(resource.id)}">
-    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">${escapeHtml(kindLabel(resource))}</p><h1>${escapeHtml(resource.name)}</h1><p class="legal-hero__lede">${escapeHtml(resource.summary)}</p><div class="legal-meta"><span>${escapeHtml(place)}</span><span>${escapeHtml(freeAccessLabel(resource))}</span><span>Checked ${escapeHtml(resource.lastChecked)}</span></div></div></section>
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">${escapeHtml(kindLabel(resource))}</p><h1>${escapeHtml(resource.name)}</h1><p class="legal-hero__lede">${escapeHtml(resource.summary)}</p><div class="legal-meta"><span>${escapeHtml(place)}</span><span>${escapeHtml(freeAccessLabel(resource))}</span><span>Source checked ${escapeHtml(resource.lastChecked)}</span></div></div></section>
     <div class="directory-shell">
       ${breadcrumbs([{ href: "/directory", label: "Directory" }, { label: resource.name }])}
       ${sourceClosureMarkup(resource)}
       <div class="policy-note"><p><strong>Confirm before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p></div>
       <article class="directory-record" aria-labelledby="service-details-heading">
-        <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+        <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl class="service-facts">
           <div><dt>${direct ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
           ${phone}
           <div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div>
-          <div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div>
+          <div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}${resource.costModel === "free-navigation" ? `<p class="service-cost-scope">${escapeHtml(freeAccessModels[resource.costModel].description)}</p>` : ""}</dd></div>
           ${resource.hours || direct ? `<div><dt>Hours</dt><dd>${resource.hours ? escapeHtml(resource.hours) : "Not listed in this snapshot. Confirm current hours with the provider before travel."}</dd></div>` : ""}
           ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${escapeHtml(resource.eligibility)}</dd></div>` : ""}
           <div><dt>Help offered</dt><dd>${escapeHtml(aidLabels(resource).join(", "))}</dd></div>
@@ -322,8 +322,10 @@ function resourcePage(resource) {
         <h3>Services offered</h3>
         <ul>${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
         <h3>Source and review</h3>
+        <p class="service-source-review">This date records a review of the linked source, not a confirmation of current service availability.</p>
         <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
         <p>${escapeHtml(resource.sourceDetail)}</p>
+        ${resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
         <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on interactive globe</a></div>
       </article>
       <div class="directory-downloads"><strong>Browse related help</strong>${categoryLinks}<a href="/directory/${slugify(resource.country)}">More in ${escapeHtml(resource.country)}</a></div>
