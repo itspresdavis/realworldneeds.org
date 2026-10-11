@@ -4,11 +4,16 @@ import { resources } from "../src/data/resources.js";
 // removal/hiding behavior, but only a browser proves real focus and key events.
 export async function verifyFocusContinuity({ client, host, navigate, evaluate }) {
   const check = async (expression, message) => {
-    if (!await evaluate(client, expression)) throw new Error(message);
+    if (!await evaluate(client, expression)) {
+      const state = await evaluate(client, `({focus:document.activeElement?.id,save:document.getElementById('saveResource')?.getAttribute('aria-pressed'),heading:document.querySelector('#resourcePanel h2')?.textContent,message:document.getElementById('statusToast')?.textContent})`);
+      throw new Error(`${message}: ${JSON.stringify(state)}`);
+    }
   };
   const enter = async (id) => {
     await evaluate(client, `document.getElementById(${JSON.stringify(id)}).focus()`);
-    await client.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    // Enter needs its carriage-return text to generate Chromium's activation
+    // keypress, matching Playwright's native Chromium keyboard implementation.
+    await client.call("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" });
     await client.call("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   };
   const openResource = async (id) => {
