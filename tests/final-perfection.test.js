@@ -15,9 +15,9 @@ test("preboot and initialized finder use one canonical task message and need ord
   assert.match(app, /<h1>Find essential services near you\.<\/h1>/);
   assert.match(app, /placeholder="Search by service or place"/);
   assert.match(index, /<h1>Find essential services near you\.<\/h1>/);
-  assert.match(index, /A meal\. A safe place to sleep\. Someone who can help\./);
+  assert.match(index, /Practical help, with contact details and sources you can check\./);
   assert.match(refinement, /Search by service or place/);
-  assert.match(professional, /A meal\. A safe place to sleep\. Someone who can help\./);
+  assert.match(professional, /Practical help, with contact details and sources you can check\./);
   assert.match(index, /Food[\s\S]*Water[\s\S]*Shelter[\s\S]*Clothing[\s\S]*Hygiene[\s\S]*Health care/);
 });
 

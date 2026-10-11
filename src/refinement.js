@@ -34,7 +34,7 @@ function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
   input.placeholder = "Search by service or place";
-  input.setAttribute("aria-label", "Search by need, service, place, ZIP or postcode, or organization");
+  input.setAttribute("aria-label", "What do you need? Search by need, service, place, ZIP or postcode, or organization");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");
 
@@ -59,8 +59,8 @@ function installQuickNeeds() {
   container.setAttribute("aria-label", "Common service filters");
   container.innerHTML = `
     <p class="quick-needs__label">Core needs</p>
-    ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
     <button class="quick-need quick-need--all" type="button" data-quick-type="all" aria-pressed="true">All</button>
+    ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
   `;
   search.insertAdjacentElement("afterend", container);
 
@@ -99,6 +99,32 @@ function groupFinderDisclosures() {
   group.append(location, filters);
 }
 
+function composeFinderSurface() {
+  const search = document.querySelector(".finder-search");
+  const sidebar = document.querySelector(".finder-sidebar");
+  if (!search || !sidebar || sidebar.querySelector(".finder-surface")) return;
+  const focused = document.activeElement;
+  const selection = typeof focused?.selectionStart === "number"
+    ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
+  const surface = document.createElement("div");
+  surface.className = "finder-surface";
+  const label = document.createElement("label");
+  label.className = "finder-search-label";
+  label.htmlFor = "resourceSearch";
+  label.textContent = "What do you need?";
+  search.before(surface);
+  surface.append(label);
+  // Reuse the live controls. Moving a focused node can blur it in older browsers.
+  for (const selector of [".finder-search", ".quick-needs", ".jump-results", ".location-actions", "#locationStatus", "#locationRecovery", ".finder-disclosures"]) {
+    const node = sidebar.querySelector(selector);
+    if (node) surface.append(node);
+  }
+  if (focused && surface.contains(focused) && document.activeElement !== focused) {
+    focused.focus({ preventScroll: true });
+    if (selection) focused.setSelectionRange(...selection);
+  }
+}
+
 function improveFilterSummary() {
   const disclosure = document.querySelector(".filter-disclosure");
   const summary = disclosure?.querySelector("summary");
@@ -122,6 +148,7 @@ export function installRefinements() {
   installQuickNeeds();
   compactLocationNotes();
   groupFinderDisclosures();
+  composeFinderSurface();
   improveFilterSummary();
   refineGlobeInstructions();
   document.documentElement.classList.add("rwn-refined");
