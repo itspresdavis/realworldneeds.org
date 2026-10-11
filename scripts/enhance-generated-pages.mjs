@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -110,9 +111,8 @@ function accessibilityMarkup(resource) {
 
 function serviceNextStepMarkup(resource) {
   const links = [`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`];
-  if (resource.phone) {
-    const number = resource.phone.replace(/[^+\d]/g, "");
-    links.push(`<a href="tel:${escapeHtml(number)}"><strong>Call</strong><span>${escapeHtml(resource.phone)}</span></a>`);
+  for (const { label, href } of phoneLinks(resource.phone)) {
+    links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
   }
   if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
     const coordinate = `${resource.lat},${resource.lng}`;

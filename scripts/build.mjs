@@ -1,3 +1,4 @@
+import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -86,8 +87,8 @@ function breadcrumbs(items) {
 
 function directoryRecordActions(resource, coordinate) {
   const links = [];
-  if (resource.phone) {
-    links.push(`<a class="is-call" href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">Call ${escapeHtml(resource.phone)}</a>`);
+  for (const { label, href } of phoneLinks(resource.phone)) {
+    links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
   if (resource.kind === "direct") {
     links.push(`<a class="is-directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Directions</a>`);
@@ -100,7 +101,7 @@ function resourceRecord(resource) {
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
   const phone = resource.phone
-    ? `<div><dt>Phone</dt><dd><a href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">${escapeHtml(resource.phone)}</a></dd></div>`
+    ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>`
     : "";
   const maps = resource.kind === "direct"
     ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a>`
@@ -274,7 +275,7 @@ function resourcePage(resource) {
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
   const direct = resource.kind === "direct";
-  const phone = resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}">${escapeHtml(resource.phone)}</a></dd></div>` : "";
+  const phone = resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : "";
   const mapLinks = direct ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
   const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
   const title = `${resource.name} — ${place}`;

@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
@@ -85,6 +86,7 @@ const records = resources.map((resource, index) => {
     categoryLabels: labels,
     kind: resource.kind,
     phone: resource.phone || "",
+    phoneLinks: phoneLinks(resource.phone),
     lat: Number.isFinite(resource.lat) ? resource.lat : null,
     lng: Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,

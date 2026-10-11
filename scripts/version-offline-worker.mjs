@@ -12,6 +12,8 @@ const inputs = [
   "public/site.webmanifest",
   "scripts/build.mjs",
   "src/utils/source-status.js",
+  "src/utils/phone.js",
+  "scripts/build-search-index.mjs",
   "scripts/build-local-seo.mjs",
   "scripts/enhance-generated-pages.mjs",
   "scripts/inject-directory-resilience.mjs",

@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resources } from "../src/data/resources.js";
@@ -157,9 +158,9 @@ function mapsFor(resource) {
 
 function directoryQuickActions(resource) {
   const links = [];
-  if (resource.phone) {
-    const number = resource.phone.replace(/[^+\d]/g, "");
-    links.push(`<a class="is-call" href="tel:${escapeHtml(number)}">Call ${escapeHtml(resource.phone)}</a>`);
+  const phones = phoneLinks(resource.phone);
+  for (const { label, href } of phones) {
+    links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
   if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
     const maps = mapsFor(resource);
@@ -167,22 +168,22 @@ function directoryQuickActions(resource) {
     links.push(`<a href="${escapeHtml(maps.google)}" rel="noopener noreferrer">Google Maps</a>`);
   }
   links.push(`<a class="is-details" href="/service/${encodeURIComponent(resource.id)}">View details</a>`);
-  return `<nav class="directory-quick-actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Quick actions for ${escapeHtml(resource.name)}"><span>${resource.kind === "direct" ? "Call or get directions" : "Open this listing"}</span>${links.join("")}</nav>`;
+  return `<nav class="directory-quick-actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Quick actions for ${escapeHtml(resource.name)}"><span>${resource.kind === "direct" ? (phones.length ? "Call or get directions" : "Get directions") : "Open this listing"}</span>${links.join("")}</nav>`;
 }
 
 function serviceActions(resource) {
   const links = [];
+  const phones = phoneLinks(resource.phone);
   const isDirectLocation = resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng);
   const isFinder = resource.kind === "locator" || resource.kind === "network";
   const nextStep = sourceClosureNotice(resource) ? "Confirm availability before travel" : isDirectLocation
-    ? (resource.phone ? "Call, get directions, or verify current details" : "Get directions or verify current details")
-    : (resource.phone ? "Call or verify current details" : "Verify current details");
+    ? (phones.length ? "Call, get directions, or verify current details" : "Get directions or verify current details")
+    : (phones.length ? "Call or verify current details" : "Verify current details");
   const context = isFinder
     ? `<span class="service-next-steps__context">Official ${resource.kind === "locator" ? "resource finder" : "service network"} — not a walk-in location.</span>`
     : "";
-  if (resource.phone) {
-    const number = resource.phone.replace(/[^+\d]/g, "");
-    links.push(`<a class="is-call" href="tel:${escapeHtml(number)}"><strong>Call</strong><span>${escapeHtml(resource.phone)}</span></a>`);
+  for (const { label, href } of phones) {
+    links.push(`<a class="is-call" href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
   }
   if (isDirectLocation) {
     const maps = mapsFor(resource);

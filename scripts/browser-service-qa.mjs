@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -185,7 +186,8 @@ async function run() {
     })()`);
     await capture(client, "service-desktop.png");
     const sourceMatches = normalizedUrl(desktop.primaryHref) === normalizedUrl(resource.sourceUrl);
-    const phoneAction = resource.phone ? desktop.phoneHref.startsWith("tel:") : true;
+    const expectedPhones = phoneLinks(resource.phone);
+    const phoneAction = expectedPhones.length ? expectedPhones.some(({ href }) => desktop.phoneHref === href) : !desktop.phoneHref;
     const privateMapLink = desktop.interactiveHref.startsWith("/#resource=") && !desktop.interactiveHref.includes("?resource=");
     if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions !== 1 || desktop.overflow > 8) {
       throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink })}`);
