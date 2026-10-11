@@ -93,13 +93,31 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     Element.prototype.animate=function(frames,options){
       const animation=original.call(this,frames,options);
       if(this.matches('.about-rwn__heading h2, .source-band__heading h2, .mission-steps article, .principle-grid article')) {
-        const record={text:this.textContent,frames,options,cancelled:false};
+        const record={target:this.matches('#about h2')?'about-heading':this.matches('#standards h2')?'standards-heading':this.tagName.toLowerCase(),text:this.textContent,frames,options,startedAt:performance.now(),finished:false,cancelled:false};
         window.__rwnArrivals.push(record);
-        animation.addEventListener('cancel',()=>{record.cancelled=true},{once:true});
+        animation.addEventListener('finish',()=>{record.finished=true;record.finishedAt=performance.now()},{once:true});
+        animation.addEventListener('cancel',()=>{record.cancelled=true;record.cancelledAt=performance.now()},{once:true});
         window.__rwnMotionReady?.();
       }
       return animation;
     };
+  })()`);
+  const enhancementReady = () => arrive(state=>state.ready==='ready', 'Editorial enhancement installation', () => evaluate(client, `({ready:document.documentElement.dataset.pageInteractions,y:scrollY,visibility:document.visibilityState})`), false);
+  // A quiet offset or even rAF delivery cannot establish that the independent
+  // IntersectionObserver task source has delivered an entry. Passive witnesses
+  // use the production threshold/margin and require newer exit/entry records.
+  const readIntersection = selector => () => evaluate(client, `(() => {
+    const selector=${JSON.stringify(selector)};
+    window.__rwnIntersectionWitnesses??={};
+    let witness=window.__rwnIntersectionWitnesses[selector];
+    if(!witness){
+      witness=window.__rwnIntersectionWitnesses[selector]={entries:[]};
+      witness.observer=new IntersectionObserver(entries=>{
+        for(const entry of entries)witness.entries.push({sequence:witness.entries.length+1,intersecting:entry.isIntersecting,at:performance.now(),top:entry.boundingClientRect.top});
+      },{threshold:0,rootMargin:'0px 0px -24px 0px'});
+      witness.observer.observe(document.querySelector(selector));
+    }
+    return {entries:witness.entries,latest:witness.entries.at(-1),y:scrollY,visibility:document.visibilityState};
   })()`);
   const enterAbout = () => evaluate(client, `scrollTo({top:document.querySelector('#about h2').getBoundingClientRect().top+scrollY-innerHeight+160,behavior:'instant'})`);
 
@@ -160,44 +178,62 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     }
 
     await loadHome();
-    await observeArrivals(); await enterAbout(); await settle();
-    const arrivals = await evaluate(client, 'window.__rwnArrivals');
-    assert(arrivals.length > 0 && arrivals.every(item => item.frames.every(frame=>frame.opacity === undefined || frame.opacity === 1) && item.options.duration <= 300 && !item.options.fill), 'Editorial arrivals were absent, hidden or unbounded', arrivals);
-    await evaluate(client, `scrollTo({top:0,behavior:'instant'})`); await settle();
-    await enterAbout(); await settle();
-    assert(await evaluate(client, 'window.__rwnArrivals.length') === arrivals.length, 'Previously seen editorial text replays on repeated scrolling');
+    await enhancementReady();
+    await observeArrivals();
+    const aboutIntersection=readIntersection('#about h2');
+    await arrive(state=>state.latest?.intersecting===false, 'About initially outside the arrival viewport', aboutIntersection, false);
+    await enterAbout();
+    const editorialState=()=>evaluate(client, `({arrivals:window.__rwnArrivals,transform:getComputedStyle(document.querySelector('#about h2')).transform,running:document.querySelector('#about h2').getAnimations().some(animation=>animation.playState==='running')})`);
+    const editorial=await arrive(state=>state.arrivals.some(item=>item.target==='about-heading'&&item.finished&&!item.cancelled)&&state.arrivals.every(item=>item.finished&&!item.cancelled)&&state.transform==='none'&&!state.running, 'Actual editorial start and finish events', editorialState, false);
+    const arrivals=editorial.arrivals;
+    assert(arrivals.length > 0 && arrivals.every(item => item.frames.every(frame=>frame.opacity === undefined || frame.opacity === 1) && item.options.duration <= 300 && !item.options.fill && item.finishedAt>=item.startedAt), 'Editorial arrivals were absent, hidden or unbounded', arrivals);
+    const visibleAbout=await arrive(state=>state.latest?.intersecting===true, 'About initial entry delivered', aboutIntersection, false);
+    await evaluate(client, `scrollTo({top:0,behavior:'instant'})`);
+    const exitedAbout=await arrive(state=>state.latest?.intersecting===false&&state.latest.sequence>visibleAbout.latest.sequence, 'About exit delivered before repeat', aboutIntersection, false);
+    await enterAbout();
+    await arrive(state=>state.latest?.intersecting===true&&state.latest.sequence>exitedAbout.latest.sequence, 'About repeat entry delivered', aboutIntersection, false);
+    const repeated=await editorialState();
+    assert(repeated.arrivals.length===arrivals.length&&repeated.transform==='none'&&!repeated.running, 'Previously seen editorial text replays on repeated scrolling', repeated);
+    await evaluate(client, `window.__rwnIntersectionWitnesses['#about h2'].observer.disconnect()`);
     await capture(client, 'page-interactions-editorial.png');
 
     // Change the live preference while a real arrival is still playing.
     await loadHome();
+    await enhancementReady();
     await observeArrivals();
-    const running = await evaluate(client, `(async () => {
+    let startPromise;
+    const readStart=()=>startPromise??=evaluate(client, `(async () => {
       window.__rwnMotionPreference = matchMedia('(prefers-reduced-motion: reduce)');
       window.__rwnMotionPreferenceChanges = [];
       window.__rwnMotionPreference.addEventListener('change',event=>window.__rwnMotionPreferenceChanges.push({matches:event.matches,at:performance.now()}));
       let timer;
-      const started=new Promise((resolve,reject)=>{
-        window.__rwnMotionReady=()=>{clearTimeout(timer);resolve()};
-        timer=setTimeout(()=>reject(new Error('Editorial motion did not begin')),2000);
+      const started=new Promise(resolve=>{
+        window.__rwnMotionReady=()=>{clearTimeout(timer);resolve(true)};
+        timer=setTimeout(()=>resolve(false),2000);
       });
       scrollTo({top:document.querySelector('#about h2').getBoundingClientRect().top+scrollY-innerHeight+160,behavior:'instant'});
-      await started;
-      return {y:scrollY,count:window.__rwnArrivals.length,running:document.querySelector('#about h2').getAnimations().some(animation=>animation.playState==='running'),preference:window.__rwnMotionPreference.matches,timeline:document.timeline.currentTime,visibility:document.visibilityState,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))};
+      const observedStart=await started;
+      return {started:observedStart,timeoutMs:2000,arrivals:window.__rwnArrivals,y:scrollY,count:window.__rwnArrivals.length,running:document.querySelector('#about h2').getAnimations().some(animation=>animation.playState==='running'),preference:window.__rwnMotionPreference.matches,timeline:document.timeline.currentTime,visibility:document.visibilityState,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))};
     })()`);
-    assert(running.running && !running.preference, 'Preference-change test never observed an active editorial animation with motion allowed', running);
+    const running=await arrive(state=>typeof state.started==='boolean', 'Active editorial start event', readStart, false);
+    assert(running.started && running.running && !running.preference, 'Preference-change test never observed an active editorial animation with motion allowed', running);
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     // The CDP override acknowledges before the browser renders and dispatches
     // MediaQueryList change/cancel events. Await those real signals; stationary
     // scrolling says nothing about whether this preference change was delivered.
-    const cancellationState = () => evaluate(client, `({y:scrollY,matches:window.__rwnMotionPreference.matches,changes:window.__rwnMotionPreferenceChanges,cancelled:window.__rwnArrivals.some(item=>item.cancelled),transform:getComputedStyle(document.querySelector('#about h2')).transform,visibility:document.visibilityState,timeline:document.timeline.currentTime,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))})`);
+    const cancellationState = () => evaluate(client, `({y:scrollY,matches:window.__rwnMotionPreference.matches,changes:window.__rwnMotionPreferenceChanges,cancelled:window.__rwnArrivals.some(item=>item.target==='about-heading'&&item.cancelled&&!item.finished),arrivals:window.__rwnArrivals,transform:getComputedStyle(document.querySelector('#about h2')).transform,visibility:document.visibilityState,timeline:document.timeline.currentTime,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))})`);
     const cancelled = await arrive(state=>state.matches&&state.changes.some(event=>event.matches)&&state.cancelled&&state.transform==='none', 'Live reduced-motion event and cancellation', cancellationState, false);
     evidence.push({label:'Live reduced-motion cancellation',running,cancelled});
     assert(cancelled.cancelled && cancelled.transform==='none' && Math.abs(cancelled.y-running.y)<=1, 'Live reduced motion did not cancel in place', {running,cancelled});
     // Controlled CPU throttle is a resilience check, not a hardware speed claim.
     await client.call('Emulation.setCPUThrottlingRate', {rate:4});
-    await evaluate(client, `document.querySelector('#standards').scrollIntoView({behavior:'instant'})`); await settle();
+    const standardsIntersection=readIntersection('#standards h2');
+    const unseenStandards=await arrive(state=>state.latest?.intersecting===false, 'Reduced-motion Standards initially unseen', standardsIntersection, false);
+    await evaluate(client, `document.querySelector('#standards').scrollIntoView({behavior:'instant'})`);
+    await arrive(state=>state.latest?.intersecting===true&&state.latest.sequence>unseenStandards.latest.sequence, 'Reduced-motion Standards entry delivered', standardsIntersection, false);
     const reduced = await evaluate(client, `({arrivals:window.__rwnArrivals.length,opacity:getComputedStyle(document.querySelector('#standards h2')).opacity})`);
     assert(reduced.arrivals === running.count && Number(reduced.opacity) === 1, 'Reduced-motion change left unseen editorial animation enabled', reduced);
+    await evaluate(client, `window.__rwnIntersectionWitnesses['#standards h2'].observer.disconnect()`);
     await evaluate(client, `scrollTo({top:0,behavior:'instant'})`); await settle();
     await click('#jumpResults');
     const reducedImmediate = await inspect();
