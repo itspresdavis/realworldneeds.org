@@ -154,6 +154,7 @@ if (requestedResource && new URL(window.location.href).searchParams.has("resourc
 
 let cancelPendingSearch = () => {};
 let hasPendingSearch = () => false;
+let refreshSearchPreparation = () => {};
 
 const state = {
   query: sanitizeFinderQuery(initialFinderHistory?.query),
@@ -921,6 +922,7 @@ function renderResults() {
     : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type. RWN may not have every service."}</p>${state.viewMode === "aid" ? '<button class="results-empty__reset" id="clearFinderFilters" type="button">Clear search and filters</button>' : ""}</div>`;
   if (matchingResultCount) matchingResultCount.textContent = `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
+  refreshSearchPreparation();
 }
 
 function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
@@ -2265,17 +2267,21 @@ function bindEvents() {
   let searchHistoryTimer = null;
   let preparationNoticeTimer = null;
   const showSearchPreparation = (revision) => {
-    if (searchPreparation.prepared || pendingSearchValue === state.query) return;
+    if (searchPreparation.prepared || !pendingSearchValue || pendingSearchValue === state.query) return;
     const count = document.getElementById("resultCount");
     const status = document.getElementById("searchStatus");
+    const badge = document.getElementById("matchingResultCount");
     count.textContent = status.textContent = "Preparing search…";
+    if (badge) badge.textContent = "Preparing…";
     if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
     preparationNoticeTimer = window.setTimeout(() => {
       if (revision === searchRevision && !searchPreparation.prepared) {
         count.textContent = status.textContent = "Search is still preparing. You can keep typing or browse the directory.";
+        if (badge) badge.textContent = "Still preparing…";
       }
     }, 3000);
   };
+  refreshSearchPreparation = () => showSearchPreparation(searchRevision);
   cancelPendingSearch = () => {
     searchRevision += 1;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);

@@ -19,6 +19,10 @@ const controlSync = source.slice(
   source.indexOf('  const search = document.getElementById("resourceSearch");', source.indexOf("function renderControls")),
   source.indexOf('  document.getElementById("locateMe").disabled', source.indexOf("function renderControls")),
 );
+const resultsRenderer = source.slice(
+  source.indexOf("function renderResults() {"),
+  source.indexOf("function setSelected("),
+);
 function fixture() {
   let resolveReady;
   const events = {},
@@ -40,14 +44,27 @@ function fixture() {
       events.clear = handler;
     },
   };
-  const state = { query: "" };
-  const count = { textContent: "Current results: " };
+  const state = { query: "", viewMode: "aid", filtered: [{ id: "first" }, { id: "second" }], visibleResults: 60 };
+  const count = { textContent: "Showing 2 of 2 listings" };
   const status = { textContent: "Current search: " };
+  const badge = { textContent: "2 matches" };
+  const nodes = {
+    resourceSearch: input,
+    clearSearch: clear,
+    resultCount: count,
+    searchStatus: status,
+    matchingResultCount: badge,
+    resourceGrid: { innerHTML: "" },
+    showMoreResults: { hidden: true },
+    resultTitle: { textContent: "" },
+  };
   const context = vm.createContext({
     state,
     FINDER_HISTORY_KEY: "rwnFinder",
     cancelPendingSearch: () => {},
     hasPendingSearch: () => false,
+    refreshSearchPreparation: () => {},
+    resourceCard: (resource) => resource.id,
     searchPreparation: {
       prepared: false,
       ready: new Promise((resolve) => {
@@ -57,18 +74,11 @@ function fixture() {
     },
     document: {
       activeElement: input,
-      getElementById: (id) =>
-        id === "resourceSearch"
-          ? input
-          : id === "resultCount"
-            ? count
-            : id === "searchStatus"
-              ? status
-              : clear,
+      getElementById: (id) => nodes[id],
     },
     window: {
-      setTimeout: (callback) => {
-        timers.set(++timerId, callback);
+      setTimeout: (callback, delay) => {
+        timers.set(++timerId, { callback, delay });
         return timerId;
       },
       clearTimeout: (id) => timers.delete(id),
@@ -79,9 +89,10 @@ function fixture() {
     sanitizeFinderQuery: (value) => value,
     updateFilters: () => {
       filtered.push(state.query);
+      state.filtered = state.query ? [{ id: state.query }] : [{ id: "first" }, { id: "second" }];
       context.syncSearchControls();
-      count.textContent = `Current results: ${state.query}`;
       status.textContent = `Current search: ${state.query}`;
+      context.renderResults();
     },
     writeFinderHistory: () => history.push(state.query),
     restoreFinderHistory: (event) => {
@@ -93,21 +104,24 @@ function fixture() {
       }
     },
   });
-  vm.runInContext(`function syncSearchControls() { const aidMode = true; ${controlSync} }\n${handlers}${popstate}`, context);
+  vm.runInContext(`function syncSearchControls() { const aidMode = true; ${controlSync} }\n${resultsRenderer}${handlers}${popstate}`, context);
   const type = (value) => {
     input.value = value;
     events.input({ target: input });
   };
-  const flush = () => {
-    const pending = [...timers.values()];
-    timers.clear();
-    for (const callback of pending) callback();
+  const flush = (delay = 48) => {
+    const pending = [...timers.entries()].filter(([, timer]) => timer.delay === delay);
+    for (const [id, { callback }] of pending) {
+      timers.delete(id);
+      callback();
+    }
   };
   return {
     events,
     input,
     count,
     status,
+    badge,
     clear,
     state,
     filtered,
@@ -170,6 +184,9 @@ for (const action of ["Escape", "clear", "Back"]) {
     assert.equal(f.state.query, expected);
     assert.equal(f.input.value, expected);
     assert.equal(f.clear.hidden, !expected);
+    assert.equal(f.count.textContent, expected ? "Showing 1 of 1 listings" : "Showing 2 of 2 listings");
+    assert.equal(f.status.textContent, `Current search: ${expected}`);
+    assert.equal(f.badge.textContent, expected ? "1 match" : "2 matches");
     assert.ok(!f.filtered.includes("London"));
     assert.ok(!f.history.includes("London"));
     await f.events.blur();
@@ -230,11 +247,13 @@ test("native Back clears preparation feedback as well as pending input", async (
   f.flush();
   assert.equal(f.count.textContent, "Preparing search…");
   assert.equal(f.status.textContent, "Preparing search…");
+  assert.equal(f.badge.textContent, "Preparing…");
   f.back(null);
   f.ready();
   await settle();
-  assert.equal(f.count.textContent, "Current results: ");
+  assert.equal(f.count.textContent, "Showing 2 of 2 listings");
   assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.badge.textContent, "2 matches");
   assert.equal(f.input.value, "");
   assert.equal(f.clear.hidden, true);
 });
@@ -263,6 +282,9 @@ test("category rerender preserves blurred pending input and Clear until readines
   assert.equal(f.state.query, "", "the pending query has not been applied yet");
   assert.equal(f.input.value, "London", "real control synchronization preserves pending text after blur");
   assert.equal(f.clear.hidden, false, "Clear remains usable after a category rerender");
+  assert.equal(f.count.textContent, "Preparing search…");
+  assert.equal(f.status.textContent, "Preparing search…");
+  assert.equal(f.badge.textContent, "Preparing…", "the actual result-render hook restores nearby feedback");
   f.ready();
   await blur;
   await settle();
@@ -271,12 +293,18 @@ test("category rerender preserves blurred pending input and Clear until readines
   assert.equal(f.clear.hidden, false);
   assert.equal(f.filtered.at(-1), "London");
   assert.equal(f.history.at(-1), "London");
+  assert.equal(f.count.textContent, "Showing 1 of 1 listings");
+  assert.equal(f.status.textContent, "Current search: London");
+  assert.equal(f.badge.textContent, "1 match");
   f.events.clear();
   await f.blur();
   assert.equal(f.state.query, "");
   assert.equal(f.input.value, "");
   assert.equal(f.clear.hidden, true);
   assert.equal(f.history.at(-1), "");
+  assert.equal(f.count.textContent, "Showing 2 of 2 listings");
+  assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.badge.textContent, "2 matches");
 });
 
 test("Clear cancels a blurred pending query after a category rerender", async () => {
@@ -288,6 +316,9 @@ test("Clear cancels a blurred pending query after a category rerender", async ()
   f.events.clear();
   assert.equal(f.input.value, "");
   assert.equal(f.clear.hidden, true);
+  assert.equal(f.count.textContent, "Showing 2 of 2 listings");
+  assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.badge.textContent, "2 matches");
   f.ready();
   await blur;
   await settle();
@@ -296,5 +327,28 @@ test("Clear cancels a blurred pending query after a category rerender", async ()
   assert.equal(f.input.value, "");
   assert.equal(f.clear.hidden, true);
   assert.ok(!f.filtered.includes("London"));
+  assert.ok(!f.history.includes("London"));
+});
+
+test("delayed preparation feedback updates all three labels and clears on cancellation", async () => {
+  const f = fixture();
+  f.type("London");
+  f.flush();
+  f.render();
+  f.flush(3000);
+  const delayed = "Search is still preparing. You can keep typing or browse the directory.";
+  assert.equal(f.count.textContent, delayed);
+  assert.equal(f.status.textContent, delayed);
+  assert.equal(f.badge.textContent, "Still preparing…");
+  f.events.clear();
+  assert.equal(f.count.textContent, "Showing 2 of 2 listings");
+  assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.badge.textContent, "2 matches");
+  f.ready();
+  await settle();
+  f.flush(3000);
+  assert.equal(f.count.textContent, "Showing 2 of 2 listings");
+  assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.badge.textContent, "2 matches");
   assert.ok(!f.history.includes("London"));
 });

@@ -13,7 +13,11 @@ const surfaces = {
 
 async function press(client, key) {
   const code = key === "Enter" ? 13 : key === "Escape" ? 27 : 0;
-  await client.call("Input.dispatchKeyEvent", { type: "keyDown", key, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
+  // Native buttons activate on Enter's character/keypress phase. Sending only
+  // keyDown reaches our search listener but cannot exercise native activation.
+  // Match CDP keyboard clients: https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/cdp/Input.ts
+  const text = key === "Enter" ? "\r" : "";
+  await client.call("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...(text ? { text, unmodifiedText: text } : {}) });
   await client.call("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
 }
 
@@ -65,17 +69,48 @@ async function typeQuery(context, surface, query, { enter = true } = {}) {
 }
 
 async function activate(context, selector) {
-  await context.evaluate(context.client, `(() => { const button = document.querySelector(${JSON.stringify(selector)}); if (!button || button.hidden) throw new Error('Missing visible control: ' + ${JSON.stringify(selector)}); button.focus(); })()`);
-  await press(context.client, "Enter");
+  const focused = await context.evaluate(context.client, `(() => {
+    const selector = ${JSON.stringify(selector)}, button = document.querySelector(selector);
+    if (!button || button.hidden || button.disabled) throw new Error('Missing enabled visible control: ' + selector);
+    window.__rwnQaActivation?.stop();
+    const events = [], types = ['keydown', 'keypress', 'keyup', 'click'];
+    const record = (event) => events.push({ type: event.type, key: event.key, charCode: event.charCode, trusted: event.isTrusted, defaultPrevented: event.defaultPrevented });
+    for (const type of types) button.addEventListener(type, record);
+    const state = window.__rwnQaActivation = { selector, events, stop: () => { for (const type of types) button.removeEventListener(type, record); } };
+    button.focus();
+    const rect = button.getBoundingClientRect();
+    state.focused = document.activeElement === button;
+    state.control = { tag: button.tagName, id: button.id, label: button.textContent.trim(), width: rect.width, height: rect.height };
+    return { selector, focused: state.focused, control: state.control };
+  })()`);
+  assert(focused.focused && focused.control.width > 0 && focused.control.height > 0, "Keyboard activation must focus a rendered control", focused);
+  try {
+    await press(context.client, "Enter");
+  } finally {
+    await context.evaluate(context.client, "window.__rwnQaActivation?.stop()");
+  }
+  const activation = await context.evaluate(context.client, `(() => {
+    const { selector, focused, control, events } = window.__rwnQaActivation;
+    const active = document.activeElement;
+    return { selector, focused, control, events, activeAfter: { tag: active?.tagName, id: active?.id } };
+  })()`);
+  assert(activation.events.some((event) => event.type === "click" && event.trusted), "Trusted Enter must activate the focused control", activation);
+  return activation;
 }
 
 async function allResults(context, surface, maximum) {
   let result = await view(context, surface);
   for (let page = 0; result.more && page < maximum; page += 1) {
     const before = result.rows.length;
-    await activate(context, surface.more);
-    await waitForUI(context, `document.querySelectorAll(${JSON.stringify(surface.rows)}).length > ${before}`);
-    result = await view(context, surface);
+    let activation;
+    try {
+      activation = await activate(context, surface.more);
+      await waitForUI(context, `document.querySelectorAll(${JSON.stringify(surface.rows)}).length > ${before}`);
+      result = await view(context, surface);
+    } catch (error) {
+      const after = await view(context, surface);
+      throw new Error(`Search pagination failed: ${JSON.stringify({ selector: surface.more, beforeRows: before, afterRows: after.rows.length, query: after.query, committedQuery: after.committedQuery, count: after.count, more: after.more, activation, reason: error.message })}`, { cause: error });
+    }
   }
   assert(!result.more && result.rows.length <= maximum, "Search pagination failed to terminate", result);
   assert(result.rows.every((row) => row.rendered) && result.overflow <= 1, "Search results must be rendered without overflow", result);
