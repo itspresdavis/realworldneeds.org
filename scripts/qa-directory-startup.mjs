@@ -36,6 +36,47 @@ function observeStartup(origin) {
   };
 }
 
+// Serialize this exact function into the page and exercise it in unit tests.
+// Page.navigate can expose a provisional document with no documentElement.
+export function directoryStartupSnapshot() {
+  const document = globalThis.document;
+  const pick = selector => document?.querySelector(selector);
+  const input = pick('[data-directory-query]');
+  const results = pick('.directory-global-results');
+  const category = pick('[data-directory-category][aria-pressed="true"]');
+  const country = pick('[data-directory-country]');
+  const rect = input?.getBoundingClientRect();
+  const href = globalThis.location?.href || '';
+  let pathname = '';
+  try { pathname = new URL(href).pathname; } catch { /* Provisional or absent location is not ready. */ }
+  const snapshot = storage => Object.fromEntries(Object.keys(storage).sort().map(key => [key, storage.getItem(key)]));
+  return {
+    href, pathname, title: document?.title || '', timeOrigin: globalThis.performance?.timeOrigin ?? null,
+    documentPresent: Boolean(document?.documentElement),
+    ready: Boolean(document?.documentElement && results && category),
+    query: input?.value, disabled: input?.disabled, countryDisabled: country?.disabled,
+    inputVisible: Boolean(rect?.width && rect?.height),
+    focusedInput: Boolean(input && document?.activeElement === input), focusedHref: document?.activeElement?.getAttribute('href'),
+    selection: input ? [input.selectionStart, input.selectionEnd] : null,
+    country: country?.value, category: category?.textContent,
+    rows: [...(document?.querySelectorAll('.directory-global-result') || [])].map(row => ({ href: row.getAttribute('href'), text: row.textContent })),
+    resultsHidden: results?.hidden, clearHidden: pick('[data-directory-clear]')?.hidden,
+    count: pick('[data-directory-count]')?.textContent,
+    history: globalThis.history?.state?.rwnDirectory, scroll: globalThis.scrollY ?? null,
+    probe: globalThis.__rwnDirectoryStartupQA || null,
+    storage: input ? { local: snapshot(globalThis.localStorage), session: snapshot(globalThis.sessionStorage) } : null,
+    overflow: document?.documentElement ? document.documentElement.scrollWidth - globalThis.innerWidth : null,
+    overlay: Boolean(pick('vite-error-overlay, nextjs-portal, #webpack-dev-server-client-overlay'))
+  };
+}
+
+export const directoryStartupStaticReady = (snapshot, previousTimeOrigin, moduleHeld) => Boolean(
+  snapshot.documentPresent && Number.isFinite(snapshot.timeOrigin) && snapshot.timeOrigin !== previousTimeOrigin
+  && snapshot.pathname === '/directory' && snapshot.inputVisible && snapshot.probe && moduleHeld > 0
+);
+
+export const isDirectoryStartupNavigationError = error => /^(?:Runtime\.evaluate: )?(?:Execution context was destroyed|Cannot find (?:default execution )?context|No execution context|Inspected target navigated)/i.test(error?.message || '');
+
 export async function verifyDirectoryStartup({ client, host, navigate, evaluate, capture }) {
   const origin = new URL(host).origin;
   const held = { module: [], catalog: [] };
@@ -59,29 +100,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     if (kind && hold[kind]) held[kind].push(requestId);
     else continueRequest(requestId).catch(error => { interceptionError = error; });
   };
-  const state = () => evaluate(client, `(() => {
-    const input = document.querySelector('[data-directory-query]');
-    const results = document.querySelector('.directory-global-results');
-    const snapshot = storage => Object.fromEntries(Object.keys(storage).sort().map(key => [key, storage.getItem(key)]));
-    return {
-      href: location.href, title: document.title, timeOrigin: performance.timeOrigin,
-      ready: Boolean(results && document.querySelector('[data-directory-category][aria-pressed="true"]')),
-      query: input?.value, disabled: input?.disabled, countryDisabled: document.querySelector('[data-directory-country]')?.disabled,
-      inputVisible: Boolean(input?.getBoundingClientRect().width && input.getBoundingClientRect().height),
-      focusedInput: document.activeElement === input, focusedHref: document.activeElement?.getAttribute('href'),
-      selection: input ? [input.selectionStart, input.selectionEnd] : null,
-      country: document.querySelector('[data-directory-country]')?.value,
-      category: document.querySelector('[data-directory-category][aria-pressed="true"]')?.textContent,
-      rows: [...document.querySelectorAll('.directory-global-result')].map(row => ({ href: row.getAttribute('href'), text: row.textContent })),
-      resultsHidden: results?.hidden, clearHidden: document.querySelector('[data-directory-clear]')?.hidden,
-      count: document.querySelector('[data-directory-count]')?.textContent,
-      history: history.state?.rwnDirectory, scroll: scrollY,
-      probe: window.__rwnDirectoryStartupQA,
-      storage: input ? { local: snapshot(localStorage), session: snapshot(sessionStorage) } : null,
-      overflow: document.documentElement.scrollWidth - innerWidth,
-      overlay: Boolean(document.querySelector('vite-error-overlay, nextjs-portal, #webpack-dev-server-client-overlay'))
-    };
-  })()`);
+  const state = () => evaluate(client, `(${directoryStartupSnapshot.toString()})()`);
   const wait = async (predicate, label) => {
     let latest;
     for (let attempt = 0; attempt < 160; attempt++) {
@@ -90,7 +109,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       catch (error) {
         // A reload can replace the default context between the CDP request and
         // evaluation. Retry only that navigation condition, never app failures.
-        if (!/Execution context was destroyed|Cannot find (?:default execution )?context|No execution context|Inspected target navigated/i.test(error.message)) throw error;
+        if (!isDirectoryStartupNavigationError(error)) throw error;
         await sleep(50); continue;
       }
       if (predicate(latest)) return latest;
@@ -111,7 +130,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     hold.module = true; hold.catalog = catalog;
     if (reload) await client.call('Page.reload', { ignoreCache: true });
     else await client.call('Page.navigate', { url: `${host}/directory` });
-    const early = await wait(s => s.timeOrigin !== previous.timeOrigin && new URL(s.href).pathname === '/directory' && s.inputVisible && held.module.length > 0, 'Static directory form did not become editable before its module');
+    const early = await wait(s => directoryStartupStaticReady(s, previous.timeOrigin, held.module.length), 'Static directory form did not become editable before its module');
     assert(!early.ready && !early.disabled && early.countryDisabled && early.rows.length === 0 && early.probe.catalogReads === 0, 'Entry-module gate did not establish the pre-handler window', early);
     // An early edit intentionally honors the visible controls. Make this Chrome
     // fixture assumption explicit rather than silently resetting its selector.
@@ -141,7 +160,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   const assertPrivate = (before, after) => {
     const url = new URL(after.href);
     assert(!url.search && !url.hash && JSON.stringify(before.storage) === JSON.stringify(after.storage), 'Startup filters escaped history-entry state into the URL or web storage', { before: before.storage, after: after.storage, href: after.href });
-    assert(after.title && !after.overlay && after.overflow <= 1, 'Startup page identity or layout failed', after);
+    assert(after.documentPresent && after.title && !after.overlay && Number.isFinite(after.overflow) && after.overflow <= 1, 'Startup page identity or layout failed', after);
   };
   const assertInputs = (snapshot, { count, early = count } = {}) => {
     const inputs = snapshot.probe.inputs;
@@ -152,7 +171,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     return wait(s => s.ready && held.catalog.length > 0 && /Searching/.test(s.count), 'Early query did not start its initial catalog request');
   };
   const london = async (before, { inputCount = 1, early = inputCount, caret = 9 } = {}) => {
-    const found = await wait(s => s.ready && s.query === QUERY && s.rows.some(row => row.href === FINDER) && s.probe.catalogSettled === 1, 'Early London query did not render without another input');
+    const found = await wait(s => s.ready && s.query === QUERY && s.rows.some(row => row.href === FINDER) && s.probe?.catalogSettled === 1, 'Early London query did not render without another input');
     await frames();
     const settled = await state();
     assert(settled.rows.length === 1 && settled.rows[0].href === FINDER && settled.rows[0].text.includes('Help finder or referral · check coverage') && settled.count === '1 matching listing' && settled.country === '' && settled.category === 'All help', 'Startup finder result or filter precedence failed', settled);
@@ -242,7 +261,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       before = await start(); await type(QUERY); await pendingStartup();
       await type('WIC');
       await release('catalog');
-      current = await wait(s => s.query === 'WIC' && s.rows.length === 60 && s.probe.catalogSettled === 1 && s.history?.query === 'WIC', 'Newer input lost to pending startup search');
+      current = await wait(s => s.query === 'WIC' && s.rows.length === 60 && s.probe?.catalogSettled === 1 && s.history?.query === 'WIC', 'Newer input lost to pending startup search');
       await frames(); current = await state();
       assert(current.rows.every(row => /\bWIC\b/i.test(row.text) && row.href !== FINDER) && current.focusedInput && JSON.stringify(current.selection) === '[3,3]', 'Stale startup results or caret replaced newer input', current);
       assertInputs(current, { count: 2, early: 1 }); assertPrivate(before, current);
@@ -251,7 +270,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       await click('[data-directory-clear]');
       await wait(s => s.query === '' && s.resultsHidden && s.focusedInput && s.history?.query === '', 'Clear did not cancel pending startup state');
       await release('catalog');
-      await wait(s => s.probe.catalogSettled === 1, 'Held catalog was not read after clear');
+      await wait(s => s.probe?.catalogSettled === 1, 'Held catalog was not read after clear');
       await frames(); current = await state();
       assert(current.query === '' && current.rows.length === 0 && current.resultsHidden && current.clearHidden && current.focusedInput && current.history?.query === '' && /listings on this page/.test(current.count), 'Completed stale catalog resurrected a cleared startup query', current);
       assertInputs(current, { count: 1 }); assertPrivate(before, current);
