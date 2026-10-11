@@ -153,6 +153,7 @@ if (requestedResource && new URL(window.location.href).searchParams.has("resourc
 }
 
 let cancelPendingSearch = () => {};
+let hasPendingSearch = () => false;
 
 const state = {
   query: sanitizeFinderQuery(initialFinderHistory?.query),
@@ -768,8 +769,8 @@ function renderControls() {
   });
   const search = document.getElementById("resourceSearch");
   search.disabled = !aidMode;
-  if (document.activeElement !== search && search.value !== state.query) search.value = state.query;
-  document.getElementById("clearSearch").hidden = !state.query;
+  if (document.activeElement !== search && !hasPendingSearch() && search.value !== state.query) search.value = state.query;
+  document.getElementById("clearSearch").hidden = !search.value;
   document.getElementById("locateMe").disabled = !aidMode;
   renderLocationState();
   document.getElementById("toggleAll").disabled = !aidMode;
@@ -2258,6 +2259,7 @@ async function loadLandGeometry() {
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
+  hasPendingSearch = () => pendingSearchValue !== state.query;
   let searchRevision = 0;
   let searchFilterTimer = null;
   let searchHistoryTimer = null;
@@ -2341,6 +2343,8 @@ function bindEvents() {
   searchInput.addEventListener("input", (event) => {
     const next = sanitizeFinderQuery(event.target.value);
     if (event.target.value !== next) event.target.value = next;
+    // Cancellation stays available even before the first search is prepared.
+    document.getElementById("clearSearch").hidden = !next;
     scheduleSearchFilter(next);
   });
   searchInput.addEventListener("keydown", (event) => {
@@ -2869,6 +2873,7 @@ function bindEvents() {
     if (wasPreparing && !event.state?.[FINDER_HISTORY_KEY]) updateFilters();
     pendingSearchValue = state.query;
     searchInput.value = state.query;
+    document.getElementById("clearSearch").hidden = !state.query;
   });
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];

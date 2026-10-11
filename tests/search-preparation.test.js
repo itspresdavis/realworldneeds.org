@@ -15,8 +15,12 @@ const popstate = source.slice(
   source.indexOf('  window.addEventListener("popstate", (event) => {'),
   source.indexOf("  const sectionLinks ="),
 );
+const controlSync = source.slice(
+  source.indexOf('  const search = document.getElementById("resourceSearch");', source.indexOf("function renderControls")),
+  source.indexOf('  document.getElementById("locateMe").disabled', source.indexOf("function renderControls")),
+);
 function fixture() {
-  let ready;
+  let resolveReady;
   const events = {},
     timers = new Map(),
     history = [],
@@ -31,6 +35,7 @@ function fixture() {
     focus() {},
   };
   const clear = {
+    hidden: true,
     addEventListener: (_, handler) => {
       events.clear = handler;
     },
@@ -42,13 +47,16 @@ function fixture() {
     state,
     FINDER_HISTORY_KEY: "rwnFinder",
     cancelPendingSearch: () => {},
+    hasPendingSearch: () => false,
     searchPreparation: {
+      prepared: false,
       ready: new Promise((resolve) => {
-        ready = resolve;
+        resolveReady = resolve;
       }),
       prioritize() {},
     },
     document: {
+      activeElement: input,
       getElementById: (id) =>
         id === "resourceSearch"
           ? input
@@ -71,18 +79,21 @@ function fixture() {
     sanitizeFinderQuery: (value) => value,
     updateFilters: () => {
       filtered.push(state.query);
+      context.syncSearchControls();
       count.textContent = `Current results: ${state.query}`;
       status.textContent = `Current search: ${state.query}`;
     },
     writeFinderHistory: () => history.push(state.query),
     restoreFinderHistory: (event) => {
-      if (event) {
-        state.query = event.query;
-        input.value = event.query;
+      const snapshot = event?.rwnFinder;
+      if (snapshot) {
+        state.query = snapshot.query;
+        input.value = snapshot.query;
+        context.updateFilters();
       }
     },
   });
-  vm.runInContext(handlers + popstate, context);
+  vm.runInContext(`function syncSearchControls() { const aidMode = true; ${controlSync} }\n${handlers}${popstate}`, context);
   const type = (value) => {
     input.value = value;
     events.input({ target: input });
@@ -97,13 +108,22 @@ function fixture() {
     input,
     count,
     status,
+    clear,
     state,
     filtered,
     history,
-    ready,
+    ready: () => {
+      context.searchPreparation.prepared = true;
+      resolveReady();
+    },
     type,
     flush,
-    back: (query) => back({ state: query === null ? null : { query } }),
+    blur: () => {
+      context.document.activeElement = { id: "category-filter" };
+      return events.blur();
+    },
+    render: () => context.updateFilters(),
+    back: (query) => back({ state: query === null ? null : { rwnFinder: { query } } }),
     cancel: () => context.cancelPendingSearch(),
   };
 }
@@ -112,6 +132,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 test("first typing and Enter wait for sliced preparation without synchronous catalog work", async () => {
   const f = fixture();
   f.type("London");
+  assert.equal(f.clear.hidden, false, "Clear is visible before preparation completes");
   f.flush();
   f.events.keydown({ key: "Enter" });
   assert.deepEqual(f.filtered, []);
@@ -148,6 +169,7 @@ for (const action of ["Escape", "clear", "Back"]) {
     const expected = action === "Back" ? "Bowery" : "";
     assert.equal(f.state.query, expected);
     assert.equal(f.input.value, expected);
+    assert.equal(f.clear.hidden, !expected);
     assert.ok(!f.filtered.includes("London"));
     assert.ok(!f.history.includes("London"));
     await f.events.blur();
@@ -185,6 +207,7 @@ test("Back to a native section entry restores the visible committed text", async
   await settle();
   assert.equal(f.state.query, "London");
   assert.equal(f.input.value, "London");
+  assert.equal(f.clear.hidden, false);
   await f.events.blur();
   assert.equal(f.state.query, "London");
 });
@@ -213,4 +236,65 @@ test("native Back clears preparation feedback as well as pending input", async (
   assert.equal(f.count.textContent, "Current results: ");
   assert.equal(f.status.textContent, "Current search: ");
   assert.equal(f.input.value, "");
+  assert.equal(f.clear.hidden, true);
+});
+
+test("native Back before debounce hides Clear without waiting for preparation feedback", async () => {
+  const f = fixture();
+  f.type("London");
+  assert.equal(f.clear.hidden, false);
+  f.back(null);
+  assert.equal(f.input.value, "");
+  assert.equal(f.clear.hidden, true);
+  f.ready();
+  await settle();
+  await f.blur();
+  assert.equal(f.state.query, "");
+  assert.equal(f.clear.hidden, true);
+  assert.ok(!f.history.includes("London"));
+});
+
+test("category rerender preserves blurred pending input and Clear until readiness", async () => {
+  const f = fixture();
+  f.type("London");
+  f.flush();
+  const blur = f.blur();
+  f.render();
+  assert.equal(f.state.query, "", "the pending query has not been applied yet");
+  assert.equal(f.input.value, "London", "real control synchronization preserves pending text after blur");
+  assert.equal(f.clear.hidden, false, "Clear remains usable after a category rerender");
+  f.ready();
+  await blur;
+  await settle();
+  assert.equal(f.state.query, "London");
+  assert.equal(f.input.value, "London");
+  assert.equal(f.clear.hidden, false);
+  assert.equal(f.filtered.at(-1), "London");
+  assert.equal(f.history.at(-1), "London");
+  f.events.clear();
+  await f.blur();
+  assert.equal(f.state.query, "");
+  assert.equal(f.input.value, "");
+  assert.equal(f.clear.hidden, true);
+  assert.equal(f.history.at(-1), "");
+});
+
+test("Clear cancels a blurred pending query after a category rerender", async () => {
+  const f = fixture();
+  f.type("London");
+  f.flush();
+  const blur = f.blur();
+  f.render();
+  f.events.clear();
+  assert.equal(f.input.value, "");
+  assert.equal(f.clear.hidden, true);
+  f.ready();
+  await blur;
+  await settle();
+  await f.blur();
+  assert.equal(f.state.query, "");
+  assert.equal(f.input.value, "");
+  assert.equal(f.clear.hidden, true);
+  assert.ok(!f.filtered.includes("London"));
+  assert.ok(!f.history.includes("London"));
 });

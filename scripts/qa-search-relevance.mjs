@@ -196,8 +196,10 @@ async function measureFinderTyping(context) {
         requestAnimationFrame(() => requestAnimationFrame(() => __rwnSearchTiming.paints.push({ value: entry.value, delay: performance.now() - entry.start })));
       }, true);
     ` });
-    // Skip the normal navigation settling delay to type while natural idle
-    // preparation can still be pending. Do not artificially delay its callbacks.
+    // A fresh history entry prevents a preceding fixture's saved query from
+    // synchronously preparing the corpus during startup. HTTP cache may be warm;
+    // the per-document matcher corpus is cold. Do not delay its idle callbacks.
+    await client.call("Page.navigate", { url: "about:blank" });
     await client.call("Page.navigate", { url: `${context.host}/` });
     await waitForUI(context, "Boolean(document.querySelector('#resourceSearch')) && Boolean(document.querySelector('.result-row-link'))", 600);
     await evaluate(client, "document.querySelector('#resourceSearch').focus(); document.querySelector('#resourceSearch').select()");
