@@ -52,7 +52,7 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Find food, shelter and everyday essentials. Clear contact details. Sources you can check."
+    "Practical help, with contact details and sources you can check."
   );
 
   const status = document.getElementById("locationStatus");

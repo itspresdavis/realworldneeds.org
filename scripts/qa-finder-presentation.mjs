@@ -30,6 +30,7 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         heading: rect('.finder-intro h1'),
         titleColor: getComputedStyle(document.querySelector('.finder-intro h1')).color,
         surfaceColor: getComputedStyle(document.querySelector('.finder-surface')).backgroundColor,
+        needRows: [...document.querySelectorAll('.quick-need')].map(node => ({label:node.textContent.trim(),top:Math.round(node.getBoundingClientRect().top),width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height})),
         formOrder: [...document.querySelector('.finder-surface').children].map(node => node.id || node.className),
         width: document.documentElement.clientWidth,
         resultCountHeight: document.querySelector('#matchingResultCount').getBoundingClientRect().height,
@@ -44,11 +45,15 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       };
     })()`);
     designEvidence.push({width, ...view});
-    if (width <= 390 && (view.search.bottom > 420 || view.primaryAction.bottom > 640)) {
+    if (width <= 390 && (view.search.bottom > 380 || view.primaryAction.bottom > 560)) {
       throw new Error(`Phone search or main action is buried below the useful first screen at ${width}px: ${JSON.stringify(view)}`);
     }
     if (view.surfaceColor !== 'rgb(255, 254, 251)' || view.titleColor !== 'rgb(249, 248, 239)' || view.formOrder[0] !== 'finder-search-label' || !view.formOrder.includes('jumpResults')) {
       throw new Error(`Homepage surface or grouping inherited the wrong theme at ${width}px: ${JSON.stringify(view)}`);
+    }
+    const lastNeedRow = view.needRows.at(-1).top;
+    if (view.needRows.filter(need => need.top === lastNeedRow).length < 2 || view.needRows.some(need => need.width < 44 || need.height < 44)) {
+      throw new Error(`Need choices are stranded or undersized at ${width}px: ${JSON.stringify(view.needRows)}`);
     }
     if (view.resultCountHeight > 24) throw new Error(`Matching-result count wraps at ${width}px.`);
     if (view.scrollWidth > view.width + 1 || view.sections.some((section) => section.x < -1 || section.right > view.width + 1)) {

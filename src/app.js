@@ -912,12 +912,15 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
+  const listingType = isExactServiceSite(resource) ? "Service location" : "Resource finder";
   const sourcePrefix = resource.sourceName === resource.name ? "" : `${resource.sourceName} · `;
+  const costLabel = freeAccessLabel(resource, true);
+  const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
   const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${sourcePrefix}${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b>${openAccess}</small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${sourcePrefix}${listingType}${costSuffix}${openAccess}</small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
         <span class="resource-row__aid">${aidLabels}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>
@@ -927,6 +930,13 @@ function resourceCard(resource) {
       ${sourceClosureMarkup(resource)}
     </article>
   `;
+}
+
+function emptyResultsCopy({ viewMode, savedOnly, savedCount }) {
+  if (viewMode === "needs") return { title: "No public requests are listed.", detail: "RWN does not accept or publish personal requests through this website.", action: "" };
+  if (savedOnly && !savedCount) return { title: "No saved services yet.", detail: "Open a service listing and choose Save to keep it in this browser.", action: "Browse all services" };
+  if (savedOnly) return { title: "No saved services match these filters.", detail: "Change your search or browse all services. Your saved list stays on this browser.", action: "Browse all services" };
+  return { title: "No services match these filters.", detail: "Try another place, service, or listing type. RWN may not have every service.", action: "Clear search and filters" };
 }
 
 function renderResults() {
@@ -939,9 +949,10 @@ function renderResults() {
   count.textContent = state.viewMode === "aid"
     ? `${state.userLocation ? `${nearbyExactCount()} service locations within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} listings`
     : "No public requests are listed";
+  const empty = emptyResultsCopy({ viewMode: state.viewMode, savedOnly: state.savedOnly, savedCount: state.savedIds.size });
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
-    : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type. RWN may not have every service."}</p>${state.viewMode === "aid" ? '<button class="results-empty__reset" id="clearFinderFilters" type="button">Clear search and filters</button>' : ""}</div>`;
+    : `<div class="results-empty"><strong>${empty.title}</strong><p>${empty.detail}</p>${empty.action ? `<button class="results-empty__reset" id="clearFinderFilters" type="button">${empty.action}</button>` : ""}</div>`;
   if (matchingResultCount) matchingResultCount.textContent = `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
   refreshSearchPreparation();

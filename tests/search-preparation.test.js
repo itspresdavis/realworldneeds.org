@@ -24,7 +24,7 @@ const controlSync = source.slice(
   source.indexOf('  document.getElementById("locateMe").disabled', source.indexOf("function renderControls")),
 );
 const resultsRenderer = source.slice(
-  source.indexOf("function renderResults() {"),
+  source.indexOf("function emptyResultsCopy("),
   source.indexOf("function setSelected("),
 );
 function fixture() {
@@ -53,7 +53,7 @@ function fixture() {
       events.clear = handler;
     },
   };
-  const state = { query: "", viewMode: "aid", filtered: [{ id: "first" }, { id: "second" }], visibleResults: 60 };
+  const state = { query: "", viewMode: "aid", savedOnly: false, savedIds: new Set(), filtered: [{ id: "first" }, { id: "second" }], visibleResults: 60 };
   const count = { textContent: "Showing 2 of 2 listings" };
   const status = { textContent: "Current search: " };
   const badge = { textContent: "2 matches" };

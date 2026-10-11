@@ -74,3 +74,48 @@ test('regrouping restores a focused search and its selected text without scrolli
 test('location and clear controls can share the narrower grouped phone surface', () => {
   assert.match(css, /\.finder-surface \.location-button \{ flex-basis: 10rem; \}/);
 });
+
+test('all needs is first in DOM order and compact rows are balanced without smaller targets', () => {
+  const markup = refinement.slice(refinement.indexOf('container.innerHTML ='), refinement.indexOf('search.insertAdjacentElement'));
+  assert.ok(markup.indexOf('data-quick-type="all"') < markup.indexOf('QUICK_TYPES.map'));
+  assert.match(css, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(css, /data-quick-type="health"\] \{ grid-column:span 2;/);
+  assert.match(css, /\.quick-need \{[^}]*min-height: 44px;/);
+});
+
+test('empty results distinguish unsaved, filtered-saved, ordinary and unavailable requests', async () => {
+  const app = await readFile('src/app.js','utf8');
+  const source = app.slice(app.indexOf('function emptyResultsCopy('), app.indexOf('function renderResults()'));
+  const context = vm.createContext({});
+  vm.runInContext(source, context);
+  const inspect = state => JSON.parse(JSON.stringify(context.emptyResultsCopy({viewMode:'aid',savedOnly:false,savedCount:0,...state})));
+  assert.equal(inspect({savedOnly:true}).title,'No saved services yet.');
+  assert.match(inspect({savedOnly:true}).detail,/choose Save.*this browser/);
+  assert.equal(inspect({savedOnly:true}).action,'Browse all services');
+  assert.equal(inspect({savedOnly:true,savedCount:2}).title,'No saved services match these filters.');
+  assert.equal(inspect({savedOnly:true,savedCount:2}).action,'Browse all services');
+  assert.equal(inspect({}).title,'No services match these filters.');
+  assert.equal(inspect({}).action,'Clear search and filters');
+  assert.equal(inspect({viewMode:'needs',savedOnly:true}).action,'');
+  assert.match(app, /event\.target\.closest\("#clearFinderFilters"\)\) clearFinderFilters\(\)/);
+});
+
+
+test('actual resource finders show their type once and retain meaningful cost labels', async () => {
+  const { resources, categories } = await import('../src/data/resources.js');
+  const { freeAccessLabel } = await import('../src/data/free-access.js');
+  const { isExactServiceSite } = await import('../src/utils/geo.js');
+  const app = await readFile('src/app.js','utf8');
+  const source = app.slice(app.indexOf('function resourceCard('), app.indexOf('function emptyResultsCopy('));
+  const context = vm.createContext({categories, freeAccessLabel, isExactServiceSite, state:{}, allTypes:r=>[r.category], formatResourcePlace:r=>r.city, locationResultLabel:()=>'', reviewLabel:r=>r.lastChecked, icon:{arrow:''}, sourceClosureMarkup:()=>''});
+  vm.runInContext(source, context);
+  const locator = resources.find(r=>r.id==='feeding-america');
+  assert.ok(locator, 'the real catalog fixture exists');
+  const markup = context.resourceCard(locator);
+  assert.equal((markup.match(/Resource finder/g)||[]).length,1);
+  for (const model of ['free','free-eligible','free-option']) {
+    const resource = resources.find(r=>r.costModel===model);
+    assert.ok(resource, model);
+    assert.ok(context.resourceCard(resource).includes(`<b>${freeAccessLabel(resource,true)}</b>`), `${model} is still visible`);
+  }
+});

@@ -1,7 +1,6 @@
-/* Real World Needs */
 
 :root {
---rwn-blue: #24583e; --rwn-blue-dark: #153c30; --rwn-blue-deep: #12392e; --rwn-green: #356c4e; --rwn-green-dark: #24583e; --rwn-green-soft: #edf4ee; --rwn-ink: #283e34; --rwn-ink-strong: #153c30; --rwn-muted: #586b60; --rwn-line: #d8e0dd; --rwn-line-strong: #c5d0cc; --rwn-paper: #f5f4ee; --rwn-white: #ffffff; --rwn-map: #e5eee8; --rwn-max: 1344px; --rwn-content: 1184px;
+--rwn-blue: #24583e; --rwn-blue-dark: #153c30; --rwn-blue-deep: #12392e; --rwn-green: #356c4e; --rwn-green-dark: #24583e; --rwn-green-soft: #edf4ee; --rwn-ink: #283e34; --rwn-ink-strong: #153c30; --rwn-muted: #586b60; --rwn-line: #d8e0dd; --rwn-line-strong: #c5d0cc; --rwn-paper: #f5f4ee; --rwn-white: #ffffff; --rwn-max: 1344px; --rwn-content: 1184px;
 }
 
 html {
@@ -31,7 +30,6 @@ outline: 3px solid #356c4e !important; outline-offset: 3px !important; box-shado
 .accountability,
 #openInspector { display: none !important; }
 
-/* Header */
 .rwn-professional .site-header {
 position: sticky; top: 0; z-index: 100; display: grid; grid-template-columns: auto 1fr auto; min-height: 74px; align-items: center; gap: 1.5rem; padding: .7rem max(1rem, calc((100vw - var(--rwn-max)) / 2)); border-bottom: 1px solid var(--rwn-line); background: rgba(255, 255, 255, .98); box-shadow: 0 1px 0 rgba(8, 26, 34, .02);
 }
@@ -78,7 +76,6 @@ border-color: #8baea0; background: var(--rwn-green-soft); color: var(--rwn-green
 }
 .rwn-professional .site-menu { display: none; }
 
-/* Primary finder */
 .rwn-professional .finder {
 border-bottom: 1px solid var(--rwn-line); background: #102f27; color: var(--rwn-ink);
 }
@@ -106,7 +103,7 @@ max-width: 17ch; margin: 0; color: #f9f8ef; font-family: Georgia, "Times New Rom
 max-width: 31rem; margin: 1.15rem 0 0; color: #c6d7cc; font-size: 1rem; line-height: 1.6;
 }
 
-.rwn-professional .finder-surface { margin-top: 1.6rem; padding: 1.25rem; border: 1px solid #e0e7df; border-radius: 12px; background: #fffefb; color: var(--rwn-ink); box-shadow: 0 12px 36px #061b1726; }
+.rwn-professional .finder-surface { container-type:inline-size; margin-top: 1.6rem; padding: 1.25rem; border: 1px solid #e0e7df; border-radius: 12px; background: #fffefb; color: var(--rwn-ink); box-shadow: 0 12px 36px #061b1726; }
 .finder-search-label { display: block; margin-bottom: .6rem; color: var(--rwn-ink-strong); font-size: .875rem; font-weight: 700; }
 .rwn-professional .finder-search { margin-top: 0; }
 .rwn-professional .search-box {
@@ -130,7 +127,7 @@ display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem;
 }
 .quick-needs__label { display: none; }
 .quick-need {
-min-height: 44px; padding: .5rem .68rem; border: 1px solid #d2dbd7; border-radius: 999px; background: rgba(255,255,255,.72); color: #334950; font: inherit; font-size: .8125rem; font-weight: 650; cursor: pointer;
+min-width: 44px; min-height: 44px; padding: .5rem .68rem; border: 1px solid #d2dbd7; border-radius: 999px; background: rgba(255,255,255,.72); color: #334950; font: inherit; font-size: .8125rem; font-weight: 650; cursor: pointer;
 }
 .quick-need:hover,
 .quick-need:focus-visible { border-color: #9ab7aa; background: #fff; color: var(--rwn-green-dark); }
@@ -372,7 +369,6 @@ display: block; min-width: 0; width: 100%; margin: 0 auto; padding: clamp(3.5rem
   .rwn-professional :is(.mission-steps,.principle-grid) { margin-top: 0; }
 }
 
-/* Footer */
 .rwn-professional .site-footer {
 display: grid; grid-template-columns: minmax(13rem,1.3fr) repeat(3,minmax(10rem,.8fr)); gap: 2rem; padding: clamp(3rem,5vw,4.5rem) max(1rem, calc((100vw - var(--rwn-content)) / 2)); border-top: 1px solid #173a49; background: var(--rwn-blue-deep); color: #bbcbce;
 }
@@ -387,7 +383,6 @@ display: grid; grid-template-columns: minmax(13rem,1.3fr) repeat(3,minmax(10rem,
 .rwn-professional .site-footer > p { grid-column: 1 / -1; margin: .5rem 0 0; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.1); color: #acbec2; font-size: .75rem; }
 .rwn-professional .footer-data-button { padding: 0; border: 0; background: transparent; text-align: left; }
 
-/* Responsive */
 @media (max-width: 1100px) {
   .rwn-professional .primary-nav { gap: 1rem; }
   .rwn-professional .finder__grid,
@@ -446,8 +441,8 @@ display: grid; grid-template-columns: minmax(13rem,1.3fr) repeat(3,minmax(10rem,
   .rwn-professional .finder__grid.is-panel-collapsed,
   .rwn-professional .finder__grid:not(.is-panel-collapsed) { padding: 1.15rem .8rem 1.5rem; gap: 1rem; }
   .rwn-professional .finder-intro h1 { max-width: 17ch; font-size: clamp(2rem,9.6vw,2.8rem); line-height:1.06; }
-  .rwn-professional .finder-intro p { margin-top:.8rem; font-size:.9375rem; line-height:1.5; }
-  .rwn-professional .finder-surface { margin-top:1.15rem; padding:.9rem; }
+  .rwn-professional .finder-intro p { margin-top:.65rem; font-size:.9375rem; line-height:1.5; }
+  .rwn-professional .finder-surface { margin-top:.85rem; padding:.8rem; }
 
   .rwn-professional .globe-stage { height: 27rem; border-radius:14px; }
   .rwn-professional .globe-meta { top:.65rem; right:.75rem; left:.75rem; }
@@ -509,7 +504,7 @@ border-color: var(--rwn-green); background: var(--rwn-green); color: #fff; box-s
   justify-content: center;
   white-space: normal;
   }
-  .rwn-professional .jump-results { margin-top: 1rem; }
+  .rwn-professional .jump-results { margin-top: .75rem; }
 }
 
 /* Presentation contracts for the c */
@@ -560,6 +555,18 @@ touch-action: manipulation; transition: transform 120ms ease, border-color 140ms
   .rwn-professional .finder-disclosures { column-gap:.65rem; }
   .rwn-professional .finder-surface .jump-results { gap:.35rem; padding:.65rem .7rem; font-size:.8125rem; }
   .rwn-professional .finder-surface .jump-results small { font-size:.625rem; padding:.12rem .25rem; }
+}
+
+@container (max-width:31rem) {
+  .rwn-professional .quick-needs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .rwn-professional .quick-need[data-quick-type="health"] { grid-column:span 2; }
+}
+@media (max-width:360px) {
+  .rwn-professional .quick-need { padding-inline:.25rem; }
+}
+
+@media (min-width:1101px) {
+  .rwn-professional :is(.resource-list-head,.result-row-link) { grid-template-columns:minmax(14rem,1.4fr) minmax(9rem,1fr) minmax(10rem,1fr) minmax(8rem,.8fr) 7rem 1.5rem; }
 }
 
 /* The text-first fallback: scope to failure; preserve retry and its coordinate space. */

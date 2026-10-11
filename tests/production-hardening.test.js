@@ -27,7 +27,7 @@ test("built homepage contains useful server-visible finder content before JavaSc
   const html = await text("dist/index.html");
   assert.match(html, /<main class="preboot-finder"/);
   assert.match(html, /Find essential services near you/);
-  assert.match(html, /Find food, shelter and everyday essentials/);
+  assert.match(html, /Practical help, with contact details and sources you can check/);
   assert.match(html, /\/directory\/help\/food/);
   assert.match(html, /Browse the full directory/);
   assert.doesNotMatch(html, /No account required\. No paywall/);

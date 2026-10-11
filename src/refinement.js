@@ -59,8 +59,8 @@ function installQuickNeeds() {
   container.setAttribute("aria-label", "Common service filters");
   container.innerHTML = `
     <p class="quick-needs__label">Core needs</p>
-    ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
     <button class="quick-need quick-need--all" type="button" data-quick-type="all" aria-pressed="true">All</button>
+    ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
   `;
   search.insertAdjacentElement("afterend", container);
 
