@@ -75,8 +75,9 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     const serviceHistory = await client.call('Page.getNavigationHistory');
     const serviceId = serviceHistory.entries[serviceHistory.currentIndex].id;
     await goEntry(directoryId);
-    const returned = await wait(s => s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120, 'Back lost query, country, need or loaded rows');
-    if (returned.scroll < 200) throw new Error('Back lost the visitor’s place in the results');
+    // Rows arrive before the separate animation frame that restores the view.
+    // Keep the bounded wait on the complete outcome, including visible focus.
+    const returned = await wait(s => s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120 && s.scroll > 200 && s.focus === target && s.focusVisible, 'Back lost query, country, need, loaded rows or visible return position');
     await client.call('Page.reload', { ignoreCache: true });
     const reloaded = await wait(s => s.timeOrigin !== returned.timeOrigin && s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120, 'Reload lost directory state');
     await wait(s => s.focus === target && s.scroll > 200, 'Reload did not restore listing focus and scroll');

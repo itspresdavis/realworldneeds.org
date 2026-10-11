@@ -10,6 +10,20 @@ const source = await readFile("public/directory.js", "utf8");
 const applySource = source.slice(source.indexOf("const apply="), source.indexOf("const reset="));
 const restoreViewSource = source.slice(source.indexOf("const restoreView="), source.indexOf("const apply="));
 
+test("browser Back assertion waits for the restored position after result rows render", async () => {
+  const qa = await readFile("scripts/qa-directory-discovery.mjs", "utf8");
+  const line = qa.split("\n").find(line => line.includes("const returned = await wait("));
+  const predicate = line.slice(line.indexOf("wait(") + 5, line.lastIndexOf(", '"));
+  const ready = vm.runInNewContext(`(${predicate})`, { target: "/service/return-target" });
+  const rendered = { query: "WIC", country: "United States", category: "Food", rows: Array(120), scroll: 0, focus: "", focusVisible: false };
+  assert.equal(ready(rendered), false, "rows can render before the restoration animation frame");
+  const restored = { ...rendered, scroll: 900, focus: "/service/return-target", focusVisible: true };
+  assert.equal(ready(restored), true);
+  for (const changed of [{ scroll: 0 }, { focus: "/service/other" }, { focusVisible: false }, { query: "" }, { country: "" }, { category: "All help" }, { rows: Array(60) }]) {
+    assert.equal(ready({ ...restored, ...changed }), false, JSON.stringify(changed));
+  }
+});
+
 test("directory state remains scoped to one path and never changes the URL", () => {
   const value = { query: "  New   York  ", country: "United States", category: "food", shown: 120, scroll: 2200, focus: "/service/bowery-mission" };
   const history = { state: { unrelated: { retained: true } }, replaceState(...args) { assert.equal(args.length, 2, "no URL argument"); this.state = args[0]; } };
