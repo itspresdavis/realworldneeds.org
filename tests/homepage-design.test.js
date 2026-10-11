@@ -131,3 +131,8 @@ test('expanded filter groups do not clip keyboard focus outlines', () => {
   assert.match(css, /\.rwn-professional \.layer-list \{ overflow:visible;/);
   assert.match(css, /\.rwn-professional \.access-switch \{[^}]*overflow:visible;/);
 });
+
+
+test('native focus scrolling reserves space for outer rings at the viewport bottom', () => {
+  assert.match(css, /scroll-padding-top: var\(--rwn-header-clearance, 5rem\); scroll-padding-bottom:\.75rem;/);
+});

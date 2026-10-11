@@ -4,7 +4,7 @@
 }
 
 html {
-scroll-behavior: auto !important; scroll-padding-top: var(--rwn-header-clearance, 5rem); background: var(--rwn-white);
+scroll-behavior: auto !important; scroll-padding-top: var(--rwn-header-clearance, 5rem); scroll-padding-bottom:.75rem; background: var(--rwn-white);
 }
 
 body.rwn-professional {

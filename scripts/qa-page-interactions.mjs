@@ -243,8 +243,8 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     assert(reducedTarget.active === 'results' && reducedTarget.smooth === 'auto', 'Reduced-motion results navigation failed', reducedTarget);
     await client.call('Emulation.setCPUThrottlingRate', {rate:1});
 
-    for (const width of [320,390,900,1440]) {
-      await client.call('Emulation.setDeviceMetricsOverride', {width,height:844,deviceScaleFactor:1,mobile:false});
+    for (const [width,height] of [[320,489],[320,844],[390,568],[390,844],[900,844],[1440,844]]) {
+      await client.call('Emulation.setDeviceMetricsOverride', {width,height,deviceScaleFactor:1,mobile:false});
       await loadHome();
       const controls = await evaluate(client, `(() => {
         document.querySelector('.filter-disclosure').open=true;
@@ -276,7 +276,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         });
       })()`);
       assert(expanded.length>=39&&expanded.every(item=>item.rendered&&item.within&&item.unclipped&&item.contentFits), 'Expanded finder clips a label, count, indicator or control', expanded);
-      evidence.push({label:'Expanded finder descendant bounds at '+width+'px',expanded});
+      evidence.push({label:'Expanded finder descendant bounds at '+width+'x'+height,expanded});
       // Traverse every real disclosure action using native Tab, including the
       // location explanation link, category choices and listing-type options.
       const expandedTargets = await evaluate(client, `(() => {
@@ -291,27 +291,36 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
           await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
           await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
         }
-        const focused=await evaluate(client, `(() => {
+        const readFocused=()=>evaluate(client, `(() => {
           const node=document.activeElement,style=getComputedStyle(node),header=document.querySelector('.site-header').getBoundingClientRect();
           const extent=Math.max(0,parseFloat(style.outlineWidth)+parseFloat(style.outlineOffset));
           const fragments=[...node.getClientRects()].map(box=>{
             const hit=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
-            let ringUnclipped=true;
+            let ringUnclipped=box.left-extent>=0&&box.right+extent<=document.documentElement.clientWidth+1&&box.top-extent>=header.bottom&&box.bottom+extent<=innerHeight;
             for(let parent=node.parentElement;parent;parent=parent.parentElement){
               const parentStyle=getComputedStyle(parent),bounds=parent.getBoundingClientRect();
               if(/hidden|clip|auto|scroll/.test(parentStyle.overflowX))ringUnclipped&&=box.left-extent>=bounds.left-1&&box.right+extent<=bounds.right+1;
               if(/hidden|clip|auto|scroll/.test(parentStyle.overflowY))ringUnclipped&&=box.top-extent>=bounds.top-1&&box.bottom+extent<=bounds.bottom+1;
             }
-            return {visible:box.width>0&&box.height>0&&box.left>=0&&box.right<=document.documentElement.clientWidth+1&&box.top>=header.bottom&&box.bottom<=innerHeight,hit:node===hit||node.contains(hit),ringUnclipped};
+            return {left:box.left,right:box.right,top:box.top,bottom:box.bottom,width:box.width,height:box.height,visible:box.width>0&&box.height>0&&box.left>=0&&box.right<=document.documentElement.clientWidth+1&&box.top>=header.bottom&&box.bottom<=innerHeight,hit:node===hit||node.contains(hit),ringUnclipped};
           });
-          return {index:Number(node.dataset.qaExpandedTarget),text:node.textContent.trim(),ring:node.matches(':focus-visible')&&parseFloat(style.outlineWidth)>=3,visible:fragments.length>0&&fragments.every(item=>item.visible),hit:fragments.some(item=>item.hit),ringUnclipped:fragments.every(item=>item.ringUnclipped)};
+          return {index:Number(node.dataset.qaExpandedTarget),text:node.textContent.trim(),headerBottom:header.bottom,viewportHeight:innerHeight,scrollY,fragments,ring:node.matches(':focus-visible')&&parseFloat(style.outlineWidth)>=3,visible:fragments.length>0&&fragments.every(item=>item.visible),hit:fragments.some(item=>item.hit),ringUnclipped:fragments.every(item=>item.ringUnclipped)};
         })()`);
+        // Focus updates before its native scroll is necessarily painted. Wait
+        // for real arrival without moving the target or relaxing any bounds.
+        let focused;
+        try {
+          focused=await arrive(state=>state.index===target.index&&state.ring&&state.visible&&state.hit&&state.ringUnclipped, 'Expanded finder keyboard target '+target.index+' at '+width+'x'+height, readFocused);
+        } catch(error) {
+          await capture(client,`page-interactions-expanded-focus-failure-${width}x${height}.png`);
+          throw error;
+        }
         assert(focused.index===target.index&&focused.ring&&focused.visible&&focused.hit&&focused.ringUnclipped, 'Keyboard cannot visibly reach an expanded finder control', {target,focused});
         reached.push(focused);
       }
-      evidence.push({label:'Expanded finder keyboard reachability at '+width+'px',reached});
+      evidence.push({label:'Expanded finder keyboard reachability at '+width+'x'+height,reached});
       await evaluate(client, `document.querySelector('.finder-location-notes').open=false;document.querySelector('.finder-controls').scrollIntoView({behavior:'instant',block:'center'})`);
-      await capture(client,`page-interactions-expanded-filters-${width}.png`);
+      await capture(client,`page-interactions-expanded-filters-${width}x${height}.png`);
       const contrast = await controlContrast('#clearSearch,.quick-need,.location-button,.location-clear,.filter-heading button,.layer-toggle,.access-switch button,.directory-tool,.outline-button--dark,.region-menu select,.layer-toggle strong,.layer-toggle.is-active .layer-toggle__check,.finder-search-label,#resourceSearch,.finder-intro h1,.finder-intro p,.finder-safety,.finder-safety strong,.globe-meta strong,.atlas-key,.atlas-key small,#jumpResults,#matchingResultCount,.globe-controls button');
       evidence.push({label:'Enabled finder control contrast at '+width+'px',contrast});
       assert(contrast.length>10&&contrast.every(item=>item.ratio>=4.5&&Number(item.opacity)===1), 'Enabled finder controls inherit unreadable light-theme text', contrast);
