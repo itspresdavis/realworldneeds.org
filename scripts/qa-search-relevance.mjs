@@ -92,12 +92,12 @@ function assertLondon(result, records, label) {
 function assertWic(result, records, label) {
   const names = (record) => [record.name, record.summary, record.sourceName, ...(record.services || [])].join(" ");
   const explicit = records.filter((record) => /\bwic\b/i.test(names(record)));
-  const falsePositives = records.filter((record) => /Norwich Foodbank|^3rd Space$/i.test(record.name));
+  const falsePositives = records.filter((record) => /Norwich Foodbank|^3rd Space$/i.test(record.name) || record.city === "Wick");
   const ids = new Set(result.rows.map((row) => row.id));
   assert(explicit.length > 60 && explicit.every((record) => ids.has(record.id)), `${label}: explicit WIC providers must survive all result pages`, { missing: explicit.filter((record) => !ids.has(record.id)).map((record) => record.name), count: result.rows.length });
-  assert(falsePositives.length > 0 && falsePositives.every((record) => !ids.has(record.id)), `${label}: WIC matched word interiors such as Norwich or Brunswick`, result.rows.filter((row) => falsePositives.some((record) => record.id === row.id)));
+  assert(falsePositives.length > 0 && falsePositives.every((record) => !ids.has(record.id)), `${label}: WIC matched a place prefix or word interior without program evidence`, result.rows.filter((row) => falsePositives.some((record) => record.id === row.id)));
   const explicitIds = new Set(explicit.map((record) => record.id));
-  assert(result.rows.slice(0, explicit.length).every((row) => explicitIds.has(row.id)), `${label}: exact WIC providers must precede partial-word matches`, result.rows.slice(-4));
+  assert(result.rows.length === explicit.length && result.rows.every((row) => explicitIds.has(row.id)), `${label}: completed WIC must contain only evidenced WIC providers`, result.rows.slice(-4));
   assert(result.rows.some((row) => /Norwich WIC/.test(row.text)), `${label}: legitimate Norwich WIC must remain`, result.count);
 }
 
@@ -132,6 +132,14 @@ async function verifySurface(context, kind, records, width) {
   assertWic(wic, records, `${kind} ${width}px`);
   await context.evaluate(context.client, `document.querySelector(${JSON.stringify(surface.results)}).scrollIntoView({ block: 'start' })`);
   await context.capture(context.client, `search-${kind}-wic-${width}.png`);
+
+  await typeQuery(context, surface, "W.I.C.");
+  assertWic(await allResults(context, surface, records.length), records, `${kind} ${width}px punctuated WIC`);
+  for (const query of ["Wi", "Wick"]) {
+    await typeQuery(context, surface, query);
+    const prefixResults = await allResults(context, surface, records.length);
+    assert(prefixResults.rows.some(row => records.find(record => record.id === row.id)?.city === "Wick"), `${kind} ${width}px: ${query} must retain Wick prefix recall`, prefixResults.count);
+  }
 
   await typeQuery(context, surface, "London Road");
   const street = await allResults(context, surface, records.length);

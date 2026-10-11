@@ -380,7 +380,8 @@ async function run() {
         const input = document.getElementById("resourceSearch");
         input.value = "zzzz-fallback-no-match";
         input.dispatchEvent(new Event("input", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 350));
+        for (let attempt = 0; attempt < 100 && !document.getElementById("clearFinderFilters"); attempt += 1)
+          await new Promise((resolve) => setTimeout(resolve, 50));
         document.getElementById("globeClusterTray").hidden = false;
         document.getElementById("globeCanvas").dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

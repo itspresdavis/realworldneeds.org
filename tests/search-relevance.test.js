@@ -34,34 +34,31 @@ const indexRecord = (resource) => ({
   search: resourceSearchText(resource),
 });
 
-test("WIC requires a word start; exact program tokens outrank legitimate prefix completion", () => {
+test("completed WIC requires program evidence while Wi and Wick retain prefix recall", () => {
   const wic = fixture({ name: "Community WIC program", city: "Boston" });
   const wick = fixture({ name: "Wick foodbank", city: "Wick" });
   const norwich = fixture({ name: "Norwich foodbank", city: "Norwich" });
   const brunswick = fixture({ name: "Brunswick pantry", city: "Brunswick" });
-  for (const query of ["WIC", "wic", "W.I.C.", "wic "]) {
-    assert.equal(score(norwich, query), -1);
-    assert.equal(score(brunswick, query), -1);
-    assert.ok(score(wic, query) > score(wick, query));
-    assert.ok(
-      score(wick, query) >= 0,
-      "Wic remains a useful partial spelling of Wick",
-    );
+  for (const convert of [(resource) => resource, indexRecord]) {
+    for (const query of ["WIC", "wic", "W.I.C.", "w.i.c", "WÍÇ", "wic ", "WIC food"]) {
+      assert.ok(score(convert(wic), query) >= 0, query);
+      for (const other of [wick, norwich, brunswick])
+        assert.equal(score(convert(other), query), -1, `${query}: ${other.name}`);
+    }
+    assert.ok(score(convert(wic), "wi") >= 0);
+    assert.ok(score(convert(wick), "wi") >= 0);
+    assert.ok(score(convert(wick), "wick") >= 0);
+    assert.equal(score(convert(wic), "wick"), -1);
+    assert.ok(score(convert(fixture({ name: "ABC Community" })), "ab") >= 0);
+    assert.ok(score(convert(fixture({ name: "Abcdef Community" })), "abc") >= 0,
+      "Unknown acronyms keep the ordinary prefix rule");
   }
-  assert.ok(score(wic, "wi") >= 0);
-  assert.ok(score(wick, "wick") >= 0);
-  assert.equal(score(wic, "wick"), -1);
-  assert.ok(
-    find("WIC").every((resource) => !/Norwich Foodbank/.test(resource.name)),
-  );
   const ranked = find("WIC");
-  const isWic = (resource) =>
-    /(?:^|\s)wic(?:\s|$)/.test(resourceSearchText(resource));
-  const exactCount = ranked.filter(isWic).length;
-  assert.ok(exactCount > 0);
-  assert.ok(ranked.slice(0, exactCount).every(isWic));
-  assert.equal(ranked.length, exactCount + 1);
-  assert.equal(ranked.at(-1).city, "Wick");
+  assert.equal(ranked.length, 395);
+  assert.ok(ranked.every((resource) => /(?:^|\s)wic(?:\s|$)/.test(resourceSearchText(resource))));
+  assert.ok(ranked.some((resource) => /Norwich WIC/.test(resource.name)));
+  assert.ok(find("wi").some((resource) => resource.city === "Wick"));
+  assert.ok(find("wick").some((resource) => resource.city === "Wick"));
 });
 
 test("exact London place outranks London Colney and a London Road in Bedford", () => {

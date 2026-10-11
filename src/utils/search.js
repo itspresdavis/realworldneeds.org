@@ -1,5 +1,6 @@
 // One local matcher for the finder and text directory. Match word starts, never
-// arbitrary interiors: WIC can match “WIC clinic”, but not “Norwich”.
+// arbitrary interiors. Completed WIC is a known program intent, so only its
+// exact token matches; shorter Wi and explicit Wick keep normal prefix behavior.
 export const normalizeSearch = (value) =>
   String(value || "")
     .normalize("NFKD")
@@ -127,10 +128,12 @@ export function resourceSearchScore(resource, query) {
   let score = 0;
   for (const [literal, alias] of tokens) {
     if (
-      !prefix(entry.text, literal) &&
-      !(alias.includes(" ")
-        ? whole(entry.phrases ?? entry.text, alias)
-        : prefix(entry.text, alias))
+      literal === "wic"
+        ? !whole(entry.text, literal)
+        : !prefix(entry.text, literal) &&
+          !(alias.includes(" ")
+            ? whole(entry.phrases ?? entry.text, alias)
+            : prefix(entry.text, alias))
     ) {
       score = -1;
       break;
