@@ -257,7 +257,62 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       })()`);
       assert(!controls.overflow && controls.targets.every(target=>target.w>=43.5&&target.h>=43.5), 'Finder control target or reflow contract failed', controls);
       assert(controls.location.length===2 && Math.abs(controls.location[0].top-controls.location[1].top)<=1, 'Location and Clear actions unnecessarily split into two rows', controls.location);
-      const contrast = await controlContrast('#clearSearch,.quick-need,.location-button,.location-clear,.filter-heading button,.layer-toggle,.access-switch button,.directory-tool,.outline-button--dark,.region-menu select,.layer-toggle strong,.finder-search-label,#resourceSearch,.finder-intro h1,.finder-intro p,.finder-safety,.finder-safety strong,.globe-meta strong,.atlas-key,.atlas-key small,#jumpResults,#matchingResultCount,.globe-controls button');
+      // Document overflow cannot reveal children clipped inside a filter list.
+      const expanded = await evaluate(client, `(() => {
+        document.querySelector('.finder-location-notes').open=true;
+        const check = (node,container) => {
+          const box=node.getBoundingClientRect(),owner=container.getBoundingClientRect();
+          let visible={left:box.left,right:box.right,top:box.top,bottom:box.bottom};
+          for(let parent=node.parentElement;parent;parent=parent.parentElement){
+            const style=getComputedStyle(parent),bounds=parent.getBoundingClientRect();
+            if(/hidden|clip|auto|scroll/.test(style.overflowX)){visible.left=Math.max(visible.left,bounds.left);visible.right=Math.min(visible.right,bounds.right);}
+            if(/hidden|clip|auto|scroll/.test(style.overflowY)){visible.top=Math.max(visible.top,bounds.top);visible.bottom=Math.min(visible.bottom,bounds.bottom);}
+          }
+          return {text:node.textContent.trim(),rendered:node.getClientRects().length>0&&box.width>0&&box.height>0&&getComputedStyle(node).visibility==='visible'&&Number(getComputedStyle(node).opacity)>0,within:box.left>=owner.left-1&&box.right<=owner.right+1&&box.top>=owner.top-1&&box.bottom<=owner.bottom+1,unclipped:visible.right-visible.left>=box.width-1&&visible.bottom-visible.top>=box.height-1,contentFits:node.scrollWidth<=node.clientWidth+1};
+        };
+        return ['.layer-list','.access-switch','.finder-location-notes__body'].flatMap(selector=>{
+          const container=document.querySelector(selector);
+          return [...container.querySelectorAll('button,button>span,button>strong,a')].map(node=>check(node,container));
+        });
+      })()`);
+      assert(expanded.length>=39&&expanded.every(item=>item.rendered&&item.within&&item.unclipped&&item.contentFits), 'Expanded finder clips a label, count, indicator or control', expanded);
+      evidence.push({label:'Expanded finder descendant bounds at '+width+'px',expanded});
+      // Traverse every real disclosure action using native Tab, including the
+      // location explanation link, category choices and listing-type options.
+      const expandedTargets = await evaluate(client, `(() => {
+        const nodes=[...document.querySelectorAll('.finder-disclosures summary,.finder-disclosures button,.finder-disclosures a')].filter(node=>!node.disabled&&node.getClientRects().length);
+        nodes.forEach((node,index)=>node.dataset.qaExpandedTarget=String(index));
+        return nodes.map((node,index)=>({index,text:node.textContent.trim()}));
+      })()`);
+      await keyboardFocus('[data-qa-expanded-target="0"]');
+      const reached=[];
+      for(const target of expandedTargets){
+        if(target.index){
+          await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+          await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+        }
+        const focused=await evaluate(client, `(() => {
+          const node=document.activeElement,style=getComputedStyle(node),header=document.querySelector('.site-header').getBoundingClientRect();
+          const extent=Math.max(0,parseFloat(style.outlineWidth)+parseFloat(style.outlineOffset));
+          const fragments=[...node.getClientRects()].map(box=>{
+            const hit=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
+            let ringUnclipped=true;
+            for(let parent=node.parentElement;parent;parent=parent.parentElement){
+              const parentStyle=getComputedStyle(parent),bounds=parent.getBoundingClientRect();
+              if(/hidden|clip|auto|scroll/.test(parentStyle.overflowX))ringUnclipped&&=box.left-extent>=bounds.left-1&&box.right+extent<=bounds.right+1;
+              if(/hidden|clip|auto|scroll/.test(parentStyle.overflowY))ringUnclipped&&=box.top-extent>=bounds.top-1&&box.bottom+extent<=bounds.bottom+1;
+            }
+            return {visible:box.width>0&&box.height>0&&box.left>=0&&box.right<=document.documentElement.clientWidth+1&&box.top>=header.bottom&&box.bottom<=innerHeight,hit:node===hit||node.contains(hit),ringUnclipped};
+          });
+          return {index:Number(node.dataset.qaExpandedTarget),text:node.textContent.trim(),ring:node.matches(':focus-visible')&&parseFloat(style.outlineWidth)>=3,visible:fragments.length>0&&fragments.every(item=>item.visible),hit:fragments.some(item=>item.hit),ringUnclipped:fragments.every(item=>item.ringUnclipped)};
+        })()`);
+        assert(focused.index===target.index&&focused.ring&&focused.visible&&focused.hit&&focused.ringUnclipped, 'Keyboard cannot visibly reach an expanded finder control', {target,focused});
+        reached.push(focused);
+      }
+      evidence.push({label:'Expanded finder keyboard reachability at '+width+'px',reached});
+      await evaluate(client, `document.querySelector('.finder-location-notes').open=false;document.querySelector('.finder-controls').scrollIntoView({behavior:'instant',block:'center'})`);
+      await capture(client,`page-interactions-expanded-filters-${width}.png`);
+      const contrast = await controlContrast('#clearSearch,.quick-need,.location-button,.location-clear,.filter-heading button,.layer-toggle,.access-switch button,.directory-tool,.outline-button--dark,.region-menu select,.layer-toggle strong,.layer-toggle.is-active .layer-toggle__check,.finder-search-label,#resourceSearch,.finder-intro h1,.finder-intro p,.finder-safety,.finder-safety strong,.globe-meta strong,.atlas-key,.atlas-key small,#jumpResults,#matchingResultCount,.globe-controls button');
       evidence.push({label:'Enabled finder control contrast at '+width+'px',contrast});
       assert(contrast.length>10&&contrast.every(item=>item.ratio>=4.5&&Number(item.opacity)===1), 'Enabled finder controls inherit unreadable light-theme text', contrast);
       assert(contrast.find(item=>item.id==='toggleAll')?.fontSize>=13, 'Filter Clear label is too small', contrast);

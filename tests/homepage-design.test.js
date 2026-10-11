@@ -119,3 +119,15 @@ test('actual resource finders show their type once and retain meaningful cost la
     assert.ok(context.resourceCard(resource).includes(`<b>${freeAccessLabel(resource,true)}</b>`), `${model} is still visible`);
   }
 });
+
+
+test('detailed filters use one readable column with high-contrast selected checks', () => {
+  assert.match(css, /\.rwn-professional \.layer-list \{ overflow:visible; grid-template-columns:minmax\(0,1fr\);/);
+  assert.match(css, /\.layer-toggle\.is-active \.layer-toggle__check \{ border-color:#24583e; background:#24583e; color:#fff;/);
+});
+
+
+test('expanded filter groups do not clip keyboard focus outlines', () => {
+  assert.match(css, /\.rwn-professional \.layer-list \{ overflow:visible;/);
+  assert.match(css, /\.rwn-professional \.access-switch \{[^}]*overflow:visible;/);
+});
