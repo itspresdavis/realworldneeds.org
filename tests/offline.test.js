@@ -121,11 +121,13 @@ async function runInstall({ failedPath = null } = {}) {
 }
 
 test("offline installation fails closed and removes a partial cache when a required core asset fails", async () => {
-  const result = await runInstall({ failedPath: "/directory.js" });
+  for (const failedPath of ["/directory.js", "/directory-startup.js"]) {
+  const result = await runInstall({ failedPath });
   assert.ok(result.error, "a failed required asset must reject installation");
   assert.equal(result.skipped, false, "an incomplete cache must never activate");
   assert.equal(result.deleted, true, "partial core cache must be removed");
   assert.equal(result.stored.size, 0, "partial core cache must not remain available");
+  }
 });
 
 test("offline installation activates only after every required core asset is cached", async () => {
@@ -133,7 +135,7 @@ test("offline installation activates only after every required core asset is cac
   assert.equal(result.error, null);
   assert.equal(result.deleted, false);
   assert.equal(result.skipped, true, "a complete cache can activate immediately");
-  assert.equal(result.stored.size, 12, "all required offline assets must be stored");
+  assert.equal(result.stored.size, 13, "all required offline assets must be stored");
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {

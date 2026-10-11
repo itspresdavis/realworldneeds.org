@@ -34,3 +34,19 @@ test("institutional browser QA uses the tested selector for its preview server",
   assert.match(source, /const SERVER_PORT = randomQaHttpPort\(\);/);
   assert.doesNotMatch(source, /4178 \+ Math\.floor\(Math\.random\(\) \* 200\)/);
 });
+
+
+test("browser aggregate fails fast on directory QA without skipping any isolated suite", async () => {
+  const { scripts } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.deepEqual(scripts["test:browser:qa"].split(" && "), [
+    "node scripts/browser-service-qa.mjs",
+    "node scripts/browser-asset-upgrade.mjs",
+    "node scripts/browser-saved-services.mjs",
+    "node scripts/browser-chaos.mjs",
+    "node scripts/browser-institutional.mjs",
+    "node scripts/browser-globe-v2.mjs",
+    "node scripts/browser-offline.mjs",
+    "node scripts/browser-service-actions.mjs",
+    "node scripts/browser-cache-upgrade.mjs"
+  ]);
+});

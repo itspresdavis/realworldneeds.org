@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 // A query alone cannot escape an already-installed worker which deliberately
 // removes queries from cache keys. Put byte identities in the pathname instead.
-const paths = ["/legal.css", "/directory-enhancements.css", "/professional-pages.css", "/directory.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/saved-loader.js"];
+const paths = ["/legal.css", "/directory-enhancements.css", "/professional-pages.css", "/directory.js", "/directory-startup.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/saved-loader.js"];
 const assets = {};
 for (const path of paths) {
   let bytes = await readFile(`dist${path}`);

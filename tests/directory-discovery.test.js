@@ -47,8 +47,8 @@ test("the real restore handler reads history.state and restores the filter contr
   let calls = 0;
   const history = { state: null, replaceState(value) { this.state = value; } };
   writeDirectoryState(history, "/directory", { query: "WIC", category: "food", country: "United States", shown: 120, scroll: 900 });
-  const f = vm.createContext({ history, location: { pathname: "/directory", hash: "" }, readDirectoryState,
-    restored: null, restorePending: false, clearTimeout() {}, inputTimer: null,
+  const f = vm.createContext({ history, location: { pathname: "/directory", hash: "" }, pagePath: "/directory", readDirectoryState,
+    startup: {}, restored: null, restorePending: false, clearTimeout() {}, inputTimer: null,
     input: {}, activeCategory: "", country: {}, renderChips() {}, apply: () => calls++ });
   const restoreSource = source.slice(source.indexOf("const restore="), source.indexOf('window.addEventListener("popstate"'));
   vm.runInContext(`${restoreSource}\nrestore();`, f);
@@ -77,7 +77,7 @@ test("reconnection retries a country-only search after its results were hidden b
 
 test("a second refresh while restoration loads preserves the saved position and target", () => {
   const history = { state: null, replaceState(value) { this.state = value; } };
-  const f = vm.createContext({ history, writeDirectoryState, location: { pathname: "/directory" },
+  const f = vm.createContext({ history, writeDirectoryState, location: { pathname: "/directory" }, pagePath: "/directory",
     input: { value: "WIC" }, activeCategory: "food", country: { value: "United States" }, visibleCount: 0,
     restorePending: true, restored: { shown: 120, scroll: 900, focus: "/service/example" },
     window: { scrollY: 0 }, document: { activeElement: {} } });
@@ -98,7 +98,7 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
   ];
   const frames = [], effects = { remembers: 0, focus: 0, scroll: null, cleared: 0 };
   const f = vm.createContext({
-    input: { value: query }, country: { value: country }, activeCategory: category, generation: 0,
+    input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
     queryTokens: value => value.trim().split(/\s+/).filter(Boolean), normalize: value => value.toLowerCase(),
     clear: {}, root: { classList: { toggle() {} } }, count: {}, loadCatalog: async () => ({ records }),
     syncCategoryLabels() {}, scopedRecords: payload => payload.records, scoreRecord: () => 1,

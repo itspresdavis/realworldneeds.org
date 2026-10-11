@@ -1,4 +1,43 @@
+import { isDirectoryStartupNavigationError } from "./qa-directory-startup.mjs";
+
 // Keep footer navigation reachable without using overflow clipping as a fix.
+export function footerReflowSnapshot(expectedPath, previousTimeOrigin) {
+  const document = globalThis.document;
+  const path = globalThis.location?.pathname || '';
+  const timeOrigin = globalThis.performance?.timeOrigin ?? null;
+  if (!document?.documentElement || !document.body || path !== expectedPath
+    || !Number.isFinite(previousTimeOrigin) || !Number.isFinite(timeOrigin) || timeOrigin === previousTimeOrigin) return { missing: true, path, timeOrigin };
+  const footer = document.querySelector(".rwn-unified-footer, .site-footer");
+  if (!footer) return { missing: true, path, timeOrigin };
+  const viewport = document.documentElement.clientWidth;
+  const controls = [...footer.querySelectorAll("a, button")];
+  const nodes = [footer, ...footer.children, ...controls];
+  const rect = footer.getBoundingClientRect();
+  const hidden = (node) => {
+    const style = getComputedStyle(node);
+    const box = node.getBoundingClientRect();
+    return style.display === "none" || style.visibility !== "visible" || box.width === 0 || box.height === 0;
+  };
+  // Home already clips its unrelated globe stage at the body; inspect the actual footer geometry there.
+  const ancestors = footer.matches(".rwn-unified-footer") ? [document.documentElement, document.body] : [];
+  const clipping = [...ancestors, ...nodes].filter((node) => /hidden|clip/.test(getComputedStyle(node).overflowX));
+  const outside = nodes.filter((node) => {
+    const box = node.getBoundingClientRect();
+    return box.left < -1 || box.right > viewport + 1 || box.left < rect.left - 1 || box.right > rect.right + 1;
+  });
+  const links = controls.map((node) => [node.textContent.trim(), node.getAttribute("href") || node.id]);
+  footer.scrollIntoView({ block: "end", behavior: "instant" });
+  return {
+    title: document.title, path, timeOrigin, width: innerWidth, viewport,
+    shared: footer.matches(".rwn-unified-footer"),
+    overflow: Math.max(0, document.documentElement.scrollWidth - viewport),
+    outside: outside.map((node) => node.textContent.trim().slice(0,80)),
+    hidden: controls.filter(hidden).length, clipping: clipping.length,
+    unreadable: controls.filter((node) => node.scrollWidth > node.clientWidth + 1 || parseFloat(getComputedStyle(node).fontSize) < 9.9).length,
+    links
+  };
+}
+
 export async function verifyFooterReflow({ client, host, serviceUrl, navigate, evaluate, capture }) {
   const pages = [
     ["home", `${host}/`],
@@ -17,46 +56,21 @@ export async function verifyFooterReflow({ client, host, serviceUrl, navigate, e
         width, height: 900, deviceScaleFactor: 1, mobile: width <= 650,
         screenWidth: width, screenHeight: 900
       });
+      const previousTimeOrigin = await evaluate(client, "globalThis.performance?.timeOrigin ?? null");
+      if (!Number.isFinite(previousTimeOrigin)) throw new Error(`Footer navigation has no prior document (${name}, ${width}px)`);
       await navigate(client, url);
-      await evaluate(client, `(async () => {
-        for (let attempt = 0; attempt < 100; attempt += 1) {
-          if (document.querySelector(".rwn-unified-footer, .rwn-professional .site-footer")) return;
-          await new Promise((resolve) => setTimeout(resolve, 50));
+      let result = { missing: true };
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { result = await evaluate(client, `(${footerReflowSnapshot.toString()})(${JSON.stringify(new URL(url).pathname)}, ${previousTimeOrigin})`); }
+        catch (error) {
+          if (!error?.message?.startsWith("Runtime.evaluate: ") || !isDirectoryStartupNavigationError(error)) throw error;
+          await new Promise(resolve => setTimeout(resolve, 50)); continue;
         }
-      })()`);
-      const result = await evaluate(client, `(() => {
-        const footer = document.querySelector(".rwn-unified-footer, .site-footer");
-        if (!footer) return { missing: true };
-        const viewport = document.documentElement.clientWidth;
-        const controls = [...footer.querySelectorAll("a, button")];
-        const nodes = [footer, ...footer.children, ...controls];
-        const rect = footer.getBoundingClientRect();
-        const hidden = (node) => {
-          const style = getComputedStyle(node);
-          const box = node.getBoundingClientRect();
-          return style.display === "none" || style.visibility !== "visible" || box.width === 0 || box.height === 0;
-        };
-        // Home already clips its unrelated globe stage at the body; inspect the actual footer geometry there.
-        const ancestors = footer.matches(".rwn-unified-footer") ? [document.documentElement, document.body] : [];
-        const clipping = [...ancestors, ...nodes].filter((node) => /hidden|clip/.test(getComputedStyle(node).overflowX));
-        const outside = nodes.filter((node) => {
-          const box = node.getBoundingClientRect();
-          return box.left < -1 || box.right > viewport + 1 || box.left < rect.left - 1 || box.right > rect.right + 1;
-        });
-        const links = controls.map((node) => [node.textContent.trim(), node.getAttribute("href") || node.id]);
-        footer.scrollIntoView({ block: "end", behavior: "instant" });
-        return {
-          title: document.title, path: location.pathname, width: innerWidth, viewport,
-          shared: footer.matches(".rwn-unified-footer"),
-          overflow: Math.max(0, document.documentElement.scrollWidth - viewport),
-          outside: outside.map((node) => node.textContent.trim().slice(0,80)),
-          hidden: controls.filter(hidden).length, clipping: clipping.length,
-          unreadable: controls.filter((node) => node.scrollWidth > node.clientWidth + 1 || parseFloat(getComputedStyle(node).fontSize) < 9.9).length,
-          links
-        };
-      })()`);
+        if (!result.missing && Number.isFinite(result.timeOrigin) && result.timeOrigin !== previousTimeOrigin && result.path === new URL(url).pathname && result.title) break;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
       // Homepage content has independent legacy layout constraints; its footer geometry is still strict.
-      if (result.missing || result.path !== new URL(url).pathname || !result.title || result.links.length < 10 || (result.shared && result.overflow > 1) || result.outside.length || result.hidden || result.clipping || result.unreadable) {
+      if (result.missing || !Number.isFinite(result.timeOrigin) || result.timeOrigin === previousTimeOrigin || result.path !== new URL(url).pathname || !result.title || !Number.isFinite(result.viewport) || result.viewport <= 0 || !Number.isFinite(result.overflow) || result.links.length < 10 || (result.shared && result.overflow > 1) || result.outside.length || result.hidden || result.clipping || result.unreadable) {
         throw new Error(`Footer reflow failed (${name}, ${width}px): ${JSON.stringify(result)}`);
       }
       expectedLinks ??= result.links;
@@ -69,6 +83,7 @@ export async function verifyFooterReflow({ client, host, serviceUrl, navigate, e
         const focus = await evaluate(client, `(() => {
           const controls = [...document.querySelectorAll(".rwn-unified-footer a, .rwn-unified-footer button, .site-footer a, .site-footer button")];
           const node = document.activeElement;
+          if (!node || !document.documentElement) return { index: -1, visible: false };
           const box = node.getBoundingClientRect();
           return { index: controls.indexOf(node), visible: box.width > 0 && box.height > 0 && box.left >= -1 && box.right <= document.documentElement.clientWidth + 1 };
         })()`);

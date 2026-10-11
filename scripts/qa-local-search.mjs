@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { isDirectoryStartupNavigationError } from "./qa-directory-startup.mjs";
 
 // Keep the oracle independent of the scope builder and search matcher: these
 // published catalog facts must agree with both static cards and live results.
@@ -11,6 +12,34 @@ const referralPath = "/directory/local/united-states/new-york/help/referral";
 const cityPath = "/directory/local/united-states/new-york";
 const bostonPath = "/directory/local/united-states/boston";
 
+export function localDirectorySnapshot() {
+  const document = globalThis.document;
+  const pick = selector => document?.querySelector(selector);
+  const all = selector => [...(document?.querySelectorAll(selector) || [])];
+  const visible = node => { const rect = node?.getBoundingClientRect(); return !!rect?.width && !!rect?.height && getComputedStyle(node).visibility !== 'hidden'; };
+  const input = pick('[data-directory-query]');
+  const active = document?.activeElement, rect = active?.getBoundingClientRect();
+  const recordId = link => decodeURIComponent(new URL(link.href).pathname.split('/').pop());
+  return {
+    documentPresent: Boolean(document?.documentElement && document.body), ready: Boolean(document?.documentElement && document.body && pick('.directory-global-results') && pick('[data-directory-category][aria-pressed="true"]')),
+    path: globalThis.location?.pathname || '', href: globalThis.location?.href || '', timeOrigin: globalThis.performance?.timeOrigin ?? null,
+    query: input?.value, category: pick('[data-directory-category][aria-pressed="true"]')?.dataset.directoryCategory,
+    history: globalThis.history?.state?.rwnDirectory, filtered: !!pick('.directory-shell.has-global-search'),
+    country: !!pick('[data-directory-country]'), count: pick('[data-directory-count]')?.textContent,
+    staticIds: all('.directory-records > .directory-record h2 a').map(recordId),
+    staticVisible: visible(pick('.directory-records > .directory-record')),
+    rows: all('.directory-global-result').map(link => ({ id: recordId(link), href: link.getAttribute('href'), visible: visible(link), text: link.textContent })),
+    more: visible(pick('[data-directory-more]')),
+    empty: pick('.directory-global-empty')?.textContent,
+    fewer: visible(pick('.directory-global-empty [data-fewer-words]')),
+    clearAll: visible(pick('.directory-global-empty [data-clear-all]')),
+    focused: active?.getAttribute('href'), inputFocused: Boolean(input && active === input),
+    focusVisible: !!rect?.height && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6,
+    scroll: globalThis.scrollY ?? null, heading: pick('h1')?.textContent,
+    overflow: document?.documentElement ? document.documentElement.scrollWidth - globalThis.innerWidth : null
+  };
+}
+
 export async function verifyLocalDirectorySearch({ client, host, payload, navigate, evaluate, capture }) {
   const newYork = payload.resources.filter(record => record.country === "United States" && record.city === "New York");
   const referral = newYork.filter(record => [record.category, ...(record.secondaryCategories || [])].includes("referral"));
@@ -20,34 +49,16 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
   assert(newYork.length === 16 && referral.length === 15 && wic.length === 14 && referral.some(record => record.id === library[0]), "New York catalog fixtures changed", { newYork: ids(newYork), referral: ids(referral), wic });
   assert(boston.some(record => record.id === "boston-homeless-services" && record.kind === "locator"), "Boston locator fixture missing", ids(boston));
 
-  const snapshot = () => evaluate(client, `(() => {
-    const visible = node => { const rect = node?.getBoundingClientRect(); return !!rect?.width && !!rect?.height && getComputedStyle(node).visibility !== 'hidden'; };
-    const input = document.querySelector('[data-directory-query]');
-    const active = document.activeElement, rect = active?.getBoundingClientRect();
-    const recordId = link => decodeURIComponent(new URL(link.href).pathname.split('/').pop());
-    return {
-      path: location.pathname, href: location.href, timeOrigin: performance.timeOrigin,
-      query: input?.value, category: document.querySelector('[data-directory-category][aria-pressed="true"]')?.dataset.directoryCategory,
-      history: history.state?.rwnDirectory, filtered: !!document.querySelector('.directory-shell.has-global-search'),
-      country: !!document.querySelector('[data-directory-country]'), count: document.querySelector('[data-directory-count]')?.textContent,
-      staticIds: [...document.querySelectorAll('.directory-records > .directory-record h2 a')].map(recordId),
-      staticVisible: visible(document.querySelector('.directory-records > .directory-record')),
-      rows: [...document.querySelectorAll('.directory-global-result')].map(link => ({ id: recordId(link), href: link.getAttribute('href'), visible: visible(link), text: link.textContent })),
-      more: visible(document.querySelector('[data-directory-more]')),
-      empty: document.querySelector('.directory-global-empty')?.textContent,
-      fewer: visible(document.querySelector('.directory-global-empty [data-fewer-words]')),
-      clearAll: visible(document.querySelector('.directory-global-empty [data-clear-all]')),
-      focused: active?.getAttribute('href'), inputFocused: active === input,
-      focusVisible: !!rect?.height && rect.top >= (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6,
-      scroll: scrollY, heading: document.querySelector('h1')?.textContent,
-      overflow: document.documentElement.scrollWidth - innerWidth
-    };
-  })()`);
+  const snapshot = () => evaluate(client, `(${localDirectorySnapshot.toString()})()`);
   const wait = async (predicate, label) => {
     let state;
     for (let attempt = 0; attempt < 160; attempt++) {
-      state = await snapshot();
-      if (predicate(state)) return state;
+      try { state = await snapshot(); }
+      catch (error) {
+        if (!error?.message?.startsWith("Runtime.evaluate: ") || !isDirectoryStartupNavigationError(error)) throw error;
+        await new Promise(resolve => setTimeout(resolve, 50)); continue;
+      }
+      if (state.documentPresent && Number.isFinite(state.timeOrigin) && predicate(state)) return state;
       // Retry cadence only. Every success requires the complete committed UI,
       // including result IDs or restored focus; elapsed time never proves it.
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -74,10 +85,10 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
     await client.call("Input.insertText", { text });
     assert(await evaluate(client, "window.__localSearchInputs.length === 1 && window.__localSearchInputs[0]"), "Local search must use trusted input", text);
   };
-  const committed = (state, path, query, category) => state.path === path && state.query === query && state.category === category && state.history?.path === path && state.history.query === query && state.history.category === category.toLowerCase() && !/searching|unavailable/i.test(state.count || "");
+  const committed = (state, path, query, category) => state.ready && state.path === path && state.query === query && state.category === category && state.history?.path === path && state.history.query === query && state.history.category === category.toLowerCase() && !/searching|unavailable/i.test(state.count || "");
   const check = (state, allowed) => {
     const url = new URL(state.href);
-    assert(!url.search && !url.hash && !state.country && state.overflow <= 1, "Local scope, private URL or layout failed", state);
+    assert(!url.search && !url.hash && !state.country && Number.isFinite(state.overflow) && state.overflow <= 1, "Local scope, private URL or layout failed", state);
     assert(state.rows.every(row => row.visible && allowed.includes(row.id)), "Hidden or out-of-scope local result", state);
   };
   const filtered = async (path, query, category, expected, allowed) => {
@@ -94,7 +105,7 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
   const open = async (path, expected) => {
     await navigate(client, "about:blank");
     await navigate(client, `${host}${path}`);
-    const state = await wait(state => state.path === path && state.query === "" && !state.filtered && state.staticVisible && sameIds(state.staticIds, expected), "Local static cards disagree with catalog facts");
+    const state = await wait(state => state.ready && state.path === path && state.query === "" && !state.filtered && state.staticVisible && sameIds(state.staticIds, expected), "Local static cards disagree with catalog facts");
     check(state, expected);
   };
   const evidence = [];

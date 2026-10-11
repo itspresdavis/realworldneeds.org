@@ -5,7 +5,7 @@ const RUNTIME_LIMIT = 64;
 const RUNTIME_ASSETS = /* __RWN_RUNTIME_ASSETS__ */ {};
 const RUNTIME_ID = /* __RWN_RUNTIME_ID__ */ "";
 const runtimePaths = Object.values(RUNTIME_ASSETS);
-const runtimePattern = /^\/(?:legal|directory-enhancements|professional-pages|directory|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
+const runtimePattern = /^\/(?:legal|directory-enhancements|professional-pages|directory|directory-startup|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
 
 const CORE_ASSETS = [
   "/directory",
@@ -13,6 +13,7 @@ const CORE_ASSETS = [
   "/directory-enhancements.css",
   "/professional-pages.css",
   "/directory.js",
+  "/directory-startup.js",
   "/saved-loader.js",
   "/saved-services.js",
   "/saved-services.css",
