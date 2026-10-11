@@ -2261,12 +2261,27 @@ function bindEvents() {
   let searchRevision = 0;
   let searchFilterTimer = null;
   let searchHistoryTimer = null;
+  let preparationNoticeTimer = null;
+  const showSearchPreparation = (revision) => {
+    if (searchPreparation.prepared || pendingSearchValue === state.query) return;
+    const count = document.getElementById("resultCount");
+    const status = document.getElementById("searchStatus");
+    count.textContent = status.textContent = "Preparing search…";
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = window.setTimeout(() => {
+      if (revision === searchRevision && !searchPreparation.prepared) {
+        count.textContent = status.textContent = "Search is still preparing. You can keep typing or browse the directory.";
+      }
+    }, 3000);
+  };
   cancelPendingSearch = () => {
     searchRevision += 1;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
     if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchFilterTimer = searchHistoryTimer = null;
     pendingSearchValue = "";
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
   };
   const commitSearchHistory = () => {
     searchHistoryTimer = null;
@@ -2281,9 +2296,13 @@ function bindEvents() {
       window.clearTimeout(searchFilterTimer);
       searchFilterTimer = null;
     }
+    searchPreparation.prioritize();
     const revision = searchRevision;
-    await searchPreparation;
+    showSearchPreparation(revision);
+    await searchPreparation.ready;
     if (revision !== searchRevision) return;
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
     if (pendingSearchValue !== state.query) {
       state.query = pendingSearchValue;
       updateFilters();
@@ -2294,15 +2313,26 @@ function bindEvents() {
   };
   const flushSearchFilter = async () => {
     searchFilterTimer = null;
+    searchPreparation.prioritize();
     const revision = searchRevision;
-    await searchPreparation;
+    showSearchPreparation(revision);
+    await searchPreparation.ready;
     if (revision !== searchRevision) return;
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
     if (pendingSearchValue === state.query) return;
     state.query = pendingSearchValue;
     updateFilters();
     scheduleSearchHistory();
   };
   const scheduleSearchFilter = (value) => {
+    if (value === state.query && preparationNoticeTimer !== null) {
+      cancelPendingSearch();
+      pendingSearchValue = value;
+      updateFilters();
+      return;
+    }
+    searchPreparation.prioritize();
     searchRevision += 1;
     pendingSearchValue = value;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
@@ -2319,12 +2349,7 @@ function bindEvents() {
       return;
     }
     if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
-    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
-    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
-    searchFilterTimer = null;
-    searchHistoryTimer = null;
-    searchRevision += 1;
-    pendingSearchValue = "";
+    cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
     updateFilters();
@@ -2332,12 +2357,7 @@ function bindEvents() {
   });
   searchInput.addEventListener("blur", commitPendingSearch);
   document.getElementById("clearSearch").addEventListener("click", () => {
-    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
-    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
-    searchFilterTimer = null;
-    searchHistoryTimer = null;
-    searchRevision += 1;
-    pendingSearchValue = "";
+    cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
     searchInput.focus();
@@ -2843,11 +2863,10 @@ function bindEvents() {
     if (window.innerWidth > 900) closeSiteMenu();
   }, { passive: true });
   window.addEventListener("popstate", (event) => {
-    searchRevision += 1;
-    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
-    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
-    searchFilterTimer = searchHistoryTimer = null;
+    const wasPreparing = preparationNoticeTimer !== null;
+    cancelPendingSearch();
     restoreFinderHistory(event.state);
+    if (wasPreparing && !event.state?.[FINDER_HISTORY_KEY]) updateFilters();
     pendingSearchValue = state.query;
     searchInput.value = state.query;
   });

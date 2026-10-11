@@ -27,6 +27,9 @@ for (const group of [
   for (const word of words) aliases.set(word, need);
 }
 aliases.set("nyc", "new york city");
+const multiwordAliases = [...new Set(aliases.values())].filter((alias) =>
+  alias.includes(" "),
+);
 const noise = new Set(
   "a an the for to of please find finding need needs help free near nearby me my local around ayuda gratis cerca mi aide gratuit gratuite pres ajuda gratuito gratuita perto".split(
     " ",
@@ -55,38 +58,47 @@ export function querySearchTokens(query) {
 
 export function resourceSearchText(resource) {
   const types = [resource.category, ...(resource.secondaryCategories || [])];
-  const tokens = words(
-    [
-      resource.name,
-      resource.city,
-      resource.country,
-      resource.region,
-      resource.address,
-      resource.sourceName,
-      resource.summary,
-      ...(resource.services || []),
-      resource.accessType,
-      resource.costNote,
-      resource.coverageNote,
-      resource.kind,
-      ...types,
-    ].join(" "),
-  );
+  const values = [
+    resource.name,
+    resource.city,
+    resource.country,
+    resource.region,
+    resource.address,
+    resource.sourceName,
+    resource.summary,
+    ...(resource.services || []),
+    resource.accessType,
+    resource.costNote,
+    resource.coverageNote,
+    resource.kind,
+    ...types,
+  ];
+  const text = normalizeSearch(values.join(" "));
+  const tokens = text.split(" ");
+  // Preserve true multiword aliases before deduplication. “New York” in the
+  // source and “City” in a different town must not combine into NYC.
+  const phrases = multiwordAliases
+    .filter(
+      (alias) =>
+        whole(text, alias) &&
+        values.some((value) => whole(normalizeSearch(value), alias)),
+    )
+    .join(" | ");
   // Retain the address as an ordered phrase; deduplicate the remaining corpus.
   // The newline is a compact field boundary, compatible with older clients.
   const address = normalizeSearch(resource.address),
     used = new Set(words(address));
-  return `${address}\n${[...new Set(tokens.flatMap((token) => [token, aliases.get(token) || token]))].filter((token) => !used.has(token)).join(" ")}`;
+  return `${address}\n${[...new Set(tokens.flatMap((token) => [token, aliases.get(token) || token]))].filter((token) => !used.has(token)).join(" ")}\n${phrases}`;
 }
 
 export function prepareResourceSearch(resource) {
   let entry = fields.get(resource);
   if (!entry) {
     const search = resource.search ?? resourceSearchText(resource);
+    const parts = search.split("\n");
     entry = {
-      address: search.includes("\n")
-        ? search.slice(0, search.indexOf("\n"))
-        : "",
+      address: parts.length > 1 ? parts[0] : "",
+      phrases: parts[2] ?? null,
       name: normalizeSearch(resource.name),
       city: normalizeSearch(
         resource.city ??
@@ -100,7 +112,7 @@ export function prepareResourceSearch(resource) {
         resource.category,
         ...(resource.secondaryCategories || []),
       ],
-      text: search.replace("\n", " "),
+      text: parts.join(" "),
     };
     fields.set(resource, entry);
   }
@@ -116,7 +128,9 @@ export function resourceSearchScore(resource, query) {
   for (const [literal, alias] of tokens) {
     if (
       !prefix(entry.text, literal) &&
-      !alias.split(" ").every((token) => prefix(entry.text, token))
+      !(alias.includes(" ")
+        ? whole(entry.phrases ?? entry.text, alias)
+        : prefix(entry.text, alias))
     ) {
       score = -1;
       break;

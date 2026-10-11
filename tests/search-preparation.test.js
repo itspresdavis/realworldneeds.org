@@ -36,14 +36,27 @@ function fixture() {
     },
   };
   const state = { query: "" };
+  const count = { textContent: "Current results: " };
+  const status = { textContent: "Current search: " };
   const context = vm.createContext({
     state,
+    FINDER_HISTORY_KEY: "rwnFinder",
     cancelPendingSearch: () => {},
-    searchPreparation: new Promise((resolve) => {
-      ready = resolve;
-    }),
+    searchPreparation: {
+      ready: new Promise((resolve) => {
+        ready = resolve;
+      }),
+      prioritize() {},
+    },
     document: {
-      getElementById: (id) => (id === "resourceSearch" ? input : clear),
+      getElementById: (id) =>
+        id === "resourceSearch"
+          ? input
+          : id === "resultCount"
+            ? count
+            : id === "searchStatus"
+              ? status
+              : clear,
     },
     window: {
       setTimeout: (callback) => {
@@ -56,7 +69,11 @@ function fixture() {
       },
     },
     sanitizeFinderQuery: (value) => value,
-    updateFilters: () => filtered.push(state.query),
+    updateFilters: () => {
+      filtered.push(state.query);
+      count.textContent = `Current results: ${state.query}`;
+      status.textContent = `Current search: ${state.query}`;
+    },
     writeFinderHistory: () => history.push(state.query),
     restoreFinderHistory: (event) => {
       if (event) {
@@ -78,6 +95,8 @@ function fixture() {
   return {
     events,
     input,
+    count,
+    status,
     state,
     filtered,
     history,
@@ -168,4 +187,30 @@ test("Back to a native section entry restores the visible committed text", async
   assert.equal(f.input.value, "London");
   await f.events.blur();
   assert.equal(f.state.query, "London");
+});
+
+test("deleting pending input restores the current result summary", async () => {
+  const f = fixture();
+  f.type("London");
+  f.flush();
+  f.type("");
+  assert.deepEqual(f.filtered, [""]);
+  f.ready();
+  await settle();
+  assert.equal(f.state.query, "");
+  assert.ok(!f.filtered.includes("London"));
+});
+
+test("native Back clears preparation feedback as well as pending input", async () => {
+  const f = fixture();
+  f.type("London");
+  f.flush();
+  assert.equal(f.count.textContent, "Preparing search…");
+  assert.equal(f.status.textContent, "Preparing search…");
+  f.back(null);
+  f.ready();
+  await settle();
+  assert.equal(f.count.textContent, "Current results: ");
+  assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.input.value, "");
 });

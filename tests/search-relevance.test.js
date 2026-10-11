@@ -55,7 +55,8 @@ test("WIC requires a word start; exact program tokens outrank legitimate prefix 
     find("WIC").every((resource) => !/Norwich Foodbank/.test(resource.name)),
   );
   const ranked = find("WIC");
-  const isWic = resource => /(?:^|\s)wic(?:\s|$)/.test(resourceSearchText(resource));
+  const isWic = (resource) =>
+    /(?:^|\s)wic(?:\s|$)/.test(resourceSearchText(resource));
   const exactCount = ranked.filter(isWic).length;
   assert.ok(exactCount > 0);
   assert.ok(ranked.slice(0, exactCount).every(isWic));
@@ -254,4 +255,60 @@ test("idle preparation limits each slice and does no work synchronously", () => 
     records.map((resource) => resource.id),
   );
   warmSearchIndex([], () => assert.fail("an empty catalog needs no task"));
+});
+
+test("NYC aliases require a real phrase rather than scattered city and source words", () => {
+  const johnson = resources.find((resource) => resource.id === "ny-wic-221-09");
+  assert.ok(johnson);
+  const scattered = fixture({
+    name: "New York advice",
+    city: "City",
+    sourceName: "State guide",
+  });
+  for (const resource of [johnson, scattered]) {
+    assert.equal(score(resource, "NYC"), -1);
+    assert.equal(score(indexRecord(resource), "NYC"), -1);
+  }
+  const repeated = fixture({
+    name: "New York library",
+    city: "New York",
+    summary: "Branches across New York City",
+  });
+  assert.ok(score(repeated, "NYC") >= 0);
+  assert.equal(score(repeated, "NYC"), score(indexRecord(repeated), "NYC"));
+});
+
+test("typing prioritizes remaining preparation without duplicate work or a long slice", async () => {
+  const idle = [],
+    active = [],
+    seen = [],
+    records = Array.from({ length: 100 }, (_, id) => ({ id }));
+  let clock = 0;
+  const preparation = warmSearchIndex(
+    records,
+    (callback) => idle.push(callback),
+    () => clock,
+    (resource) => {
+      seen.push(resource.id);
+      clock += 1;
+    },
+    (callback) => active.push(callback),
+  );
+  preparation.prioritize();
+  preparation.prioritize();
+  assert.equal(active.length, 1);
+  idle.shift()();
+  assert.equal(seen.length, 0, "the older idle callback is invalidated");
+  while (active.length) {
+    const before = seen.length;
+    active.shift()();
+    assert.ok(seen.length - before <= 4);
+  }
+  await preparation.ready;
+  preparation.prioritize();
+  assert.equal(active.length, 0);
+  assert.deepEqual(
+    seen,
+    records.map((resource) => resource.id),
+  );
 });

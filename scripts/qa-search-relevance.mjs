@@ -138,6 +138,10 @@ async function verifySurface(context, kind, records, width) {
   const streetRecords = records.filter((record) => /\blondon road\b/i.test(record.address));
   assert(streetRecords.some((record) => record.city !== "London") && streetRecords.every((record) => street.rows.some((row) => row.id === record.id)), `${kind} ${width}px: legitimate street-address searches disappeared`, street);
 
+  await typeQuery(context, surface, "NYC");
+  const nyc = await allResults(context, surface, records.length);
+  assert(nyc.rows.some(row => row.id === "new-york-public-library-access") && !nyc.rows.some(row => row.id === "ny-wic-221-09"), `${kind} ${width}px: NYC must retain NYPL without combining Johnson City with its New York source`, nyc);
+
   const provider = await typeQuery(context, surface, "Whitechapel Mission");
   assert(provider.rows[0]?.id === "whitechapel-mission" && provider.rows[0].rendered, `${kind} ${width}px: exact provider lookup failed`, provider);
   await activate(context, surface.category);
@@ -192,13 +196,13 @@ async function measureFinderTyping(context) {
     for (const text of ["L", "o", "ndon"]) await client.call("Input.insertText", { text });
     const editable = await evaluate(client, "({ value: document.querySelector('#resourceSearch').value, disabled: document.querySelector('#resourceSearch').disabled, pendingIdle: __rwnSearchTiming.pending })");
     await press(client, "Enter");
-    await waitForUI(context, "history.state?.rwnFinder?.query === 'London' && document.querySelector('.resource-row__place')?.innerText.startsWith('London')", 600);
+    await waitForUI(context, "history.state?.rwnFinder?.query === 'London' && document.querySelector('.resource-row__place')?.innerText.startsWith('London')", 100);
     const coldReady = await evaluate(client, "performance.now()");
     await sleep(100);
     const cold = await evaluate(client, `({ settled: ${coldReady}, ...__rwnSearchTiming })`);
     await insertQuery(context, surfaces.finder, "WIC");
     await press(client, "Enter");
-    await waitForUI(context, "history.state?.rwnFinder?.query === 'WIC' && document.querySelector('.result-row-link')?.innerText.includes('WIC')", 600);
+    await waitForUI(context, "history.state?.rwnFinder?.query === 'WIC' && document.querySelector('.result-row-link')?.innerText.includes('WIC')", 100);
     const warmReady = await evaluate(client, "performance.now()");
     await sleep(100);
     const warm = await evaluate(client, `({ settled: ${warmReady}, ...__rwnSearchTiming })`);
@@ -215,7 +219,18 @@ async function measureFinderTyping(context) {
         longTasksAfterInputMs: snapshot.longTasks.filter((entry) => entry.start >= first.start).map((entry) => entry.duration)
       };
     };
-    const measurement = { viewport: 390, cpuThrottle: 4, timingNote: "Diagnostic values include browser polling/paint overhead; no hardware-dependent latency budget is asserted.", editable, cold: summarize(cold, "London"), warm: summarize(warm, "WIC") };
+    // Controlled before/after comparison: the same matcher and fresh record
+    // objects, prepared synchronously as one task at the same CPU throttle.
+    // Fetch/parse time is excluded, and this is not a prior-release UX claim.
+    const synchronousBaseline = await evaluate(client, `(async () => {
+      const payload = await (await fetch('/data/resources.json')).json();
+      const release = await (await fetch('/data/release.json')).json();
+      const { prepareResourceSearch } = await import('/src/utils/search.js?v=' + release.release);
+      const started = performance.now();
+      payload.resources.forEach(prepareResourceSearch);
+      return { records: payload.resources.length, oneTaskMs: performance.now() - started };
+    })()`);
+    const measurement = { viewport: 390, cpuThrottle: 4, synchronousBaseline, baselineNote: "Same current matcher on fresh records in one blocking task; not a prior-release end-to-end typing benchmark.", timingNote: "Readiness has a five-second functional timeout. Diagnostic values include browser polling/paint overhead; longest tasks are recorded without a hardware-dependent frame-time assertion.", editable, cold: summarize(cold, "London"), warm: summarize(warm, "WIC") };
     assert(editable.value === "London" && !editable.disabled && warm.inputs.every((entry) => entry.trusted && !entry.disabled), "Input must remain editable through cold preparation", measurement);
     await mkdir("qa-screenshots", { recursive: true });
     await writeFile("qa-screenshots/search-typing-timing.json", `${JSON.stringify(measurement, null, 2)}\n`);

@@ -221,7 +221,9 @@ async function run() {
 
       input.value = "zzzzqqqq-no-such-service";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      await wait(320);
+      // First-use search preparation yields in short slices. Wait for the
+      // actual empty state rather than requiring synchronous setup in 320 ms.
+      for (let attempt = 0; attempt < 100 && !document.getElementById("clearFinderFilters"); attempt += 1) await wait(50);
       const reset = document.getElementById("clearFinderFilters");
       const empty = Boolean(reset);
       const emptyDebug = { query: input.value, count: document.getElementById("resultCount")?.textContent || "", cards: document.querySelectorAll(".resource-card").length, grid: document.getElementById("resourceGrid")?.textContent?.trim().slice(0, 120) || "" };
