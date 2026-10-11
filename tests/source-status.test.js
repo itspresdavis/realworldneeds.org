@@ -116,7 +116,7 @@ test("every static directory card, including local pages, puts the warning outsi
 
 test("search export contains matching status notices for all affected records and none for unflagged records", async () => {
   const index = JSON.parse(await read("dist/data/search-index.json"));
-  assert.equal(index.schemaVersion, "1.4");
+  assert.equal(index.schemaVersion, "1.5");
   const byId = new Map(resources.map((resource) => [resource.id, resource]));
   for (const record of index.records) {
     assert.deepEqual(record.sourceStatus || null, sourceClosureNotice(byId.get(record.id)));

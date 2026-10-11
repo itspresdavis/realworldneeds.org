@@ -1,5 +1,6 @@
 import { randomQaHttpPort } from "./qa-port.mjs";
 import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
+import { verifyFinderSearchRelevance } from "./qa-search-relevance.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -423,6 +424,7 @@ async function run() {
       }
     }
 
+    await verifyFinderSearchRelevance({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderPresentation({ client, host: HOST, navigate, evaluate, capture });
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);

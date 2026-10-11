@@ -68,7 +68,7 @@ test("resource-finder service pages do not promise directions and explain their 
 
 test("whole-directory search index carries only the fields needed for immediate actions", async () => {
   const payload = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(payload.schemaVersion, "1.4");
+  assert.equal(payload.schemaVersion, "1.5");
   const direct = payload.records.find((record) => record.kind === "direct");
   assert.ok(direct);
   assert.ok(Object.hasOwn(direct, "phone"));

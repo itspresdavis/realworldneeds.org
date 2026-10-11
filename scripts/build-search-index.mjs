@@ -1,16 +1,9 @@
+import { resourceSearchText } from "../src/utils/search.js";
 import { phoneLinks } from "../src/utils/phone.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
-
-const normalize = (value) => String(value || "")
-  .normalize("NFKD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .replace(/wi[\s-]?fi\b/g, "wifi")
-  .replace(/[^a-z0-9+]+/g, " ")
-  .trim();
 
 const slugify = (value) => String(value || "unknown")
   .normalize("NFKD")
@@ -60,17 +53,7 @@ const records = resources.map((resource, index) => {
   const types = allTypes(resource);
   const labels = types.map((type) => categories[type]?.label || type);
   const place = formatResourcePlace(resource);
-  const search = normalize([
-    resource.name,
-    resource.city,
-    resource.country,
-    resource.region,
-    resource.address,
-    resource.sourceName,
-    ...(resource.services || []),
-    ...types,
-    ...labels
-  ].join(" "));
+  const search = resourceSearchText(resource);
 
   for (const scope of scopesFor(resource, types)) {
     (scopes[scope] ||= []).push(index);
@@ -97,7 +80,7 @@ const records = resources.map((resource, index) => {
 
 await mkdir("dist/data", { recursive: true });
 await writeFile("dist/data/search-index.json", `${JSON.stringify({
-  schemaVersion: "1.4",
+  schemaVersion: "1.5",
   resourceCount: records.length,
   privacy: "Static search index. Search terms remain in the visitor's browser and are not included in requests.",
   records,

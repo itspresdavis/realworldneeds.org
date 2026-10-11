@@ -1,3 +1,4 @@
+import { warmSearchIndex } from "./utils/search-warmup.js";
 import { phoneMarkup } from "./utils/phone.js";
 import * as THREE from "/vendor/three.module.js";
 import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
@@ -150,6 +151,8 @@ function finderAccessFromHistory(value) {
 if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
 }
+
+let cancelPendingSearch = () => {};
 
 const state = {
   query: sanitizeFinderQuery(initialFinderHistory?.query),
@@ -1071,6 +1074,7 @@ function clearUserLocation() {
 }
 
 function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
+  cancelPendingSearch();
   clearUserLocation();
   state.query = "";
   state.accessMode = "all";
@@ -2254,8 +2258,16 @@ async function loadLandGeometry() {
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
+  let searchRevision = 0;
   let searchFilterTimer = null;
   let searchHistoryTimer = null;
+  cancelPendingSearch = () => {
+    searchRevision += 1;
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchFilterTimer = searchHistoryTimer = null;
+    pendingSearchValue = "";
+  };
   const commitSearchHistory = () => {
     searchHistoryTimer = null;
     writeFinderHistory("push");
@@ -2264,11 +2276,14 @@ function bindEvents() {
     if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchHistoryTimer = window.setTimeout(commitSearchHistory, 640);
   };
-  const commitPendingSearch = () => {
+  const commitPendingSearch = async () => {
     if (searchFilterTimer !== null) {
       window.clearTimeout(searchFilterTimer);
       searchFilterTimer = null;
     }
+    const revision = searchRevision;
+    await searchPreparation;
+    if (revision !== searchRevision) return;
     if (pendingSearchValue !== state.query) {
       state.query = pendingSearchValue;
       updateFilters();
@@ -2277,14 +2292,18 @@ function bindEvents() {
     searchHistoryTimer = null;
     writeFinderHistory("push");
   };
-  const flushSearchFilter = () => {
+  const flushSearchFilter = async () => {
     searchFilterTimer = null;
+    const revision = searchRevision;
+    await searchPreparation;
+    if (revision !== searchRevision) return;
     if (pendingSearchValue === state.query) return;
     state.query = pendingSearchValue;
     updateFilters();
     scheduleSearchHistory();
   };
   const scheduleSearchFilter = (value) => {
+    searchRevision += 1;
     pendingSearchValue = value;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
     searchFilterTimer = window.setTimeout(flushSearchFilter, 48);
@@ -2304,6 +2323,7 @@ function bindEvents() {
     if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchFilterTimer = null;
     searchHistoryTimer = null;
+    searchRevision += 1;
     pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
@@ -2316,6 +2336,7 @@ function bindEvents() {
     if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchFilterTimer = null;
     searchHistoryTimer = null;
+    searchRevision += 1;
     pendingSearchValue = "";
     state.query = "";
     searchInput.value = "";
@@ -2821,7 +2842,15 @@ function bindEvents() {
   window.addEventListener("resize", () => {
     if (window.innerWidth > 900) closeSiteMenu();
   }, { passive: true });
-  window.addEventListener("popstate", (event) => restoreFinderHistory(event.state));
+  window.addEventListener("popstate", (event) => {
+    searchRevision += 1;
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchFilterTimer = searchHistoryTimer = null;
+    restoreFinderHistory(event.state);
+    pendingSearchValue = state.query;
+    searchInput.value = state.query;
+  });
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
   const sections = ["finder", "about", "standards"].map((id) => document.getElementById(id));
@@ -2858,6 +2887,7 @@ function bindEvents() {
 shell();
 renderStatic();
 updateFilters();
+const searchPreparation = warmSearchIndex(resources);
 bindEvents();
 writeFinderHistory();
 initThreeGlobe();
