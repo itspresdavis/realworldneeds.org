@@ -325,13 +325,14 @@ async function run() {
           rows: rows.length,
           inputSize: parseFloat(getComputedStyle(input).fontSize),
           minimumTextSize: Math.min(...sizes),
+          browseMetadataSize: Math.min(...[...document.querySelectorAll(".directory-record header span, .directory-record header time")].map((node) => parseFloat(getComputedStyle(node).fontSize))),
           minimumActionHeight: Math.min(...actions.map((node) => node.getBoundingClientRect().height)),
           clippedTitles: links.filter((node) => node.scrollWidth > node.clientWidth + 1 || getComputedStyle(node.querySelector("strong")).whiteSpace === "nowrap").length,
           squeezedTabletRows: innerWidth > 650 && innerWidth <= 900 ? rows.filter((row) => row.querySelector("nav").getBoundingClientRect().top < row.querySelector(".directory-global-result").getBoundingClientRect().bottom - 1).length : 0,
           overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
         };
       })()`);
-      if (layout.rows !== 60 || layout.inputSize < 16 || layout.minimumTextSize < 13 || layout.minimumActionHeight < 44 || layout.clippedTitles || layout.squeezedTabletRows || layout.overflow > 1) {
+      if (layout.rows !== 60 || layout.inputSize < 16 || layout.minimumTextSize < 13 || layout.browseMetadataSize < 13 || layout.minimumActionHeight < 44 || layout.clippedTitles || layout.squeezedTabletRows || layout.overflow > 1) {
         throw new Error(`Directory readability/reflow failed: ${JSON.stringify(layout)}`);
       }
       await capture(client, `directory-layout-${width}-search.png`);

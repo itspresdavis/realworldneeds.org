@@ -212,7 +212,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .directory-record h2 a { color:inherit; text-decoration:none; }
 .directory-record h2 a:hover { color:var(--page-blue); }
 .directory-record header span,
-.directory-record time { color:#52666e; font-size:.8125rem; line-height:1.5; }
+.directory-record header time { color:#52666e; font-size:.8125rem; line-height:1.5; }
 .directory-record > p { max-width:52rem; color:#41565d; font-size:.875rem; line-height:1.6; }
 .directory-aid { display:flex; flex-wrap:wrap; gap:.25rem .5rem; }
 .directory-aid li { padding:0; border:0; border-radius:0; background:transparent; color:#50675f; font-size:.65rem; font-weight:670; }
