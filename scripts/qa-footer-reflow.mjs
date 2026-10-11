@@ -13,7 +13,8 @@ export async function verifyFooterReflow({ client, host, serviceUrl, navigate, e
     let expectedLinks;
     for (const width of widths) {
       await client.call("Emulation.setDeviceMetricsOverride", {
-        width, height: 900, deviceScaleFactor: 1, mobile: false,
+        // Phone viewports have overlay scrollbars; retain classic-scrollbar coverage above 650px.
+        width, height: 900, deviceScaleFactor: 1, mobile: width <= 650,
         screenWidth: width, screenHeight: 900
       });
       await navigate(client, url);
