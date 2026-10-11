@@ -282,6 +282,50 @@ async function run() {
     if (locationRetry.attempts !== 2 || !locationRetry.hasRetry || !/try again|search by city/i.test(locationRetry.recoveryText)) {
       throw new Error(`Location retry failed: ${JSON.stringify(locationRetry)}`);
     }
+    const locationInterruption = await evaluate(client, `(async () => {
+      const original = navigator.geolocation;
+      const pending = [];
+      const button = document.getElementById("locateMe");
+      const clear = document.getElementById("clearBrowserData");
+      const position = { coords: { latitude: 51.5, longitude: -0.1, accuracy: 1000 } };
+      const snapshot = () => JSON.stringify({
+        hasLocation: button.classList.contains("has-location"),
+        loading: button.classList.contains("is-loading"),
+        clearHidden: document.getElementById("clearLocation").hidden,
+        recovery: document.getElementById("locationRecovery").textContent,
+        status: document.getElementById("locationStatus").textContent,
+        toast: document.getElementById("statusToast").textContent,
+        selected: location.hash
+      });
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: { getCurrentPosition: (success, failure) => pending.push({ success, failure }) }
+      });
+      try {
+        clear.click();
+        button.click(); button.click();
+        const repeatedClicksBounded = pending.length === 1;
+        clear.click();
+        const cleared = snapshot();
+        await pending[0].success(position);
+        pending[0].failure({ code: 1 });
+        const lateCallbacksIgnored = snapshot() === cleared;
+        button.click();
+        const freshPending = snapshot();
+        await pending[0].success(position);
+        pending[0].failure({ code: 2 });
+        const olderRequestIgnored = snapshot() === freshPending;
+        await pending[1].success(position);
+        const freshRequestWorks = button.classList.contains("has-location") && !button.classList.contains("is-loading") && !document.getElementById("clearLocation").hidden;
+        return { repeatedClicksBounded, lateCallbacksIgnored, olderRequestIgnored, freshRequestWorks };
+      } finally {
+        clear.click();
+        Object.defineProperty(navigator, "geolocation", { configurable: true, value: original });
+      }
+    })()`);
+    if (Object.values(locationInterruption).some((passed) => !passed)) {
+      throw new Error(`Interrupted location recovery failed: ${JSON.stringify(locationInterruption)}`);
+    }
     const coordinateFidelity = await evaluate(client, `(async () => {
       const version = new URL(document.querySelector('script[src*="bootstrap"]').src).search;
       const { resources } = await import('/src/data/resources.js' + version);
@@ -365,6 +409,22 @@ async function run() {
     })()`);
     if (!mobileMenu.opened || !mobileMenu.closed || !mobileMenu.focusReturned) {
       throw new Error(`Mobile menu dismissal failed: ${JSON.stringify(mobileMenu)}`);
+    }
+    const searchPointer = await evaluate(client, `(() => {
+      window.scrollTo(0, 0);
+      const menu = document.querySelector(".site-menu");
+      menu.querySelector("summary").click();
+      const input = document.getElementById("resourceSearch");
+      const rect = input.getBoundingClientRect();
+      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      if (!menu.open || document.elementFromPoint(point.x, point.y) !== input) throw new Error("The open-menu search target is not exposed");
+      return point;
+    })()`);
+    await client.call("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, ...searchPointer });
+    await client.call("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1, ...searchPointer });
+    const outsideMenuFocus = await evaluate(client, `({ closed: !document.querySelector(".site-menu").open, searchFocused: document.activeElement === document.getElementById("resourceSearch") })`);
+    if (!outsideMenuFocus.closed || !outsideMenuFocus.searchFocused) {
+      throw new Error(`Outside-menu search focus failed: ${JSON.stringify(outsideMenuFocus)}`);
     }
     await capture(client, "institutional-mobile.png");
 

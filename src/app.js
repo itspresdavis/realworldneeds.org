@@ -238,6 +238,7 @@ let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
 let liveSourceController = null;
+let locationRequestGeneration = 0;
 let globeCanvasElement = null;
 let globeStageElement = null;
 let globePinLayerElement = null;
@@ -1060,6 +1061,7 @@ function focusGlobeNearUser() {
 }
 
 function clearUserLocation() {
+  locationRequestGeneration += 1;
   liveSourceController?.abort();
   liveSourceController = null;
   state.userLocation = null;
@@ -1095,16 +1097,17 @@ function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
 async function loadLiveResourcesNearUser() {
   if (!state.userLocation || state.userCountry !== "United States") return;
   liveSourceController?.abort();
-  liveSourceController = new AbortController();
+  const controller = new AbortController();
+  liveSourceController = controller;
   state.liveSourceStatus = "loading";
   state.liveSourceError = "";
   renderLiveSourceState();
-  const options = { signal: liveSourceController.signal };
+  const options = { signal: controller.signal };
   const [nearbyResult, countResult] = await Promise.allSettled([
     fetchNearbyUsdaSites(state.userLocation, options),
     fetchUsdaActiveCount(options)
   ]);
-  if (liveSourceController?.signal.aborted) return;
+  if (controller.signal.aborted || liveSourceController !== controller) return;
 
   if (countResult.status === "fulfilled") state.liveNationalCount = countResult.value;
   if (nearbyResult.status === "rejected") {
@@ -2505,9 +2508,11 @@ function bindEvents() {
     }
     state.locationRecovery = "";
     state.locationRetryAvailable = false;
+    const requestGeneration = ++locationRequestGeneration;
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
+      if (requestGeneration !== locationRequestGeneration) return;
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
@@ -2518,6 +2523,7 @@ function bindEvents() {
         button.innerHTML = `${icon.locate}<span>Loading current services…</span>`;
         await loadLiveResourcesNearUser();
       }
+      if (requestGeneration !== locationRequestGeneration) return;
       button.classList.remove("is-loading");
       renderLocationState();
       const nearest = state.filtered.find((resource) => {
@@ -2529,6 +2535,7 @@ function bindEvents() {
       const nearby = nearbyExactCount();
       notify(nearby ? `Found ${nearby.toLocaleString()} service ${nearby === 1 ? "location" : "locations"} within 250 km` : "No service location is listed nearby yet. Showing regional resource finders next.");
     }, (error) => {
+      if (requestGeneration !== locationRequestGeneration) return;
       button.classList.remove("is-loading");
       state.locationRecovery = error.code === 1
         ? "Location permission was not granted. Search by city, ZIP or postcode instead, or change this site’s location permission in your browser settings."
@@ -2861,7 +2868,9 @@ function bindEvents() {
   };
   siteMenu?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => closeSiteMenu()));
   document.addEventListener("click", (event) => {
-    if (siteMenu?.open && !siteMenu.contains(event.target)) closeSiteMenu({ restoreFocus: true });
+    if (siteMenu?.open && !siteMenu.contains(event.target)) {
+      closeSiteMenu({ restoreFocus: siteMenu.contains(document.activeElement) });
+    }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && siteMenu?.open) {
