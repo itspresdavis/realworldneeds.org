@@ -1,3 +1,4 @@
+import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
 import { randomQaHttpPort } from "./qa-port.mjs";
 import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
 import { verifyFinderSearchRelevance } from "./qa-search-relevance.mjs";
@@ -487,6 +488,7 @@ async function run() {
       }
     }
 
+    await verifyMenuReflow({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderSearchRelevance({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderPresentation({ client, host: HOST, navigate, evaluate, capture });
 
