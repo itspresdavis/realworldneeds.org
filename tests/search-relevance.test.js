@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { resources } from "../src/data/resources.js";
 import { createInitialTypeSet, matchesResource } from "../src/utils/geo.js";
 import {
@@ -308,4 +309,146 @@ test("typing prioritizes remaining preparation without duplicate work or a long 
     seen,
     records.map((resource) => resource.id),
   );
+});
+
+const warmupSource = (await readFile(new URL("../src/utils/search-warmup.js", import.meta.url), "utf8"))
+  .replace(/^import[^\n]+\n/, "")
+  .replace("export function warmSearchIndex(", "function warmSearchIndex(");
+
+// Run the real default scheduler with isolated host APIs, without opening live
+// Node ports or changing globals used by another test.
+function schedulerFixture({ count = 53, cost = 0, channelAvailable = true, injected = false } = {}) {
+  const idle = [], messages = [], timers = [], channels = [], override = [], seen = [];
+  const records = Array.from({ length: count }, (_, id) => ({ id }));
+  let clock = 0;
+  class TestMessageChannel {
+    constructor() {
+      this.port1 = { onmessage: null, closed: false, closes: 0, close() { this.closed = true; this.closes += 1; } };
+      this.port2 = {
+        closed: false,
+        closes: 0,
+        close() { this.closed = true; this.closes += 1; },
+        postMessage: (data) => {
+          assert.equal(this.port2.closed, false, "completed preparation must not post to a closed port");
+          messages.push(() => {
+            if (!this.port1.closed) this.port1.onmessage({ data });
+          });
+        },
+      };
+      channels.push(this);
+    }
+  }
+  const context = vm.createContext({
+    MessageChannel: channelAvailable ? TestMessageChannel : undefined,
+    setTimeout: (callback, delay) => timers.push({ callback, delay }),
+  });
+  const warm = vm.runInContext(`${warmupSource}\nwarmSearchIndex;`, context);
+  const preparation = warm(
+    records,
+    (callback) => idle.push(callback),
+    () => clock,
+    (resource) => { seen.push(resource.id); clock += cost; },
+    injected ? (callback) => override.push(callback) : undefined,
+  );
+  return { preparation, idle, messages, timers, channels, override, seen, records };
+}
+
+test("posted-task preparation is lazy, bounded, and closes both ports exactly once", async () => {
+  const f = schedulerFixture();
+  assert.equal(f.channels.length, 0);
+  assert.equal(f.seen.length, 0);
+  f.idle.shift()();
+  assert.equal(f.seen.length, 24, "idle preparation still respects the record limit");
+  const staleIdle = f.idle.shift();
+  f.preparation.prioritize();
+  f.preparation.prioritize();
+  assert.equal(f.channels.length, 1);
+  assert.equal(f.messages.length, 1);
+  assert.equal(f.seen.length, 24, "prioritization does no synchronous preparation");
+  staleIdle();
+  assert.equal(f.seen.length, 24);
+  while (f.messages.length) {
+    assert.equal(f.messages.length, 1, "only one active slice is queued");
+    const before = f.seen.length;
+    f.messages.shift()();
+    assert.ok(f.seen.length - before <= 24);
+  }
+  await f.preparation.ready;
+  assert.equal(f.preparation.prepared, true);
+  assert.deepEqual(f.seen, f.records.map((record) => record.id));
+  for (const port of [f.channels[0].port1, f.channels[0].port2]) {
+    assert.equal(port.closed, true);
+    assert.equal(port.closes, 1);
+  }
+  staleIdle();
+  f.preparation.prioritize();
+  assert.equal(f.seen.length, 53);
+  assert.equal(f.channels.length, 1);
+  assert.equal(f.messages.length, 0);
+  assert.equal(f.timers.length, 0, "the available posted-task path does not use timers");
+});
+
+test("posted-task preparation also honors the four-millisecond slice limit", async () => {
+  const f = schedulerFixture({ count: 19, cost: 1 });
+  f.preparation.prioritize();
+  while (f.messages.length) {
+    const before = f.seen.length;
+    f.messages.shift()();
+    assert.ok(f.seen.length - before <= 4);
+  }
+  await f.preparation.ready;
+  assert.deepEqual(f.seen, f.records.map((record) => record.id));
+  assert.ok(f.channels[0].port1.closed && f.channels[0].port2.closed);
+});
+
+test("active preparation falls back to queued timers when MessageChannel is unavailable", async () => {
+  const f = schedulerFixture({ channelAvailable: false });
+  f.preparation.prioritize();
+  f.preparation.prioritize();
+  assert.equal(f.channels.length, 0);
+  assert.equal(f.timers.length, 1);
+  assert.equal(f.seen.length, 0);
+  f.idle.shift()();
+  assert.equal(f.seen.length, 0, "the pre-priority idle callback stays invalidated");
+  while (f.timers.length) {
+    assert.equal(f.timers.length, 1);
+    const { callback, delay } = f.timers.shift();
+    assert.equal(delay, 0);
+    const before = f.seen.length;
+    callback();
+    assert.ok(f.seen.length - before <= 24);
+  }
+  await f.preparation.ready;
+  f.preparation.prioritize();
+  assert.deepEqual(f.seen, f.records.map((record) => record.id));
+  assert.equal(f.timers.length, 0);
+});
+
+test("empty and idle-only catalogs resolve without creating a channel", async () => {
+  for (const count of [0, 53]) {
+    const f = schedulerFixture({ count });
+    while (f.idle.length) f.idle.shift()();
+    await f.preparation.ready;
+    assert.equal(f.preparation.prepared, true);
+    f.preparation.prioritize();
+    assert.deepEqual(f.seen, f.records.map((record) => record.id));
+    assert.equal(f.channels.length, 0);
+    assert.equal(f.messages.length, 0);
+    assert.equal(f.timers.length, 0);
+    assert.equal(f.idle.length, 0);
+  }
+});
+
+test("an injected active scheduler overrides both channel and timer defaults", async () => {
+  const f = schedulerFixture({ injected: true });
+  f.preparation.prioritize();
+  f.preparation.prioritize();
+  assert.equal(f.override.length, 1);
+  while (f.override.length) f.override.shift()();
+  await f.preparation.ready;
+  f.idle.shift()();
+  assert.deepEqual(f.seen, f.records.map((record) => record.id));
+  assert.equal(f.channels.length, 0);
+  assert.equal(f.messages.length, 0);
+  assert.equal(f.timers.length, 0);
 });

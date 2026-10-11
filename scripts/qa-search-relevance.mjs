@@ -98,9 +98,9 @@ async function activate(context, selector) {
   return activation;
 }
 
-async function allResults(context, surface, maximum) {
+async function readResultPages(context, surface, maximum, stopWhen = () => false) {
   let result = await view(context, surface);
-  for (let page = 0; result.more && page < maximum; page += 1) {
+  for (let page = 0; result.more && !stopWhen(result) && page < maximum; page += 1) {
     const before = result.rows.length;
     let activation;
     try {
@@ -112,9 +112,37 @@ async function allResults(context, surface, maximum) {
       throw new Error(`Search pagination failed: ${JSON.stringify({ selector: surface.more, beforeRows: before, afterRows: after.rows.length, query: after.query, committedQuery: after.committedQuery, count: after.count, more: after.more, activation, reason: error.message })}`, { cause: error });
     }
   }
-  assert(!result.more && result.rows.length <= maximum, "Search pagination failed to terminate", result);
+  assert(result.rows.length <= maximum, "Search pagination exceeded the published catalog", result);
   assert(result.rows.every((row) => row.rendered) && result.overflow <= 1, "Search results must be rendered without overflow", result);
   return result;
+}
+
+async function allResults(context, surface, maximum) {
+  const result = await readResultPages(context, surface, maximum);
+  assert(!result.more, "Search pagination failed to terminate", result);
+  return result;
+}
+
+async function resultsThroughRecord(context, surface, maximum, ids) {
+  assert(ids.size > 0, "Prefix recall fixture must name an existing catalog record", [...ids]);
+  const found = (result) => result.rows.some((row) => row.rendered && ids.has(row.id));
+  const result = await readResultPages(context, surface, maximum, found);
+  assert(found(result), "Prefix recall must render the expected catalog record", { query: result.query, count: result.count, renderedRows: result.rows.length, expectedIds: [...ids] });
+  return result;
+}
+
+async function activateCategory(context, surface) {
+  const activation = await activate(context, surface.category);
+  try {
+    // Quick needs synchronize their pressed state after the scheduled render;
+    // a fixed sleep can observe the prior state while a busy frame is pending.
+    await waitForUI(context, `document.querySelector(${JSON.stringify(surface.category)})?.getAttribute('aria-pressed') === 'true'`, 100);
+  } catch (error) {
+    const result = await view(context, surface);
+    const filters = await context.evaluate(context.client, `({ activeTypes: history.state?.rwnFinder?.activeTypes, controls: [...document.querySelectorAll('[data-quick-type], .layer-toggle, [data-directory-category]')].map((button) => ({ label: button.textContent.trim(), pressed: button.getAttribute('aria-pressed') })) })`);
+    throw new Error(`Category control did not settle: ${JSON.stringify({ selector: surface.category, query: result.query, count: result.count, firstResult: result.rows[0]?.id, activation, filters, reason: error.message })}`, { cause: error });
+  }
+  return view(context, surface);
 }
 
 function assertLondon(result, records, label) {
@@ -170,9 +198,11 @@ async function verifySurface(context, kind, records, width) {
 
   await typeQuery(context, surface, "W.I.C.");
   assertWic(await allResults(context, surface, records.length), records, `${kind} ${width}px punctuated WIC`);
+  const wickIds = new Set(records.filter((record) => record.city === "Wick").map((record) => record.id));
   for (const query of ["Wi", "Wick"]) {
     await typeQuery(context, surface, query);
-    const prefixResults = await allResults(context, surface, records.length);
+    // Prefix recall needs a real rendered Wick result, not all 1,800+ Wi rows.
+    const prefixResults = await resultsThroughRecord(context, surface, records.length, wickIds);
     assert(prefixResults.rows.some(row => records.find(record => record.id === row.id)?.city === "Wick"), `${kind} ${width}px: ${query} must retain Wick prefix recall`, prefixResults.count);
   }
 
@@ -187,9 +217,7 @@ async function verifySurface(context, kind, records, width) {
 
   const provider = await typeQuery(context, surface, "Whitechapel Mission");
   assert(provider.rows[0]?.id === "whitechapel-mission" && provider.rows[0].rendered, `${kind} ${width}px: exact provider lookup failed`, provider);
-  await activate(context, surface.category);
-  await sleep(180);
-  const filtered = await view(context, surface);
+  const filtered = await activateCategory(context, surface);
   const categoryActive = await context.evaluate(context.client, `document.querySelector(${JSON.stringify(surface.category)}).getAttribute('aria-pressed') === 'true'`);
   assert(categoryActive && filtered.query === "Whitechapel Mission" && filtered.rows[0]?.id === "whitechapel-mission", `${kind} ${width}px: category filter lost the search`, filtered);
   await activate(context, surface.clear);
@@ -205,6 +233,35 @@ async function verifySurface(context, kind, records, width) {
   console.log(`Search relevance QA passed for ${kind} at ${width}px: London city first, ${wic.rows.length} WIC results, legitimate street/provider searches, keyboard/category/clear${kind === "finder" ? ", and real browser Back" : ""}.`);
 }
 
+
+async function comparePreparationSchedulers(resources, prepareResourceSearch, warmSearchIndex) {
+  // Clone before timing so each strategy gets an equally cold WeakMap entry.
+  const synchronousRecords = structuredClone(resources);
+  const started = performance.now();
+  synchronousRecords.forEach(prepareResourceSearch);
+  const synchronousBaseline = { records: synchronousRecords.length, oneTaskMs: performance.now() - started };
+  const run = async (scheduleActive) => {
+    const records = structuredClone(resources);
+    let preparedRecords = 0;
+    const started = performance.now();
+    const preparation = warmSearchIndex(records, () => {}, () => performance.now(), (record) => {
+      prepareResourceSearch(record);
+      preparedRecords += 1;
+    }, scheduleActive);
+    preparation.prioritize();
+    await preparation.ready;
+    if (!preparation.prepared || preparedRecords !== records.length) throw new Error('Scheduler comparison did not prepare every fresh record');
+    return { records: records.length, preparedRecords, elapsedMs: performance.now() - started };
+  };
+  return {
+    synchronousBaseline,
+    isolatedSchedulerComparison: {
+      note: 'Same current matcher, fresh cloned records, idle scheduling disabled, then prioritize(). Fetch, parsing, imports and cloning are excluded. This isolates scheduling; it is not a prior-release UX comparison.',
+      timer: { scheduler: 'setTimeout(0)', ...await run((callback) => setTimeout(callback, 0)) },
+      defaultActive: { scheduler: typeof MessageChannel === 'function' ? 'MessageChannel posted tasks' : 'setTimeout(0) fallback', ...await run() }
+    }
+  };
+}
 
 async function measureFinderTyping(context) {
   const { client, evaluate } = context;
@@ -249,7 +306,12 @@ async function measureFinderTyping(context) {
     await press(client, "Enter");
     await waitForUI(context, "history.state?.rwnFinder?.query === 'WIC' && document.querySelector('.result-row-link')?.innerText.includes('WIC')", 100);
     const warmReady = await evaluate(client, "performance.now()");
-    await sleep(100);
+    // Wait briefly for the observed paint sample; a missing sample remains a
+    // diagnostic limitation rather than a hardware-dependent latency failure.
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      if (await evaluate(client, "__rwnSearchTiming.paints.some((entry) => entry.value === 'WIC')")) break;
+      await sleep(50);
+    }
     const warm = await evaluate(client, `({ settled: ${warmReady}, ...__rwnSearchTiming })`);
     const summarize = (snapshot, value) => {
       const last = snapshot.inputs.filter((entry) => entry.value === value).at(-1);
@@ -258,24 +320,26 @@ async function measureFinderTyping(context) {
       return {
         input: last,
         resultReadinessMs: Math.round(snapshot.settled - last.start),
+        firstKeystrokeToReadyMs: Math.round(snapshot.settled - first.start),
+        nextPaintSampleObserved: snapshot.paints.some((entry) => entry.value === value),
         nextPaintMs: snapshot.paints.filter((entry) => value === "London" ? ["L", "Lo", "London"].includes(entry.value) : entry.value === value),
         idleSlicesAfterInput: slices.length,
         maximumIdleSliceMs: Math.max(0, ...slices.map((entry) => entry.duration)),
         longTasksAfterInputMs: snapshot.longTasks.filter((entry) => entry.start >= first.start).map((entry) => entry.duration)
       };
     };
-    // Controlled before/after comparison: the same matcher and fresh record
-    // objects, prepared synchronously as one task at the same CPU throttle.
-    // Fetch/parse time is excluded, and this is not a prior-release UX claim.
-    const synchronousBaseline = await evaluate(client, `(async () => {
+    // Keep isolated strategy comparisons after the real typing measurements,
+    // in the same browser and at the same CPU throttle to limit job variance.
+    const { synchronousBaseline, isolatedSchedulerComparison } = await evaluate(client, `(async () => {
       const payload = await (await fetch('/data/resources.json')).json();
       const release = await (await fetch('/data/release.json')).json();
-      const { prepareResourceSearch } = await import('/src/utils/search.js?v=' + release.release);
-      const started = performance.now();
-      payload.resources.forEach(prepareResourceSearch);
-      return { records: payload.resources.length, oneTaskMs: performance.now() - started };
+      const [{ prepareResourceSearch }, { warmSearchIndex }] = await Promise.all([
+        import('/src/utils/search.js?v=' + release.release),
+        import('/src/utils/search-warmup.js?v=' + release.release)
+      ]);
+      return (${comparePreparationSchedulers.toString()})(payload.resources, prepareResourceSearch, warmSearchIndex);
     })()`);
-    const measurement = { viewport: 390, cpuThrottle: 4, synchronousBaseline, baselineNote: "Same current matcher on fresh records in one blocking task; not a prior-release end-to-end typing benchmark.", timingNote: "Readiness has a five-second functional timeout. Diagnostic values include browser polling/paint overhead; longest tasks are recorded without a hardware-dependent frame-time assertion.", editable, cold: summarize(cold, "London"), warm: summarize(warm, "WIC") };
+    const measurement = { viewport: 390, cpuThrottle: 4, synchronousBaseline, isolatedSchedulerComparison, baselineNote: "Same current matcher on fresh records in one blocking task; not a prior-release end-to-end typing benchmark.", timingNote: "Readiness has a five-second functional timeout. resultReadinessMs starts at the last input; firstKeystrokeToReadyMs includes the whole typed sequence. Diagnostic values include browser polling overhead. Paint samples get a bounded two-second observation window without a hardware-dependent frame-time assertion.", editable, cold: summarize(cold, "London"), warm: summarize(warm, "WIC") };
     assert(editable.value === "London" && !editable.disabled && warm.inputs.every((entry) => entry.trusted && !entry.disabled), "Input must remain editable through cold preparation", measurement);
     await mkdir("qa-screenshots", { recursive: true });
     await writeFile("qa-screenshots/search-typing-timing.json", `${JSON.stringify(measurement, null, 2)}\n`);

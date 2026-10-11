@@ -12,18 +12,33 @@ export function warmSearchIndex(
   },
   now = () => performance.now(),
   prepare = prepareResourceSearch,
-  scheduleActive = (callback) => setTimeout(callback, 0),
+  scheduleActive = null,
 ) {
   let offset = 0,
     generation = 0,
     active = false,
+    channel = null,
     resolve;
+  // Posted tasks yield to browser input/rendering without the nested-timer
+  // clamp. Create the channel only when someone types, and close it at finish.
+  const enqueueActive = scheduleActive || ((callback) => {
+    if (typeof MessageChannel !== "function") return setTimeout(callback, 0);
+    channel ||= new MessageChannel();
+    channel.port1.onmessage = callback;
+    channel.port2.postMessage(null);
+  });
+  const finish = () => {
+    channel?.port1.close();
+    channel?.port2.close();
+    channel = null;
+    resolve();
+  };
   const ready = new Promise((done) => {
     resolve = done;
   });
   const enqueue = () => {
     const ticket = ++generation;
-    (active ? scheduleActive : schedule)(() => {
+    (active ? enqueueActive : schedule)(() => {
       // A queued idle callback becomes harmless when typing takes priority.
       if (ticket !== generation) return;
       const started = now();
@@ -34,11 +49,11 @@ export function warmSearchIndex(
         if (now() - started >= 4) break;
       }
       if (offset < resources.length) enqueue();
-      else resolve();
+      else finish();
     });
   };
   if (resources.length) enqueue();
-  else resolve();
+  else finish();
   return {
     ready,
     get prepared() {
