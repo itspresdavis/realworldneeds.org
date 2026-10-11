@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { phoneLinks } from "../src/utils/phone.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
+import { freeAccessModels } from "../src/data/free-access.js";
 
 // Run in the established Chromium CI suite. DOM presence alone missed a shared
 // directory CSS rule that made every service's address/eligibility invisible.
@@ -31,6 +32,9 @@ export async function verifyServiceFacts({ client, host, payload, navigate, eval
       const jump = document.querySelector('.service-tools-jump');
       const warning = document.querySelector('#service > .directory-shell > .source-status-notice');
       const next = document.querySelector('.service-next-steps');
+      const sourceReview = document.querySelector('.service-source-review');
+      const coordinateNote = document.querySelector('.service-coordinate-note');
+      const costScope = document.querySelector('.service-cost-scope');
       const rows = [...(facts?.querySelectorAll(':scope > div') || [])].map(row => ({
         label:row.querySelector('dt')?.textContent.trim(), value:row.querySelector('dd')?.textContent.trim(),
         visible:visible(row) && visible(row.querySelector('dt')) && visible(row.querySelector('dd')),
@@ -38,6 +42,10 @@ export async function verifyServiceFacts({ client, host, payload, navigate, eval
       }));
       return { title:document.querySelector('#service h1')?.textContent.trim(), factsVisible:visible(facts), display:facts && getComputedStyle(facts).display,
         rows, linksVisible:visible(record?.querySelector('.directory-links')),
+        sourceChecked:document.querySelector('#service .legal-meta')?.textContent.includes('Source checked ${item.lastChecked}'),
+        sourceReview:sourceReview?.textContent, sourceReviewVisible:visible(sourceReview),
+        coordinateNote:coordinateNote?.textContent || null, coordinateNoteVisible:visible(coordinateNote),
+        costScope:costScope?.textContent || null, costScopeVisible:visible(costScope),
         calls:[...(facts?.querySelectorAll('a[href^="tel:"]') || [])].map(a => a.getAttribute('href')),
         factsBeforeTools:!tools || !!(record.compareDocumentPosition(tools) & 4),
         warningBeforeActions:!warning || !!(warning.compareDocumentPosition(next) & 4),
@@ -58,6 +66,10 @@ export async function verifyServiceFacts({ client, host, payload, navigate, eval
       if (!state.rows.some(row => row.label === label && row.value === value && row.visible)) throw new Error(`${item.id} ${mode}: hidden or changed ${label}: ${JSON.stringify(state)}`);
     }
     const notice = sourceClosureNotice(item);
+    if (!state.sourceChecked || !state.sourceReviewVisible || !state.sourceReview?.includes('not a confirmation of current service availability')) throw new Error(`Source-review boundary is missing or hidden: ${item.id} ${mode}`);
+    if (state.coordinateNote !== (item.coordinateNote || null) || item.coordinateNote && !state.coordinateNoteVisible) throw new Error(`Coordinate evidence is missing, changed or hidden: ${item.id} ${mode}`);
+    const expectedCostScope = item.costModel === 'free-navigation' ? freeAccessModels[item.costModel].description : null;
+    if (state.costScope !== expectedCostScope || expectedCostScope && !state.costScopeVisible) throw new Error(`Free-navigation cost scope is missing, changed or hidden: ${item.id} ${mode}`);
     const phoneTargets = phoneLinks(item.phone).map(({ href }) => href);
     if (!state.factsVisible || !state.linksVisible || state.title !== item.name || state.rows.some(row => !row.visible || row.fontSize < 15) || !state.factsBeforeTools || !state.warningBeforeActions || state.overflow > 1 || JSON.stringify(state.calls) !== JSON.stringify(phoneTargets) || (notice && (!state.warningVisible || !state.warning.includes(notice.detail))) || state.directions !== (item.kind === 'direct')) {
       throw new Error(`Service facts failed ${item.id} ${mode}: ${JSON.stringify(state)}`);

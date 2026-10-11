@@ -415,6 +415,7 @@ main#directory > .legal-hero { background: #f5f4ee; }
   overflow-wrap: anywhere;
 }
 #service .service-facts dd a { display: inline-block; padding-block: .35rem; }
+#service .service-cost-scope { margin: .35rem 0 0; color: #52666e; }
 #service .directory-record > h3 { margin: 1.5rem 0 .6rem; font-size: 1.0625rem; }
 #service .directory-record > :is(p, ul) { max-width: 75ch; font-size: 1rem; line-height: 1.65; }
 #service .directory-record > .directory-links { gap: .5rem; }

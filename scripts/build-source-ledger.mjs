@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
+import { sourceCheckRange } from "./source-check-range.mjs";
 
 const SITE_ORIGIN = "https://www.realworldneeds.org";
 
@@ -87,7 +88,7 @@ const otherSources = [...recordGroups.values()]
 
 function recordSourceCard(group) {
   return `<article class="directory-record source-ledger-card">
-    <header><div><p>Record-level original source</p><h2>${escapeHtml(group.name)}</h2><span>${escapeHtml(group.kind)}</span></div><time datetime="${escapeHtml(group.lastChecked)}">Checked through ${escapeHtml(group.lastChecked)}</time></header>
+    <header><div><p>Record-level original source</p><h2>${escapeHtml(group.name)}</h2><span>${escapeHtml(group.kind)}</span></div><span class="source-check-range">Source checks ${escapeHtml(sourceCheckRange(group.dates))}</span></header>
     <p>${escapeHtml(group.sourceDetail || "RWN reviews the cited public source at the record level and keeps the original source connected to each published listing.")}</p>
     <dl>${fieldRow("RWN records", group.count.toLocaleString())}${fieldRow("Help represented", group.categories)}</dl>
     ${group.sourceUrl ? `<div class="directory-links"><a href="${escapeHtml(group.sourceUrl)}" rel="noopener noreferrer">Open original source</a></div>` : ""}
@@ -149,11 +150,12 @@ const html = `<!doctype html>
   <a class="skip-link" href="#content">Skip to source ledger</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Source navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a aria-current="page" href="/sources">Sources</a><a href="/editorial-policy">How listings are checked</a></nav></header>
   <main id="content">
-    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Source ledger</p><h1>See where RWN’s directory information comes from.</h1><p class="legal-hero__lede">Structured public feeds, reviewed snapshots, and record-level original sources stay attributable. This page describes what RWN actually uses and how it was checked; inclusion does not imply sponsorship, endorsement, or a partnership with RWN.</p><div class="legal-meta"><span>${sourceRegistry.length} structured source families</span><span>${otherSources.length} additional original-source groups</span><span>${resources.length.toLocaleString()} reviewed directory records</span><span>Checked through ${escapeHtml(pageLastmod)}</span></div></div></section>
+    <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Source ledger</p><h1>See where RWN’s directory information comes from.</h1><p class="legal-hero__lede">Structured public feeds, reviewed snapshots, and record-level original sources stay attributable. This page describes what RWN actually uses and how it was checked; inclusion does not imply sponsorship, endorsement, or a partnership with RWN.</p><div class="legal-meta"><span>${sourceRegistry.length} structured source families</span><span>${otherSources.length} additional original-source groups</span><span>${resources.length.toLocaleString()} reviewed directory records</span><span>Listing source checks ${escapeHtml(sourceCheckRange(resources.map(resource => resource.lastChecked)))}</span></div></div></section>
     <div class="directory-shell">
       <nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a><a href="/transparency">Transparency</a><span aria-current="page">Sources</span></nav>
       <div class="transparency-metrics">${metric("structured feeds and snapshots", sourceRegistry.length)}${metric("additional original-source groups", otherSources.length)}${metric("reviewed directory records", resources.length.toLocaleString())}</div>
       <div class="policy-note"><p><strong>What these labels mean:</strong> a structured source family has a documented refresh/audit model in RWN’s registry. “Record-level original source” means the listing keeps a cited publisher or provider source but is not represented as one of RWN’s structured feed/snapshot pipelines. Neither label means the source organization endorses or partners with RWN.</p></div>
+      <p class="source-review-note">Source checks record when RWN reviewed the linked information. Individual listing dates can differ. Audit dates and publisher updates describe the source data; they do not confirm current service availability.</p>
       <section aria-labelledby="structured-sources"><h2 id="structured-sources">Structured feeds and reviewed snapshots</h2><div class="directory-records">${sourceRegistry.map(structuredCard).join("")}</div></section>
       <section aria-labelledby="record-sources"><h2 id="record-sources">Other original-source groups</h2><p>These records are still source-connected and reviewed under the same publication rules, but they are not represented as a single automated or snapshot data pipeline.</p><div class="directory-records">${otherSources.map(recordSourceCard).join("")}</div></section>
       <div class="open-data-actions"><a href="/transparency">Transparency Center</a><a href="/editorial-policy">Review standard</a><a href="/data/sources.json">Machine-readable source registry</a><a href="/data/resources.json">Full resource JSON</a></div>
