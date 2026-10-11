@@ -363,6 +363,64 @@ async function run() {
     }
     await capture(client, "institutional-mobile.png");
 
+    // A lost map must not leave map-sized whitespace or stale overlays between
+    // the search controls and the directory. Exercise the real loss/retry
+    // handlers at both sizes; the visible tray is a presentation-state fixture.
+    for (const [width, height, mobileViewport] of [[1440, 1000, false], [390, 844, true]]) {
+      await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: mobileViewport, screenWidth: width, screenHeight: height });
+      await navigate(client, `${HOST}/`);
+      const fallback = await evaluate(client, `(async () => {
+        const stage = document.querySelector(".globe-stage");
+        const originalHeight = stage.getBoundingClientRect().height;
+        const input = document.getElementById("resourceSearch");
+        input.value = "zzzz-fallback-no-match";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        document.getElementById("globeClusterTray").hidden = false;
+        document.getElementById("globeCanvas").dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const hiddenChrome = [".globe-meta", ".atlas-key", ".globe-empty", ".globe-cluster-tray", ".globe-gesture-hint", "#globeHelp"].every((selector) => getComputedStyle(stage.querySelector(selector)).display === "none");
+        const notice = document.getElementById("globeFallback");
+        const readout = document.getElementById("globeReadout");
+        const retry = document.getElementById("retryGlobe");
+        notice.scrollIntoView({ block: "center" });
+        retry.focus();
+        return {
+          originalHeight,
+          compactHeight: stage.getBoundingClientRect().height,
+          noticeHeight: notice.getBoundingClientRect().height,
+          unavailable: stage.classList.contains("is-globe-unavailable"),
+          hiddenChrome,
+          emptySearch: document.querySelectorAll(".result-row-link").length === 0,
+          liveAnnouncement: readout.getAttribute("aria-live") === "polite" && readout.textContent.includes("lost its graphics context") && getComputedStyle(readout).display !== "none" && getComputedStyle(readout).clipPath === "inset(50%)",
+          retryVisible: !retry.hidden && retry.getBoundingClientRect().height >= 44,
+          retryFocused: document.activeElement === retry,
+          directoryRoute: notice.querySelector("a")?.getAttribute("href") === "/directory",
+          noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1
+        };
+      })()`);
+      if (!fallback.unavailable || !fallback.hiddenChrome || !fallback.emptySearch || !fallback.liveAnnouncement || !fallback.retryVisible || !fallback.retryFocused || !fallback.directoryRoute || !fallback.noHorizontalOverflow || fallback.compactHeight > fallback.noticeHeight + 3 || fallback.compactHeight >= fallback.originalHeight) {
+        throw new Error(`Compact fallback failed at ${width}px: ${JSON.stringify(fallback)}`);
+      }
+      await capture(client, `institutional-fallback-${width}.png`);
+      const restored = await evaluate(client, `(async () => {
+        document.getElementById("retryGlobe").click();
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        const stage = document.querySelector(".globe-stage");
+        const input = document.getElementById("resourceSearch");
+        return {
+          available: !stage.classList.contains("is-globe-unavailable"),
+          hiddenFallback: document.getElementById("globeFallback").hidden,
+          normalHeight: stage.getBoundingClientRect().height,
+          mapControlsVisible: getComputedStyle(stage.querySelector(".globe-meta")).display !== "none",
+          searchPreserved: input.value === "zzzz-fallback-no-match"
+        };
+      })()`);
+      if (!restored.available || !restored.hiddenFallback || !restored.mapControlsVisible || !restored.searchPreserved || Math.abs(restored.normalHeight - fallback.originalHeight) > 1) {
+        throw new Error(`Fallback retry failed at ${width}px: ${JSON.stringify(restored)}`);
+      }
+    }
+
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);
     console.log("Interaction QA passed: desktop/mobile finder, input bounds, no-result recovery, history restoration, location retry, menu focus, and established globe layout.");
   } finally {
