@@ -7,8 +7,8 @@ import test from "node:test";
 
 const fixtureId = "synthetic-cache-removal-fixture";
 const read = (root, path) => readFile(join(root, path), "utf8");
-const build = (cwd) => new Promise((done, fail) => {
-  const child = spawn("npm", ["run", "build"], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+const build = (cwd, command = ["npm", "run", "build"]) => new Promise((done, fail) => {
+  const child = spawn(command[0], command.slice(1), { cwd, stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
@@ -46,12 +46,24 @@ test("data-only removal rotates finder, directory-index and offline URLs across 
     assert.ok((await read(root, "dist/src/bootstrap.js")).includes(`./app.js?v=${after.release}`));
     assert.ok((await read(root, "dist/src/app.js")).includes(`./data/resources.js?v=${after.release}`));
     assert.ok((await read(root, "dist/src/data/resources.js")).includes(`./generated/trussell-foodbanks.js?v=${after.release}`));
-    assert.ok((await read(root, "dist/directory/index.html")).includes(`/directory.js?v=${after.directoryRelease}`));
+    assert.ok((await read(root, "dist/directory/index.html")).includes(`${after.offlineAssets["/directory.js"]}?v=${after.directoryRelease}`));
     assert.ok((await read(root, "dist/sw.js")).includes(`rwn-offline-${after.offlineRelease}`));
     for (const path of [generatedPath, "data/search-index.json", "data/resources.json", "directory.csv", "sitemap.xml"]) {
       assert.equal((await read(root, `dist/${path}`)).includes(fixtureId), false, path);
     }
     await assert.rejects(stat(join(root, `dist/service/${fixtureId}/index.html`)), { code: "ENOENT" });
+    // Exercise the final worker transform independently: unchanged final bytes
+    // retain the cache identity, while an HTML-only output change rotates it.
+    const versionWorker = ["node", "scripts/version-offline-worker.mjs"];
+    await cp(join(root, "public/sw.js"), join(root, "dist/sw.js"));
+    await build(root, versionWorker);
+    assert.equal(JSON.parse(await read(root, "dist/data/release.json")).offlineRelease, after.offlineRelease);
+    await writeFile(join(root, "dist/directory/index.html"), `${await read(root, "dist/directory/index.html")}\n<!-- synthetic output-only change -->`);
+    await cp(join(root, "public/sw.js"), join(root, "dist/sw.js"));
+    await build(root, versionWorker);
+    const transformed = JSON.parse(await read(root, "dist/data/release.json"));
+    assert.notEqual(transformed.offlineRelease, after.offlineRelease, "different warm HTML must not share the active cache name");
+    assert.deepEqual(transformed.offlineAssets, after.offlineAssets, "identical runtime bytes keep stable path identities");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -185,7 +185,7 @@ async function run() {
     await capture(client, "saved-service-mobile.png");
 
     await navigate(client, `${HOST}/directory`);
-    result = await evaluate(client, `({lazy: !performance.getEntriesByType('resource').some(entry => entry.name.includes('/saved-services.js')), canvas: !!document.querySelector('canvas'), hidden: getComputedStyle(document.getElementById('saved')).display === 'none'})`);
+    result = await evaluate(client, `({lazy: !performance.getEntriesByType('resource').some(entry => new URL(entry.name).pathname.startsWith('/saved-services.') && new URL(entry.name).pathname.endsWith('.js')), canvas: !!document.querySelector('canvas'), hidden: getComputedStyle(document.getElementById('saved')).display === 'none'})`);
     check(result.lazy && result.hidden && !result.canvas, "Ordinary directory must not load Saved or require a map", result);
     await evaluate(client, `location.hash = 'saved'`);
     await waitForUI(`document.querySelectorAll('[data-saved-remove]').length === 1`);
