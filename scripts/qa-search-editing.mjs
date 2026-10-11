@@ -1,8 +1,12 @@
+import { mkdir, writeFile } from "node:fs/promises";
+
 // Browser-owned editing, rather than assigning whole search values. This catches
 // handlers that remove the separator before a visitor can type the next word.
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function verifyFinderEditing({ client, host, navigate, evaluate, capture }) {
+  const evidence = [];
+  const browser = await client.call('Browser.getVersion');
   const read = () => evaluate(client, `(() => {
     const input = document.getElementById('resourceSearch');
     return { value: input.value, start: input.selectionStart, end: input.selectionEnd,
@@ -49,8 +53,8 @@ export async function verifyFinderEditing({ client, host, navigate, evaluate, ca
     await evaluate(client, `(() => {
       const input = document.getElementById('resourceSearch');
       window.__rwnEditingEvents = [];
-      for (const type of ['input', 'compositionstart', 'compositionend']) input.addEventListener(type, event => {
-        __rwnEditingEvents.push({ type, trusted: event.isTrusted, composing: event.isComposing, value: input.value });
+      for (const type of ['input', 'compositionstart', 'compositionupdate', 'compositionend']) input.addEventListener(type, event => {
+        __rwnEditingEvents.push({ type, trusted: event.isTrusted, composing: event.isComposing, data: event.data, value: input.value });
       });
     })()`);
     await type('New York');
@@ -77,15 +81,26 @@ export async function verifyFinderEditing({ client, host, navigate, evaluate, ca
     await type('London'); await enter();
     const before = await wait(state => state.committed === 'London' && state.rows.length > 0, 'Composition baseline did not settle');
     await select();
+    await evaluate(client, 'window.__rwnEditingEvents = []');
     await client.call('Input.imeSetComposition', { text: 'New York', selectionStart: 8, selectionEnd: 8 });
     await sleep(800);
     await check(state => state.value === 'New York' && state.committed === 'London' && JSON.stringify(state.rows) === JSON.stringify(before.rows)
       && state.events.some(event => event.type === 'compositionstart' && event.trusted)
+      && state.events.some(event => event.type === 'compositionupdate' && event.trusted && event.data === 'New York')
       && state.events.some(event => event.type === 'input' && event.composing && event.trusted), 'IME candidate changed settled search results');
     await client.call('Input.insertText', { text: 'New York' });
     await enter();
-    await wait(state => state.value === 'New York' && state.committed === 'New York' && state.rows.some(row => row.includes('New York'))
-      && state.events.some(event => event.type === 'compositionend' && event.trusted), 'Final IME text did not become searchable');
-    console.log(`Finder editing QA passed at ${width}px: native multiword keys, in-place selection, preserved whitespace, normalized private history, and trusted IME composition.`);
+    // Chromium queues compositionend through DispatchScopedEvent, rather than
+    // EventTarget::DispatchEvent (which sets trusted). CDP's final event can
+    // therefore be untrusted even though the browser owns the composition.
+    // https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/editing/ime/input_method_controller.cc
+    // Keep the lifecycle, committed text, caret and actual results as the oracle.
+    const committed = await wait(state => state.value === 'New York' && state.committed === 'New York' && state.start === 8 && state.end === 8
+      && state.rows.some(row => row.includes('New York'))
+      && state.events.some(event => event.type === 'compositionend' && event.data === 'New York'), 'Final IME text did not become searchable');
+    evidence.push({ width, browser, composition: committed.events, value: committed.value, historyQuery: committed.committed, count: committed.count });
+    console.log(`Finder editing QA passed at ${width}px: native multiword keys, in-place selection, preserved whitespace, normalized private history, and CDP-driven composition. Physical OS IME not exercised; compositionend trust is recorded, not assumed.`);
   }
+  await mkdir('qa-screenshots', { recursive: true });
+  await writeFile('qa-screenshots/search-editing.json', JSON.stringify(evidence, null, 2));
 }
