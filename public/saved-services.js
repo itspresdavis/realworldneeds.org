@@ -157,6 +157,7 @@ export function initSavedServices() {
     } catch { cancelClear(true); announceFailure(); }
   });
   const syncView = (focus = false) => {
+    if (focus) document.querySelector(".rwn-page-menu")?.removeAttribute("open");
     const visible = active();
     panel.closest(".directory-shell")?.classList.toggle("has-saved-view", visible);
     generation += 1;
@@ -165,6 +166,11 @@ export function initSavedServices() {
       render();
       if (focus) { heading.focus({ preventScroll: true }); panel.scrollIntoView({ block: "start", behavior: "auto" }); }
     } else if (focus) {
+      // History restoration owns the return target after the saved panel hides.
+      if (history.state?.rwnDirectory) {
+        window.dispatchEvent(new Event("rwn-directory-restore"));
+        return;
+      }
       const target = document.getElementById(location.hash.slice(1)) || document.querySelector("[data-directory-query]");
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: "start", behavior: "auto" });

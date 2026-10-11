@@ -1,3 +1,4 @@
+import { verifyDirectoryDiscovery } from "./qa-directory-discovery.mjs";
 import { verifyFooterReflow } from "./qa-footer-reflow.mjs";
 import { verifyServiceFacts } from "./qa-service-facts.mjs";
 import { verifyDirectorySearchRelevance } from "./qa-search-relevance.mjs";
@@ -359,6 +360,7 @@ async function run() {
     }
 
     await verifyDirectorySearchRelevance({ client, host: HOST, navigate, evaluate, capture });
+    await verifyDirectoryDiscovery({ client, host: HOST, navigate, evaluate, capture });
     await verifyFooterReflow({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
 
     console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, one clear Directions path, phone contact, current-source verification, directory search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
