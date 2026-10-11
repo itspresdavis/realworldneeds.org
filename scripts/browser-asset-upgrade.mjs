@@ -205,7 +205,19 @@ function assertSaved(snapshot) {
   assert.equal(snapshot.unrelated, "preserve-me", "Unrelated localStorage must survive");
 }
 
+async function waitActivated(client) {
+  // controllerchange can precede completion of activate.waitUntil(). Do not
+  // inspect cleanup/archive results, or prime the next release's catalog,
+  // until activation and the controlling worker have both fully settled.
+  await waitExpression(client, `(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration?.active?.state === "activated"
+      && navigator.serviceWorker.controller?.state === "activated";
+  })()`, "active worker completed activation");
+}
+
 async function assertCaches(client, release, { allowLegacy = false } = {}) {
+  await waitActivated(client);
   const snapshot = await evaluate(client, `(async () => {
     const result = [];
     for (const name of await caches.keys()) {
@@ -370,6 +382,7 @@ async function run() {
     const oldTab = await newTab();
     await navigate(oldTab, `${HOST}/directory`);
     await waitExpression(oldTab, "Boolean(navigator.serviceWorker.controller)", "frozen legacy worker controls old page");
+    await waitActivated(oldTab);
     await evaluate(oldTab, `(async () => { localStorage.setItem("rwn-saved-resources", ${JSON.stringify(SAVED)}); localStorage.setItem("fixture-unrelated", "preserve-me"); const cache = await caches.open("unrelated-fixture"); await cache.put("/unrelated", new Response("keep")); })()`);
     await primeCatalog(oldTab, "legacy");
     online = false;
@@ -407,6 +420,7 @@ async function run() {
     assert.ok(held.length, "Installation must still be blocked during first navigation/lazy loading");
     releaseGate();
     await waitExpression(newTabClient, "window.__fixtureControllerChanges === 1", "built worker activation");
+    await waitActivated(newTabClient);
     await primeCatalog(newTabClient, "modern");
     await assertCaches(newTabClient, modern.id);
     assertSaved(await state(newTabClient));
@@ -453,6 +467,7 @@ async function run() {
     await evaluate(oldTab, 'window.__queuedLazy = new Promise(resolve => { window.__releaseLazy = resolve; }).then(() => { location.hash = "saved"; }); true');
     releaseGate();
     await waitExpression(oldTab, "window.__fixtureControllerChanges === 1", "next release controls retained old modern tab");
+    await waitActivated(oldTab);
     await primeCatalog(oldTab, "variant");
     await assertCaches(oldTab, variant.id);
     online = false;
@@ -476,6 +491,7 @@ async function run() {
     deployed = modern;
     await startUpdate(newTabClient);
     await waitExpression(newTabClient, 'window.__updateResult === "activated"', "rollback to previous built worker");
+    await waitActivated(newTabClient);
     await primeCatalog(newTabClient, "modern");
     assert.equal((await state(newTabClient)).documentId, variantPage.documentId, "Rollback must not reload already-open newer page");
     await assertCaches(newTabClient, modern.id);
