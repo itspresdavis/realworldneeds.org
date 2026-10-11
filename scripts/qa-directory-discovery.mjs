@@ -11,7 +11,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     count: document.querySelector('[data-directory-count]')?.textContent,
     focus: document.activeElement?.getAttribute('href'), scroll: scrollY,
     focusedId: document.activeElement?.id,
-    focusVisible: (() => { const rect = document.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.bottom > (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0) && rect.top < innerHeight; })(),
+    focusVisible: (() => { const rect = document.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.top >= (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6; })(),
     saved: document.querySelector('.directory-shell')?.classList.contains('has-saved-view'),
     menuOpen: Boolean(document.querySelector('.rwn-page-menu[open]')),
     href: location.href, history: history.state?.rwnDirectory,

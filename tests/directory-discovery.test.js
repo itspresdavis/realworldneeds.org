@@ -133,14 +133,16 @@ test("directory view restoration focuses a visible result instead of an offscree
   const link = (href, top, height = 30) => ({ getAttribute: () => href,
     getBoundingClientRect: () => ({ top, bottom: top + height, height }),
     focus: options => { assert.equal(options.preventScroll, true); focused = href; } });
-  const before = link("/service/before", -400), visible = link("/service/current", 130), after = link("/service/after", 1200);
+  const before = link("/service/before", -400), clipped = link("/service/clipped", 40, 80), visible = link("/service/current", 130), after = link("/service/after", 1200);
   const nav = link("/directory", 20);
   globalThis.window = { innerHeight: 800, scrollTo: value => { scroll = value.top; } };
   globalThis.document = { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 74 }), querySelectorAll: () => [nav] }) };
   try {
-    const list = { querySelectorAll: () => [before, visible, after] };
+    const list = { querySelectorAll: selector => { assert.equal(selector, "h2 a,.directory-global-result", "prefer a readable listing identity over a nearby action"); return [before, clipped, visible, after]; } };
     restoreDirectoryView(list, { focus: "/service/before", scroll: 900 });
     assert.equal(focused, "/service/current"); assert.equal(scroll, 900);
+    restoreDirectoryView(list, { focus: "/service/clipped", scroll: 900 });
+    assert.equal(focused, "/service/current", "a clipped name is not a useful visible return target");
     restoreDirectoryView({ querySelectorAll: () => [] }, { focus: "", scroll: 900 });
     assert.equal(focused, "/directory", "sticky navigation is the fallback when no result is in view");
   } finally { globalThis.window = oldWindow; globalThis.document = oldDocument; }
