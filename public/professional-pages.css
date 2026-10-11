@@ -358,5 +358,6 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 #service :is(.service-next-steps a strong, .service-utility-actions button) { font-size: .875rem; }
 #service .service-next-steps a span { font-size: .8125rem; white-space: normal; overflow: visible; }
 #service :is(.service-utility-actions__intro > small, .service-utility-actions__status) { font-size: .8125rem; }
-#service .service-utility-actions button { color: #24583e; }
+#service .service-utility-actions__buttons button { color: #24583e; }
+#service .service-utility-actions button:focus-visible { outline: 3px solid #356c4e; }
 #service .directory-record { margin-top: 1.5rem; }

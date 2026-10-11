@@ -69,3 +69,32 @@ test("small directory and service metadata has readable text contrast", async ()
   assert.match(finder, /\.resource-list-head \{ color: #586b60; font-size: \.8125rem/);
   assert.doesNotMatch(pages, /color:#(?:748389|6f7f84|77868b|697a80|6d7d82)/);
 });
+
+test("service Save states retain their own contrasting colors", async () => {
+  const pages = await readFile("public/professional-pages.css", "utf8");
+  const browser = await readFile("scripts/qa-finder-presentation.mjs", "utf8");
+  assert.doesNotMatch(pages, /#service \.service-utility-actions button\s*\{[^}]*color:/);
+  assert.match(pages, /#service \.service-utility-actions__buttons button \{ color: #24583e;/);
+  assert.match(browser, /state\.contrast < 4\.5/);
+  assert.match(browser, /service\.before\.pressed !== service\.restored\.pressed/);
+});
+
+test("provider visiting warnings precede optional listing tools", async () => {
+  const source = await readFile("public/service-actions.js", "utf8");
+  const placement = source.match(/const providerNote = nextSteps\.nextElementSibling;[\s\S]*?utilityAnchor\.insertAdjacentElement\("afterend", utility\);/)?.[0];
+  assert.ok(placement);
+  for (const kind of [".policy-note", "article", null]) {
+    const calls = [];
+    const note = kind && { matches: (selector) => selector === kind, insertAdjacentElement: (...args) => calls.push(["note", ...args]) };
+    const nextSteps = { nextElementSibling: note, insertAdjacentElement: (...args) => calls.push(["actions", ...args]) };
+    const utility = {};
+    new Function("nextSteps", "utility", placement)(nextSteps, utility);
+    assert.deepEqual(calls, [[kind === ".policy-note" ? "note" : "actions", "afterend", utility]]);
+  }
+});
+
+test("mobile filter chips do not turn a lone reset into a full-width primary action", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.match(css, /\.quick-need--all\[aria-pressed="true"\] \{[^}]*background: var\(--rwn-green-soft\);/);
+  assert.match(css, /\.rwn-professional \.quick-need \{[^}]*min-width: 44px;[^}]*flex: 0 1 auto;/);
+});

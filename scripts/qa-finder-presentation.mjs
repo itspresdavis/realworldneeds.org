@@ -45,6 +45,33 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         await navigate(client, `${host}${route}`);
         const geometry = await evaluate(client, `({client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth})`);
         if (geometry.scroll > geometry.client + 1) throw new Error(`${label} overflows at ${width}px: ${JSON.stringify(geometry)}`);
+        if (label === 'service') {
+          const service = await evaluate(client, `(() => {
+            const button = document.querySelector('[data-service-save]');
+            if (!button) throw new Error('Save control did not initialize');
+            const luminance = (color) => {
+              const rgb = color.match(/[\\d.]+/g).slice(0,3).map(Number).map((value) => value / 255);
+              const linear = rgb.map((value) => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+              return linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
+            };
+            const state = () => {
+              const style = getComputedStyle(button);
+              const levels = [luminance(style.color), luminance(style.backgroundColor)].sort((a,b) => a-b);
+              return {label:button.textContent.trim(),pressed:button.getAttribute('aria-pressed'),contrast:(levels[1]+.05)/(levels[0]+.05)};
+            };
+            const before = state();
+            button.click();
+            const toggled = state();
+            button.click();
+            const restored = state();
+            const note = document.querySelector('.service-next-steps + .policy-note');
+            const tools = document.querySelector('[data-service-utility]');
+            return {before,toggled,restored,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
+          })()`);
+          if ([service.before, service.toggled, service.restored].some((state) => !state.label || !Number.isFinite(state.contrast) || state.contrast < 4.5) || service.before.pressed === service.toggled.pressed || service.before.pressed !== service.restored.pressed || !service.warningBeforeTools) {
+            throw new Error(`Service action contrast/state/order failed at ${width}px: ${JSON.stringify(service)}`);
+          }
+        }
         await capture(client, `finder-journey-${label}-${width}.png`);
       }
     }

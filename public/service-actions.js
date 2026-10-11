@@ -25,7 +25,10 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     </div>
     <p class="service-utility-actions__status" data-service-action-status role="status" aria-live="polite"></p>
   `;
-  nextSteps.insertAdjacentElement("afterend", utility);
+  // Keep the provider's visiting/eligibility warning ahead of optional tools.
+  const providerNote = nextSteps.nextElementSibling;
+  const utilityAnchor = providerNote?.matches(".policy-note") ? providerNote : nextSteps;
+  utilityAnchor.insertAdjacentElement("afterend", utility);
 
   const status = utility.querySelector("[data-service-action-status]");
   const title = document.querySelector("#service h1")?.textContent?.trim() || document.title;
