@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { resources } from "../src/data/resources.js";
 import { waitForScrollStability } from "./qa-scroll-stability.mjs";
 
 // Native browser input and rendered geometry, rather than source-string claims.
@@ -58,6 +59,28 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     await client.call('Input.dispatchMouseEvent', { type:'mouseReleased',button:'left',clickCount:1,...point });
   };
   const assert = (condition, message, state) => { if (!condition) throw new Error(`${message}: ${JSON.stringify(state)}`); };
+  const controlContrast = selectors => evaluate(client, `(() => {
+    const rgba = value => { const parts=value.match(/[0-9.]+/g).map(Number); return [...parts.slice(0,3),parts[3]??1]; };
+    const blend = (front,back) => front.slice(0,3).map((value,index)=>value*front[3]+back[index]*(1-front[3]));
+    const luminance = rgb => rgb.map(value=>{value/=255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[.2126,.7152,.0722][index],0);
+    return [...document.querySelectorAll(${JSON.stringify(selectors)})].filter(el=>el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden'&&!el.disabled).map(el=>{
+      const style=getComputedStyle(el), ancestors=[];
+      for(let node=el;node;node=node.parentElement)ancestors.unshift(node);
+      let background=[255,255,255];
+      for(const node of ancestors)background=blend(rgba(getComputedStyle(node).backgroundColor),background);
+      const foreground=blend(rgba(style.color),background),levels=[luminance(foreground),luminance(background)].sort((a,b)=>a-b);
+      const box=el.getBoundingClientRect();
+      return {id:el.id,w:box.width,h:box.height,focusVisible:el.matches(':focus-visible'),hovered:el.matches(':hover'),text:el.textContent.trim()||el.getAttribute('aria-label'),color:style.color,background,opacity:style.opacity,outlineOffset:parseFloat(style.outlineOffset),fontSize:parseFloat(style.fontSize),ratio:(levels[1]+.05)/(levels[0]+.05)};
+    });
+  })()`);
+  const keyboardFocus = async selector => {
+    await evaluate(client, `document.querySelector(${JSON.stringify(selector)}).focus({preventScroll:true})`);
+    for(const modifiers of [8,0]) {
+      await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9,modifiers});
+      await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9,modifiers});
+    }
+    assert(await evaluate(client, `document.activeElement===document.querySelector(${JSON.stringify(selector)})&&document.activeElement.matches(':focus-visible')`), 'Native keyboard did not return visible focus to '+selector);
+  };
   const observeArrivals = () => evaluate(client, `(() => {
     window.__rwnArrivals=[];
     const original=Element.prototype.animate;
@@ -174,13 +197,35 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       const controls = await evaluate(client, `(() => {
         document.querySelector('.filter-disclosure').open=true;
         document.querySelector('#clearLocation').hidden=false;
-        const selectors='.quick-need, .location-button, .location-clear, .filter-heading button, .layer-toggle, .access-switch button, .directory-tool, .outline-button--dark, .region-menu select';
+        document.querySelector('#clearSearch').hidden=false;
+        const selectors='#clearSearch, .quick-need, .location-button, .location-clear, .filter-heading button, .layer-toggle, .access-switch button, .directory-tool, .outline-button--dark, .region-menu select';
         const targets=[...document.querySelectorAll(selectors)].filter(el=>el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden').map(el=>({text:el.textContent.trim(),w:el.getBoundingClientRect().width,h:el.getBoundingClientRect().height}));
         const location=[...document.querySelectorAll('.location-actions button')].map(el=>({top:el.getBoundingClientRect().top,height:el.getBoundingClientRect().height}));
         return {width:innerWidth,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,targets,location};
       })()`);
       assert(!controls.overflow && controls.targets.every(target=>target.w>=43.5&&target.h>=43.5), 'Finder control target or reflow contract failed', controls);
       assert(controls.location.length===2 && Math.abs(controls.location[0].top-controls.location[1].top)<=1, 'Location and Clear actions unnecessarily split into two rows', controls.location);
+      const contrast = await controlContrast('#clearSearch,.quick-need,.location-button,.location-clear,.filter-heading button,.layer-toggle,.access-switch button,.directory-tool,.outline-button--dark,.region-menu select,.layer-toggle strong');
+      evidence.push({label:'Enabled finder control contrast at '+width+'px',contrast});
+      assert(contrast.length>10&&contrast.every(item=>item.ratio>=4.5&&Number(item.opacity)===1), 'Enabled finder controls inherit unreadable light-theme text', contrast);
+      assert(contrast.find(item=>item.id==='toggleAll')?.fontSize>=13, 'Filter Clear label is too small', contrast);
+      await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      for (const selector of ['#clearSearch','#toggleAll','.location-privacy a']) {
+        await evaluate(client, `(() => {document.querySelector('.finder-location-notes').open=true;const item=document.querySelector(${JSON.stringify(selector)});item.scrollIntoView({behavior:'instant',block:'center'});item.blur();})()`);
+        const point=await evaluate(client, `(() => {const box=document.querySelector(${JSON.stringify(selector)}).getClientRects()[0];return {x:box.x+box.width/2,y:box.y+box.height/2};})()`);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+        const activeContrast=await controlContrast(selector);
+        assert(activeContrast.length===1&&activeContrast[0].ratio>=4.5&&activeContrast[0].hovered, 'Focused/hovered finder action loses light-theme contrast', activeContrast);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
+        await keyboardFocus(selector);
+        const keyboardContrast=await controlContrast(selector);
+        assert(keyboardContrast[0]?.focusVisible&&keyboardContrast[0].ratio>=4.5,'Keyboard finder action loses contrast',keyboardContrast);
+        evidence.push({label:'Hover and keyboard '+selector+' at '+width+'px',hover:activeContrast,keyboard:keyboardContrast});
+      }
+      await evaluate(client, `document.querySelector('.finder-location-notes').open=false;document.activeElement.blur();scrollTo({top:0,behavior:'instant'})`);
+
+
       if(width === 320) {
         await capture(client,'page-interactions-controls-320.png');
         await evaluate(client, `document.querySelector('.globe-stage').scrollIntoView({behavior:'instant',block:'center'});document.querySelector('#zoomIn').focus({preventScroll:true})`);
@@ -190,6 +235,46 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         assert(focus.active==='zoomOut'&&focus.width>=3&&focus.offset<=-3, 'Clipped globe group has no inset keyboard focus ring', focus);
         await capture(client,'page-interactions-globe-focus-320.png');
       }
+    }
+
+    for (const width of [320,1440]) {
+      await client.call('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
+      await navigate(client,'about:blank');
+      await navigate(client,`${host}/#resource=${encodeURIComponent(resources[0].id)}`);
+      await evaluate(client, `document.querySelector('.panel-detail-disclosure').open=true;document.querySelector('.panel-source-note').open=true;document.querySelector('#resourcePanel').scrollIntoView({behavior:'instant',block:'start'})`);
+      const selectors='.panel-source,.panel-source b,.panel-title p,.panel-precision,.panel-precision strong,.panel-facts dt,.panel-facts dd,.free-cost,.cost-scope,.panel-services h3,.panel-services li,.availability-note p,.availability-note strong,.panel-source-note p,.panel-source-note strong,#resourcePanel summary,#resourcePanel summary span,#resourcePanel button,#resourcePanel a';
+      const contrast=await controlContrast(selectors);
+      assert(contrast.length>15&&contrast.every(item=>item.ratio>=4.5&&Number(item.opacity)===1), 'Inspector facts or secondary controls have unreadable light-theme contrast', contrast);
+      const geometry=await evaluate(client, `({overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,buttons:[...document.querySelectorAll('#resourcePanel button,.panel-actions a,.panel-map-actions a')].filter(item=>item.getClientRects().length).map(item=>({id:item.id,w:item.getBoundingClientRect().width,h:item.getBoundingClientRect().height,disabled:item.disabled,opacity:getComputedStyle(item).opacity}))})`);
+      assert(!geometry.overflow&&geometry.buttons.every(item=>item.w>=43.5&&item.h>=43.5), 'Inspector action targets or reflow failed', geometry);
+      assert(geometry.buttons.some(item=>item.disabled&&Number(item.opacity)<1), 'Inspector disabled navigation lost its distinct state', geometry);
+      evidence.push({label:'Inspector palette and targets at '+width+'px',contrast,geometry});
+      await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      for (const selector of ['.secondary-button','#saveResource','#shareResource','#copyAddress','#closeInspector','.panel-map-actions a']) {
+        await evaluate(client, `(() => {const item=document.querySelector(${JSON.stringify(selector)});item.scrollIntoView({behavior:'instant',block:'center'});item.blur();})()`);
+        const point=await evaluate(client, `(() => {const box=document.querySelector(${JSON.stringify(selector)}).getClientRects()[0];return {x:box.x+box.width/2,y:box.y+box.height/2};})()`);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+        const activeContrast=await controlContrast(selector);
+        assert(activeContrast.length>0&&activeContrast.every(item=>item.ratio>=4.5)&&activeContrast.some(item=>item.hovered), 'Hovered inspector action loses contrast', activeContrast);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
+        await keyboardFocus(selector);
+        const keyboardContrast=await controlContrast(selector);
+        assert(keyboardContrast.some(item=>item.focusVisible)&&keyboardContrast.every(item=>item.ratio>=4.5),'Keyboard inspector action loses contrast',keyboardContrast);
+        if(['#saveResource','#shareResource','#copyAddress','.panel-map-actions a'].includes(selector))assert(keyboardContrast.filter(item=>item.focusVisible).every(item=>item.outlineOffset<=-3),'Clipped inspector action has no inset focus ring',keyboardContrast);
+        evidence.push({label:'Hover and keyboard inspector '+selector+' at '+width+'px',hover:activeContrast,keyboard:keyboardContrast});
+      }
+      const savedBefore=await evaluate(client, `document.querySelector('#saveResource').getAttribute('aria-pressed')`);
+      if(savedBefore!=='true')await evaluate(client, `document.querySelector('#saveResource').click()`);
+      assert(await evaluate(client, `document.querySelector('#saveResource').getAttribute('aria-pressed')==='true'`),'Inspector Save action did not enter the Saved state');
+      const savedContrast=await controlContrast('#saveResource');
+      assert(savedContrast.length===1&&savedContrast[0].ratio>=4.5, 'Saved inspector state loses contrast', savedContrast);
+      if(savedBefore!=='true')await evaluate(client, `document.querySelector('#saveResource').click()`);
+      assert(await evaluate(client, `document.querySelector('#saveResource').getAttribute('aria-pressed')`)===savedBefore,'Inspector Save state was not restored');
+      await evaluate(client, `document.querySelector('.panel-detail-disclosure').open=true;document.querySelector('.panel-source-note').open=true;document.querySelector('.panel-facts').scrollIntoView({behavior:'instant',block:'center'})`);
+      await capture(client,`page-interactions-inspector-facts-${width}.png`);
+      await evaluate(client, `document.querySelector('.panel-actions').scrollIntoView({behavior:'instant',block:'center'})`);
+      await capture(client,`page-interactions-inspector-actions-${width}.png`);
     }
 
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'no-preference'}]});

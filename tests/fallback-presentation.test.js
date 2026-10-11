@@ -13,7 +13,7 @@ test("unavailable maps use content height rather than the normal map viewport", 
 
 test("unavailable maps hide unusable controls but retain the live status announcement", () => {
   assert.match(fallbackCss, /\.globe-stage\.is-globe-unavailable :is\(\.globe-meta, \.atlas-key, \.globe-empty, \.globe-cluster-tray, \.globe-gesture-hint, #globeHelp\)\s*\{\s*display: none !important;/);
-  assert.match(fallbackCss, /\.globe-stage\.is-globe-unavailable \.globe-readout\s*\{[^}]*clip-path: inset\(50%\);/);
+  assert.match(css, /\.rwn-professional \.globe-readout\s*\{[^}]*display: block !important;[^}]*clip-path: inset\(50%\);/);
   assert.match(app, /id="globeReadout" aria-live="polite"/);
   assert.match(app, /class="globe-fallback__action" href="\/directory"/);
   assert.match(app, /class="jump-results" id="jumpResults" href="#results"/);

@@ -109,7 +109,11 @@ test("no-JS content and control states have no hidden entrance prerequisite", as
   const skipStack = Number(css.match(/\.rwn-professional \.skip-link \{ z-index: (\d+);/)?.[1]);
   const headerStack = Number(css.match(/\.rwn-professional \.site-header \{[^}]*z-index: (\d+);/)?.[1]);
   assert.ok(skipStack > headerStack, "the focused skip link paints above the sticky header");
-  assert.match(css, /\.globe-controls button:focus-visible \{ outline-offset: -4px !important;/);
+  assert.match(css, /\.filter-heading button \{[^}]*color: var\(--rwn-green-dark\);[^}]*font-size: \.8125rem;/);
+  assert.match(css, /\.resource-panel :is\(p, dd, li, \.cost-scope\) \{ color: var\(--rwn-ink\);/);
+  assert.match(css, /\.panel-precision strong/);
+  assert.match(css, /\.panel-navigation \{ grid-template-columns: 44px 1fr 44px;/);
+  assert.match(css, /:is\(\.globe-controls,\.panel-utilities,\.panel-map-actions\) :focus-visible \{ outline-offset: -4px !important;/);
   assert.match(css, /\.site-footer :is\(a, button\):focus-visible \{ outline-color: #c2e5cc/);
   assert.ok((await stat("src/page-interactions.js")).size < 6_000, "optional motion stays dependency-free and bounded");
 });
