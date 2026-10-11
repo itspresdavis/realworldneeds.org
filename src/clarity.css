@@ -46,6 +46,8 @@ body.rwn-professional main { display: block; }
   box-shadow: none !important;
 }
 
+.rwn-professional .skip-link { z-index: 110; }
+
 /* Remove old demo/dashboard chrome. */
 .mobile-taskbar,
 .globe-guide,

@@ -106,6 +106,9 @@ test("no-JS content and control states have no hidden entrance prerequisite", as
   assert.match(css, /scroll-padding-top: var\(--rwn-header-clearance, 5rem\)/);
   assert.match(css, /:where\(#finder, #results, #about, #standards\) \{ scroll-margin-top: 0;/);
   assert.match(css, /prefers-reduced-motion: no-preference/);
+  const skipStack = Number(css.match(/\.rwn-professional \.skip-link \{ z-index: (\d+);/)?.[1]);
+  const headerStack = Number(css.match(/\.rwn-professional \.site-header \{[^}]*z-index: (\d+);/)?.[1]);
+  assert.ok(skipStack > headerStack, "the focused skip link paints above the sticky header");
   assert.match(css, /\.globe-controls button:focus-visible \{ outline-offset: -4px !important;/);
   assert.match(css, /\.site-footer :is\(a, button\):focus-visible \{ outline-color: #c2e5cc/);
   assert.ok((await stat("src/page-interactions.js")).size < 6_000, "optional motion stays dependency-free and bounded");

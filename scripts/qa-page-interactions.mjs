@@ -1,9 +1,12 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { waitForScrollStability } from "./qa-scroll-stability.mjs";
 
 // Native browser input and rendered geometry, rather than source-string claims.
 // Runs in existing CI Chrome; this is not a physical mobile-device benchmark.
 export async function verifyPageInteractions({ client, host, navigate, evaluate, capture }) {
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const evidence = [];
+  let completed = false;
   const loadHome = async () => {
     // A hash-only navigation can retain the old observer and history state.
     await navigate(client, "about:blank");
@@ -14,7 +17,41 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     const target = document.querySelector(location.hash || '#finder');
     return {hash:location.hash,y:scrollY,active:document.activeElement.id,header:header.bottom,target:target?.getBoundingClientRect().top,clearance:parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),smooth:getComputedStyle(document.documentElement).scrollBehavior,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1};
   })()`);
-  const settle = () => waitForScrollStability({ sample: () => evaluate(client, '({scrollY,scrollX})'), wait });
+  const settle = (timeoutMs = 5000) => waitForScrollStability({ sample: () => evaluate(client, '({scrollY,scrollX})'), wait, timeoutMs });
+  const arrive = async (condition, label) => {
+    const started = Date.now(), deadline = started + 6000;
+    const record = {label, trace:[]};
+    evidence.push(record);
+    const withinDeadline = async operation => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error(`${label} exceeded its 6000ms arrival deadline`);
+      let timer;
+      try {
+        const result = await Promise.race([
+          operation(remaining),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} exceeded its 6000ms arrival deadline`)), remaining); })
+        ]);
+        if (Date.now() >= deadline) throw new Error(`${label} exceeded its 6000ms arrival deadline`);
+        return result;
+      } finally { clearTimeout(timer); }
+    };
+    try {
+      while (Date.now() < deadline) {
+        const state = await withinDeadline(inspect);
+        record.trace.push({elapsed:Date.now()-started, ...state});
+        if (condition(state)) {
+          record.stability = await withinDeadline(settle);
+          return await withinDeadline(inspect);
+        }
+        await wait(Math.min(50, Math.max(0, deadline-Date.now())));
+      }
+      throw new Error(`${label} did not reach its destination`);
+    } catch (error) {
+      record.failed = true;
+      record.error = error.message;
+      throw new Error(`${error.message}: ${JSON.stringify(record.trace)}`, {cause:error});
+    }
+  };
   const click = async selector => {
     const point = await evaluate(client, `(() => { const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
     await client.call('Input.dispatchMouseEvent', { type:'mousePressed',button:'left',clickCount:1,...point });
@@ -38,32 +75,40 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
   const enterAbout = () => evaluate(client, `scrollTo({top:document.querySelector('#about h2').getBoundingClientRect().top+scrollY-innerHeight+160,behavior:'instant'})`);
 
   try {
-    for (const width of [390, 1180]) {
+    for (const width of [320, 390, 1180]) {
       await client.call('Emulation.setDeviceMetricsOverride', {width,height:844,deviceScaleFactor:1,mobile:false});
       await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
       await loadHome();
+      await client.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await client.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      const firstTab = await evaluate(client, `(() => {
+        const link=document.querySelector('.skip-link'),box=link.getBoundingClientRect();
+        return {focused:document.activeElement===link,top:box.top,bottom:box.bottom,painted:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('.skip-link')===link};
+      })()`);
+      assert(firstTab.focused && firstTab.top>=0 && firstTab.bottom<=844 && firstTab.painted, 'First-Tab skip link is offscreen or painted behind the header', firstTab);
+      await capture(client, `page-interactions-skip-focus-${width}.png`);
       await evaluate(client, `document.querySelector('#clearSearch').click(); document.querySelector('.quick-need--all').click(); scrollTo({top:0,behavior:'instant'}); window.__rwnScrollSamples=[]; window.addEventListener('scroll',()=>{if(window.__rwnScrollSamples.length<180)window.__rwnScrollSamples.push(scrollY)},{passive:true});`);
       await settle();
       const initial = await inspect();
       await evaluate(client, 'window.__rwnScrollSamples=[]');
       await click('#jumpResults');
-      await settle();
-      const arrived = await inspect();
+      const arrived = await arrive(state=>state.hash==='#results'&&state.target>=state.header+10&&state.target<=state.header+15, `Results travel at ${width}px`);
       const samples = await evaluate(client, 'window.__rwnScrollSamples');
+      evidence.push({label:`Native anchor at ${width}px`,initial,arrived,samples});
       assert(arrived.hash === '#results' && arrived.active === 'results', 'Results anchor did not move native focus/hash', arrived);
       assert(arrived.target >= arrived.header + 10 && arrived.target <= arrived.header + 15, 'Anchor clearance is missing or doubled', arrived);
       assert(arrived.smooth === 'auto' && !arrived.overflow, 'Travel policy leaked into ordinary page behavior', arrived);
       assert(new Set(samples.map(Math.round)).size > 2, 'Intentional anchor travel jumped instead of scrolling smoothly', samples);
       await capture(client, `page-interactions-results-${width}.png`);
-      await evaluate(client, 'history.back()'); await settle();
-      const back = await inspect();
+      await evaluate(client, 'history.back()');
+      const back = await arrive(state=>state.hash===''&&Math.abs(state.y-initial.y)<=2, `Back at ${width}px`);
       assert(back.hash === '' && Math.abs(back.y - initial.y) <= 2, 'Native Back did not restore the previous place', {initial,back});
-      await evaluate(client, 'history.forward()'); await settle();
-      const forward = await inspect();
+      await evaluate(client, 'history.forward()');
+      const forward = await arrive(state=>state.hash==='#results'&&Math.abs(state.y-arrived.y)<=2, `Forward at ${width}px`);
       assert(forward.hash === '#results' && Math.abs(forward.y - arrived.y) <= 2, 'Native Forward did not restore results', {arrived,forward});
       // The sticky header's brand must return to the document start from here.
-      await click('.site-header .brand'); await click('.site-header .brand'); await settle();
-      const top = await inspect();
+      await click('.site-header .brand'); await click('.site-header .brand');
+      const top = await arrive(state=>state.hash==='#top'&&state.y<=1, `Repeated brand return at ${width}px`);
       assert(top.hash === '#top' && top.y <= 1, 'Brand home link stayed pinned to the sticky header', top);
       await evaluate(client, `scrollTo({top:300,behavior:'instant'}); document.querySelector('.skip-link').focus({preventScroll:true})`);
       await client.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
@@ -101,6 +146,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     await settle();
     const cancelled = await evaluate(client, `({y:scrollY,cancelled:window.__rwnArrivals.some(item=>item.cancelled),transform:getComputedStyle(document.querySelector('#about h2')).transform})`);
+    evidence.push({label:'Live reduced-motion cancellation',running,cancelled});
     assert(cancelled.cancelled && cancelled.transform==='none' && Math.abs(cancelled.y-running.y)<=1, 'Live reduced motion did not cancel in place', {running,cancelled});
     // Controlled CPU throttle is a resilience check, not a hardware speed claim.
     await client.call('Emulation.setCPUThrottlingRate', {rate:4});
@@ -144,8 +190,11 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     await loadHome();
     const found = await evaluate(client, `(() => { const found=window.find('Everyone deserves a clear next step.');const item=document.querySelector('#about h2');return {found,selected:String(getSelection()),opacity:Number(getComputedStyle(item).opacity),display:getComputedStyle(item).display}; })()`);
     assert(found.found && found.selected.includes('Everyone deserves') && found.opacity === 1 && found.display !== 'none', 'Browser find could not reach readable editorial text', found);
+    completed = true;
     console.log('Page interactions QA passed: native smooth anchors, history/focus, header clearance, once-only arrivals, live reduced motion, controlled4x CPU check, readable find targets and44px controls at four widths.');
   } finally {
+    await mkdir('qa-screenshots',{recursive:true});
+    await writeFile('qa-screenshots/page-interactions.json',JSON.stringify({completed,evidence},null,2));
     await client.call('Emulation.setCPUThrottlingRate', {rate:1});
     await client.call('Emulation.setEmulatedMedia', {features:[]});
   }
