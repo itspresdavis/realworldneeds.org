@@ -2297,7 +2297,8 @@ async function loadLandGeometry() {
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
-  hasPendingSearch = () => pendingSearchValue !== state.query;
+  let composingSearch = false;
+  hasPendingSearch = () => composingSearch || pendingSearchValue !== state.query;
   let searchRevision = 0;
   let searchFilterTimer = null;
   let searchHistoryTimer = null;
@@ -2319,6 +2320,7 @@ function bindEvents() {
   };
   refreshSearchPreparation = () => showSearchPreparation(searchRevision);
   cancelPendingSearch = () => {
+    composingSearch = false;
     searchRevision += 1;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
     if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
@@ -2336,6 +2338,7 @@ function bindEvents() {
     searchHistoryTimer = window.setTimeout(commitSearchHistory, 640);
   };
   const commitPendingSearch = async () => {
+    if (composingSearch) return;
     if (searchFilterTimer !== null) {
       window.clearTimeout(searchFilterTimer);
       searchFilterTimer = null;
@@ -2382,19 +2385,41 @@ function bindEvents() {
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
     searchFilterTimer = window.setTimeout(flushSearchFilter, 48);
   };
+  const queueSearchInput = () => {
+    // Leave the draft and caret alone: trimming each keystroke removes the
+    // space needed to type a second word. Only matching/history normalize it.
+    if (searchInput.value.length > FINDER_QUERY_LIMIT) {
+      const { selectionStart, selectionEnd } = searchInput;
+      searchInput.value = searchInput.value.slice(0, FINDER_QUERY_LIMIT);
+      searchInput.setSelectionRange(Math.min(selectionStart, FINDER_QUERY_LIMIT), Math.min(selectionEnd, FINDER_QUERY_LIMIT));
+    }
+    document.getElementById("clearSearch").hidden = !searchInput.value;
+    scheduleSearchFilter(sanitizeFinderQuery(searchInput.value));
+  };
+  searchInput.addEventListener("compositionstart", () => {
+    const wasPreparing = preparationNoticeTimer !== null;
+    cancelPendingSearch();
+    pendingSearchValue = state.query;
+    composingSearch = true;
+    if (wasPreparing) updateFilters();
+  });
+  searchInput.addEventListener("compositionend", () => {
+    composingSearch = false;
+    queueSearchInput();
+  });
   searchInput.addEventListener("input", (event) => {
-    const next = sanitizeFinderQuery(event.target.value);
-    if (event.target.value !== next) event.target.value = next;
-    // Cancellation stays available even before the first search is prepared.
-    document.getElementById("clearSearch").hidden = !next;
-    scheduleSearchFilter(next);
+    // The IME owns the draft until compositionend, including its Enter/Escape.
+    document.getElementById("clearSearch").hidden = !searchInput.value;
+    if (event.isComposing || composingSearch) return;
+    queueSearchInput();
   });
   searchInput.addEventListener("keydown", (event) => {
+    if (event.isComposing || composingSearch || event.keyCode === 229) return;
     if (event.key === "Enter") {
       commitPendingSearch();
       return;
     }
-    if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
+    if (event.key !== "Escape" || (!state.query && !pendingSearchValue && !searchInput.value)) return;
     cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
