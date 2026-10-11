@@ -40,7 +40,20 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
     await openResource(resources.at(-2).id);
     await enter("nextResource");
     await check(`document.activeElement.id === 'resourcePanelHeading' && document.getElementById('nextResource').disabled`, `Last-result boundary lost focus at ${width}px`);
+    // The real context-loss handler hides the map chrome, including the normal
+    // inspector opener. Close must recover to visible search without changing it.
+    await evaluate(client, `document.getElementById('globeCanvas').dispatchEvent(new Event('webglcontextlost', {cancelable:true}))`);
+    await enter("closeInspector");
+    await check(`document.activeElement.id === 'resourceSearch' && !document.getElementById('resourceSearch').value && document.getElementById('resourcePanel').hidden && document.getElementById('openInspector').getClientRects().length === 0`, `Fallback Close lost focus or changed search at ${width}px`);
+    await check(`(() => {
+      const input = document.activeElement, box = input.getBoundingClientRect();
+      const exposed = [box.left + 8, box.right - 8, box.left + box.width / 2]
+        .some(x => [box.top + 8, box.bottom - 8, box.top + box.height / 2].some(y => document.elementFromPoint(x, y) === input));
+      return box.width > 0 && box.height > 0 && box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight && exposed;
+    })()`, `Fallback Close focus is outside the visible viewport at ${width}px`);
   }
+
+  await openResource(resources[1].id);
 
   const clipboard = await evaluate(client, `(async () => {
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');

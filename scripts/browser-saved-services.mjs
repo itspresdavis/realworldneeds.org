@@ -230,6 +230,10 @@ async function run() {
 
     // Background list changes can hide controls without replacing their nodes.
     await evaluate(client, `localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids))}); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
+    // Earlier pagination intentionally remains expanded across refreshes. Start
+    // a new document so this fixture has an actual, visible Show more control.
+    await navigate(client, "about:blank");
+    await navigate(client, `${HOST}/directory#saved`);
     await waitForUI(`!document.querySelector('[data-saved-more]').hidden`);
     await evaluate(client, `document.querySelector('[data-saved-more]').focus(); localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids.slice(0, 2)))}); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
     await waitForUI(`document.querySelector('[data-saved-more]').hidden && document.activeElement.id === 'saved-services-heading'`);

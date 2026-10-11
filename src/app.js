@@ -819,12 +819,16 @@ function renderResourcePanel() {
   if (inspectorToggle) inspectorToggle.hidden = !resource || inspectorVisible;
   if (!resource) {
     panel.innerHTML = "";
-    if (focusInPanel || focused === inspectorToggle) document.getElementById("resourceSearch")?.focus({ preventScroll: true });
+    if (focusInPanel || focused === inspectorToggle) document.getElementById("resourceSearch")?.focus();
     return;
   }
   if (!inspectorVisible) {
     panel.innerHTML = "";
-    if (focusInPanel) inspectorToggle?.focus({ preventScroll: true });
+    if (focusInPanel) {
+      // The text-first map fallback hides the globe chrome and its opener.
+      const target = inspectorToggle?.getClientRects().length ? inspectorToggle : document.getElementById("resourceSearch");
+      target?.focus();
+    }
     return;
   }
 

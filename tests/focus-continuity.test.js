@@ -82,8 +82,9 @@ function inspectorFixture({ clipboard, execCommand = () => true, share } = {}) {
   const f = domFixture(), { document, Element } = f;
   const panel = new Element("aside", { id: "resourcePanel" });
   const toggle = new Element("button", { id: "openInspector" });
+  const globeChrome = new Element(); globeChrome.append(toggle);
   const search = new Element("input", { id: "resourceSearch" });
-  document.body.append(panel, toggle, search);
+  document.body.append(panel, globeChrome, search);
   document.execCommand = execCommand;
   const records = ["first", "second", "third"].map((id) => ({ id, name: id, category: "food", address: "10 Main St", services: [] }));
   const state = { filtered: records, selectedId: "second", inspectorOpen: true, savedIds: new Set() };
@@ -113,7 +114,7 @@ function inspectorFixture({ clipboard, execCommand = () => true, share } = {}) {
   vm.runInContext(`${between("function renderResourcePanel()", "function resourceCard(")}\n${between("function setSelected(", "function downloadDirectory(")}`, context);
   panel.getBoundingClientRect = () => ({ top: 100, bottom: 600 });
   context.renderResourcePanel();
-  return { ...f, context, state, panel, toggle, search, messages, records, control: (id) => document.getElementById(id) };
+  return { ...f, context, state, panel, toggle, globeChrome, search, messages, records, control: (id) => document.getElementById(id) };
 }
 
 test("inspector Save retains focus on the replacement button through repeated save/remove", () => {
@@ -149,6 +150,13 @@ test("removing the selected service in Saved-only view returns to search when de
   const f = inspectorFixture(); f.control("saveResource").click(); f.state.savedOnly = true;
   f.control("saveResource").focus(); f.control("saveResource").click();
   assert.equal(f.panel.hidden, true); assert.equal(f.document.activeElement, f.search);
+});
+
+test("Close returns to search when unavailable map chrome hides the inspector opener", () => {
+  const f = inspectorFixture(); f.globeChrome.hidden = true;
+  f.control("closeInspector").focus(); f.control("closeInspector").click();
+  assert.equal(f.panel.hidden, true); assert.equal(f.toggle.getClientRects().length, 0);
+  assert.equal(f.document.activeElement, f.search);
 });
 
 test("background inspector rerenders never move focus away from search", () => {
