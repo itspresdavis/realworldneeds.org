@@ -54,6 +54,8 @@ class CdpClient {
     this.listeners = new Map();
     this.responses = new Map();
     this.resources = [];
+    this.diagnosticEvents = [];
+    this.requestURLs = new Map();
   }
   async connect() {
     this.ws = new WebSocket(this.url);
@@ -75,6 +77,15 @@ class CdpClient {
         for (const listener of this.listeners.get(message.method) || []) listener(message.params || {});
       }
     });
+    this.on("Runtime.exceptionThrown", ({ exceptionDetails }) => this.diagnosticEvents.push({ type: "exception", message: exceptionDetails.exception?.description || exceptionDetails.text }));
+    this.on("Runtime.consoleAPICalled", ({ type, args }) => {
+      if (["error", "warning"].includes(type)) this.diagnosticEvents.push({ type, message: args.map((arg) => arg.description || arg.value || "").join(" ") });
+    });
+    this.on("Network.requestWillBeSent", ({ requestId, request }) => this.requestURLs.set(requestId, request.url));
+    this.on("Network.loadingFailed", ({ requestId, errorText, type }) => this.diagnosticEvents.push({ type: "request-failed", resourceType: type, url: this.requestURLs.get(requestId), message: errorText }));
+    this.on("Network.responseReceived", ({ response }) => {
+      if (response.status >= 400) this.diagnosticEvents.push({ type: "http-error", url: response.url, status: response.status, fromServiceWorker: response.fromServiceWorker });
+    });
     // Inspect the bytes Chrome actually applied/executed, rather than a second
     // fetch which could already have been repaired by stale-while-revalidate.
     this.on("Network.responseReceived", ({ requestId, type, response }) => {
@@ -89,7 +100,9 @@ class CdpClient {
       }).catch((error) => this.resources.push({ url: response.url, error: error.message }));
     });
     await Promise.all([this.call("Page.enable"), this.call("Runtime.enable"), this.call("Network.enable")]);
-    await this.call("Network.setCacheDisabled", { cacheDisabled: true });
+    // The fixture server already sends no-store. Do not override request cache
+    // modes through DevTools: offline catalog fallback deliberately distinguishes
+    // ordinary reads from explicit reloads in both the frozen and current worker.
   }
   call(method, params = {}) {
     const id = this.nextId++;
@@ -340,7 +353,11 @@ async function run() {
   };
   const openSaved = async (client) => {
     await evaluate(client, 'location.hash = "saved"');
-    await waitExpression(client, 'document.querySelectorAll("[data-saved-id]").length === 2', "saved production module rendered synthetic IDs");
+    await until(async () => {
+      const snapshot = await evaluate(client, '({ count: document.querySelectorAll("[data-saved-id]").length, summary: document.querySelector("[data-saved-summary]")?.textContent })');
+      if (/could not open|details could not load|unavailable in this browser/.test(snapshot.summary || "")) throw new Error(`Saved-module fixture failed: ${snapshot.summary}`);
+      return snapshot.count === 2;
+    }, "saved production module rendered synthetic IDs");
     assertSaved(await state(client));
   };
   const primeCatalog = async (client, label) => {
@@ -476,6 +493,39 @@ async function run() {
     const screenshot = await oldTab.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     await writeFile(join("qa-screenshots", "directory-asset-upgrade.png"), Buffer.from(screenshot.data, "base64"));
     console.log("RWN runtime asset upgrade browser QA passed: legacy returning visitor, first navigation, lazy loading, failed install, offline old/new tabs, rollback, integrity rejection, catalog purge, query-free bounded archive and unchanged saved IDs.");
+  } catch (error) {
+    // Preserve actionable evidence even when failure occurs before the final
+    // screenshot. These pages and cache contents contain synthetic data only.
+    await mkdir("qa-screenshots", { recursive: true });
+    for (const [index, client] of clients.entries()) {
+      try {
+        const page = await evaluate(client, `(async () => {
+          const registration = await navigator.serviceWorker.getRegistration();
+          const storage = [];
+          for (const name of await caches.keys()) {
+            const cache = await caches.open(name);
+            const index = await cache.match("/data/search-index.json");
+            storage.push({ name, urls: (await cache.keys()).map(key => key.url), catalog: index ? await index.text() : null });
+          }
+          return { url: location.href, title: document.title, body: document.body?.innerText.slice(0, 5000),
+            saved: localStorage.getItem("rwn-saved-resources"), savedModule: window.__fixtureSavedRelease || null,
+            savedCount: document.querySelectorAll("[data-saved-id]").length, savedSummary: document.querySelector("[data-saved-summary]")?.textContent,
+            retryHidden: document.querySelector("[data-saved-retry]")?.hidden, css: getComputedStyle(document.documentElement).getPropertyValue("--fixture-release").trim(),
+            controllerChanges: window.__fixtureControllerChanges, documentId: window.__fixtureDocumentId,
+            controller: navigator.serviceWorker.controller?.state, installing: registration?.installing?.state,
+            waiting: registration?.waiting?.state, active: registration?.active?.state,
+            scripts: [...document.scripts].map(script => script.src).filter(Boolean), storage };
+        })()`);
+        const details = { page, resources: client.resources, events: client.diagnosticEvents.slice(-80), serverRequests: requests.slice(-100) };
+        await writeFile(join("qa-screenshots", `directory-asset-upgrade-failure-${index}.json`), `${JSON.stringify(details, null, 2)}\n`);
+        console.error(`RWN asset-upgrade failure tab ${index}: ${JSON.stringify(details)}`);
+        const { data } = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true });
+        await writeFile(join("qa-screenshots", `directory-asset-upgrade-failure-${index}.png`), Buffer.from(data, "base64"));
+      } catch (diagnosticError) {
+        console.error(`Could not capture fixture tab ${index}: ${diagnosticError.message}`);
+      }
+    }
+    throw error;
   } finally {
     releaseGate();
     for (const client of clients) client.close();
