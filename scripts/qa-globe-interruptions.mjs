@@ -21,6 +21,15 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
   const call = (expression) => evaluate(client, expression);
   const point = (x, y) => ({ x, y, id: 0, radiusX: 8, radiusY: 8, force: 1 });
   const touch = (type, points = []) => client.call("Input.dispatchTouchEvent", { type, touchPoints: points });
+  const verticalSwipe = async (start, step = 22, delay = 28) => {
+    if(!start || !Number.isFinite(start.y) || start.y-step*5<12) throw new Error('Native vertical swipe would leave the device viewport.');
+    await touch('touchStart',[point(start.x,start.y)]);
+    for(let i=1;i<=5;i++) {
+      await touch('touchMove',[point(start.x+2,start.y-i*step)]);
+      await sleep(delay);
+    }
+    await touch('touchEnd');
+  };
   const check = (ok, message, detail) => { if (!ok) throw new Error(`${message}: ${JSON.stringify(detail)}`); };
   const phase = (name) => call(`window.__rwnInterruptions.phase=${JSON.stringify(name)}`);
   const events = () => call("window.__rwnInterruptions.events");
@@ -89,10 +98,10 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
     for (let cycle = 0; cycle < 2; cycle++) {
       const geometry = await canvasGeometry(client);
       await phase(`fling-${cycle}`);
-      await client.call("Input.synthesizeScrollGesture", {
-        x:geometry.point.x,y:geometry.point.y,yDistance:-96,speed:800,
-        gestureSourceType:"touch",preventFling:false
-      });
+      // Use the same native press/move/release path as the established vertical
+      // scroll check. Chromium's high-level synthesizeScrollGesture produced
+      // only a press/release with no movement in the verified CI environment.
+      await verticalSwipe(geometry.point);
       const proof = await call(`new Promise((resolve,reject)=>{
         const release=window.__rwnInterruptions.events.findLast(e=>e.phase==='fling-${cycle}' && e.type==='touchend');
         const samples=[];let expired=false,ready=false;
@@ -174,7 +183,7 @@ export async function verifyGlobeInterruptions({ client, evaluate, canvasGeometr
     // stay on the device; no impossible off-screen touch is injected.
     const leave=(await canvasGeometry(client)).point;
     await phase('leave-viewport');
-    await client.call('Input.synthesizeScrollGesture',{x:leave.x,y:leave.y,yDistance:-240,speed:1800,gestureSourceType:'touch',preventFling:false});
+    await verticalSwipe(leave,48,20);
     await sleep(1400);
     const outside=await state();
     check(outside.canvasBottom<=0 && !outside.moving,'Native page fling did not leave the globe cleanly outside the viewport',outside);

@@ -19,7 +19,8 @@ test('settled scrolling, held fingers, stale samples and synthetic events cannot
 });
 test('interruption QA uses native input without changing page scroll policy or weakening settled QA',async()=>{
   const source=await readFile(new URL('../scripts/qa-globe-interruptions.mjs',import.meta.url),'utf8');
-  assert.match(source,/gestureSourceType:"touch",preventFling:false/);
+  assert.match(source,/client\.call\("Input.dispatchTouchEvent", \{ type, touchPoints: points \}\)/);
+  assert.match(source,/await verticalSwipe\(geometry.point\)/);
   assert.match(source,/assertFlingProof\(\{release:proof.release,samples:start\?\.flingSamples,start\}\)/);
   assert.match(source,/Math\.abs\(pageDrift\)<=18/);
   assert.doesNotMatch(source,/\.dispatchEvent\(|\.preventDefault\(|\.style\.(touchAction|overflow)|scrollTo\(/);

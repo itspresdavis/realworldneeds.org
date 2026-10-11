@@ -317,6 +317,9 @@ async function run() {
     if (horizontalEnd.moving || horizontalEnd.pinOpacity < .85) throw new Error(`Touch release did not promptly stabilize service targets: ${JSON.stringify(horizontalEnd)}`);
 
     observations.horizontal = horizontalEnd;
+    phase = "native-gesture-interruptions";
+    await verifyGlobeInterruptions({ client, evaluate, canvasGeometry, sleep, observations });
+
     phase = "pinch";
     const pinch = await canvasGeometry(client);
     const zoomBefore = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
@@ -357,9 +360,6 @@ async function run() {
     await sleep(900);
     await evaluate(client, "window.__rwnSamplingFrames=false");
     if (await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Pinch-to-drag transition left the globe moving.");
-
-    phase = "native-gesture-interruptions";
-    await verifyGlobeInterruptions({ client, evaluate, canvasGeometry, sleep, observations });
 
     phase = "canvas-touch-picking";
     // Use the reset globe centre (land in western Africa) for an actual touch
