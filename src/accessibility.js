@@ -30,7 +30,11 @@ function installSearchAccessibility() {
     input.setAttribute("aria-describedby", [...describedBy].join(" "));
   }
 
+  let composingSearch = false;
+  input.addEventListener("compositionstart", () => { composingSearch = true; });
+  input.addEventListener("compositionend", () => { composingSearch = false; });
   input.addEventListener("keydown", (event) => {
+    if (composingSearch || event.isComposing || event.keyCode === 229) return;
     if (event.key !== "Escape" || !input.value) return;
     event.preventDefault();
     input.value = "";

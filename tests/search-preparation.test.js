@@ -4,6 +4,10 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile("src/app.js", "utf8");
+const sanitizer = source.slice(
+  source.indexOf("function sanitizeFinderQuery("),
+  source.indexOf("function finderTypesFromHistory("),
+);
 const handlers = source.slice(
   source.indexOf(
     "  const searchInput =",
@@ -31,8 +35,13 @@ function fixture() {
     filtered = [];
   let timerId = 0,
     back;
+  let inputValue = "";
   const input = {
-    value: "",
+    get value() { return inputValue; },
+    set value(value) { inputValue = value; this.selectionStart = this.selectionEnd = value.length; },
+    selectionStart: 0,
+    selectionEnd: 0,
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; },
     addEventListener: (event, handler) => {
       events[event] = handler;
     },
@@ -61,6 +70,7 @@ function fixture() {
   const context = vm.createContext({
     state,
     FINDER_HISTORY_KEY: "rwnFinder",
+    FINDER_QUERY_LIMIT: 180,
     cancelPendingSearch: () => {},
     hasPendingSearch: () => false,
     refreshSearchPreparation: () => {},
@@ -86,7 +96,6 @@ function fixture() {
         back = handler;
       },
     },
-    sanitizeFinderQuery: (value) => value,
     updateFilters: () => {
       filtered.push(state.query);
       state.filtered = state.query ? [{ id: state.query }] : [{ id: "first" }, { id: "second" }];
@@ -104,7 +113,7 @@ function fixture() {
       }
     },
   });
-  vm.runInContext(`function syncSearchControls() { const aidMode = true; ${controlSync} }\n${resultsRenderer}${handlers}${popstate}`, context);
+  vm.runInContext(`${sanitizer} function syncSearchControls() { const aidMode = true; ${controlSync} }\n${resultsRenderer}${handlers}${popstate}`, context);
   const type = (value) => {
     input.value = value;
     events.input({ target: input });
@@ -131,6 +140,12 @@ function fixture() {
       resolveReady();
     },
     type,
+    insert(value, isComposing = false) {
+      const start = input.selectionStart, end = input.selectionEnd;
+      input.value = input.value.slice(0, start) + value + input.value.slice(end);
+      input.setSelectionRange(start + value.length, start + value.length);
+      events.input({ target: input, isComposing });
+    },
     flush,
     blur: () => {
       context.document.activeElement = { id: "category-filter" };
@@ -351,4 +366,160 @@ test("delayed preparation feedback updates all three labels and clears on cancel
   assert.equal(f.status.textContent, "Current search: ");
   assert.equal(f.badge.textContent, "2 matches");
   assert.ok(!f.history.includes("London"));
+});
+
+
+for (const query of ["New York", "London Road", "Crisis Skylight London", "E1 6LT", "Bogotá food"]) {
+  test(`ordinary incremental typing preserves the words in ${query}`, async () => {
+    const f = fixture();
+    f.ready();
+    for (const character of query) {
+      f.insert(character);
+      f.flush();
+      await settle();
+    }
+    await f.events.keydown({ key: "Enter" });
+    await settle();
+    assert.equal(f.input.value, query);
+    assert.equal(f.state.query, query);
+    assert.equal(f.history.at(-1), query);
+  });
+}
+
+test("editing spaces in the middle preserves the caret and selected replacement", async () => {
+  const f = fixture(); f.ready();
+  f.type("NewYork");
+  f.input.setSelectionRange(3, 3);
+  f.insert(" ");
+  assert.equal(f.input.value, "New York");
+  assert.equal(f.input.selectionStart, 4);
+  f.input.setSelectionRange(4, 8);
+  f.insert("Jersey");
+  assert.equal(f.input.value, "New Jersey");
+  assert.equal(f.input.selectionStart, 10);
+  f.input.setSelectionRange(3, 4);
+  f.insert("  ");
+  assert.equal(f.input.value, "New  Jersey");
+  assert.equal(f.input.selectionStart, 5, "normalization must not jump the caret to the end");
+  f.flush(); await settle();
+  assert.equal(f.state.query, "New Jersey", "matching still normalizes whitespace");
+});
+
+test("leading and trailing spaces remain editable while committed history is normalized", async () => {
+  const f = fixture(); f.ready();
+  for (const character of "  New   York  ") f.insert(character);
+  await f.events.keydown({ key: "Enter" }); await settle();
+  assert.equal(f.input.value, "  New   York  ");
+  assert.equal(f.state.query, "New York");
+  assert.equal(f.history.at(-1), "New York");
+  f.type("   "); f.flush(); await settle();
+  assert.equal(f.clear.hidden, false);
+  f.events.keydown({ key: "Escape" });
+  assert.equal(f.input.value, "");
+  assert.equal(f.clear.hidden, true);
+});
+
+test("long pasted values stay bounded without losing an earlier selection", async () => {
+  const f = fixture(); f.ready();
+  f.input.value = "a".repeat(250);
+  f.input.setSelectionRange(10, 15);
+  f.events.input({ target: f.input });
+  assert.equal(f.input.value.length, 180);
+  assert.equal(f.input.selectionStart, 10);
+  assert.equal(f.input.selectionEnd, 15);
+  f.flush(); await settle();
+  assert.equal(f.state.query.length, 180);
+});
+
+for (const key of ["Enter", "Escape"]) {
+  test(`${key} during composition does not submit or clear the draft`, async () => {
+    const f = fixture(); f.ready();
+    f.type("New"); f.flush(); await settle();
+    f.events.compositionstart?.();
+    f.insert(" York", true);
+    f.flush(); await settle();
+    f.events.keydown({ key, isComposing: true, keyCode: 229 });
+    await settle();
+    assert.equal(f.input.value, "New York");
+    assert.equal(f.state.query, "New", "composition must not change settled results");
+    assert.deepEqual(f.history, [], "composition keys must not create search history");
+    f.events.compositionend?.();
+    f.flush(); await settle();
+    assert.equal(f.state.query, "New York");
+  });
+}
+
+test("composition start cancels a pending pre-composition query", async () => {
+  const f = fixture();
+  f.type("Lond"); f.flush();
+  f.events.compositionstart?.();
+  f.insert("on", true);
+  f.ready(); await settle(); f.flush(); await settle();
+  assert.equal(f.state.query, "");
+  assert.deepEqual(f.filtered, [""], "cancelled preparation feedback returns to settled results");
+  f.events.compositionend?.(); f.flush(); await settle();
+  assert.equal(f.state.query, "London");
+});
+
+
+test("the accessibility Escape listener also leaves IME composition alone", async () => {
+  const accessibility = await readFile("src/accessibility.js", "utf8");
+  const start = accessibility.includes("  let composingSearch = false;") ? accessibility.indexOf("  let composingSearch = false;") : accessibility.indexOf('  input.addEventListener("keydown"');
+  const listener = accessibility.slice(start, accessibility.indexOf('  document.addEventListener("keydown"'));
+  const events = {};
+  let cleared = 0;
+  const input = { value: "New York", addEventListener: (type, handler) => { events[type] = handler; }, dispatchEvent: () => { cleared++; } };
+  const context = vm.createContext({ input, announce() {}, Event });
+  vm.runInContext(listener, context);
+  for (const flags of [{ isComposing: true }, { keyCode: 229 }]) {
+    events.keydown({ key: "Escape", ...flags, preventDefault: () => assert.fail("IME Escape was cancelled") });
+    assert.equal(input.value, "New York");
+    assert.equal(cleared, 0);
+  }
+  events.compositionstart?.();
+  events.keydown({ key: "Escape", isComposing: false, keyCode: 27, preventDefault: () => assert.fail("Lifecycle-active IME Escape was cancelled") });
+  assert.equal(input.value, "New York");
+  events.compositionend?.();
+  events.keydown({ key: "Escape", preventDefault() {} });
+  assert.equal(input.value, "");
+  assert.equal(cleared, 1);
+});
+
+for (const action of ["Clear", "Back"]) {
+  test(`${action} interrupts composition without reviving a stale draft`, async () => {
+    const f = fixture(); f.ready();
+    f.type("London"); f.flush(); await settle();
+    f.events.compositionstart?.(); f.insert(" Road", true);
+    assert.equal(f.clear.hidden, false);
+    if (action === "Clear") f.events.clear(); else f.back("New York");
+    f.events.compositionend?.(); f.flush(); await settle();
+    await f.blur();
+    const expected = action === "Clear" ? "" : "New York";
+    assert.equal(f.input.value, expected);
+    assert.equal(f.state.query, expected);
+    assert.ok(!f.history.includes("London Road"));
+  });
+}
+
+test("query normalization still removes control characters without rewriting the draft", async () => {
+  const f = fixture(); f.ready();
+  f.type("New\u0001York\tfood\u007f");
+  await f.events.keydown({ key: "Enter" }); await settle();
+  assert.equal(f.state.query, "New York food");
+  assert.equal(f.history.at(-1), "New York food");
+});
+
+
+test("cancelling a preparing search through IME clears its preparation feedback", async () => {
+  const f = fixture();
+  f.type("Lond"); f.flush();
+  assert.equal(f.count.textContent, "Preparing search…");
+  f.events.compositionstart?.();
+  f.input.value = "";
+  f.events.compositionend?.();
+  f.ready(); f.flush(); await settle();
+  assert.equal(f.state.query, "");
+  assert.equal(f.count.textContent, "Showing 2 of 2 listings");
+  assert.equal(f.status.textContent, "Current search: ");
+  assert.equal(f.badge.textContent, "2 matches");
 });

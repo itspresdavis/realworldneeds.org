@@ -1,3 +1,4 @@
+import { verifyFinderEditing } from "./qa-search-editing.mjs";
 import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
 import { randomQaHttpPort } from "./qa-port.mjs";
 import { verifyFocusContinuity } from "./qa-focus-continuity.mjs";
@@ -496,6 +497,7 @@ async function run() {
     await verifyFinderSearchRelevance({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderPresentation({ client, host: HOST, navigate, evaluate, capture });
 
+    await verifyFinderEditing({ client, host: HOST, navigate, evaluate, capture });
     await verifyFocusContinuity({ client, host: HOST, navigate, evaluate });
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);
