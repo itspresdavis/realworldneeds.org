@@ -5,6 +5,8 @@ const nextSteps = document.querySelector(".service-next-steps");
 if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const utility = document.createElement("section");
   utility.className = "service-utility-actions";
+  utility.id = "service-listing-tools";
+  utility.tabIndex = -1;
   utility.dataset.serviceUtility = "";
   utility.setAttribute("aria-label", "Save, share, copy, or print this service listing");
   utility.innerHTML = `
@@ -25,10 +27,20 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     </div>
     <p class="service-utility-actions__status" data-service-action-status role="status" aria-live="polite"></p>
   `;
-  // Keep the provider's visiting/eligibility warning ahead of optional tools.
-  const providerNote = nextSteps.nextElementSibling;
-  const utilityAnchor = providerNote?.matches(".policy-note") ? providerNote : nextSteps;
-  utilityAnchor.insertAdjacentElement("afterend", utility);
+  // Provider facts and requirements come before optional browser-only tools.
+  const details = document.querySelector("#service .directory-record");
+  if (details) {
+    details.insertAdjacentElement("afterend", utility);
+    const jump = document.createElement("a");
+    jump.className = "service-tools-jump";
+    jump.href = "#service-listing-tools";
+    jump.textContent = "Save, share or print";
+    details.querySelector("header")?.insertAdjacentElement("afterend", jump);
+  } else {
+    const providerNote = nextSteps.nextElementSibling;
+    const utilityAnchor = providerNote?.matches(".policy-note") ? providerNote : nextSteps;
+    utilityAnchor.insertAdjacentElement("afterend", utility);
+  }
 
   const status = utility.querySelector("[data-service-action-status]");
   const title = document.querySelector("#service h1")?.textContent?.trim() || document.title;
@@ -87,16 +99,21 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   };
 
   const fallbackCopy = (text) => {
+    const focused = document.activeElement;
     const area = document.createElement("textarea");
     area.value = text;
     area.setAttribute("readonly", "");
     area.style.position = "fixed";
     area.style.opacity = "0";
     document.body.append(area);
-    area.select();
-    const copied = document.execCommand("copy");
-    area.remove();
-    if (!copied) throw new Error("copy unavailable");
+    try {
+      area.select();
+      if (!document.execCommand("copy")) throw new Error("copy unavailable");
+    } finally {
+      const restoreFocus = document.activeElement === area;
+      area.remove();
+      if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+    }
   };
 
   const copyText = async (text) => {

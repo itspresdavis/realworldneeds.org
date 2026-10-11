@@ -275,7 +275,7 @@ function resourcePage(resource) {
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
   const direct = resource.kind === "direct";
-  const phone = resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : "";
+  const phone = `<div><dt>Phone</dt><dd>${resource.phone ? phoneMarkup(resource.phone) : "Not listed in this snapshot. Check the official source for contact details."}</dd></div>`;
   const mapLinks = direct ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
   const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
   const title = `${resource.name} — ${place}`;
@@ -308,16 +308,16 @@ function resourcePage(resource) {
       ${breadcrumbs([{ href: "/directory", label: "Directory" }, { label: resource.name }])}
       ${sourceClosureMarkup(resource)}
       <div class="policy-note"><p><strong>Confirm before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p></div>
-      <article class="directory-record">
-        <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2>Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
-        <dl>
-          <div><dt>Help offered</dt><dd>${escapeHtml(aidLabels(resource).join(", "))}</dd></div>
+      <article class="directory-record" aria-labelledby="service-details-heading">
+        <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Checked ${escapeHtml(resource.lastChecked)}</time></header>
+        <dl class="service-facts">
+          <div><dt>${direct ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
+          ${phone}
           <div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div>
           <div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}</dd></div>
-          <div><dt>${direct ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
-          ${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}
-          ${phone}
+          ${resource.hours || direct ? `<div><dt>Hours</dt><dd>${resource.hours ? escapeHtml(resource.hours) : "Not listed in this snapshot. Confirm current hours with the provider before travel."}</dd></div>` : ""}
           ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${escapeHtml(resource.eligibility)}</dd></div>` : ""}
+          <div><dt>Help offered</dt><dd>${escapeHtml(aidLabels(resource).join(", "))}</dd></div>
         </dl>
         <h3>Services offered</h3>
         <ul>${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
