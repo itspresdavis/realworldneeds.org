@@ -157,6 +157,7 @@ export function initSavedServices() {
     } catch { cancelClear(true); announceFailure(); }
   });
   const syncView = (focus = false) => {
+    if (focus) document.querySelector(".rwn-page-menu")?.removeAttribute("open");
     const visible = active();
     panel.closest(".directory-shell")?.classList.toggle("has-saved-view", visible);
     generation += 1;

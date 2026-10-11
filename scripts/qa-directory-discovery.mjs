@@ -13,6 +13,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     focusedId: document.activeElement?.id,
     focusVisible: (() => { const rect = document.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.bottom > (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0) && rect.top < innerHeight; })(),
     saved: document.querySelector('.directory-shell')?.classList.contains('has-saved-view'),
+    menuOpen: Boolean(document.querySelector('.rwn-page-menu[open]')),
     href: location.href, history: history.state?.rwnDirectory,
     heading: document.querySelector('h1')?.textContent, timeOrigin: performance.timeOrigin,
     overflow: document.documentElement?.scrollWidth > innerWidth + 1,
@@ -89,12 +90,12 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     const savedFrom = await state();
     if (width < 900) await click('.rwn-page-menu > summary');
     await click('.legal-header a[href="/directory#saved"]');
-    await wait(s => s.saved && s.focusedId === 'saved-services-heading', 'Saved did not own focus after hash navigation');
+    await wait(s => s.saved && !s.menuOpen && s.focusedId === 'saved-services-heading', 'Saved did not close its navigation overlay and own focus');
     await sleep(250);
     if (!(await state()).saved || (await state()).focusedId !== 'saved-services-heading') throw new Error('Pending directory restoration stole Saved focus');
     await capture(client, `directory-discovery-saved-${width}.png`);
     await goEntry(directoryId);
-    await wait(s => !s.saved && s.query === 'WIC' && s.country === 'United States' && s.rows.length === 120 && s.focusVisible && s.focus?.startsWith('/service/') && Math.abs(s.scroll - savedFrom.scroll) < 5, 'Saved Back did not restore the latest scroll with a visible return target');
+    await wait(s => !s.saved && !s.menuOpen && s.query === 'WIC' && s.country === 'United States' && s.rows.length === 120 && s.focusVisible && s.focus?.startsWith('/service/') && Math.abs(s.scroll - savedFrom.scroll) < 5, 'Saved Back did not restore the latest scroll with an unobscured return target');
 
     await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key: '/', code: 'Slash', windowsVirtualKeyCode: 191 });
     await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: '/', code: 'Slash', windowsVirtualKeyCode: 191 });

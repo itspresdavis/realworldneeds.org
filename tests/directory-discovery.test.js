@@ -166,6 +166,23 @@ test("Saved handoff hides its panel before requesting directory return-focus own
   assert.match(source, /addEventListener\("rwn-directory-restore",restore\)/);
 });
 
+test("Saved navigation closes the narrow menu before moving focus into either view", async () => {
+  const saved = await readFile("public/saved-services.js", "utf8");
+  const syncSource = saved.slice(saved.indexOf("  const syncView ="), saved.indexOf('  window.addEventListener("hashchange"'));
+  for (const visible of [true, false]) {
+    const effects = [];
+    const f = vm.createContext({ active: () => visible, generation: 0,
+      document: { querySelector(selector) { assert.equal(selector, ".rwn-page-menu"); return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } }; } },
+      panel: { closest: () => ({ classList: { toggle() {} } }), scrollIntoView() {} },
+      cancelClear() {}, render() {}, heading: { focus() { effects.push("focus"); } },
+      history: { state: { rwnDirectory: {} } }, Event: class {},
+      window: { dispatchEvent() { effects.push("handoff"); } }
+    });
+    vm.runInContext(`${syncSource}\nsyncView(true);`, f);
+    assert.deepEqual(effects, ["closed", visible ? "focus" : "handoff"]);
+  }
+});
+
 test("no filter restores the ordinary crawlable directory", async () => {
   const { f, effects } = searchFixture();
   await f.apply();
