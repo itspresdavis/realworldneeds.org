@@ -133,3 +133,11 @@ test("narrow search affordances use concise labels and unbroken counts", async (
   assert.match(source, /placeholder="Search by service or place"/);
   assert.match(css, /\.rwn-professional \.jump-results small \{[^}]*flex: none;[^}]*white-space: nowrap;/);
 });
+
+
+test("map attribution stays readable on the forest footer", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.match(css, /\.rwn-professional \.site-footer > p \{[^}]*color: #acbec2; font-size: \.75rem;/);
+  const luminance = (hex) => hex.match(/../g).map((channel) => parseInt(channel,16)/255).map((value) => value <= .04045 ? value/12.92 : ((value+.055)/1.055)**2.4).reduce((sum,value,index) => sum+value*[.2126,.7152,.0722][index],0);
+  assert.ok((luminance("acbec2")+.05)/(luminance("12392e")+.05) >= 4.5);
+});

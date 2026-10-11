@@ -706,7 +706,7 @@ body.rwn-professional main { display: block; }
 .rwn-professional .site-footer button { color: #acbec2; font-size: .7rem; text-decoration: none; }
 .rwn-professional .site-footer nav a:hover,
 .rwn-professional .site-footer button:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
-.rwn-professional .site-footer > p { grid-column: 1 / -1; margin: .5rem 0 0; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.1); color: #849ba1; font-size: .62rem; }
+.rwn-professional .site-footer > p { grid-column: 1 / -1; margin: .5rem 0 0; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.1); color: #acbec2; font-size: .75rem; }
 .rwn-professional .footer-data-button { padding: 0; border: 0; background: transparent; text-align: left; }
 
 /* Responsive */
