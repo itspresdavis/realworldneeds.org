@@ -101,7 +101,14 @@ test("every static action generator rejects ambiguous phone targets", async () =
   for (const [body, name] of bodies) {
     const context = vm.createContext({ phoneLinks, escapeHtml, sourceClosureNotice: () => null });
     vm.runInContext(body, context);
-    for (const [phone, expected] of cases) assert.deepEqual(targets(context[name](fixture(phone), "")), expected, name);
+    for (const [phone, expected] of cases) {
+      const html = context[name](fixture(phone), "");
+      assert.deepEqual(targets(html), expected, name);
+      const phones = phoneLinks(phone);
+      if (name.startsWith("service") && phone && (phones.length !== 1 || phones[0].label !== phone)) {
+        assert.ok(html.includes(`data-phone-context>Phone: ${escapeHtml(phone)}</span>`), `${name} must keep annotations outside hidden contact facts`);
+      }
+    }
   }
 });
 
@@ -158,6 +165,10 @@ test("built service pages, directory records and search index agree on every pho
     const html = await read(`dist/service/${record.id}/index.html`);
     assert.deepEqual([...new Set(targets(html))].sort(), [...new Set(record.phoneLinks.map(({ href }) => href))].sort(), record.id);
     if (resource.phone) assert.ok(html.includes(`<dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd>`));
+    if (resource.phone && (record.phoneLinks.length !== 1 || record.phoneLinks[0].label !== resource.phone)) {
+      const nextSteps = html.match(/<nav class="service-next-steps"[\s\S]*?<\/nav>/)?.[0] || "";
+      assert.ok(nextSteps.includes(`data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`), "contact context must remain in the visible action bar");
+    }
   }
   const files = await readdir("dist/directory", { recursive: true });
   for (const file of files.filter((path) => path.endsWith("index.html"))) {

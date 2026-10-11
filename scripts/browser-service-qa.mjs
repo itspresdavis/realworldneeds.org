@@ -211,6 +211,38 @@ async function run() {
       throw new Error(`Mobile service landing page failed: ${JSON.stringify(mobile)}`);
     }
 
+    // Check rendered annotations, not only source markup: baseline service facts
+    // can be hidden by directory CSS. Never launch an actual telephone action.
+    const phoneCases = [
+      payload.resources.find((item) => item.id === "trussell-f17d0776-8f36-47b9-88f8-5a4344f10d15"),
+      payload.resources.find((item) => item.id === "trussell-16e7a2ca-bcd9-4b98-9d6f-36d656601791"),
+      payload.resources.find((item) => item.phone && !phoneLinks(item.phone).length)
+    ];
+    if (phoneCases.some((item) => !item)) throw new Error("Phone browser fixtures are missing.");
+    for (const width of [1440, 390]) {
+      await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
+      for (const item of phoneCases) {
+        await navigate(client, `${HOST}/service/${encodeURIComponent(item.id)}`);
+        const contact = await evaluate(client, `(() => {
+          const next = document.querySelector(".service-next-steps");
+          const context = next?.querySelector("[data-phone-context]");
+          const rect = context?.getBoundingClientRect();
+          return {
+            targets: [...(next?.querySelectorAll('a[href^="tel:"]') || [])].map((link) => link.getAttribute("href")),
+            text: context?.innerText || "",
+            visible: Boolean(rect && rect.width > 0 && rect.height > 0 && getComputedStyle(context).visibility !== "hidden"),
+            overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+          };
+        })()`);
+        const expected = phoneLinks(item.phone).map(({ href }) => href);
+        if (JSON.stringify(contact.targets) !== JSON.stringify(expected) || contact.text !== `Phone: ${item.phone}` || !contact.visible || contact.overflow > 8) {
+          throw new Error(`Rendered phone context failed (${width}px): ${JSON.stringify(contact)}`);
+        }
+      }
+    }
+    console.log("Phone context QA passed at desktop and mobile widths: annotated, multiple and withheld dial targets preserve visible source text.");
+    await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
+
     await navigate(client, `${HOST}/directory`);
     const directoryMobile = await evaluate(client, `(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

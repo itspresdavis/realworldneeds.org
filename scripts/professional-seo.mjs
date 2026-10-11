@@ -182,6 +182,9 @@ function serviceActions(resource) {
   const context = isFinder
     ? `<span class="service-next-steps__context">Official ${resource.kind === "locator" ? "resource finder" : "service network"} — not a walk-in location.</span>`
     : "";
+  const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
+    ? `<span class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`
+    : "";
   for (const { label, href } of phones) {
     links.push(`<a class="is-call" href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
   }
@@ -191,7 +194,7 @@ function serviceActions(resource) {
   }
   links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`);
   links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  return `<nav class="service-next-steps" aria-label="${isDirectLocation ? "Contact or get directions" : "Contact or verify current details"} for this service"><div><span>Next step</span><strong>${nextStep}</strong>${context}</div><div>${links.join("")}</div></nav>`;
+  return `<nav class="service-next-steps" aria-label="${isDirectLocation ? "Contact or get directions" : "Contact or verify current details"} for this service"><div><span>Next step</span><strong>${nextStep}</strong>${context}${phoneContext}</div><div>${links.join("")}</div></nav>`;
 }
 
 function enhanceActionOrientation(html) {
