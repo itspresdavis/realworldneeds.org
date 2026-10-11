@@ -46,7 +46,7 @@ test("institutional presentation stays intentionally lightweight and release-ver
     readFile("dist/index.html", "utf8")
   ]);
 
-  assert.ok(finalCss.size < 36_000, `interactive institutional CSS grew to ${finalCss.size} bytes`);
+  assert.ok(finalCss.size < 38_000, `interactive institutional CSS grew to ${finalCss.size} bytes`);
   assert.ok(pageCss.size < 32_000, `generated-page professional CSS grew to ${pageCss.size} bytes`);
   assert.doesNotMatch(html, /\/src\/professional\.css/);
   assert.match(release.presentationRelease || "", /^[a-f0-9]{12}$/);

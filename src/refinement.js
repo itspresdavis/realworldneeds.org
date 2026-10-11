@@ -1,3 +1,5 @@
+import { installPageInteractions } from "./page-interactions.js";
+
 const QUICK_TYPES = [
   ["food", "Food"],
   ["water", "Water"],
@@ -123,4 +125,5 @@ export function installRefinements() {
   improveFilterSummary();
   refineGlobeInstructions();
   document.documentElement.classList.add("rwn-refined");
+  installPageInteractions();
 }

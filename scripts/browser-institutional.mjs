@@ -1,3 +1,4 @@
+import { verifyPageInteractions } from "./qa-page-interactions.mjs";
 import { verifyFinderEditing } from "./qa-search-editing.mjs";
 import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
 import { randomQaHttpPort } from "./qa-port.mjs";
@@ -499,6 +500,7 @@ async function run() {
 
     await verifyFinderEditing({ client, host: HOST, navigate, evaluate, capture });
     await verifyFocusContinuity({ client, host: HOST, navigate, evaluate });
+    await verifyPageInteractions({ client, host: HOST, navigate, evaluate, capture });
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);
     console.log("Interaction QA passed: desktop/mobile finder, input bounds, no-result recovery, history restoration, location retry, menu focus, and established globe layout.");
