@@ -30,7 +30,11 @@ The API allows only an explicit set of editorial fields. Its update predicate in
 
 Apply the committed migrations in order. `npm run catalog:seed` prepares 100-row SQL batches under ignored `supabase/import/`. The bootstrap importer uses `ON CONFLICT DO NOTHING`; rerunning it never overwrites editorial changes.
 
-`npm run catalog:verify` compares a canonical SHA-256 digest of every published database record with the exact site snapshot, including all nested fields. `npm run catalog:export` creates reviewed editorial overrides consumed by the globe and static generators. Builds never mutate the database or silently pull new content.
+`npm run catalog:verify` compares a canonical SHA-256 digest of every published database record with the exact site snapshot, including all nested fields. Reads require exact server counts and complete ranges, continue across server-capped short pages, reject duplicate or malformed records, and require two consecutive complete reads with identical records and revisions. This detects changes during the read; it is not a database transaction or a lock on future edits.
+
+`npm run catalog:export` creates reviewed editorial overrides consumed by the globe and static generators. It refuses an empty or incomplete catalog and database records whose review date is older than their corresponding source snapshot, including removed records from a refreshed dataset. When source imports are ahead, reconcile those reviewed changes into the database before exporting. Never use an export to erase a synchronization warning. Preserve existing editorial notes and use exact revision/record guards when applying reviewed source changes; withhold retired IDs instead of deleting audit evidence.
+
+Run `npm run catalog:verify` before a data release and again after database reconciliation. It must pass before treating the editorial database and public snapshot as synchronized. Builds never mutate the database or silently pull new content.
 
 Run `supabase/tests/permissions.sql` through the SQL editor or an authorized SQL tool. It creates transactional fixtures and rolls them back, testing contributor isolation, privilege escalation denial, editor writes, withheld records, immutable audit visibility, and optimistic concurrency. Run Supabase security/performance advisors after schema changes.
 

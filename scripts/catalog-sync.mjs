@@ -1,15 +1,14 @@
-import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resources, curatedResources } from "../src/data/resources.js";
+import {
+  canonical,
+  fingerprint,
+  fetchPublishedCatalog,
+  assertFreshExport,
+} from "./catalog-sync-core.mjs";
 
 // Explicit operations only: builds never silently publish or overwrite database edits.
 const action = process.argv[2];
-const fingerprint = (records) =>
-  createHash("sha256")
-    .update(
-      JSON.stringify([...records].sort((a, b) => a.id.localeCompare(b.id))),
-    )
-    .digest("hex");
 if (action === "seed") {
   await mkdir("supabase/import", { recursive: true });
   for (let offset = 0; offset < resources.length; offset += 100) {
@@ -35,34 +34,13 @@ if (action === "seed") {
   const key =
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     "sb_publishable_QcjZr9DWdhMW42P8HK33mQ_cvu1S0ut";
-  const records = [];
-  for (let offset = 0; ; offset += 500) {
-    const response = await fetch(
-      `${url}/rest/v1/rwn_locations?select=record&published=eq.true&order=id&offset=${offset}&limit=500`,
-      { headers: { apikey: key }, signal: AbortSignal.timeout(15000) },
-    );
-    if (!response.ok)
-      throw new Error(`Catalog read failed: ${response.status}`);
-    const page = await response.json();
-    records.push(...page.map((row) => row.record));
-    if (page.length < 500) break;
-  }
-  // JSONB changes key ordering, so compare canonical recursive objects.
-  const canonical = (value) =>
-    Array.isArray(value)
-      ? value.map(canonical)
-      : value && typeof value === "object"
-        ? Object.fromEntries(
-            Object.keys(value)
-              .sort()
-              .map((k) => [k, canonical(value[k])]),
-          )
-        : value;
+  const records = await fetchPublishedCatalog({ url, key });
   if (action === "export") {
     if (!records.length)
       throw new Error(
         "Refusing to export an empty catalog. Investigate the database first.",
       );
+    assertFreshExport(records, curatedResources);
     const base = new Map(
       curatedResources.map((r) => [r.id, JSON.stringify(canonical(r))]),
     );

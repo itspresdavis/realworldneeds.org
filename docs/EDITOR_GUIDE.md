@@ -33,7 +33,7 @@ npm run check
 npm run catalog:verify
 ```
 
-Review `src/data/generated/editorial-overrides.js`, commit the approved diff, and deploy the release. Every public surface then receives the same snapshot. The export includes edited/new records and withheld IDs. It refuses an empty catalog. Existing source-refresh scripts remain explicit maintenance operations: reconcile upstream changes with editorial overrides before releasing.
+Review `src/data/generated/editorial-overrides.js`, commit the approved diff, and deploy the release. Every public surface then receives the same snapshot. The export includes edited/new records and withheld IDs. It refuses an empty, incomplete, unstable, or older-than-source catalog. A synchronization failure can mean that a source refresh is newer than the database: reconcile that approved refresh into the database first, preserving editorial notes and history, rather than exporting stale rows back onto the site. Existing source-refresh scripts remain explicit maintenance operations: reconcile upstream changes with editorial overrides before releasing.
 
 To withhold urgently, update the database, export, and deploy promptly. A database status change alone does not remove a record from an already deployed static release or a visitor's offline cache. Previously cached public pages can persist until the next worker update or browser eviction.
 
