@@ -78,7 +78,10 @@ test("all public routes expose text-only Saved navigation and service controls a
   assert.match(directory, /Anyone using this browser can see your list/);
   assert.match(directory, /data-saved-clear[^>]+hidden/);
   assert.match(directory, /data-saved-confirmation hidden/);
+  const servicePage = await readFile("dist/service/bowery-mission/index.html", "utf8");
+  assert.match(servicePage, /<main id="service" data-service-id="bowery-mission">/);
   const service = await readFile("public/service-actions.js", "utf8");
+  assert.match(service, /document\.querySelector\("#service"\)\?\.dataset\.serviceId/);
   assert.match(service, /data-service-save aria-pressed="false" aria-describedby="service-save-privacy"/);
   assert.match(service, /saveButton\.addEventListener\("click"/);
   assert.match(service, /Saved only in this browser on this device/);

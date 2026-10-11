@@ -33,13 +33,14 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const officialSource = nextSteps.querySelector("a.is-primary")?.href || "";
 
   const saveButton = utility.querySelector("[data-service-save]");
-  const serviceId = document.querySelector("#service .directory-record[id]")?.id;
+  const serviceId = document.querySelector("#service")?.dataset.serviceId;
   const syncSaved = () => {
     try {
       const saved = readSavedResources().has(serviceId);
       saveButton.setAttribute("aria-pressed", String(saved));
       saveButton.textContent = saved ? "Remove from saved" : "Save";
       saveButton.disabled = !serviceId;
+      if (!serviceId) status.textContent = "Saving is unavailable for this listing. You can still copy or print it.";
     } catch {
       saveButton.disabled = true;
       status.textContent = "Saving is unavailable in this browser. You can still copy or print this listing.";
