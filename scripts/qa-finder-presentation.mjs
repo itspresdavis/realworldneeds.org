@@ -5,6 +5,15 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
     const height = width <= 600 ? 844 : 1000;
     await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false, screenWidth: width, screenHeight: height });
     await navigate(client, `${host}/`);
+    // Earlier recovery tests intentionally leave a no-match query. Set each
+    // visual state through the controls rather than silently inheriting it.
+    await evaluate(client, `(async () => {
+      document.querySelector('#clearSearch').click();
+      document.querySelector('.quick-need--all')?.click();
+      if (document.querySelector('#toggleSaved')?.getAttribute('aria-pressed') === 'true') document.querySelector('#toggleSaved').click();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      window.scrollTo(0,0);
+    })()`);
     const view = await evaluate(client, `(() => {
       const rect = (selector) => {
         const element = document.querySelector(selector);
@@ -41,6 +50,33 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         await evaluate(client, `document.getElementById('${section}').scrollIntoView({block:'start'})`);
         await capture(client, `finder-${section}-${width}.png`);
       }
+      await evaluate(client, `(async () => {
+        const input = document.querySelector('#resourceSearch');
+        input.value = 'zzzz-finder-visual-no-match';
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        input.blur();
+        await new Promise((resolve) => setTimeout(resolve,500));
+        document.querySelector('.globe-stage').scrollIntoView({block:'center'});
+      })()`);
+      const empty = await evaluate(client, `(() => {
+        const element = document.querySelector('#globeEmpty');
+        const box = element.getBoundingClientRect();
+        const controls = document.querySelector('.globe-controls').getBoundingClientRect();
+        const stage = document.querySelector('.globe-stage').getBoundingClientRect();
+        const luminance = (color) => color.match(/[\\d.]+/g).slice(0,3).map(Number).map((value) => value/255).map((value) => value <= .04045 ? value/12.92 : ((value+.055)/1.055)**2.4).reduce((sum,value,index) => sum+value*[.2126,.7152,.0722][index],0);
+        const background = luminance(getComputedStyle(element).backgroundColor);
+        const contrast = [...element.querySelectorAll('strong,p')].map((node) => {
+          const foreground = luminance(getComputedStyle(node).color);
+          return (Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05);
+        });
+        return {visible:!element.hidden,contrast,within:box.left>=stage.left&&box.right<=stage.right&&box.top>=stage.top&&box.bottom<=stage.bottom,clearOfControls:box.right<=controls.left||box.bottom<=controls.top||box.top>=controls.bottom};
+      })()`);
+      await capture(client, `finder-empty-map-${width}.png`);
+      if (!empty.visible || !empty.within || !empty.clearOfControls || empty.contrast.length !== 2 || empty.contrast.some((ratio) => !Number.isFinite(ratio) || ratio < 4.5)) {
+        throw new Error(`Empty map is unreadable or overlaps controls at ${width}px: ${JSON.stringify(empty)}`);
+      }
+      await evaluate(client, `document.getElementById('results').scrollIntoView({block:'start'})`);
+      await capture(client, `finder-empty-results-${width}.png`);
       for (const [route, label] of [['/directory','directory'], ['/service/bowery-mission','service']]) {
         await navigate(client, `${host}${route}`);
         const geometry = await evaluate(client, `({client:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth})`);
@@ -66,10 +102,20 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
             const restored = state();
             const note = document.querySelector('.service-next-steps + .policy-note');
             const tools = document.querySelector('[data-service-utility]');
-            return {before,toggled,restored,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
+            const nextActions = [...document.querySelectorAll('.service-next-steps a')].map((link) => {
+              const subtitle = link.querySelector('span');
+              const foreground = getComputedStyle(subtitle || link).color;
+              const background = getComputedStyle(link).backgroundColor;
+              const levels = [luminance(foreground),luminance(background)].sort((a,b) => a-b);
+              return {top:link.getBoundingClientRect().top,contrast:(levels[1]+.05)/(levels[0]+.05)};
+            });
+            return {before,toggled,restored,nextActions,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
           })()`);
           if ([service.before, service.toggled, service.restored].some((state) => !state.label || !Number.isFinite(state.contrast) || state.contrast < 4.5) || service.before.pressed === service.toggled.pressed || service.before.pressed !== service.restored.pressed || !service.warningBeforeTools) {
             throw new Error(`Service action contrast/state/order failed at ${width}px: ${JSON.stringify(service)}`);
+          }
+          if (service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || (width >= 901 && service.nextActions.length === 4 && service.nextActions.some((action) => !close(action.top,service.nextActions[0].top)))) {
+            throw new Error(`Service next-step labels or row alignment failed at ${width}px: ${JSON.stringify(service.nextActions)}`);
           }
         }
         await capture(client, `finder-journey-${label}-${width}.png`);

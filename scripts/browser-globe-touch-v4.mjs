@@ -307,7 +307,17 @@ async function run() {
     await evaluate(client, "window.__rwnStartFrameSample('pinchToDrag')");
     await touch(client, "touchStart", [touchPoint(transition.point.x - 20, transition.point.y, 0), touchPoint(transition.point.x + 20, transition.point.y, 1)]);
     await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0), touchPoint(transition.point.x + 35, transition.point.y, 1)]);
-    await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0)]);
+    // Chromium has two native input backends: the legacy path releases the
+    // supplied IDs, while the newer path releases IDs omitted from touchMove.
+    // Verify the DOM event rather than assuming which backend is active.
+    try {
+      await touch(client, "touchEnd", [touchPoint(transition.point.x + 35, transition.point.y, 1)]);
+    } catch (error) {
+      if (!/TouchEnd and TouchCancel must not have any touch points/.test(error.message)) throw error;
+      await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0)]);
+    }
+    const remainingTouch = await evaluate(client, "window.__rwnInputTrace.findLast(e=>e.type==='touchend')");
+    if (remainingTouch?.touches?.length !== 1 || remainingTouch.touches[0].id !== 0 || !remainingTouch.changed.includes(1)) throw new Error(`Native one-finger release was not delivered: ${JSON.stringify(remainingTouch)}`);
     for (let i = 1; i <= 4; i += 1) {
       await touch(client, "touchMove", [touchPoint(transition.point.x - 35 + i * 18, transition.point.y, 0)]);
       await sleep(30);
@@ -412,6 +422,28 @@ async function run() {
     if (!returnedMap.live || !returnedMap.zoom) throw new Error(`Returning from a service left the globe unavailable: ${JSON.stringify(returnedMap)}`);
     await evaluate(client, `document.getElementById('${returnedMap.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
     await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${returnedMap.zoom}) > .02`, "The restored globe did not respond to zoom after Back.");
+    phase = "real-context-recovery";
+    const lossFixture = await evaluate(client, `(() => {
+      const canvas=document.getElementById('globeCanvas');
+      const gl=canvas.getContext('webgl2') || canvas.getContext('webgl');
+      const extension=gl?.getExtension('WEBGL_lose_context');
+      if(!extension) return {supported:false};
+      const zoom=Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]);
+      extension.loseContext();
+      return {supported:true,zoom,query:document.getElementById('resourceSearch').value};
+    })()`);
+    if (!lossFixture.supported) throw new Error("CI browser cannot exercise real WebGL context loss.");
+    await waitForExpression(client, "document.querySelector('.globe-stage').classList.contains('is-globe-unavailable') && document.getElementById('globeCanvas').getContext('webgl2').isContextLost()", "Real context loss did not expose the recovery state.");
+    await evaluate(client, "document.getElementById('retryGlobe').click()");
+    await waitForExpression(client, "!document.querySelector('.globe-stage').classList.contains('is-globe-unavailable') && !document.getElementById('globeCanvas').getContext('webgl2').isContextLost()", "Retry failed to restore a real lost WebGL context.");
+    await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
+    await evaluate(client, `document.getElementById('${lossFixture.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
+    await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${lossFixture.zoom}) > .02`, "The restored context did not render zoom changes.");
+    if (!await evaluate(client, `document.getElementById('resourceSearch').value === ${JSON.stringify(lossFixture.query)}`)) throw new Error("Context recovery discarded the current search.");
+    const recoveredShot=await client.call("Page.captureScreenshot", {format:"png",fromSurface:true,captureBeyondViewport:false});
+    await writeFile("qa-screenshots/globe-context-recovered.png", Buffer.from(recoveredShot.data,"base64"));
+    observations.realContextRecovery = { passed: true, queryPreserved: true, zoomResponds: true };
+    phase = "saved-return-journey";
     await navigate(client, `${HOST}/directory#saved`);
     await waitForExpression(client, `!!document.querySelector('[data-saved-remove="${serviceId}"]')`, "Saved service did not appear in the directory.");
     await navigate(client, "about:blank");

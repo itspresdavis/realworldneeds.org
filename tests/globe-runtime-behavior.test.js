@@ -215,3 +215,40 @@ test("retry uses the extension captured before context loss and waits for restor
   f.document.getElementById("retryGlobe").dispatch("click");
   assert.equal(requests, 1);
 });
+
+function timingFixture(overrides = {}, reduceMotion = false) {
+  const state = { targetLon: null, targetLat: null, rotationLon: 0, rotationLat: 0, dragging: false, pinching: false, velocityLon: 0, velocityLat: 0, autoRotate: false, interactionUntil: 0, ambientZoom: 1, zoom: 1, targetZoom: 6, ...overrides };
+  const context = vm.createContext({ state, lastFrame: 0, reduceMotion, Math, normalizeLongitude: value => ((value + 540) % 360) - 180, clampGlobeLatitude: value => Math.max(-82, Math.min(82, value)), shortestLongitude: (from, to) => ((to - from + 540) % 360) - 180 });
+  vm.runInContext(functionSource("advanceGlobe", "pauseGlobe"), context);
+  return { state, advance: now => vm.runInContext(`advanceGlobe(${now})`, context) };
+}
+
+test("zoom settling follows wall time at both normal and stalled frame rates", () => {
+  const regular = timingFixture(); const stalled = timingFixture();
+  for (let i = 1; i <= 60; i++) regular.advance(i * 1000 / 60);
+  stalled.advance(500); stalled.advance(1000);
+  assert.ok(Math.abs(regular.state.zoom - stalled.state.zoom) < 1e-10);
+  assert.ok(Math.abs(stalled.state.targetZoom - stalled.state.zoom) < 0.008);
+});
+
+test("a long frame decays inertia without advancing rotation through the whole stall", () => {
+  const f = timingFixture({ velocityLon: 36, velocityLat: 20 });
+  f.advance(1000);
+  assert.ok(Math.abs(f.state.rotationLon - 1.44) < 1e-9);
+  assert.ok(Math.abs(f.state.rotationLat - 0.8) < 1e-9);
+  assert.ok(Math.abs(f.state.velocityLon - 1.98) < 1e-9);
+});
+
+test("focus completes on the current settled frame instead of needing another slow frame", () => {
+  const f = timingFixture({ targetLon: 30, targetLat: 20 });
+  f.advance(1000);
+  assert.equal(f.state.targetLon, null); assert.equal(f.state.targetLat, null);
+  assert.equal(f.state.rotationLon, 30); assert.equal(f.state.rotationLat, 20);
+});
+
+test("reduced-motion focus and zoom settle immediately", () => {
+  const f = timingFixture({ targetLon: 100, targetLat: 40 }, true);
+  f.advance(16);
+  assert.equal(f.state.targetLon, null); assert.equal(f.state.rotationLon, 100);
+  assert.equal(f.state.zoom, f.state.targetZoom);
+});

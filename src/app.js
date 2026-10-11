@@ -461,7 +461,7 @@ function shell() {
                 <label class="region-menu">
                   <span class="sr-only">Focus globe region</span>
                   <select id="regionFocus" aria-label="Focus globe region">
-                    <option value="focus" hidden>Focused view</option>
+                    <option value="focus" hidden>This area</option>
                     <option value="world" selected>World view</option>
                     <option value="americas">Americas</option>
                     <option value="europeAfrica">Europe &amp; Africa</option>
@@ -1901,16 +1901,20 @@ function shortestLongitude(from, to) {
 }
 
 function advanceGlobe(now) {
-  const dt = Math.min(0.04, (now - lastFrame) / 1000);
+  const elapsed = Math.max(0, (now - lastFrame) / 1000);
+  // Bound free-motion travel after a stalled frame, but let camera easing and
+  // velocity decay follow elapsed time. Capping easing to 40ms made a slow
+  // renderer replay seconds of camera motion long after the fingers released.
+  const dt = Math.min(0.04, elapsed);
   lastFrame = now;
   let isIdle = false;
   if (state.targetLon !== null) {
     const lonGap = shortestLongitude(state.rotationLon, state.targetLon);
     const latGap = state.targetLat - state.rotationLat;
-    const focusEase = reduceMotion ? 1 : 1 - Math.exp(-dt * 6.2);
+    const focusEase = reduceMotion ? 1 : 1 - Math.exp(-elapsed * 6.2);
     state.rotationLon = normalizeLongitude(state.rotationLon + lonGap * focusEase);
     state.rotationLat += latGap * focusEase;
-    if (Math.abs(lonGap) < 0.08 && Math.abs(latGap) < 0.08) {
+    if (Math.abs(lonGap) * (1 - focusEase) < 0.08 && Math.abs(latGap) * (1 - focusEase) < 0.08) {
       state.rotationLon = state.targetLon;
       state.rotationLat = state.targetLat;
       state.targetLon = null;
@@ -1919,7 +1923,7 @@ function advanceGlobe(now) {
   } else if (!state.dragging && !state.pinching) {
     state.rotationLon = normalizeLongitude(state.rotationLon + state.velocityLon * dt);
     state.rotationLat = clampGlobeLatitude(state.rotationLat + state.velocityLat * dt);
-    const friction = Math.pow(0.055, dt);
+    const friction = Math.pow(0.055, elapsed);
     state.velocityLon *= friction;
     state.velocityLat *= friction;
     isIdle = state.autoRotate && now > state.interactionUntil && Math.abs(state.velocityLon) < 0.12;
@@ -1929,8 +1933,8 @@ function advanceGlobe(now) {
       state.ambientZoom = 1;
     }
   }
-  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-dt * 4));
-  state.zoom += (state.targetZoom - state.zoom) * (reduceMotion ? 1 : 1 - Math.exp(-dt * 8));
+  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-elapsed * 4));
+  state.zoom += (state.targetZoom - state.zoom) * (reduceMotion ? 1 : 1 - Math.exp(-elapsed * 8));
 }
 
 function pauseGlobe() {

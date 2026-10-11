@@ -547,6 +547,22 @@ body.rwn-professional main { display: block; }
 .rwn-professional .globe-pin.is-selected > strong { border-color: rgba(122,217,158,.55); }
 .rwn-professional .globe-cluster > span { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.8); background: var(--pin); box-shadow: 0 0 0 4px rgba(255,255,255,.08); }
 
+.rwn-professional .globe-empty {
+  left: .85rem;
+  right: auto;
+  top: 50%;
+  width: min(24rem, calc(100% - 5.5rem));
+  padding: 1rem;
+  transform: translateY(-50%);
+  border: 1px solid var(--rwn-line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rwn-ink-strong);
+  box-shadow: 0 4px 16px rgba(21,60,48,.08);
+}
+.rwn-professional .globe-empty strong { color: var(--rwn-ink-strong); font-size: .875rem; }
+.rwn-professional .globe-empty p { color: var(--rwn-muted); font-size: .8125rem; line-height: 1.5; }
+
 .rwn-professional .globe-cluster-tray {
   position: absolute;
   right: 4.6rem;

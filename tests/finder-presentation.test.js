@@ -75,8 +75,15 @@ test("service Save states retain their own contrasting colors", async () => {
   const browser = await readFile("scripts/qa-finder-presentation.mjs", "utf8");
   assert.doesNotMatch(pages, /#service \.service-utility-actions button\s*\{[^}]*color:/);
   assert.match(pages, /#service \.service-utility-actions__buttons button \{ color: #24583e;/);
+  assert.match(pages, /#service \[data-service-save\] \{ transition: none;/);
   assert.match(browser, /state\.contrast < 4\.5/);
   assert.match(browser, /service\.before\.pressed !== service\.restored\.pressed/);
+});
+
+test("map empty state stays readable and leaves room for the controls", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.match(css, /\.rwn-professional \.globe-empty \{[^}]*width: min\(24rem, calc\(100% - 5\.5rem\)\);[^}]*background: #fff;[^}]*color: var\(--rwn-ink-strong\);/);
+  assert.match(css, /\.rwn-professional \.globe-empty p \{ color: var\(--rwn-muted\); font-size: \.8125rem;/);
 });
 
 test("provider visiting warnings precede optional listing tools", async () => {
@@ -97,4 +104,24 @@ test("mobile filter chips do not turn a lone reset into a full-width primary act
   const css = await readFile("src/clarity.css", "utf8");
   assert.match(css, /\.quick-need--all\[aria-pressed="true"\] \{[^}]*background: var\(--rwn-green-soft\);/);
   assert.match(css, /\.rwn-professional \.quick-need \{[^}]*min-width: 44px;[^}]*flex: 0 1 auto;/);
+});
+
+test("handoff subtitles and medium-width action rows share the readable layout", async () => {
+  const nav = await readFile("public/navigation-actions.css", "utf8");
+  const pages = await readFile("public/professional-pages.css", "utf8");
+  const finder = await readFile("src/clarity.css", "utf8");
+  assert.match(nav, /\.service-next-steps a\.is-primary span\{color:#586b60!important\}/);
+  assert.doesNotMatch(nav, /color:#(?:6f7f84|697a80|728188)/);
+  assert.match(pages, /@media \(max-width:1024px\) \{\s*\.service-next-steps \{ grid-template-columns:1fr; \}/);
+  assert.match(finder, /\.results-empty__reset\)\{min-height:44px/);
+});
+
+
+test("compact navigation keeps full focus text and editorial heading weight", async () => {
+  const source = await readFile("src/app.js", "utf8");
+  const pages = await readFile("public/professional-pages.css", "utf8");
+  const nav = await readFile("public/navigation-actions.css", "utf8");
+  assert.match(source, /<option value="focus" hidden>This area<\/option>/);
+  assert.match(pages, /\[aria-label="Breadcrumb"\] span \{ flex:0 0 auto;/);
+  assert.match(nav, /#directory>\.legal-hero h1\{[^}]*font-weight:400;/);
 });
