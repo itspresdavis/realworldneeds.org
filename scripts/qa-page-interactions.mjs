@@ -116,7 +116,17 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       })()`);
       assert(firstTab.focused && firstTab.top>=0 && firstTab.bottom<=844 && firstTab.painted, 'First-Tab skip link is offscreen or painted behind the header', firstTab);
       await capture(client, `page-interactions-skip-focus-${width}.png`);
-      await evaluate(client, `document.querySelector('#clearSearch').click(); document.querySelector('.quick-need--all').click(); scrollTo({top:0,behavior:'instant'}); window.__rwnScrollSamples=[]; window.addEventListener('scroll',()=>{if(window.__rwnScrollSamples.length<180)window.__rwnScrollSamples.push(scrollY)},{passive:true});`);
+      // Fresh navigation already owns an empty, all-services state. Do not
+      // trigger redundant Clear/All actions (and software-GPU redraws) here.
+      const fresh=await evaluate(client, `({query:document.querySelector('#resourceSearch').value,all:document.querySelector('.quick-need--all').getAttribute('aria-pressed'),y:scrollY,hash:location.hash})`);
+      assert(fresh.query===''&&fresh.all==='true'&&fresh.y<=1&&fresh.hash==='', 'Fresh native navigation did not start from the default finder', fresh);
+      // First-Tab/cold content was already checked and captured. Measure smooth
+      // travel on a settled interactive page after actual frame delivery, not
+      // merely a quiet scroll offset while the software GPU is still warming.
+      const readFrames=()=>evaluate(client, `(() => {if(!window.__rwnFrameReady){window.__rwnFrameReady={frames:[],done:false};const frame=at=>{window.__rwnFrameReady.frames.push({at,observed:performance.now(),visibility:document.visibilityState});if(window.__rwnFrameReady.frames.length<4)requestAnimationFrame(frame);else window.__rwnFrameReady.done=true;};requestAnimationFrame(frame);}return window.__rwnFrameReady;})()`);
+      const frameReady=await arrive(state=>state.done,'Frame delivery readiness at '+width+'px',readFrames,false);
+      assert(frameReady.frames.length===4&&frameReady.frames.every((frame,index)=>Number.isFinite(frame.at)&&frame.visibility==='visible'&&(!index||frame.at>frameReady.frames[index-1].at)), 'Frame readiness did not observe four distinct visible rendering opportunities', frameReady);
+      await evaluate(client, `window.__rwnScrollSamples=[]; window.addEventListener('scroll',()=>{if(window.__rwnScrollSamples.length<180)window.__rwnScrollSamples.push(scrollY)},{passive:true});`);
       await settle();
       const initial = await inspect();
       await evaluate(client, 'window.__rwnScrollSamples=[]');
