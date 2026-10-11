@@ -1,3 +1,4 @@
+import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -420,6 +421,8 @@ async function run() {
         throw new Error(`Fallback retry failed at ${width}px: ${JSON.stringify(restored)}`);
       }
     }
+
+    await verifyFinderPresentation({ client, host: HOST, navigate, evaluate, capture });
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);
     console.log("Interaction QA passed: desktop/mobile finder, input bounds, no-result recovery, history restoration, location retry, menu focus, and established globe layout.");

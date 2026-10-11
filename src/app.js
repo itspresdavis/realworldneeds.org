@@ -26,8 +26,7 @@ import {
   classifyGlobeDragIntent,
   globeViewProfile,
   pinchZoom,
-  pointPickThresholdWorld,
-  pointerDistance
+  pointPickThresholdWorld
 } from "./utils/gesture.js";
 import { classifyWheelIntent, wheelZoomFactor } from "./utils/globe-zoom.js";
 import {
@@ -61,13 +60,14 @@ function markGlobeEngaged() {
 function zoomTowardPointer(factor, clientX, clientY) {
   wakeGlobe();
   const maximum = maxGlobeZoom();
-  const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, state.targetZoom * factor));
+  const previousTargetZoom = state.targetZoom;
+  const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, previousTargetZoom * factor));
   const anchor = clientX === undefined ? null : globeCoordinateAtClientPoint(clientX, clientY);
   state.targetZoom = nextZoom;
   if (!anchor) return;
   // Nudge the rotation so the anchored coordinate drifts toward the centre in
   // proportion to how much closer the camera moved.
-  const pull = Math.max(0, Math.min(0.62, (nextZoom / Math.max(0.0001, state.zoom) - 1) * 1.35));
+  const pull = Math.max(0, Math.min(0.62, (nextZoom / Math.max(0.0001, previousTargetZoom) - 1) * 1.35));
   if (pull <= 0.001) return;
   const lonGap = normalizeLongitude(anchor.lng - state.rotationLon);
   const latGap = anchor.lat - state.rotationLat;
@@ -175,6 +175,7 @@ const state = {
   zoom: 1,
   targetZoom: 1,
   dragging: false,
+  touching: false,
   pointerX: 0,
   pointerY: 0,
   pointerStartX: 0,
@@ -204,9 +205,6 @@ const state = {
 };
 
 const activeGlobePointers = new Map();
-let pinchStartDistance = 0;
-let pinchStartZoom = 1;
-let globeGestureHadMultiplePointers = false;
 
 const root = document.getElementById("root");
 let pinSignature = "";
@@ -229,6 +227,8 @@ let earthTextureImage = null;
 let earthDetailTextureImage = null;
 let earthDetailTextureRequested = false;
 let earthDetailTextureReady = false;
+let pendingDetailGeometry = null;
+let pendingDetailImage = null;
 let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
@@ -246,7 +246,9 @@ let globeCloseViewActive = false;
 let globeServicePoints = null;
 let globePointSignature = "";
 let globeContextLost = false;
+let globeContextRecoveryExtension = null;
 let globeFrameHandle = null;
+let globeResizeObserver = null;
 const globeRaycaster = new THREE.Raycaster();
 const globePointerNdc = new THREE.Vector2();
 const globeProjectionVector = new THREE.Vector3();
@@ -415,7 +417,7 @@ function shell() {
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by need, service, or place" autocomplete="off">
+                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by service or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
@@ -459,7 +461,7 @@ function shell() {
                 <label class="region-menu">
                   <span class="sr-only">Focus globe region</span>
                   <select id="regionFocus" aria-label="Focus globe region">
-                    <option value="focus" hidden>Focused view</option>
+                    <option value="focus" hidden>This area</option>
                     <option value="world" selected>World view</option>
                     <option value="americas">Americas</option>
                     <option value="europeAfrica">Europe &amp; Africa</option>
@@ -1239,16 +1241,18 @@ function loadDetailEarthImagery() {
   const image = new Image();
   image.decoding = "async";
   image.onload = () => {
-    earthDetailTextureImage = image;
-    earthDetailTextureReady = true;
-    refreshGlobeSurface();
-    if (status) status.textContent = state.detailGeometryReady ? "detailed · HD NASA" : "HD NASA surface";
-    updateGlobeReadout();
+    pendingDetailImage = image;
+    wakeGlobe();
   };
   image.onerror = () => {
     if (status && state.detailGeometryReady) status.textContent = "detailed boundaries";
   };
-  image.src = "/media/earth-blue-marble-detail.jpg";
+  // A 4K file avoids decoding a 128 MiB 8K bitmap only to downsample it on
+  // mobile. Desktop retains the original 8K close-view surface.
+  image.src = window.innerWidth <= 600 || window.matchMedia("(pointer: coarse)").matches
+    || (globeRenderer?.capabilities.maxTextureSize || 0) < 8192
+    ? "/media/earth-blue-marble-mobile.jpg"
+    : "/media/earth-blue-marble-detail.jpg";
 }
 
 function createStarField() {
@@ -1445,6 +1449,7 @@ function initThreeGlobe() {
       event.preventDefault();
       globeContextLost = true;
       state.autoRotate = false;
+      pauseGlobe();
       reportGlobeUnavailable("The interactive map paused because this device lost its graphics context. You can keep using text results or try the map again.", true);
     });
     canvas.addEventListener("webglcontextrestored", () => {
@@ -1458,15 +1463,16 @@ function initThreeGlobe() {
     globeViewportHeight = Math.max(1, rect.height);
   };
   updateGlobeViewport();
-  if ("ResizeObserver" in window && canvas) {
-    const observer = new ResizeObserver((entries) => {
+  if ("ResizeObserver" in window && canvas && !globeResizeObserver) {
+    globeResizeObserver = new ResizeObserver((entries) => {
       const box = entries[0]?.contentRect;
       if (!box) return;
       globeViewportWidth = Math.max(1, box.width);
       globeViewportHeight = Math.max(1, box.height);
+      state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom);
       wakeGlobe();
     });
-    observer.observe(canvas);
+    globeResizeObserver.observe(canvas);
   }
   try {
     globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
@@ -1474,8 +1480,9 @@ function initThreeGlobe() {
     console.error("WebGL globe could not be initialized.", error);
     globeRenderer = null;
     reportGlobeUnavailable();
-    return;
+    return false;
   }
+  globeContextRecoveryExtension = globeRenderer.getContext().getExtension("WEBGL_lose_context");
   globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   globeRenderer.outputColorSpace = THREE.SRGBColorSpace;
   globeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1549,6 +1556,7 @@ function initThreeGlobe() {
 
   connectionGroup = new THREE.Group();
   globeWorld.add(connectionGroup);
+  return true;
 }
 
 function slerpVector(start, end, progress) {
@@ -1625,6 +1633,24 @@ function reportGlobeUnavailable(message = "Interactive map unavailable on this d
 }
 
 function resetGlobeContextResources() {
+  pauseGlobe();
+  // Renderer disposal alone does not release the geometries and textures that
+  // the old scene owned. Deduplicate shared map/emissive textures.
+  const geometries = new Set();
+  const materials = new Set();
+  const textures = new Set();
+  globeScene?.traverse((object) => {
+    if (object.geometry) geometries.add(object.geometry);
+    for (const material of [object.material].flat().filter(Boolean)) {
+      materials.add(material);
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+    }
+  });
+  if (globeLandMask.value) textures.add(globeLandMask.value);
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
+  for (const texture of textures) texture.dispose();
+  globeLandMask.value = null;
   globeRenderer?.dispose();
   globeRenderer = null;
   globeScene = null;
@@ -1642,6 +1668,8 @@ function resetGlobeContextResources() {
   connectionSignature = "";
   globeServicePoints = null;
   globePointSignature = "";
+  pinSignature = "";
+  lastPinClusters = [];
 }
 
 function recoverGlobeContext() {
@@ -1655,7 +1683,11 @@ function recoverGlobeContext() {
   const retryButton = document.getElementById("retryGlobe");
   if (retryButton) retryButton.hidden = true;
   try {
-    initThreeGlobe();
+    if (!initThreeGlobe() || globeRenderer.getContext().isContextLost()) {
+      globeContextLost = true;
+      reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
+      return;
+    }
     rebuildCountryBorders();
     syncGlobePointLayer();
     wakeGlobe();
@@ -1771,7 +1803,10 @@ function renderPins(width, height, now = performance.now()) {
   // Clustering is the expensive half, so it is recomputed less often during
   // motion while positions still update every frame.
   const minInterval = moving ? (gpuPointsActive ? 120 : 60) : 70;
-  const positionsOnly = now - globeLastPinUpdate < minInterval;
+  // Keep the same hit targets mounted until release. Replacing innerHTML
+  // during a touch that started on a marker detaches its event target.
+  const positionsOnly = state.dragging || state.pinching || state.touching
+    || (pinSignature && globeHasMotion(state) && now - globeLastPinUpdate < minInterval);
   if (positionsOnly) {
     repositionPins(width, height);
     return;
@@ -1866,16 +1901,20 @@ function shortestLongitude(from, to) {
 }
 
 function advanceGlobe(now) {
-  const dt = Math.min(0.04, (now - lastFrame) / 1000);
+  const elapsed = Math.max(0, (now - lastFrame) / 1000);
+  // Bound free-motion travel after a stalled frame, but let camera easing and
+  // velocity decay follow elapsed time. Capping easing to 40ms made a slow
+  // renderer replay seconds of camera motion long after the fingers released.
+  const dt = Math.min(0.04, elapsed);
   lastFrame = now;
   let isIdle = false;
   if (state.targetLon !== null) {
     const lonGap = shortestLongitude(state.rotationLon, state.targetLon);
     const latGap = state.targetLat - state.rotationLat;
-    const focusEase = 1 - Math.exp(-dt * 6.2);
+    const focusEase = reduceMotion ? 1 : 1 - Math.exp(-elapsed * 6.2);
     state.rotationLon = normalizeLongitude(state.rotationLon + lonGap * focusEase);
     state.rotationLat += latGap * focusEase;
-    if (Math.abs(lonGap) < 0.08 && Math.abs(latGap) < 0.08) {
+    if (Math.abs(lonGap) * (1 - focusEase) < 0.08 && Math.abs(latGap) * (1 - focusEase) < 0.08) {
       state.rotationLon = state.targetLon;
       state.rotationLat = state.targetLat;
       state.targetLon = null;
@@ -1884,7 +1923,7 @@ function advanceGlobe(now) {
   } else if (!state.dragging && !state.pinching) {
     state.rotationLon = normalizeLongitude(state.rotationLon + state.velocityLon * dt);
     state.rotationLat = clampGlobeLatitude(state.rotationLat + state.velocityLat * dt);
-    const friction = Math.pow(0.055, dt);
+    const friction = Math.pow(0.055, elapsed);
     state.velocityLon *= friction;
     state.velocityLat *= friction;
     isIdle = state.autoRotate && now > state.interactionUntil && Math.abs(state.velocityLon) < 0.12;
@@ -1894,8 +1933,8 @@ function advanceGlobe(now) {
       state.ambientZoom = 1;
     }
   }
-  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-dt * 4));
-  state.zoom += (state.targetZoom - state.zoom) * (1 - Math.exp(-dt * 8));
+  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-elapsed * 4));
+  state.zoom += (state.targetZoom - state.zoom) * (reduceMotion ? 1 : 1 - Math.exp(-elapsed * 8));
 }
 
 function pauseGlobe() {
@@ -1912,6 +1951,29 @@ function wakeGlobe(resetClock = true) {
     globeFrameHandle = null;
     animateGlobe(now);
   });
+}
+
+function applyPendingGlobeDetail() {
+  if (!globeRenderer || (!pendingDetailGeometry && !pendingDetailImage)) return;
+  if (pendingDetailGeometry) {
+    state.detailCountryFeatures = pendingDetailGeometry;
+    state.detailLandRings = pendingDetailGeometry.flatMap((feature) => extractRings(feature.geometry));
+    pendingDetailGeometry = null;
+    state.detailGeometryReady = true;
+    rebuildCountryBorders();
+    updateGlobeLandMask();
+    if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
+  }
+  if (pendingDetailImage) {
+    earthDetailTextureImage = pendingDetailImage;
+    pendingDetailImage = null;
+    earthDetailTextureReady = true;
+    refreshGlobeSurface();
+  }
+  const status = document.getElementById("globeDetailStatus");
+  if (status && (state.detailGeometryReady || earthDetailTextureReady)) {
+    status.textContent = earthDetailTextureReady ? "detailed · HD NASA" : "detailed boundaries";
+  }
 }
 
 function animateGlobe(now) {
@@ -1931,11 +1993,10 @@ function animateGlobe(now) {
     && Math.abs(state.velocityLat) < 0.22
     && Math.abs(state.targetZoom - state.zoom) < 0.025
     && state.targetLon === null;
-  const deepBoundaryIntent = state.targetZoom > (window.innerWidth <= 600 ? 3.4 : 3.0);
-  if ((interactionSettled || deepBoundaryIntent) && (state.zoom > 1.35 || state.targetZoom > 1.35)) loadDetailGeometry();
+  if (interactionSettled) applyPendingGlobeDetail();
+  if (interactionSettled && state.zoom > 1.35) loadDetailGeometry();
   const detailTextureZoom = window.innerWidth <= 600 ? 2.7 : 2.15;
-  const deepTextureIntent = state.targetZoom > (window.innerWidth <= 600 ? 4.2 : 3.6);
-  if ((interactionSettled || deepTextureIntent) && (state.zoom > detailTextureZoom || state.targetZoom > detailTextureZoom)) loadDetailEarthImagery();
+  if (interactionSettled && state.zoom > detailTextureZoom) loadDetailEarthImagery();
 
   const closeView = state.zoom > 1.9;
   if (closeView !== globeCloseViewActive) {
@@ -2159,15 +2220,8 @@ async function loadDetailGeometry() {
     const response = await fetch("/data/countries-detail.geojson", { cache: "force-cache" });
     if (!response.ok) throw new Error(`Detailed map data returned ${response.status}`);
     const data = await response.json();
-    state.detailCountryFeatures = data.features;
-    state.detailLandRings = data.features.flatMap((feature) => extractRings(feature.geometry));
-    state.detailGeometryReady = true;
-    rebuildCountryBorders();
-    updateGlobeLandMask();
+    pendingDetailGeometry = data.features;
     wakeGlobe();
-    if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
-    if (status) status.textContent = earthDetailTextureReady ? "detailed · HD NASA" : "detailed boundaries";
-    updateGlobeReadout();
   } catch (error) {
     console.warn("High-detail Natural Earth geometry could not be loaded.", error);
     if (status) status.textContent = "Standard boundaries";
@@ -2436,7 +2490,7 @@ function bindEvents() {
 
   const canvas = document.getElementById("globeCanvas");
   const globeStage = canvas.closest(".globe-stage");
-  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .globe-cluster-tray"));
+  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
 
   const prepareGlobeInteraction = () => {
     wakeGlobe();
@@ -2453,285 +2507,183 @@ function bindEvents() {
     state.interactionUntil = performance.now() + 6000;
   };
 
-  const beginPinch = () => {
-    if (activeGlobePointers.size < 2) return;
-    state.dragging = false;
-    state.pinching = true;
-    state.pointerMoved = true;
-    globeGestureHadMultiplePointers = true;
-    for (const pointerId of activeGlobePointers.keys()) {
-      try { globeStage.setPointerCapture(pointerId); } catch {}
-    }
-    pinchStartDistance = pointerDistance(activeGlobePointers.values());
-    pinchStartZoom = state.targetZoom;
-    prepareGlobeInteraction();
-  };
-
+  // Touch Events own touch input on both Safari and browsers that also emit
+  // Pointer Events. Running both streams caused competing pinch baselines and
+  // release state. Pointer Events here own only mouse and pen input.
   globeStage.addEventListener("pointerdown", (event) => {
-    const startedOnCanvas = event.target === canvas;
-    const startedOnMap = event.pointerType === "touch" ? !isGlobeChrome(event.target) : startedOnCanvas;
-    if (!startedOnMap) return;
-
-    activeGlobePointers.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-      startedOnCanvas,
-      startedOnMap,
-      pointerType: event.pointerType,
-      handledRotation: false
-    });
-    if (event.pointerType !== "touch") {
-      try { globeStage.setPointerCapture(event.pointerId); } catch {}
-    }
-
-    if (activeGlobePointers.size >= 2) {
-      beginPinch();
-      event.preventDefault();
-      return;
-    }
-
-    if (!startedOnMap) return;
-    state.dragging = event.pointerType !== "touch";
+    if (event.pointerType === "touch" || event.button !== 0 || event.target !== canvas || activeGlobePointers.size) return;
+    activeGlobePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    try { globeStage.setPointerCapture(event.pointerId); } catch {}
+    state.dragging = true;
     state.pinching = false;
-    state.pointerX = event.clientX;
-    state.pointerY = event.clientY;
-    state.pointerStartX = event.clientX;
-    state.pointerStartY = event.clientY;
+    state.pointerX = state.pointerStartX = event.clientX;
+    state.pointerY = state.pointerStartY = event.clientY;
     state.pointerMoved = false;
     state.pointerTime = event.timeStamp || performance.now();
-    globeGestureHadMultiplePointers = false;
     markGlobeEngaged();
     prepareGlobeInteraction();
   });
 
   globeStage.addEventListener("pointermove", (event) => {
-    const pointer = activeGlobePointers.get(event.pointerId);
-    if (!pointer) return;
-    pointer.x = event.clientX;
-    pointer.y = event.clientY;
-
-    if (activeGlobePointers.size >= 2) {
-      if (!state.pinching) beginPinch();
-      state.targetZoom = pinchZoom(
-        pinchStartZoom,
-        pinchStartDistance,
-        pointerDistance(activeGlobePointers.values()),
-        MIN_GLOBE_ZOOM,
-        maxGlobeZoom()
-      );
-      state.velocityLon = 0;
-      state.velocityLat = 0;
-      state.interactionUntil = performance.now() + 5000;
-      wakeGlobe();
-      event.preventDefault();
-      return;
-    }
-
-    if (!state.dragging && pointer.pointerType === "touch") {
-      const intent = classifyGlobeDragIntent(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY);
-      if (intent === "scroll") {
-        activeGlobePointers.delete(event.pointerId);
-        return;
-      }
-      if (intent !== "rotate") return;
-      state.dragging = true;
-      wakeGlobe();
-      try { globeStage.setPointerCapture(event.pointerId); } catch {}
-      event.preventDefault();
-      state.pointerX = event.clientX;
-      state.pointerY = event.clientY;
-      state.pointerTime = event.timeStamp || performance.now();
-    }
-    if (!state.dragging) return;
+    if (!activeGlobePointers.has(event.pointerId) || !state.dragging) return;
     if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
-    const dx = event.clientX - state.pointerX;
-    const dy = event.clientY - state.pointerY;
     const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
-    const lonDelta = -dx * 0.30 * interactionScale;
-    const latDelta = dy * 0.22 * interactionScale;
+    const lonDelta = -(event.clientX - state.pointerX) * 0.30 * interactionScale;
+    const latDelta = (event.clientY - state.pointerY) * 0.22 * interactionScale;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
     state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
     const pointerNow = event.timeStamp || performance.now();
     const pointerDt = Math.max(8, Math.min(40, pointerNow - (state.pointerTime || pointerNow - 16))) / 1000;
-    const sampledVelocityLon = lonDelta / pointerDt;
-    const sampledVelocityLat = latDelta / pointerDt;
-    state.velocityLon = state.velocityLon * 0.58 + sampledVelocityLon * 0.42;
-    state.velocityLat = state.velocityLat * 0.58 + sampledVelocityLat * 0.42;
+    state.velocityLon = reduceMotion ? 0 : state.velocityLon * 0.58 + lonDelta / pointerDt * 0.42;
+    state.velocityLat = reduceMotion ? 0 : state.velocityLat * 0.58 + latDelta / pointerDt * 0.42;
     state.pointerTime = pointerNow;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
-    pointer.handledRotation = true;
     wakeGlobe();
-    if (event.pointerType === "touch") event.preventDefault();
   });
 
   const finishGlobePointer = (event, cancelled = false) => {
-    const pointer = activeGlobePointers.get(event.pointerId);
-    const shouldSelectCountry = !cancelled
-      && activeGlobePointers.size === 1
-      && state.dragging
-      && !state.pointerMoved
-      && pointer?.startedOnCanvas
-      && !globeGestureHadMultiplePointers;
-
+    if (!activeGlobePointers.has(event.pointerId)) return;
+    const shouldSelect = !cancelled && !state.pointerMoved;
     activeGlobePointers.delete(event.pointerId);
     try { globeStage.releasePointerCapture(event.pointerId); } catch {}
-
-    if (activeGlobePointers.size >= 2) {
-      beginPinch();
-      return;
-    }
-
-    state.pinching = false;
-    if (activeGlobePointers.size === 1) {
-      const remaining = activeGlobePointers.values().next().value;
-      state.dragging = Boolean(remaining?.startedOnMap && remaining?.pointerType !== "touch");
-      state.pointerX = remaining?.x || 0;
-      state.pointerY = remaining?.y || 0;
-      state.pointerStartX = state.pointerX;
-      state.pointerStartY = state.pointerY;
-      state.pointerMoved = true;
-      return;
-    }
-
     state.dragging = false;
     state.pointerMoved = false;
-    globeGestureHadMultiplePointers = false;
-    if (shouldSelectCountry) selectCountryFromPointer(event);
+    if (cancelled || (event.timeStamp || performance.now()) - state.pointerTime > 100) {
+      state.velocityLon = 0;
+      state.velocityLat = 0;
+    }
+    if (shouldSelect) selectCountryFromPointer(event);
+    wakeGlobe();
   };
-
   globeStage.addEventListener("pointerup", (event) => finishGlobePointer(event));
   globeStage.addEventListener("pointercancel", (event) => finishGlobePointer(event, true));
+  globeStage.addEventListener("lostpointercapture", (event) => finishGlobePointer(event, true));
 
+  let touchState = null;
+  const mapTouches = (touches) => Array.from(touches).filter((touch) => globeStage.contains(touch.target) && !isGlobeChrome(touch.target));
+  const touchListDistance = (touches) => Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
+  const beginTouch = (touch, hadMultiple = false) => ({
+    identifier: touch.identifier,
+    startX: touch.clientX, startY: touch.clientY,
+    lastX: touch.clientX, lastY: touch.clientY,
+    startedOnCanvas: touch.target === canvas,
+    intent: "pending", moved: hadMultiple, hadMultiple
+  });
+  const beginTouchPinch = (touches) => {
+    touchState = { intent: "pinch", moved: true, hadMultiple: true,
+      pinchStartDistance: touchListDistance(touches), pinchStartZoom: state.targetZoom };
+    state.pinching = true;
+    state.dragging = false;
+    state.pointerMoved = true;
+    markGlobeEngaged();
+    prepareGlobeInteraction();
+  };
   const preventNativePagePinch = (event) => {
-    if (!isGlobeChrome(event.target)) event.preventDefault();
+    if (touchState?.intent === "pinch") event.preventDefault();
   };
   globeStage.addEventListener("gesturestart", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gesturechange", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gestureend", preventNativePagePinch, { passive: false });
-  let touchFallbackState = null;
-  const touchListDistance = (touches) => {
-    if (touches.length < 2) return 0;
-    return Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
-  };
-  const resetTouchFallback = () => { touchFallbackState = null; };
+
   globeStage.addEventListener("touchstart", (event) => {
     if (isGlobeChrome(event.target)) return;
-    if (event.touches.length > 1) {
-      touchFallbackState = {
-        intent: "pinch",
-        pinchStartDistance: touchListDistance(event.touches),
-        pinchStartZoom: state.targetZoom
-      };
-      state.pinching = true;
-      state.dragging = false;
-      state.pointerMoved = true;
-      globeGestureHadMultiplePointers = true;
-      markGlobeEngaged();
-      prepareGlobeInteraction();
+    const touches = mapTouches(event.touches);
+    state.touching = touches.length > 0;
+    if (touches.length > 1) {
+      beginTouchPinch(touches);
       event.preventDefault();
-      return;
+    } else if (touches.length === 1 && !touchState) {
+      touchState = beginTouch(touches[0]);
     }
-    const touch = event.touches[0];
-    if (!touch) return;
-    touchFallbackState = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      lastX: touch.clientX,
-      lastY: touch.clientY,
-      lastTime: event.timeStamp || performance.now(),
-      intent: "pending"
-    };
   }, { passive: false });
   globeStage.addEventListener("touchmove", (event) => {
-    if (isGlobeChrome(event.target)) return;
-    if (event.touches.length > 1) {
-      if (!touchFallbackState || touchFallbackState.intent !== "pinch") {
-        touchFallbackState = {
-          intent: "pinch",
-          pinchStartDistance: touchListDistance(event.touches),
-          pinchStartZoom: state.targetZoom
-        };
-        state.pinching = true;
-        state.dragging = false;
-        state.pointerMoved = true;
-        globeGestureHadMultiplePointers = true;
-        prepareGlobeInteraction();
-      }
-      state.targetZoom = pinchZoom(
-        touchFallbackState.pinchStartZoom,
-        touchFallbackState.pinchStartDistance,
-        touchListDistance(event.touches),
-        MIN_GLOBE_ZOOM,
-        maxGlobeZoom()
-      );
-      state.velocityLon = 0;
-      state.velocityLat = 0;
+    if (!touchState) return;
+    const touches = mapTouches(event.touches);
+    if (touches.length > 1) {
+      if (touchState.intent !== "pinch") beginTouchPinch(touches);
+      state.targetZoom = pinchZoom(touchState.pinchStartZoom, touchState.pinchStartDistance,
+        touchListDistance(touches), MIN_GLOBE_ZOOM, maxGlobeZoom());
       state.interactionUntil = performance.now() + 5000;
       wakeGlobe();
       event.preventDefault();
       return;
     }
-    const touch = event.touches[0];
-    const fallback = touchFallbackState;
-    if (!touch || !fallback || fallback.intent === "pinch") return;
-    if (fallback.intent === "pending") {
-      fallback.intent = classifyGlobeDragIntent(touch.clientX - fallback.startX, touch.clientY - fallback.startY);
-      if (fallback.intent === "scroll") return;
-      if (fallback.intent !== "rotate") return;
-      if (!state.dragging) {
-        state.dragging = true;
-        state.pinching = false;
-        state.pointerMoved = true;
-        prepareGlobeInteraction();
-      }
-      fallback.lastX = touch.clientX;
-      fallback.lastY = touch.clientY;
-      fallback.lastTime = event.timeStamp || performance.now();
-      event.preventDefault();
-      return;
+    const touch = touches[0];
+    if (!touch) return;
+    if (touchState.intent === "pinch") {
+      state.pinching = false;
+      touchState = beginTouch(touch, true);
     }
-    if (fallback.intent !== "rotate") return;
-    wakeGlobe();
-    const pointerPath = activeGlobePointers.size === 1 ? activeGlobePointers.values().next().value : null;
-    if (pointerPath?.handledRotation) {
-      event.preventDefault();
-      return;
+    if (Math.hypot(touch.clientX - touchState.startX, touch.clientY - touchState.startY) > 6) touchState.moved = true;
+    if (touchState.intent === "pending") {
+      const intent = classifyGlobeDragIntent(touch.clientX - touchState.startX, touch.clientY - touchState.startY);
+      touchState.intent = intent;
+      if (intent !== "rotate") return;
+      state.dragging = true;
+      state.pinching = false;
+      markGlobeEngaged();
+      prepareGlobeInteraction();
+      touchState.lastX = touch.clientX;
+      touchState.lastY = touch.clientY;
     }
-    const dx = touch.clientX - fallback.lastX;
-    const dy = touch.clientY - fallback.lastY;
+    if (touchState.intent !== "rotate") return;
     const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
-    const lonDelta = -dx * 0.30 * interactionScale;
-    const latDelta = dy * 0.22 * interactionScale;
-    state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
-    state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
-    state.targetLon = null;
-    state.targetLat = null;
+    state.rotationLon = normalizeLongitude(state.rotationLon - (touch.clientX - touchState.lastX) * 0.30 * interactionScale);
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + (touch.clientY - touchState.lastY) * 0.22 * interactionScale);
     state.pointerMoved = true;
     state.interactionUntil = performance.now() + 5000;
-    fallback.lastX = touch.clientX;
-    fallback.lastY = touch.clientY;
-    fallback.lastTime = event.timeStamp || performance.now();
+    touchState.lastX = touch.clientX;
+    touchState.lastY = touch.clientY;
+    wakeGlobe();
     event.preventDefault();
   }, { passive: false });
   globeStage.addEventListener("touchend", (event) => {
-    if (event.touches.length === 0) {
-      state.dragging = false;
-      state.pinching = false;
-      state.velocityLon = 0;
-      state.velocityLat = 0;
-      pinchStartDistance = 0;
-      resetTouchFallback();
-    }
-  }, { passive: true });
-  globeStage.addEventListener("touchcancel", () => {
+    if (!touchState) return;
+    const touches = mapTouches(event.touches);
+    state.touching = touches.length > 0;
+    if (touches.length > 1) { beginTouchPinch(touches); return; }
     state.dragging = false;
     state.pinching = false;
     state.velocityLon = 0;
     state.velocityLat = 0;
-    pinchStartDistance = 0;
-    resetTouchFallback();
+    if (touches.length === 1) {
+      touchState = beginTouch(touches[0], true);
+    } else {
+      const released = Array.from(event.changedTouches).find((touch) => touch.identifier === touchState.identifier);
+      const tap = released && touchState.startedOnCanvas && !touchState.moved && !touchState.hadMultiple;
+      touchState = null;
+      if (tap) {
+        markGlobeEngaged();
+        prepareGlobeInteraction();
+        selectCountryFromPointer({ clientX: released.clientX, clientY: released.clientY, pointerType: "touch" });
+      }
+    }
+    state.pointerMoved = false;
+    wakeGlobe();
   }, { passive: true });
+
+  const resetGlobeInput = () => {
+    const captured = [...activeGlobePointers.keys()];
+    activeGlobePointers.clear();
+    for (const id of captured) { try { globeStage.releasePointerCapture(id); } catch {} }
+    touchState = null;
+    state.touching = false;
+    state.dragging = false;
+    state.pinching = false;
+    state.pointerMoved = false;
+    state.velocityLon = 0;
+    state.velocityLat = 0;
+    wheelOwner = null;
+    lastWheelTime = 0;
+    wakeGlobe();
+  };
+  globeStage.addEventListener("touchcancel", resetGlobeInput, { passive: true });
+  canvas.addEventListener("webglcontextlost", resetGlobeInput);
+  window.addEventListener("blur", resetGlobeInput);
+  window.addEventListener("pagehide", resetGlobeInput);
+  window.addEventListener("popstate", resetGlobeInput);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) resetGlobeInput(); });
 
   // Wheel ownership is decided per gesture from its shape, so the page keeps
   // scrolling normally and the map only claims the wheel when the visitor
@@ -2839,7 +2791,13 @@ function bindEvents() {
     state.interactionUntil = 0;
   });
   document.getElementById("retryGlobe")?.addEventListener("click", () => {
-    globeContextLost = true;
+    const context = globeRenderer?.getContext();
+    if (context?.isContextLost()) {
+      // Wait for the browser's restored event before rebuilding or claiming
+      // recovery; constructing a renderer cannot revive a lost context.
+      globeContextRecoveryExtension?.restoreContext();
+      return;
+    }
     recoverGlobeContext();
   });
 

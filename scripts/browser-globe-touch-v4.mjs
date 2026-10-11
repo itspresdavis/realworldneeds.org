@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -92,6 +92,14 @@ async function navigate(client, url) {
   await sleep(650);
 }
 
+async function waitForExpression(client, expression, message) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try { if (await evaluate(client, expression)) return; } catch {}
+    await sleep(100);
+  }
+  throw new Error(message);
+}
+
 const touchPoint = (x, y, id = 0) => ({ x, y, id, radiusX: 8, radiusY: 8, force: 1 });
 const touch = (client, type, points) => client.call("Input.dispatchTouchEvent", { type, touchPoints: points });
 
@@ -130,12 +138,47 @@ async function cropDigest(client, rect) {
   return createHash("sha256").update(Buffer.from(shot.data, "base64")).digest("hex");
 }
 
+// Inspect a failed live animation through DevTools, without modifying shipped
+// application code or adding a production debug API. Sampling happens only
+// after a failed assertion, so successful-run timings are unaffected.
+async function inspectFailedGlobeState(client) {
+  let breakpoint;
+  try {
+    const source = await readFile("dist/src/app.js", "utf8");
+    const lineNumber = source.split("\n").findIndex((line) => line.startsWith("function animateGlobe(now)")) + 1;
+    if (lineNumber < 1) return { diagnosticError: "Built animation entry point was not found." };
+    await client.call("Debugger.enable");
+    const result = await client.call("Debugger.setBreakpointByUrl", {
+      urlRegex: "/src/app\\.js(?:\\?|$)", lineNumber,
+      condition: `(globalThis.__rwnRuntimeSnapshot = {
+        dragging:state.dragging,touching:state.touching,pinching:state.pinching,
+        zoom:state.zoom,targetZoom:state.targetZoom,targetLon:state.targetLon,
+        velocityLon:state.velocityLon,velocityLat:state.velocityLat,
+        globeVisible:state.globeVisible,contextLost:globeContextLost,
+        pointers:activeGlobePointers.size,autoRotate:state.autoRotate,
+        frames:globeRenderer?.info.render.frame,textures:globeRenderer?.info.memory.textures,
+        at:performance.now()
+      },false)`
+    });
+    breakpoint = result.breakpointId;
+    await sleep(650);
+    return await evaluate(client, "window.__rwnRuntimeSnapshot || null");
+  } catch (error) {
+    return { diagnosticError: String(error.message || error) };
+  } finally {
+    if (breakpoint) await client.call("Debugger.removeBreakpoint", { breakpointId: breakpoint }).catch(() => {});
+    await client.call("Debugger.disable").catch(() => {});
+  }
+}
+
 async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-globe-touch-"));
   const server = spawn(process.execPath, ["scripts/serve.mjs", "4178"], { stdio: "ignore" });
   let browser;
   let client;
   const exceptions = [];
+  let phase = "setup";
+  const observations = {};
 
   try {
     await waitFor(HOST);
@@ -155,6 +198,29 @@ async function run() {
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
     await client.call("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    await client.call("Page.addScriptToEvaluateOnNewDocument", { source: `
+      window.__rwnLongTasks = [];
+      window.__rwnInputTimings = [];
+      window.__rwnFrameSamples = {};
+      window.__rwnInputTrace = [];
+      window.__rwnStartFrameSample = (label) => {
+        window.__rwnSamplingFrames=true;
+        const deltas=[]; window.__rwnFrameSamples[label]=deltas;
+        let last;
+        const frame=(now)=>{if(last!==undefined)deltas.push(now-last);last=now;if(window.__rwnSamplingFrames && deltas.length<300)requestAnimationFrame(frame);};
+        requestAnimationFrame(frame);
+      };
+      for (const type of ['pointerdown','pointerup','pointercancel','lostpointercapture','touchstart','touchmove','touchend','touchcancel']) {
+        document.addEventListener(type, (event) => {
+          if (!event.target.closest?.('.globe-stage')) return;
+          const rows=window.__rwnInputTrace;
+          rows.push({type,at:performance.now(),target:event.target.id || event.target.className,touches:Array.from(event.touches || []).map(t=>({id:t.identifier,x:t.clientX,y:t.clientY})),changed:Array.from(event.changedTouches || []).map(t=>t.identifier)});
+          if(rows.length>100)rows.shift();
+        }, {capture:true,passive:true});
+      }
+      try { new PerformanceObserver((list) => { for (const entry of list.getEntries()) if (entry.interactionId) window.__rwnInputTimings.push({type:entry.name,duration:entry.duration,inputDelay:entry.processingStart-entry.startTime}); }).observe({type:'event',durationThreshold:16,buffered:true}); } catch {}
+      try { new PerformanceObserver((list) => { for (const entry of list.getEntries()) window.__rwnLongTasks.push({ start: entry.startTime, duration: entry.duration }); }).observe({ type: 'longtask', buffered: true }); } catch {}
+    ` });
     await navigate(client, HOST);
 
     const ready = await evaluate(client, `new Promise((resolve) => {
@@ -167,7 +233,9 @@ async function run() {
       check();
     })`);
     if (!ready) throw new Error("Mobile globe did not initialize.");
+    const readyMs = await evaluate(client, "performance.now()");
 
+    phase = "vertical-scroll";
     const vertical = await canvasGeometry(client);
     if (!vertical.point) throw new Error("No unobstructed WebGL touch point was available.");
     if (vertical.stageTouchAction !== "pan-y" || vertical.canvasTouchAction !== "pan-y") throw new Error(`Map touch policy is not pan-y: ${JSON.stringify(vertical)}`);
@@ -182,8 +250,11 @@ async function run() {
     if (Math.abs(verticalEnd.scrollY - vertical.scrollY) < 30) throw new Error(`Vertical touch did not scroll the page (${vertical.scrollY} -> ${verticalEnd.scrollY}).`);
     if (verticalEnd.moving) throw new Error("Vertical page swipe incorrectly left the globe moving.");
 
+    observations.vertical = verticalEnd;
+    phase = "horizontal-drag";
     const horizontal = await canvasGeometry(client);
     const beforeDigest = await cropDigest(client, horizontal.rect);
+    await evaluate(client, "window.__rwnStartFrameSample('horizontalDrag')");
     await touch(client, "touchStart", [touchPoint(horizontal.point.x, horizontal.point.y)]);
     for (let i = 1; i <= 6; i += 1) {
       await touch(client, "touchMove", [touchPoint(horizontal.point.x + i * 22, horizontal.point.y + 2)]);
@@ -202,6 +273,7 @@ async function run() {
     })()`);
     await touch(client, "touchEnd", []);
     await sleep(320);
+    await evaluate(client, "window.__rwnSamplingFrames=false");
     const afterDigest = await cropDigest(client, horizontal.rect);
     const horizontalEnd = await evaluate(client, `({ scrollY, moving:document.querySelector('.globe-stage')?.classList.contains('is-globe-moving') || false, pinOpacity:Number(getComputedStyle(document.getElementById('pinLayer')).opacity || 0) })`);
     if (Math.abs(horizontalEnd.scrollY - horizontal.scrollY) > 18) throw new Error(`Horizontal globe drag moved the page by ${Math.abs(horizontalEnd.scrollY - horizontal.scrollY)}px.`);
@@ -213,6 +285,8 @@ async function run() {
     if (beforeDigest === afterDigest) throw new Error("Horizontal touch left the rendered globe pixel-identical.");
     if (horizontalEnd.moving || horizontalEnd.pinOpacity < .85) throw new Error(`Touch release did not promptly stabilize service targets: ${JSON.stringify(horizontalEnd)}`);
 
+    observations.horizontal = horizontalEnd;
+    phase = "pinch";
     const pinch = await canvasGeometry(client);
     const zoomBefore = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
     await touch(client, "touchStart", [touchPoint(pinch.point.x - 28, pinch.point.y, 0), touchPoint(pinch.point.x + 28, pinch.point.y, 1)]);
@@ -225,6 +299,53 @@ async function run() {
     const zoomAfter = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
     if (!(zoomAfter > zoomBefore + .08)) throw new Error(`Two-finger spread did not zoom (${zoomBefore} -> ${zoomAfter}).`);
 
+    // Lift one finger, then continue rotating with the other. This used to
+    // retain a stale pinch baseline and leave interaction state stuck.
+    observations.pinch = { zoomBefore, zoomAfter };
+    phase = "pinch-to-drag";
+    const transition = await canvasGeometry(client);
+    await evaluate(client, "window.__rwnStartFrameSample('pinchToDrag')");
+    await touch(client, "touchStart", [touchPoint(transition.point.x - 20, transition.point.y, 0), touchPoint(transition.point.x + 20, transition.point.y, 1)]);
+    await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0), touchPoint(transition.point.x + 35, transition.point.y, 1)]);
+    // Chromium has two native input backends: the legacy path releases the
+    // supplied IDs, while the newer path releases IDs omitted from touchMove.
+    // Verify the DOM event rather than assuming which backend is active.
+    try {
+      await touch(client, "touchEnd", [touchPoint(transition.point.x + 35, transition.point.y, 1)]);
+    } catch (error) {
+      if (!/TouchEnd and TouchCancel must not have any touch points/.test(error.message)) throw error;
+      await touch(client, "touchMove", [touchPoint(transition.point.x - 35, transition.point.y, 0)]);
+    }
+    const remainingTouch = await evaluate(client, "window.__rwnInputTrace.findLast(e=>e.type==='touchend')");
+    if (remainingTouch?.touches?.length !== 1 || remainingTouch.touches[0].id !== 0 || !remainingTouch.changed.includes(1)) throw new Error(`Native one-finger release was not delivered: ${JSON.stringify(remainingTouch)}`);
+    for (let i = 1; i <= 4; i += 1) {
+      await touch(client, "touchMove", [touchPoint(transition.point.x - 35 + i * 18, transition.point.y, 0)]);
+      await sleep(30);
+    }
+    await touch(client, "touchEnd", []);
+    await sleep(900);
+    await evaluate(client, "window.__rwnSamplingFrames=false");
+    if (await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Pinch-to-drag transition left the globe moving.");
+
+    phase = "canvas-touch-picking";
+    // Use the reset globe centre (land in western Africa) for an actual touch
+    // hit-test of the rendered sphere, rather than clicking a DOM marker.
+    await evaluate(client, "document.getElementById('resetGlobe').click()");
+    await sleep(1500);
+    const center = await evaluate(client, `(() => {
+      const c=document.getElementById('globeCanvas'); c.scrollIntoView({block:'center',behavior:'auto'});
+      const r=c.getBoundingClientRect();
+      const candidates=[[.5,.5],[.55,.45],[.6,.45],[.5,.4]].map(([xf,yf])=>({x:r.left+r.width*xf,y:r.top+r.height*yf}));
+      return candidates.find(({x,y})=>document.elementFromPoint(x,y)===c) || null;
+    })()`);
+    if (!center) throw new Error("Globe centre is covered by interface chrome; touch selection cannot be tested.");
+    await touch(client, "touchStart", [touchPoint(center.x, center.y)]);
+    await touch(client, "touchEnd", []);
+    await sleep(1600);
+    const picked = await evaluate(client, "document.querySelector('#globeReadout strong')?.textContent || ''");
+    if (!picked || picked === "World view") throw new Error(`Canvas touch did not select the country or service under it: ${picked}`);
+
+    phase = "deep-zoom";
     const deep = await evaluate(client, `new Promise((resolve) => {
       const button=document.getElementById('zoomIn');
       const started=performance.now();
@@ -234,7 +355,9 @@ async function run() {
         const stage=document.querySelector('.globe-stage');
         const readout=document.getElementById('globeReadout')?.innerText || '';
         const zoom=Number((readout.match(/([0-9.]+)×/) || [0,0])[1]);
-        return { zoom, readout, overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), canvasWidth:canvas?.width||0, stageWidth:stage?.getBoundingClientRect().width||0, close:stage?.classList.contains('is-close-view')||false, detailed:/HD NASA|high-detail boundaries/.test(readout) };
+        const detailStatus=document.getElementById('globeDetailStatus')?.textContent || '';
+        const mobileTextureLoaded=performance.getEntriesByType('resource').some(e=>e.name.endsWith('/earth-blue-marble-mobile.jpg') && e.responseEnd > 0);
+        return { zoom, readout, detailStatus, overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), canvasWidth:canvas?.width||0, stageWidth:stage?.getBoundingClientRect().width||0, close:stage?.classList.contains('is-close-view')||false, detailed:/HD NASA/.test(detailStatus) && mobileTextureLoaded };
       };
       const drive=()=>{
         const state=read();
@@ -253,6 +376,19 @@ async function run() {
     await sleep(450);
     const landscape = await evaluate(client, `(() => { const r=document.querySelector('.globe-stage')?.getBoundingClientRect(); return { overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), width:r?.width||0, height:r?.height||0, viewportWidth:innerWidth }; })()`);
     if (landscape.overflow > 8 || !landscape.width || !landscape.height || landscape.width > landscape.viewportWidth + 8) throw new Error(`Landscape globe layout failed: ${JSON.stringify(landscape)}`);
+    const performanceReport = await evaluate(client, `(() => ({
+      readyMs: ${readyMs},
+      longTasks: window.__rwnLongTasks || [],
+      inputTimings: window.__rwnInputTimings || [],
+      frameIntervals: window.__rwnFrameSamples || {},
+      navigation: performance.getEntriesByType('navigation').map(e=>({responseEnd:e.responseEnd,domContentLoaded:e.domContentLoadedEventEnd,load:e.loadEventEnd})),
+      globeAssets: performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration})),
+      device: {width:390,height:844,emulatedTouch:true,engine:'Chromium'}
+    }))()`);
+    if (performanceReport.globeAssets.some(asset => asset.name.endsWith('/earth-blue-marble-detail.jpg'))) throw new Error("Mobile close view downloaded the 8K desktop texture.");
+    await mkdir("qa-screenshots", { recursive: true });
+    await writeFile("qa-screenshots/globe-touch-performance.json", JSON.stringify(performanceReport, null, 2));
+    console.log(`Globe mobile performance evidence: ${JSON.stringify(performanceReport)}`);
     if (exceptions.length) throw new Error(`Globe touch QA emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -260,7 +396,83 @@ async function run() {
     await mkdir("qa-screenshots", { recursive: true });
     const shot = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     await writeFile("qa-screenshots/globe-touch-mobile.png", Buffer.from(shot.data, "base64"));
-    console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
+    phase = "connected-service-journey";
+    // Continue the same mobile session from exploring the map to finding,
+    // saving, leaving and returning to a service. No real user data is used.
+    await evaluate(client, `(() => {
+      const input=document.getElementById('resourceSearch');
+      input.value='London'; input.dispatchEvent(new Event('input',{bubbles:true}));
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+    })()`);
+    await waitForExpression(client, "document.querySelector('#resourceGrid .result-row-link') && document.getElementById('resourceSearch').value === 'London'", "Search after globe gestures did not settle.");
+    const serviceUrl = await evaluate(client, "document.querySelector('#resourceGrid .result-row-link').href");
+    const serviceId = decodeURIComponent(new URL(serviceUrl).pathname.split('/').pop());
+    await navigate(client, serviceUrl);
+    await waitForExpression(client, "!!document.querySelector('[data-service-save]')", "Service saving control did not load.");
+    await evaluate(client, "document.querySelector('[data-service-save]').click()");
+    if (!await evaluate(client, "document.querySelector('[data-service-save]').getAttribute('aria-pressed') === 'true'")) throw new Error("Service could not be saved after map exploration.");
+    await evaluate(client, "history.back()");
+    await waitForExpression(client, "document.getElementById('resourceSearch')?.value === 'London'", "Back did not restore the search after leaving the map.");
+    await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
+    await sleep(350);
+    const returnedMap = await evaluate(client, `(() => {
+      const canvas=document.getElementById('globeCanvas');
+      const gl=canvas.getContext('webgl2') || canvas.getContext('webgl');
+      const zoom=Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]);
+      return {live:!!gl && !gl.isContextLost() && !document.querySelector('.globe-stage').classList.contains('is-globe-unavailable'),zoom};
+    })()`);
+    if (!returnedMap.live || !returnedMap.zoom) throw new Error(`Returning from a service left the globe unavailable: ${JSON.stringify(returnedMap)}`);
+    await evaluate(client, `document.getElementById('${returnedMap.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
+    await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${returnedMap.zoom}) > .02`, "The restored globe did not respond to zoom after Back.");
+    phase = "real-context-recovery";
+    const lossFixture = await evaluate(client, `(() => {
+      const canvas=document.getElementById('globeCanvas');
+      const gl=canvas.getContext('webgl2') || canvas.getContext('webgl');
+      const extension=gl?.getExtension('WEBGL_lose_context');
+      if(!extension) return {supported:false};
+      const zoom=Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]);
+      extension.loseContext();
+      return {supported:true,zoom,query:document.getElementById('resourceSearch').value};
+    })()`);
+    if (!lossFixture.supported) throw new Error("CI browser cannot exercise real WebGL context loss.");
+    await waitForExpression(client, "document.querySelector('.globe-stage').classList.contains('is-globe-unavailable') && document.getElementById('globeCanvas').getContext('webgl2').isContextLost()", "Real context loss did not expose the recovery state.");
+    await evaluate(client, "document.getElementById('retryGlobe').click()");
+    await waitForExpression(client, "!document.querySelector('.globe-stage').classList.contains('is-globe-unavailable') && !document.getElementById('globeCanvas').getContext('webgl2').isContextLost()", "Retry failed to restore a real lost WebGL context.");
+    await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
+    await evaluate(client, `document.getElementById('${lossFixture.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
+    await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${lossFixture.zoom}) > .02`, "The restored context did not render zoom changes.");
+    if (!await evaluate(client, `document.getElementById('resourceSearch').value === ${JSON.stringify(lossFixture.query)}`)) throw new Error("Context recovery discarded the current search.");
+    const recoveredShot=await client.call("Page.captureScreenshot", {format:"png",fromSurface:true,captureBeyondViewport:false});
+    await writeFile("qa-screenshots/globe-context-recovered.png", Buffer.from(recoveredShot.data,"base64"));
+    observations.realContextRecovery = { passed: true, queryPreserved: true, zoomResponds: true };
+    phase = "saved-return-journey";
+    await navigate(client, `${HOST}/directory#saved`);
+    await waitForExpression(client, `!!document.querySelector('[data-saved-remove="${serviceId}"]')`, "Saved service did not appear in the directory.");
+    await navigate(client, "about:blank");
+    await navigate(client, `${HOST}/directory#saved`);
+    await waitForExpression(client, `!!document.querySelector('[data-saved-remove="${serviceId}"]')`, "Saved service was lost after leaving and returning.");
+    if (exceptions.length) throw new Error(`Mobile service journey emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
+    console.log("Connected mobile journey passed: globe touch interaction → search → service → save → Back restores query → leave and return to Saved.");
+    console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, canvas touch picking, pinch-to-drag recovery, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
+  } catch (error) {
+    if (client) {
+      try {
+        const failure = await evaluate(client, `(() => {
+          const canvas=document.getElementById('globeCanvas');
+          const gl=canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+          const stage=document.querySelector('.globe-stage');
+          return {readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
+        })()`);
+        failure.runtime = await inspectFailedGlobeState(client);
+        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions });
+        await mkdir("qa-screenshots", { recursive: true });
+        await writeFile("qa-screenshots/globe-touch-failure.json", JSON.stringify(failure, null, 2));
+        const shot=await client.call("Page.captureScreenshot", {format:"png",fromSurface:true,captureBeyondViewport:false});
+        await writeFile("qa-screenshots/globe-touch-failure.png", Buffer.from(shot.data,"base64"));
+        console.error(`Globe failure diagnostics: ${JSON.stringify(failure)}`);
+      } catch (diagnosticError) { console.error(`Failure diagnostics unavailable: ${diagnosticError.message}`); }
+    }
+    throw error;
   } finally {
     client?.close();
     await stop(browser);
