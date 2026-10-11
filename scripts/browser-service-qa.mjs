@@ -1,3 +1,4 @@
+import { verifyFooterReflow } from "./qa-footer-reflow.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -352,6 +353,8 @@ async function run() {
       }
       console.log(`Directory layout QA passed at ${width}px: ${JSON.stringify(layout)}`);
     }
+
+    await verifyFooterReflow({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
 
     console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, one clear Directions path, phone contact, current-source verification, directory search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
   } finally {

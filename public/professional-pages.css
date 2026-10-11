@@ -251,6 +251,17 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .legal-footer a { color:#b8c8cb; font-size:.68rem; text-decoration:none; }
 .legal-footer a:hover,
 .legal-footer a:focus-visible { color:#fff; text-decoration:underline; text-underline-offset:3px; }
+/* Keep shared footer links within their tracks, then reflow before columns crowd. */
+.legal-footer.rwn-unified-footer { grid-template-columns:minmax(0,1.2fr) repeat(3,minmax(0,.8fr)); }
+.legal-footer.rwn-unified-footer > * { min-width:0; overflow-wrap:anywhere; }
+.legal-footer.rwn-unified-footer nav { display:grid; grid-template-columns:minmax(0,1fr); justify-content:start; gap:.42rem; }
+.legal-footer.rwn-unified-footer nav strong { color:#eef3f2; font-size:.66rem; }
+@media (max-width:900px) {
+  .legal-footer.rwn-unified-footer { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:650px) {
+  .legal-footer.rwn-unified-footer { grid-template-columns:minmax(0,1fr); }
+}
 .professional-need-links { grid-column:1/-1; display:flex; flex-wrap:wrap; justify-content:flex-start !important; gap:.45rem .9rem !important; padding-top:1rem; border-top:1px solid rgba(255,255,255,.1); }
 .professional-need-links strong { width:100%; color:#eef3f2; font-size:.65rem; }
 .professional-need-links a { color:#aebfc3; }
