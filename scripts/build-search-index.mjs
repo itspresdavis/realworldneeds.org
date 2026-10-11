@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
+import { sourceClosureNotice } from "../src/utils/source-status.js";
 
 const normalize = (value) => String(value || "")
   .normalize("NFKD")
@@ -87,13 +88,14 @@ const records = resources.map((resource, index) => {
     lat: Number.isFinite(resource.lat) ? resource.lat : null,
     lng: Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,
+    ...(sourceClosureNotice(resource) ? { sourceStatus: sourceClosureNotice(resource) } : {}),
     search
   };
 });
 
 await mkdir("dist/data", { recursive: true });
 await writeFile("dist/data/search-index.json", `${JSON.stringify({
-  schemaVersion: "1.3",
+  schemaVersion: "1.4",
   resourceCount: records.length,
   privacy: "Static search index. Search terms remain in the visitor's browser and are not included in requests.",
   records,

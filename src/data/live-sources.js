@@ -58,11 +58,11 @@ export const sourceRegistry = [
     sourceUrl: "https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank",
     mode: "reviewed-official-network-snapshot",
     updateFrequency: "Refreshable from the current official Trussell finder; RWN's generator fails closed if the source becomes materially incomplete or changes format.",
-    recordCount: 1398,
-    sourceReportedRecordsAtAudit: 1408,
-    sourceParsedRecordsAtAudit: 1406,
-    excludedForPublicationAtAudit: 8,
-    auditedAt: "2026-08-07",
+    recordCount: 1373,
+    sourceReportedRecordsAtAudit: 1390,
+    sourceParsedRecordsAtAudit: 1388,
+    excludedForPublicationAtAudit: 15,
+    auditedAt: "2026-10-10",
     fields: ["Trussell-published coordinates", "public address", "town and postcode", "phone and email when supplied", "referral route", "collection or delivery status", "provider page"],
     reuseBasis: "Official Trussell finder snapshot with record-level UUIDs and attribution. RWN excludes hidden-address records and records that fail exact-location or publication checks."
   }

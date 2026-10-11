@@ -179,3 +179,20 @@ a:hover { color: #055f34; }
   .legal-layout { display: block; width: 100%; padding: 1rem 0; }
   .directory-record { break-inside: avoid; }
 }
+
+/* Source-reported closures remain visible before actions at every viewport size. */
+aside.source-status-notice {
+  display: block; grid-column: 1 / -1; min-width: 0;
+  margin: .65rem 0; padding: .85rem 1rem;
+  border: 1px solid #9b6827; border-left-width: 4px; border-radius: 4px;
+  background: #fff4df; color: #50340d; font-size: .875rem; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+aside.source-status-notice > strong { display: block; color: #50340d; font-size: 1rem; }
+aside.source-status-notice > p { margin: .25rem 0; color: #50340d; font-size: .875rem; line-height: 1.5; }
+aside.source-status-notice > a { display: inline-flex; align-items: center; min-height: 44px; color: #50340d; text-decoration: underline; }
+aside.source-status-notice > a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+@media (forced-colors: active) { aside.source-status-notice { border: 2px solid CanvasText; } }
+
+.directory-global-result-wrap.has-source-status { grid-template-columns: minmax(0, 1fr); }
+.directory-global-result-wrap.has-source-status .directory-global-result-actions { justify-content: flex-start; }

@@ -3,6 +3,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
+import { sourceClosureNotice } from "../src/utils/source-status.js";
 
 const SITE_ORIGIN = "https://www.realworldneeds.org";
 const STATIC_WITHOUT_DATA_LASTMOD = ["/privacy", "/terms", "/accessibility", "/editorial-policy"];
@@ -38,7 +39,7 @@ async function walkHtml(directory) {
 
 async function directoryAssetRelease() {
   const hash = createHash("sha256");
-  for (const path of ["dist/directory.js", "dist/directory-enhancements.css", "dist/legal.css"]) {
+  for (const path of ["dist/directory.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
     hash.update(path);
     hash.update(await readFile(path));
   }
@@ -59,7 +60,7 @@ function haversineKm(a, b) {
 function relatedResources(resource) {
   const sourceTypes = new Set(allTypes(resource));
   return resources
-    .filter((candidate) => candidate.id !== resource.id)
+    .filter((candidate) => candidate.id !== resource.id && !sourceClosureNotice(candidate))
     .map((candidate) => {
       const sameCountry = candidate.country === resource.country;
       const sameCity = sameCountry && candidate.city && resource.city && candidate.city === resource.city;
@@ -187,6 +188,13 @@ function replaceUrlLastmod(sitemap, path, date) {
 }
 
 const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"));
+// Keep the shipped entry self-contained: an older offline worker can refresh
+// directory.js before it successfully installs a new complete offline release.
+const directoryEntry = await readFile("dist/directory.js", "utf8");
+const resultRenderer = await readFile("dist/directory-results.js", "utf8");
+const rendererImport = 'import { createResultRow } from "./directory-results.js";';
+if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
+await writeFile("dist/directory.js", `${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${directoryEntry.replace(rendererImport, "")}`);
 const directoryRelease = await directoryAssetRelease();
 releaseInfo.directoryRelease = directoryRelease;
 await writeFile("dist/data/release.json", `${JSON.stringify(releaseInfo, null, 2)}\n`);

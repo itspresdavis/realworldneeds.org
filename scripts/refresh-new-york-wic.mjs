@@ -56,7 +56,8 @@ const records = rows.flatMap((row) => {
     sourceDetail: "The state WIC dataset publishes the site name, address, phone, site type, counties served, and map location; it is posted on a quarterly schedule.",
     datasetId: "new-york-wic-sites",
     sourceRecordId: clean(row.site_number),
-    sourceUpdatedAt: "2026-04-30",
+    // This importer does not fetch a dataset update timestamp. Leave it unknown.
+    // lastChecked below is the fetch date, not the source's publication date.
     verificationMethod: "official-open-data-snapshot",
     coordinateNote: "Coordinates are published in the New York State WIC Program Site Information dataset.",
     lastChecked: REVIEW_DATE
