@@ -1,3 +1,4 @@
+import { phoneMarkup } from "./utils/phone.js";
 import * as THREE from "/vendor/three.module.js";
 import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
 import { globeHasMotion, globePointVisible, frameBufferMatches } from "./utils/globe-rendering.js";
@@ -840,7 +841,7 @@ function renderResourcePanel() {
           <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${resource.costNote}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
           <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
-          ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
+          ${resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : ""}
           ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${resource.eligibility}</dd></div>` : ""}
           ${resource.validFrom && resource.validThrough ? `<div><dt>Active dates</dt><dd>${checkedDate(resource.validFrom)}–${checkedDate(resource.validThrough)}</dd></div>` : ""}
           ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}

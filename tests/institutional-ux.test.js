@@ -60,7 +60,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.match(client, /MAX_RESULTS\s*=\s*60/);
   assert.match(client, /Escape/);
   for (const record of searchIndex.records.slice(0, 10)) {
-    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "place", "search"].sort());
+    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "phoneLinks", "place", "search"].sort());
   }
   const usIndex = searchIndex.records.findIndex((record) => record.country === "United States");
   assert.ok(usIndex >= 0);

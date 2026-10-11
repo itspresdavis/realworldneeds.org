@@ -1,10 +1,7 @@
 import { resources } from "./data/resources.js";
+import { phoneLinks } from "./utils/phone.js";
 
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
-
-function cleanPhone(value) {
-  return String(value || "").replace(/[^+\d]/g, "");
-}
 
 function directionsUrl(resource) {
   const coordinate = `${resource.lat},${resource.lng}`;
@@ -52,9 +49,9 @@ function enhanceCard(article) {
   actions.setAttribute("aria-label", `Actions for ${resource.name}`);
 
   if (resource.kind === "direct") {
-    if (resource.phone) {
-      const phone = cleanPhone(resource.phone);
-      if (phone) actions.append(createAction("Call", `tel:${phone}`, `Call ${resource.name}`, { primary: true }));
+    const phones = phoneLinks(resource.phone);
+    for (const { label, href } of phones) {
+      actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
     if (Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
       actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));

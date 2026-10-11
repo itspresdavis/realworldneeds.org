@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
@@ -134,7 +135,7 @@ for (const online of [true, false]) {
     const script = await read("public/directory-results.js");
     const context = vm.createContext({ document: { createElement: element }, navigator: { onLine: online } });
     vm.runInContext(`${script.replace("export const createResultRow", "const createResultRow")}\nglobalThis.render = createResultRow;`, context);
-    const record = { ...closed, place: "Coventry, United Kingdom", categoryLabels: ["Food"], checked: closed.lastChecked, sourceStatus: sourceClosureNotice(closed) };
+    const record = { ...closed, phoneLinks: phoneLinks(closed.phone), place: "Coventry, United Kingdom", categoryLabels: ["Food"], checked: closed.lastChecked, sourceStatus: sourceClosureNotice(closed) };
     const wrap = context.render(record, { id: "offline" });
     assert.equal(wrap.children[0].tag, "a");
     assert.equal(wrap.children[1].tag, "aside");

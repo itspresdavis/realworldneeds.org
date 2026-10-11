@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -110,9 +111,12 @@ function accessibilityMarkup(resource) {
 
 function serviceNextStepMarkup(resource) {
   const links = [`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`];
-  if (resource.phone) {
-    const number = resource.phone.replace(/[^+\d]/g, "");
-    links.push(`<a href="tel:${escapeHtml(number)}"><strong>Call</strong><span>${escapeHtml(resource.phone)}</span></a>`);
+  const phones = phoneLinks(resource.phone);
+  const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
+    ? `<span class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`
+    : "";
+  for (const { label, href } of phones) {
+    links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
   }
   if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
     const coordinate = `${resource.lat},${resource.lng}`;
@@ -120,7 +124,7 @@ function serviceNextStepMarkup(resource) {
     links.push(`<a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Open location</span></a>`);
   }
   links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong></div><div>${links.join("")}</div></nav>`;
+  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong>${phoneContext}</div><div>${links.join("")}</div></nav>`;
 }
 
 function assetLinks(release, includeScript) {
