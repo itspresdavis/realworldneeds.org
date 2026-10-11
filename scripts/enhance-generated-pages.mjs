@@ -41,7 +41,7 @@ async function walkHtml(directory) {
 
 async function directoryAssetRelease() {
   const hash = createHash("sha256");
-  for (const path of ["dist/directory.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
+  for (const path of ["dist/directory.js", "dist/directory-startup.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
     hash.update(path);
     hash.update(await readFile(path));
   }
@@ -129,7 +129,7 @@ function serviceNextStepMarkup(resource) {
 }
 
 function assetLinks(release, includeScript) {
-  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
+  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
 }
 
 function directorySearchMarkup(scope) {

@@ -81,7 +81,7 @@ test("an older pending search cannot replace newer input or reset state", async 
   let renderCalls = 0;
   const pending = new Promise((done) => { resolve = done; });
   const f = vm.createContext({
-    input: { value: "New York" }, activeCategory: "", generation: 0,
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false,
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, loadCatalog: () => pending,
     syncCategoryLabels: () => { renderCalls += 1; }
@@ -117,7 +117,7 @@ test("a failed older search cannot clear newer results after input changes or re
   let clearCalls = 0;
   const pending = new Promise((_, fail) => { reject = fail; });
   const f = vm.createContext({
-    input: { value: "New York" }, activeCategory: "", generation: 0,
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false,
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }
   });

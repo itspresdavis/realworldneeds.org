@@ -1,4 +1,5 @@
 import { verifyDirectoryDiscovery } from "./qa-directory-discovery.mjs";
+import { verifyDirectoryStartup } from "./qa-directory-startup.mjs";
 import { verifyLocalDirectorySearch } from "./qa-local-search.mjs";
 import { verifyFooterReflow } from "./qa-footer-reflow.mjs";
 import { verifyServiceFacts } from "./qa-service-facts.mjs";
@@ -364,6 +365,7 @@ async function run() {
 
     await verifyDirectorySearchRelevance({ client, host: HOST, navigate, evaluate, capture });
     await verifyDirectoryDiscovery({ client, host: HOST, navigate, evaluate, capture });
+    await verifyDirectoryStartup({ client, host: HOST, navigate, evaluate, capture });
     await verifyLocalDirectorySearch({ client, host: HOST, payload, navigate, evaluate, capture });
     await verifyFooterReflow({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
 

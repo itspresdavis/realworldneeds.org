@@ -3,6 +3,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function verifyDirectoryDiscovery({ client, host, navigate, evaluate, capture }) {
   const state = () => evaluate(client, `(() => ({
+    ready: Boolean(document.querySelector('.directory-global-results') && document.querySelector('[data-directory-category][aria-pressed="true"]')),
     query: document.querySelector('[data-directory-query]')?.value,
     country: document.querySelector('[data-directory-country]')?.value,
     category: document.querySelector('[data-directory-category][aria-pressed="true"]')?.textContent,
@@ -122,13 +123,13 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
   await wait(s => s.country === undefined && s.empty?.includes('browse global resource finders'), 'Scoped fallback is missing');
   await capture(client, 'directory-discovery-scoped-empty.png');
   await click('.directory-global-empty a[href="/directory"]');
-  await wait(s => new URL(s.href).pathname === '/directory' && s.query === '' && s.rows.length === 0, 'Scoped full-directory recovery retained the failed search');
+  await wait(s => new URL(s.href).pathname === '/directory' && s.ready && s.query === '' && s.rows.length === 0, 'Scoped full-directory recovery retained the failed search');
   await navigate(client, `${host}/directory/global`);
   await type('zzzz-no-service-here');
   await wait(s => Boolean(s.empty), 'Global scoped empty state is missing');
   if (await evaluate(client, `Boolean(document.querySelector('.directory-global-empty a[href="/directory/global"]'))`)) throw new Error('Global resource directory offers a self-restoring link');
   await click('.directory-global-empty a[href="/directory"]');
-  await wait(s => s.query === '' && s.country === '', 'Global scoped recovery did not broaden to the directory');
+  await wait(s => new URL(s.href).pathname === '/directory' && s.ready && s.query === '' && s.country === '', 'Global scoped recovery did not broaden to the directory');
   await type('Drinking fountains for London');
   const finder = await wait(s => s.rows.length > 0, 'Finder example did not match');
   if (!finder.rows.some(row => row.text.includes('Help finder or referral · check coverage'))) throw new Error('A coverage finder appears to be a service location');
