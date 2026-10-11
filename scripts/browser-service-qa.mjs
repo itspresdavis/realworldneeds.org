@@ -303,6 +303,56 @@ async function run() {
       throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions })}`);
     }
 
+    // Long names, readable metadata, and action groups must reflow together.
+    // Include the 486px regression width and the tablet breakpoint, not only phones.
+    for (const width of [320, 390, 486, 500, 760, 900, 1440]) {
+      await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
+      await navigate(client, `${HOST}/directory`);
+      const layout = await evaluate(client, `(async () => {
+        const input = document.querySelector("[data-directory-query]");
+        input.value = "WIC";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          if (document.querySelectorAll(".directory-global-result-wrap").length >= 60) break;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        const rows = [...document.querySelectorAll(".directory-global-result-wrap")];
+        const links = rows.map((row) => row.querySelector(".directory-global-result"));
+        const actions = rows.flatMap((row) => [...row.querySelectorAll(".directory-global-result-actions a")]);
+        const sizes = [...document.querySelectorAll(".directory-global-result small, .directory-global-result span span, .directory-search-tools__meta")].map((node) => parseFloat(getComputedStyle(node).fontSize));
+        return {
+          width: innerWidth,
+          rows: rows.length,
+          inputSize: parseFloat(getComputedStyle(input).fontSize),
+          minimumTextSize: Math.min(...sizes),
+          browseMetadataSize: Math.min(...[...document.querySelectorAll(".directory-record header span, .directory-record header time")].map((node) => parseFloat(getComputedStyle(node).fontSize))),
+          minimumActionHeight: Math.min(...actions.map((node) => node.getBoundingClientRect().height)),
+          clippedTitles: links.filter((node) => node.scrollWidth > node.clientWidth + 1 || getComputedStyle(node.querySelector("strong")).whiteSpace === "nowrap").length,
+          squeezedTabletRows: innerWidth > 650 && innerWidth <= 900 ? rows.filter((row) => row.querySelector("nav").getBoundingClientRect().top < row.querySelector(".directory-global-result").getBoundingClientRect().bottom - 1).length : 0,
+          overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+        };
+      })()`);
+      if (layout.rows !== 60 || layout.inputSize < 16 || layout.minimumTextSize < 13 || layout.browseMetadataSize < 13 || layout.minimumActionHeight < 44 || layout.clippedTitles || layout.squeezedTabletRows || layout.overflow > 1) {
+        throw new Error(`Directory readability/reflow failed: ${JSON.stringify(layout)}`);
+      }
+      await capture(client, `directory-layout-${width}-search.png`);
+      await evaluate(client, `document.querySelector(".directory-global-results").scrollIntoView({ block: "start" })`);
+      await capture(client, `directory-layout-${width}-results.png`);
+      const repeat = await evaluate(client, `(() => {
+        const input = document.querySelector("[data-directory-query]");
+        const before = document.querySelectorAll(".directory-global-result-wrap").length;
+        document.querySelector("[data-directory-more]").click();
+        const after = document.querySelectorAll(".directory-global-result-wrap").length;
+        const focusedNext = document.activeElement === document.querySelectorAll(".directory-global-result")[before];
+        document.querySelector("[data-directory-clear]").click();
+        return { before, after, focusedNext, cleared: input.value === "", inputFocused: document.activeElement === input, resultsHidden: document.querySelector(".directory-global-results").hidden };
+      })()`);
+      if (repeat.before !== 60 || repeat.after !== 120 || !repeat.focusedNext || !repeat.cleared || !repeat.inputFocused || !repeat.resultsHidden) {
+        throw new Error(`Directory repeated search/focus failed (${width}px): ${JSON.stringify(repeat)}`);
+      }
+      console.log(`Directory layout QA passed at ${width}px: ${JSON.stringify(layout)}`);
+    }
+
     console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, one clear Directions path, phone contact, current-source verification, directory search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
   } finally {
     client?.close();
