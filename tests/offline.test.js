@@ -133,7 +133,7 @@ test("offline installation activates only after every required core asset is cac
   assert.equal(result.error, null);
   assert.equal(result.deleted, false);
   assert.equal(result.skipped, true, "a complete cache can activate immediately");
-  assert.equal(result.stored.size, 9, "all required offline assets must be stored");
+  assert.equal(result.stored.size, 12, "all required offline assets must be stored");
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {
@@ -168,3 +168,12 @@ test("built site publishes the offline worker", async () => {
   assert.match(sw, /brand\/rwn-logo-192\.png/);
   assert.match(sw, /site\.webmanifest/);
 });
+
+for (const failedPath of ["/saved-loader.js", "/saved-services.js", "/saved-services.css"]) {
+  test(`offline release does not activate with missing saved-list asset ${failedPath}`, async () => {
+    const result = await runInstall({ failedPath });
+    assert.ok(result.error);
+    assert.equal(result.skipped, false);
+    assert.equal(result.deleted, true);
+  });
+}

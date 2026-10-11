@@ -1,0 +1,21 @@
+/* Saved listings reuse the text directory; no map or account is required. */
+.saved-services:not(:target) { display: none; }
+.has-saved-view > :not(.saved-services):not(#offlineDirectoryNotice):not([aria-label="Breadcrumb"]) { display: none !important; }
+.saved-services { margin: .5rem 0 2rem; scroll-margin-top: 6rem; }
+.saved-services__heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; }
+.saved-services h2 { margin: 0; font: 700 clamp(1.8rem, 4vw, 2.5rem)/1.15 Georgia, serif; color: #153c30; }
+.saved-services__heading a { display: inline-flex; align-items: center; min-height: 44px; color: #24583e; font-weight: 650; }
+.saved-services__privacy, .saved-services [data-saved-summary], .saved-services [data-saved-status] { max-width: 48rem; color: #405a50; font-size: .9rem; line-height: 1.6; }
+.saved-services__tools { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.saved-services button { min-height: 44px; padding: .6rem .85rem; border: 1px solid #8baea0; border-radius: 6px; background: #fff; color: #24583e; font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer; }
+.saved-services button:hover { background: #edf7ef; }
+.saved-services button:focus-visible, .saved-services a:focus-visible { outline: 3px solid #24583e; outline-offset: 3px; }
+.saved-services [data-saved-confirmation] { margin: 1rem 0; padding: 1rem; border: 1px solid #8baea0; background: #f8fcf5; }
+.saved-services [data-saved-confirmation] p { margin-top: 0; }
+.saved-service-row { padding: 1rem 0; border-bottom: 1px solid #d8e0dd; }
+.saved-service-row > button { margin-top: .6rem; justify-self: start; }
+.directory-global-result > span, .directory-global-result strong { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+@media (forced-colors: active) { .saved-services button, .saved-services [data-saved-confirmation] { border: 1px solid CanvasText; } }
+@media print { .saved-services__tools, .saved-services button, .saved-services [data-saved-confirmation] { display: none !important; } }
+
+.directory-global-result-actions [hidden] { display: none !important; }

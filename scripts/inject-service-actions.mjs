@@ -2,6 +2,13 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+// Inline the small shared storage helper so service actions have no extra
+// runtime dependency and share the exact finder storage format.
+const actionSource = await readFile("dist/service-actions.js", "utf8");
+const privacySource = (await readFile("src/utils/privacy.js", "utf8")).replaceAll("export ", "");
+if (!actionSource.startsWith("import { SAVED_RESOURCES_KEY,")) throw new Error("Service storage import was not found.");
+await writeFile("dist/service-actions.js", `${privacySource}\n${actionSource.replace(/^import[^\n]+\n/, "")}`);
+
 const hash = createHash("sha256");
 for (const path of ["dist/service-actions.js", "dist/service-actions.css"]) {
   hash.update(path);

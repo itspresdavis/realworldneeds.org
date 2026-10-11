@@ -133,7 +133,7 @@ if (notice) {
 
   document.addEventListener("click", (event) => {
     if (!offline) return;
-    const link = event.target.closest?.(".directory-global-result");
+    const link = event.target.closest?.(".directory-global-result, .directory-global-result-actions .is-details");
     if (!link) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -148,6 +148,8 @@ if (notice) {
   });
   const results = document.querySelector(".directory-global-results");
   if (results) observer.observe(results, { childList: true, subtree: true });
+  const savedList = document.querySelector("[data-saved-list]");
+  if (savedList) observer.observe(savedList, { childList: true, subtree: true });
 
   window.addEventListener("online", probe);
   window.addEventListener("offline", () => setOffline(true));

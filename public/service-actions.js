@@ -1,15 +1,22 @@
+import { SAVED_RESOURCES_KEY, readSavedResources, setResourceSaved } from "../src/utils/privacy.js";
+
 const nextSteps = document.querySelector(".service-next-steps");
 
 if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const utility = document.createElement("section");
   utility.className = "service-utility-actions";
   utility.dataset.serviceUtility = "";
-  utility.setAttribute("aria-label", "Share, copy, or print this service listing");
+  utility.setAttribute("aria-label", "Save, share, copy, or print this service listing");
   utility.innerHTML = `
     <div class="service-utility-actions__intro">
       <span>Listing tools</span>
-      <strong>Share, copy, or print this listing.</strong>
+      <strong>Keep this listing handy.</strong>
       <small>These actions happen on your device. RWN does not receive who you share with or the text you copy.</small>
+    </div>
+    <div class="service-save-actions">
+      <button type="button" data-service-save aria-pressed="false" aria-describedby="service-save-privacy">Save</button>
+      <a href="/directory#saved">View saved services</a>
+      <small id="service-save-privacy">Saved only in this browser on this device. Anyone using this browser can see your list. You can remove it anytime.</small>
     </div>
     <div class="service-utility-actions__buttons">
       <button type="button" data-service-share>Share</button>
@@ -24,6 +31,35 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const title = document.querySelector("#service h1")?.textContent?.trim() || document.title;
   const place = document.querySelector("#service .legal-meta span")?.textContent?.trim() || "";
   const officialSource = nextSteps.querySelector("a.is-primary")?.href || "";
+
+  const saveButton = utility.querySelector("[data-service-save]");
+  const serviceId = document.querySelector("#service .directory-record[id]")?.id;
+  const syncSaved = () => {
+    try {
+      const saved = readSavedResources().has(serviceId);
+      saveButton.setAttribute("aria-pressed", String(saved));
+      saveButton.textContent = saved ? "Remove from saved" : "Save";
+      saveButton.disabled = !serviceId;
+    } catch {
+      saveButton.disabled = true;
+      status.textContent = "Saving is unavailable in this browser. You can still copy or print this listing.";
+    }
+  };
+  saveButton.addEventListener("click", () => {
+    try {
+      const saved = readSavedResources().has(serviceId);
+      setResourceSaved(serviceId, !saved);
+      syncSaved();
+      status.textContent = saved ? "Removed from your saved services." : "Saved only in this browser. Use View saved services to return to your list.";
+    } catch {
+      status.textContent = "Your saved list could not be changed. Check this browser’s storage settings and try again.";
+    }
+  });
+  window.addEventListener("pageshow", syncSaved);
+  window.addEventListener("storage", (event) => {
+    if (event.key === SAVED_RESOURCES_KEY || event.key === null) syncSaved();
+  });
+  syncSaved();
 
   const publicDetails = () => {
     const rows = [...document.querySelectorAll("#service .directory-record dl > div")]
