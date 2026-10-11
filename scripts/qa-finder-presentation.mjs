@@ -1,7 +1,10 @@
+import { writeFile } from "node:fs/promises";
+
 /** Rendered contracts for the complete finder, not only the mobile breakpoint. */
 export async function verifyFinderPresentation({ client, host, navigate, evaluate, capture }) {
   const close = (a, b) => Math.abs(a - b) <= 1;
-  for (const width of [320, 390, 500, 600, 760, 900, 901, 1024, 1180, 1440]) {
+  const designEvidence = [];
+  for (const width of [320, 390, 500, 600, 760, 768, 900, 901, 1024, 1180, 1440]) {
     const height = width <= 600 ? 844 : 1000;
     await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false, screenWidth: width, screenHeight: height });
     await navigate(client, `${host}/`);
@@ -21,6 +24,13 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         return { x: box.x, y: box.y, width: box.width, height: box.height, right: box.right, bottom: box.bottom };
       };
       return {
+        surface: rect('.finder-surface'),
+        search: rect('#resourceSearch'),
+        primaryAction: rect('#jumpResults'),
+        heading: rect('.finder-intro h1'),
+        titleColor: getComputedStyle(document.querySelector('.finder-intro h1')).color,
+        surfaceColor: getComputedStyle(document.querySelector('.finder-surface')).backgroundColor,
+        formOrder: [...document.querySelector('.finder-surface').children].map(node => node.id || node.className),
         width: document.documentElement.clientWidth,
         resultCountHeight: document.querySelector('#matchingResultCount').getBoundingClientRect().height,
         scrollWidth: document.documentElement.scrollWidth,
@@ -33,6 +43,13 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         sections: ['.about-rwn', '.source-band', '.mission-steps', '.principle-grid'].map((selector) => ({selector,...rect(selector)}))
       };
     })()`);
+    designEvidence.push({width, ...view});
+    if (width <= 390 && (view.search.bottom > 420 || view.primaryAction.bottom > 640)) {
+      throw new Error(`Phone search or main action is buried below the useful first screen at ${width}px: ${JSON.stringify(view)}`);
+    }
+    if (view.surfaceColor !== 'rgb(255, 254, 251)' || view.titleColor !== 'rgb(249, 248, 239)' || view.formOrder[0] !== 'finder-search-label' || !view.formOrder.includes('jumpResults')) {
+      throw new Error(`Homepage surface or grouping inherited the wrong theme at ${width}px: ${JSON.stringify(view)}`);
+    }
     if (view.resultCountHeight > 24) throw new Error(`Matching-result count wraps at ${width}px.`);
     if (view.scrollWidth > view.width + 1 || view.sections.some((section) => section.x < -1 || section.right > view.width + 1)) {
       throw new Error(`Finder or explanation section overflows at ${width}px: ${JSON.stringify(view)}`);
@@ -44,7 +61,7 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
     if (view.stage.height > 625 || view.stage.height < 350 || view.canvas.height < 200 || view.targets.length !== 4 || view.targets.some((button) => !close(button.width, 44) || !close(button.height, 44)) || view.controls.height > 180) {
       throw new Error(`Map framing or controls are not compact at ${width}px: ${JSON.stringify(view)}`);
     }
-    if ([320, 390, 901, 1440].includes(width)) {
+    if ([320, 390, 768, 901, 1180, 1440].includes(width)) {
       await capture(client, `finder-presentation-${width}.png`);
       await evaluate(client, `document.querySelector('.globe-stage').scrollIntoView({block:'center'})`);
       await capture(client, `finder-map-${width}.png`);
@@ -124,5 +141,6 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       }
     }
   }
-  console.log('Finder presentation QA passed: 10 widths, real globe framing, aligned marker layers, compact controls, and no page overflow.');
+  await writeFile('qa-screenshots/homepage-design-geometry.json', JSON.stringify(designEvidence, null, 2));
+  console.log('Finder presentation QA passed: 11 widths, real globe framing, aligned marker layers, compact controls, and no page overflow.');
 }

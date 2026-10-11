@@ -17,7 +17,7 @@ test("explanation sections reset inherited two-column layouts at every width", a
   const browser = await readFile("scripts/browser-institutional.mjs", "utf8");
   const contract = await readFile("scripts/qa-finder-presentation.mjs", "utf8");
   assert.match(browser, /await verifyFinderPresentation\(/);
-  assert.match(contract, /\[320, 390, 500, 600, 760, 900, 901, 1024, 1180, 1440\]/);
+  assert.match(contract, /\[320, 390, 500, 600, 760, 768, 900, 901, 1024, 1180, 1440\]/);
   assert.match(contract, /Real WebGL is required/);
 });
 

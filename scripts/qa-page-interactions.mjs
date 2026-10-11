@@ -257,7 +257,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       })()`);
       assert(!controls.overflow && controls.targets.every(target=>target.w>=43.5&&target.h>=43.5), 'Finder control target or reflow contract failed', controls);
       assert(controls.location.length===2 && Math.abs(controls.location[0].top-controls.location[1].top)<=1, 'Location and Clear actions unnecessarily split into two rows', controls.location);
-      const contrast = await controlContrast('#clearSearch,.quick-need,.location-button,.location-clear,.filter-heading button,.layer-toggle,.access-switch button,.directory-tool,.outline-button--dark,.region-menu select,.layer-toggle strong');
+      const contrast = await controlContrast('#clearSearch,.quick-need,.location-button,.location-clear,.filter-heading button,.layer-toggle,.access-switch button,.directory-tool,.outline-button--dark,.region-menu select,.layer-toggle strong,.finder-search-label,#resourceSearch,.finder-intro h1,.finder-intro p,.finder-safety,.finder-safety strong,.globe-meta strong,.atlas-key,.atlas-key small,#jumpResults,#matchingResultCount,.globe-controls button');
       evidence.push({label:'Enabled finder control contrast at '+width+'px',contrast});
       assert(contrast.length>10&&contrast.every(item=>item.ratio>=4.5&&Number(item.opacity)===1), 'Enabled finder controls inherit unreadable light-theme text', contrast);
       assert(contrast.find(item=>item.id==='toggleAll')?.fontSize>=13, 'Filter Clear label is too small', contrast);

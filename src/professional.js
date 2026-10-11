@@ -52,7 +52,7 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "A meal. A safe place to sleep. Someone who can help. Find practical support, with contact details and sources you can check."
+    "Find food, shelter and everyday essentials. Clear contact details. Sources you can check."
   );
 
   const status = document.getElementById("locationStatus");
@@ -72,7 +72,7 @@ function rewriteMethodSections() {
   setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
   setText(
     ".about-rwn__heading p",
-    "Finding help can be hard enough. Real World Needs brings essential service information into one place, so you can spend less time searching and more time reaching the people who can help. The provider confirms eligibility and availability."
+    "Find practical support. Review the details. Reach the people who can help. The provider confirms eligibility and availability."
   );
 
   const heading = document.querySelector('.about-rwn__heading');
