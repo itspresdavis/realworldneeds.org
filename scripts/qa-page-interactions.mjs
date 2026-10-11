@@ -18,7 +18,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     return {hash:location.hash,y:scrollY,active:document.activeElement.id,header:header.bottom,target:target?.getBoundingClientRect().top,clearance:parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),smooth:getComputedStyle(document.documentElement).scrollBehavior,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1};
   })()`);
   const settle = (timeoutMs = 5000) => waitForScrollStability({ sample: () => evaluate(client, '({scrollY,scrollX})'), wait, timeoutMs });
-  const arrive = async (condition, label) => {
+  const arrive = async (condition, label, read = inspect, settlePage = true) => {
     const started = Date.now(), deadline = started + 6000;
     const record = {label, trace:[]};
     evidence.push(record);
@@ -37,11 +37,11 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     };
     try {
       while (Date.now() < deadline) {
-        const state = await withinDeadline(inspect);
+        const state = await withinDeadline(read);
         record.trace.push({elapsed:Date.now()-started, ...state});
         if (condition(state)) {
-          record.stability = await withinDeadline(settle);
-          return await withinDeadline(inspect);
+          if (settlePage) record.stability = await withinDeadline(settle);
+          return await withinDeadline(read);
         }
         await wait(Math.min(50, Math.max(0, deadline-Date.now())));
       }
@@ -133,6 +133,9 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     await loadHome();
     await observeArrivals();
     const running = await evaluate(client, `(async () => {
+      window.__rwnMotionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+      window.__rwnMotionPreferenceChanges = [];
+      window.__rwnMotionPreference.addEventListener('change',event=>window.__rwnMotionPreferenceChanges.push({matches:event.matches,at:performance.now()}));
       let timer;
       const started=new Promise((resolve,reject)=>{
         window.__rwnMotionReady=()=>{clearTimeout(timer);resolve()};
@@ -140,12 +143,15 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       });
       scrollTo({top:document.querySelector('#about h2').getBoundingClientRect().top+scrollY-innerHeight+160,behavior:'instant'});
       await started;
-      return {y:scrollY,count:window.__rwnArrivals.length,running:document.getAnimations().some(animation=>animation.playState==='running')};
+      return {y:scrollY,count:window.__rwnArrivals.length,running:document.querySelector('#about h2').getAnimations().some(animation=>animation.playState==='running'),preference:window.__rwnMotionPreference.matches,timeline:document.timeline.currentTime,visibility:document.visibilityState,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))};
     })()`);
-    assert(running.running, 'Preference-change test never observed an active animation', running);
+    assert(running.running && !running.preference, 'Preference-change test never observed an active editorial animation with motion allowed', running);
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
-    await settle();
-    const cancelled = await evaluate(client, `({y:scrollY,cancelled:window.__rwnArrivals.some(item=>item.cancelled),transform:getComputedStyle(document.querySelector('#about h2')).transform})`);
+    // The CDP override acknowledges before the browser renders and dispatches
+    // MediaQueryList change/cancel events. Await those real signals; stationary
+    // scrolling says nothing about whether this preference change was delivered.
+    const cancellationState = () => evaluate(client, `({y:scrollY,matches:window.__rwnMotionPreference.matches,changes:window.__rwnMotionPreferenceChanges,cancelled:window.__rwnArrivals.some(item=>item.cancelled),transform:getComputedStyle(document.querySelector('#about h2')).transform,visibility:document.visibilityState,timeline:document.timeline.currentTime,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))})`);
+    const cancelled = await arrive(state=>state.matches&&state.changes.some(event=>event.matches)&&state.cancelled&&state.transform==='none', 'Live reduced-motion event and cancellation', cancellationState, false);
     evidence.push({label:'Live reduced-motion cancellation',running,cancelled});
     assert(cancelled.cancelled && cancelled.transform==='none' && Math.abs(cancelled.y-running.y)<=1, 'Live reduced motion did not cancel in place', {running,cancelled});
     // Controlled CPU throttle is a resilience check, not a hardware speed claim.
