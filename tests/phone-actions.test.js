@@ -53,6 +53,7 @@ const functionSource = (source, name, next) => source.slice(source.indexOf(`func
 class Element {
   constructor(tag = "div") { this.tag = tag; this.children = []; this.dataset = {}; this.style = { setProperty() {} }; this.classList = { add() {}, toggle() {} }; }
   append(...children) { this.children.push(...children); }
+  contains(element) { return element === this || this.children.some((child) => child.contains(element)); }
   setAttribute(name, value) { this[name] = value; }
   addEventListener() {}
   get childElementCount() { return this.children.length; }
