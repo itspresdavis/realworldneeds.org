@@ -1,4 +1,5 @@
 import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
+import { verifyGlobeInterruptions } from "./qa-globe-interruptions.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -356,6 +357,9 @@ async function run() {
     await sleep(900);
     await evaluate(client, "window.__rwnSamplingFrames=false");
     if (await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Pinch-to-drag transition left the globe moving.");
+
+    phase = "native-gesture-interruptions";
+    await verifyGlobeInterruptions({ client, evaluate, canvasGeometry, sleep, observations });
 
     phase = "canvas-touch-picking";
     // Use the reset globe centre (land in western Africa) for an actual touch
