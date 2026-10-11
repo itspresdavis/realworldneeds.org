@@ -97,17 +97,20 @@ export function prepareResourceSearch(resource) {
   if (!entry) {
     const search = resource.search ?? resourceSearchText(resource);
     const parts = search.split("\n");
+    const country = String(resource.country || "").trim();
+    const place = String(resource.place || "").trim();
+    const countrySuffix = country ? `, ${country}` : "";
+    // Sparse older indexes may provide only a display place. Infer its city
+    // only when the final comma-separated country is actually known.
+    const legacyCity = countrySuffix && place.toLowerCase().endsWith(countrySuffix.toLowerCase())
+      ? place.slice(0, -countrySuffix.length)
+      : "";
     entry = {
       address: parts.length > 1 ? parts[0] : "",
       phrases: parts[2] ?? null,
       name: normalizeSearch(resource.name),
-      city: normalizeSearch(
-        resource.city ??
-          (resource.place === resource.country
-            ? ""
-            : resource.place?.slice(0, -(resource.country.length + 2))),
-      ),
-      country: normalizeSearch(resource.country),
+      city: normalizeSearch(resource.city ?? legacyCity),
+      country: normalizeSearch(country),
       primary: resource.category,
       types: resource.categories || [
         resource.category,

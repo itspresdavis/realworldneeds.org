@@ -6,6 +6,7 @@ import { resources } from "../src/data/resources.js";
 import { createInitialTypeSet, matchesResource } from "../src/utils/geo.js";
 import {
   normalizeSearch,
+  prepareResourceSearch,
   resourceSearchScore as score,
   resourceSearchText,
 } from "../src/utils/search.js";
@@ -33,6 +34,31 @@ const indexRecord = (resource) => ({
   category: resource.category,
   categories: [resource.category, ...(resource.secondaryCategories || [])],
   search: resourceSearchText(resource),
+});
+
+test("sparse legacy directory records derive a city only from a known country suffix", () => {
+  const cases = [
+    ["missing country", { place: "Synthetic test place" }, ""],
+    ["unknown comma-separated country", { place: "London, United Kingdom" }, ""],
+    ["empty country", { place: "Synthetic test place", country: "" }, ""],
+    ["null country", { place: "Synthetic test place", country: null }, ""],
+    ["missing place", { country: "United Kingdom" }, ""],
+    ["country-only place", { place: "United Kingdom", country: "United Kingdom" }, ""],
+    ["known suffix", { place: "London, United Kingdom", country: "United Kingdom" }, "london"],
+    ["trimmed case-insensitive suffix", { place: " London, UNITED KINGDOM ", country: " United Kingdom " }, "london"],
+    ["different suffix", { place: "London, Canada", country: "United Kingdom" }, ""],
+    ["missing comma separator", { place: "London United Kingdom", country: "United Kingdom" }, ""],
+    ["country is not a suffix", { place: "London, United Kingdom office", country: "United Kingdom" }, ""],
+    ["explicit city", { city: "Boston", place: "London, United Kingdom", country: "United Kingdom" }, "boston"],
+    ["explicit empty city", { city: "", place: "London, United Kingdom", country: "United Kingdom" }, ""],
+  ];
+  for (const [label, fields, city] of cases) {
+    const record = { name: "Fixture survivor", category: "food", categoryLabels: ["Food"], search: "fixture survivor food", ...fields };
+    assert.equal(prepareResourceSearch(record).city, city, label);
+    assert.ok(score(record, "fixture") >= 0, `${label}: searchable sparse record`);
+    assert.ok(score(record, "food") >= 0, `${label}: category match`);
+    assert.equal(score(record, "removed"), -1, `${label}: unrelated query`);
+  }
 });
 
 test("completed WIC requires program evidence while Wi and Wick retain prefix recall", () => {
