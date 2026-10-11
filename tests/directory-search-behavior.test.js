@@ -99,7 +99,8 @@ test("an older pending search cannot replace newer input or reset state", async 
 test("shipped directory entry stays self-contained for existing offline workers", async () => {
   const client = await readFile("dist/directory.js", "utf8");
   const { directoryRelease } = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-  assert.match(client, /const createResultRow=/);
+  assert.match(client, /directory-global-result-wrap/);
+  assert.doesNotMatch(client, /from[\s]*["\'].*search\.js/);
   assert.doesNotMatch(client, /import.*directory-results/);
   assert.ok(Buffer.byteLength(client) <= 14_000, "bundled entry must stay inside the existing directory client budget");
   const page = await readFile("dist/directory/index.html", "utf8");

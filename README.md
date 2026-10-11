@@ -73,7 +73,9 @@ CI uploads short-lived QA screenshots from the rendered browser suite.
 
 ## Search and low-connectivity behavior
 
-Homepage search and filters run locally. The text-directory search lazily loads a fixed same-origin static index; the typed query is not placed in that request URL or sent to an RWN endpoint.
+Homepage search and filters run locally. The text-directory search lazily loads a fixed same-origin static index; the typed query is not placed in that request URL or sent to an RWN endpoint. Both surfaces use the same word-start matcher and relevance rules: exact places, program words, and street phrases outrank incidental prefixes. Partial typing remains supported. The recognized complete program query WIC (including W.I.C.) requires an exact WIC token, returning 395 evidenced matches rather than implying that Wick provides WIC. Wi still finds WIC and Wick, and Wick still finds that place; other words keep the ordinary prefix rule. Diacritics, common punctuation, curated need aliases, and multiword provider/address queries are normalized consistently.
+
+Homepage search fields are prepared in bounded idle slices; typing prioritizes the remaining slices and shows preparation feedback while the first search waits, instead of synchronously normalizing the whole catalog. Search history stays in browser history state rather than URLs. The directory entry includes the shared matcher and result renderer in one offline-safe file, with a pinned development-only minifier keeping it under the existing client-size budget. The static index preserves an address phrase, deduplicated search words, and evidence for true multiword aliases, leaving displayed listing fields and source availability notices unchanged.
 
 Supported browsers register a same-origin service worker after page load. The offline cache is deliberately narrow: lightweight public directory assets, the static search index, the manifest, the RWN mark, and visited directory pages. Service-detail pages and RWN API requests are not intentionally cached.
 

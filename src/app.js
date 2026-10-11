@@ -1,3 +1,4 @@
+import { warmSearchIndex } from "./utils/search-warmup.js";
 import { phoneMarkup } from "./utils/phone.js";
 import * as THREE from "/vendor/three.module.js";
 import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
@@ -150,6 +151,10 @@ function finderAccessFromHistory(value) {
 if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
 }
+
+let cancelPendingSearch = () => {};
+let hasPendingSearch = () => false;
+let refreshSearchPreparation = () => {};
 
 const state = {
   query: sanitizeFinderQuery(initialFinderHistory?.query),
@@ -765,8 +770,8 @@ function renderControls() {
   });
   const search = document.getElementById("resourceSearch");
   search.disabled = !aidMode;
-  if (document.activeElement !== search && search.value !== state.query) search.value = state.query;
-  document.getElementById("clearSearch").hidden = !state.query;
+  if (document.activeElement !== search && !hasPendingSearch() && search.value !== state.query) search.value = state.query;
+  document.getElementById("clearSearch").hidden = !search.value;
   document.getElementById("locateMe").disabled = !aidMode;
   renderLocationState();
   document.getElementById("toggleAll").disabled = !aidMode;
@@ -917,6 +922,7 @@ function renderResults() {
     : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type. RWN may not have every service."}</p>${state.viewMode === "aid" ? '<button class="results-empty__reset" id="clearFinderFilters" type="button">Clear search and filters</button>' : ""}</div>`;
   if (matchingResultCount) matchingResultCount.textContent = `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
+  refreshSearchPreparation();
 }
 
 function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
@@ -1071,6 +1077,7 @@ function clearUserLocation() {
 }
 
 function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
+  cancelPendingSearch();
   clearUserLocation();
   state.query = "";
   state.accessMode = "all";
@@ -2254,8 +2261,36 @@ async function loadLandGeometry() {
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
+  hasPendingSearch = () => pendingSearchValue !== state.query;
+  let searchRevision = 0;
   let searchFilterTimer = null;
   let searchHistoryTimer = null;
+  let preparationNoticeTimer = null;
+  const showSearchPreparation = (revision) => {
+    if (searchPreparation.prepared || !pendingSearchValue || pendingSearchValue === state.query) return;
+    const count = document.getElementById("resultCount");
+    const status = document.getElementById("searchStatus");
+    const badge = document.getElementById("matchingResultCount");
+    count.textContent = status.textContent = "Preparing search…";
+    if (badge) badge.textContent = "Preparing…";
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = window.setTimeout(() => {
+      if (revision === searchRevision && !searchPreparation.prepared) {
+        count.textContent = status.textContent = "Search is still preparing. You can keep typing or browse the directory.";
+        if (badge) badge.textContent = "Still preparing…";
+      }
+    }, 3000);
+  };
+  refreshSearchPreparation = () => showSearchPreparation(searchRevision);
+  cancelPendingSearch = () => {
+    searchRevision += 1;
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchFilterTimer = searchHistoryTimer = null;
+    pendingSearchValue = "";
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
+  };
   const commitSearchHistory = () => {
     searchHistoryTimer = null;
     writeFinderHistory("push");
@@ -2264,11 +2299,18 @@ function bindEvents() {
     if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
     searchHistoryTimer = window.setTimeout(commitSearchHistory, 640);
   };
-  const commitPendingSearch = () => {
+  const commitPendingSearch = async () => {
     if (searchFilterTimer !== null) {
       window.clearTimeout(searchFilterTimer);
       searchFilterTimer = null;
     }
+    searchPreparation.prioritize();
+    const revision = searchRevision;
+    showSearchPreparation(revision);
+    await searchPreparation.ready;
+    if (revision !== searchRevision) return;
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
     if (pendingSearchValue !== state.query) {
       state.query = pendingSearchValue;
       updateFilters();
@@ -2277,14 +2319,29 @@ function bindEvents() {
     searchHistoryTimer = null;
     writeFinderHistory("push");
   };
-  const flushSearchFilter = () => {
+  const flushSearchFilter = async () => {
     searchFilterTimer = null;
+    searchPreparation.prioritize();
+    const revision = searchRevision;
+    showSearchPreparation(revision);
+    await searchPreparation.ready;
+    if (revision !== searchRevision) return;
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
     if (pendingSearchValue === state.query) return;
     state.query = pendingSearchValue;
     updateFilters();
     scheduleSearchHistory();
   };
   const scheduleSearchFilter = (value) => {
+    if (value === state.query && preparationNoticeTimer !== null) {
+      cancelPendingSearch();
+      pendingSearchValue = value;
+      updateFilters();
+      return;
+    }
+    searchPreparation.prioritize();
+    searchRevision += 1;
     pendingSearchValue = value;
     if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
     searchFilterTimer = window.setTimeout(flushSearchFilter, 48);
@@ -2292,6 +2349,8 @@ function bindEvents() {
   searchInput.addEventListener("input", (event) => {
     const next = sanitizeFinderQuery(event.target.value);
     if (event.target.value !== next) event.target.value = next;
+    // Cancellation stays available even before the first search is prepared.
+    document.getElementById("clearSearch").hidden = !next;
     scheduleSearchFilter(next);
   });
   searchInput.addEventListener("keydown", (event) => {
@@ -2300,11 +2359,7 @@ function bindEvents() {
       return;
     }
     if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
-    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
-    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
-    searchFilterTimer = null;
-    searchHistoryTimer = null;
-    pendingSearchValue = "";
+    cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
     updateFilters();
@@ -2312,11 +2367,7 @@ function bindEvents() {
   });
   searchInput.addEventListener("blur", commitPendingSearch);
   document.getElementById("clearSearch").addEventListener("click", () => {
-    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
-    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
-    searchFilterTimer = null;
-    searchHistoryTimer = null;
-    pendingSearchValue = "";
+    cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
     searchInput.focus();
@@ -2821,7 +2872,15 @@ function bindEvents() {
   window.addEventListener("resize", () => {
     if (window.innerWidth > 900) closeSiteMenu();
   }, { passive: true });
-  window.addEventListener("popstate", (event) => restoreFinderHistory(event.state));
+  window.addEventListener("popstate", (event) => {
+    const wasPreparing = preparationNoticeTimer !== null;
+    cancelPendingSearch();
+    restoreFinderHistory(event.state);
+    if (wasPreparing && !event.state?.[FINDER_HISTORY_KEY]) updateFilters();
+    pendingSearchValue = state.query;
+    searchInput.value = state.query;
+    document.getElementById("clearSearch").hidden = !state.query;
+  });
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
   const sections = ["finder", "about", "standards"].map((id) => document.getElementById(id));
@@ -2858,6 +2917,7 @@ function bindEvents() {
 shell();
 renderStatic();
 updateFilters();
+const searchPreparation = warmSearchIndex(resources);
 bindEvents();
 writeFinderHistory();
 initThreeGlobe();

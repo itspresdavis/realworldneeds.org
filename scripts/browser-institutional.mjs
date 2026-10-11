@@ -1,10 +1,12 @@
+import { randomQaHttpPort } from "./qa-port.mjs";
 import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
+import { verifyFinderSearchRelevance } from "./qa-search-relevance.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const SERVER_PORT = 4178 + Math.floor(Math.random() * 200);
+const SERVER_PORT = randomQaHttpPort();
 const HOST = `http://127.0.0.1:${SERVER_PORT}`;
 const CDP_PORT = 9228 + Math.floor(Math.random() * 200);
 const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
@@ -219,7 +221,9 @@ async function run() {
 
       input.value = "zzzzqqqq-no-such-service";
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      await wait(320);
+      // First-use search preparation yields in short slices. Wait for the
+      // actual empty state rather than requiring synchronous setup in 320 ms.
+      for (let attempt = 0; attempt < 100 && !document.getElementById("clearFinderFilters"); attempt += 1) await wait(50);
       const reset = document.getElementById("clearFinderFilters");
       const empty = Boolean(reset);
       const emptyDebug = { query: input.value, count: document.getElementById("resultCount")?.textContent || "", cards: document.querySelectorAll(".resource-card").length, grid: document.getElementById("resourceGrid")?.textContent?.trim().slice(0, 120) || "" };
@@ -376,7 +380,8 @@ async function run() {
         const input = document.getElementById("resourceSearch");
         input.value = "zzzz-fallback-no-match";
         input.dispatchEvent(new Event("input", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 350));
+        for (let attempt = 0; attempt < 100 && !document.getElementById("clearFinderFilters"); attempt += 1)
+          await new Promise((resolve) => setTimeout(resolve, 50));
         document.getElementById("globeClusterTray").hidden = false;
         document.getElementById("globeCanvas").dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -422,6 +427,7 @@ async function run() {
       }
     }
 
+    await verifyFinderSearchRelevance({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderPresentation({ client, host: HOST, navigate, evaluate, capture });
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);

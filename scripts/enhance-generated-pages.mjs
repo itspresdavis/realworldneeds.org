@@ -1,3 +1,4 @@
+import { minify } from "terser";
 import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
@@ -208,7 +209,14 @@ const directoryEntry = await readFile("dist/directory.js", "utf8");
 const resultRenderer = await readFile("dist/directory-results.js", "utf8");
 const rendererImport = 'import { createResultRow } from "./directory-results.js";';
 if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
-await writeFile("dist/directory.js", `${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${directoryEntry.replace(rendererImport, "")}`);
+const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";';
+if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
+const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
+const directoryBundle = `${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${directoryEntry.replace(rendererImport, "").replace(searchImport, "")}`;
+// Keep the complete offline entry under its existing 14 KB ceiling, without
+// another runtime request. Only local variable names/whitespace are minified.
+const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: false, mangle: { reserved: ["createResultRow", "root"] } });
+await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search
 // self-contained during upgrades from older offline workers.

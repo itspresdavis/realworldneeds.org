@@ -9,6 +9,7 @@ const inputs = [
   "public/saved-services.css",
   "src/utils/privacy.js",
   "public/directory-results.js",
+  "src/utils/search.js",
   "public/offline-status.js",
   "public/directory-enhancements.css",
   "public/professional-pages.css",

@@ -1,4 +1,6 @@
 import { resourceTypes } from "../data/resources.js";
+import { normalizeSearch as normalizedText, resourceSearchScore } from "./search.js";
+export { resourceSearchScore } from "./search.js";
 
 export const THREE_SPHERE_TEXTURE_OFFSET = 0.25;
 
@@ -98,127 +100,6 @@ export function isExactServiceSite(resource) {
 export function resourceDistanceKm(userLocation, resource) {
   if (!userLocation || !isExactServiceSite(resource)) return null;
   return distanceKm(userLocation.lat, userLocation.lng, resource.lat, resource.lng);
-}
-
-function normalizedText(value) {
-  return String(value || "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    // Keep common public-utility terms intact when punctuation would otherwise
-    // split them into weak, ambiguous tokens (for example, “Wi-Fi” → “wi fi”).
-    .replace(/wi[\s-]?fi\b/g, "wifi")
-    .replace(/[^a-z0-9+]+/g, " ")
-    .trim();
-}
-
-const searchAliases = new Map(Object.entries({
-  meal: "food", meals: "food", pantry: "food", pantries: "food", groceries: "food", grocery: "food", hunger: "food",
-  comida: "food", comidas: "food", alimento: "food", alimentos: "food", nourriture: "food", repas: "food",
-  drink: "water", drinking: "water", refill: "water", hydration: "water", agua: "water", eau: "water",
-  housing: "shelter", homeless: "shelter", homelessness: "shelter", bed: "shelter", refuge: "shelter",
-  albergue: "shelter", refugio: "shelter", alojamiento: "shelter", abrigo: "shelter", abri: "shelter",
-  shower: "hygiene", showers: "hygiene", laundry: "hygiene", toilet: "hygiene", toilets: "hygiene", toiletries: "hygiene",
-  ducha: "hygiene", duchas: "hygiene", bano: "hygiene", banos: "hygiene", lavanderia: "hygiene", banho: "hygiene", douche: "hygiene", douches: "hygiene",
-  clothes: "clothing", coat: "clothing", coats: "clothing", shoes: "clothing", blanket: "clothing", blankets: "clothing",
-  ropa: "clothing", roupas: "clothing", vetement: "clothing", vetements: "clothing",
-  doctor: "health", doctors: "health", clinic: "health", clinics: "health", dental: "health", dentist: "health", medical: "health", mental: "health", healthcare: "health",
-  salud: "health", saude: "health", sante: "health", medico: "health", medica: "health", clinica: "health", clinique: "health",
-  directory: "referral", directories: "referral", locator: "referral", navigation: "referral", benefits: "referral", advice: "referral", casework: "referral",
-  diapers: "diaper", chargers: "charging", charger: "charging", wifi: "wifi", nyc: "new york city"
-}));
-
-// Small, deliberate corrections for high-frequency need words. This is not a
-// broad fuzzy matcher: ambiguous corrections can send someone seeking urgent
-// help to the wrong category, so only obvious single-word slips are accepted.
-const commonNeedTypos = new Map(Object.entries({
-  foood: "food", shleter: "shelter", sheltor: "shelter", watre: "water", clohtes: "clothing", hygene: "hygiene"
-}));
-
-const queryNoise = new Set([
-  "a", "an", "the", "for", "to", "of", "please", "find", "finding", "need", "needs", "help", "free",
-  "near", "nearby", "me", "my", "local", "around",
-  "ayuda", "gratis", "cerca", "mi",
-  "aide", "gratuit", "gratuite", "pres",
-  "ajuda", "gratuito", "gratuita", "perto"
-]);
-
-function rawTokens(value) {
-  return normalizedText(value).split(/\s+/).filter(Boolean);
-}
-
-function searchTokens(value) {
-  return rawTokens(value).map((token) => searchAliases.get(token) || token);
-}
-
-function querySearchTokens(value) {
-  return rawTokens(value)
-    .filter((token) => !queryNoise.has(token))
-    .map((token) => commonNeedTypos.get(token) || searchAliases.get(token) || token);
-}
-
-const resourceSearchFieldCache = new WeakMap();
-const queryTokenCache = new Map();
-const QUERY_TOKEN_CACHE_LIMIT = 64;
-
-function resourceSearchFields(resource) {
-  const cached = resourceSearchFieldCache.get(resource);
-  if (cached) return cached;
-  const types = [resource.category, ...(resource.secondaryCategories || [])];
-  const services = Array.isArray(resource.services) ? resource.services : [];
-  const fields = {
-    name: normalizedText(resource.name),
-    place: normalizedText([resource.city, resource.country, resource.region, resource.address].join(" ")),
-    source: normalizedText(resource.sourceName),
-    primaryType: normalizedText(resource.category),
-    types: new Set(searchTokens(types.join(" "))),
-    detail: normalizedText([
-      resource.summary,
-      services.join(" "),
-      resource.accessType,
-      resource.costNote,
-      resource.coverageNote,
-      resource.kind,
-      ...types,
-      ...types.map((type) => resourceTypes.includes(type) ? type : "")
-    ].join(" "))
-  };
-  fields.all = `${fields.name} ${fields.place} ${fields.source} ${fields.detail}`;
-  fields.tokens = new Set(searchTokens(fields.all));
-  resourceSearchFieldCache.set(resource, fields);
-  return fields;
-}
-
-function cachedQueryTokens(query) {
-  const key = normalizedText(query);
-  const cached = queryTokenCache.get(key);
-  if (cached) return cached;
-  const tokens = querySearchTokens(key);
-  if (queryTokenCache.size >= QUERY_TOKEN_CACHE_LIMIT) {
-    queryTokenCache.delete(queryTokenCache.keys().next().value);
-  }
-  queryTokenCache.set(key, tokens);
-  return tokens;
-}
-
-export function resourceSearchScore(resource, query) {
-  const tokens = cachedQueryTokens(query);
-  if (!tokens.length) return 0;
-  const fields = resourceSearchFields(resource);
-  if (!tokens.every((token) => fields.tokens.has(token) || fields.all.includes(token))) return -1;
-
-  return tokens.reduce((score, token) => {
-    // Category intent must outrank incidental text. A person typing “water”
-    // should see water access before foodbanks named after Waterbeach.
-    if (fields.primaryType === token) return score + 40;
-    if (fields.types.has(token)) return score + 30;
-    if (fields.name === token) return score + 20;
-    if (fields.name.startsWith(token)) return score + 12;
-    if (fields.name.includes(token)) return score + 8;
-    if (fields.place.includes(token)) return score + 6;
-    if (fields.source.includes(token)) return score + 4;
-    return score + 2;
-  }, 0);
 }
 
 export function rankResourcesForLocation(resourceList, userLocation, userCountry = "", query = "") {
