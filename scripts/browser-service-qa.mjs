@@ -1,4 +1,5 @@
 import { verifyFooterReflow } from "./qa-footer-reflow.mjs";
+import { verifyServiceFacts } from "./qa-service-facts.mjs";
 import { verifyDirectorySearchRelevance } from "./qa-search-relevance.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
 import { spawn, spawnSync } from "node:child_process";
@@ -212,6 +213,8 @@ async function run() {
     if (!mobile.nextSteps || !mobile.aboveFold || mobile.minimumActionHeight < 44 || mobile.overflow > 8) {
       throw new Error(`Mobile service landing page failed: ${JSON.stringify(mobile)}`);
     }
+
+    await verifyServiceFacts({ client, host: HOST, payload, navigate, evaluate, capture });
 
     // Check rendered annotations, not only source markup: baseline service facts
     // can be hidden by directory CSS. Never launch an actual telephone action.

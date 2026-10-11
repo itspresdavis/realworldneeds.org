@@ -173,7 +173,7 @@ test("affected records are not suggested as related alternatives and copied deta
   const notice = sourceClosureNotice(closed);
   const context = vm.createContext({
     title: closed.name, place: closed.city, officialSource: closed.sourceUrl,
-    location: { href: `https://www.realworldneeds.org/service/${closed.id}` },
+    listingUrl: `https://www.realworldneeds.org/service/${closed.id}`,
     document: { querySelectorAll: () => [], querySelector: () => ({ querySelectorAll: () => [{ textContent: notice.title }, { textContent: notice.detail }] }) }
   });
   vm.runInContext(`${script.slice(start, end)}\nglobalThis.copy = publicDetails;`, context);

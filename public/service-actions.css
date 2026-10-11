@@ -168,3 +168,15 @@
 }
 .service-save-actions button:disabled { opacity: .6; cursor: not-allowed; }
 .service-save-actions a:focus-visible { outline: 3px solid #24583e; outline-offset: 3px; }
+
+/* Keep optional tools compact and easy to return to after reading the facts. */
+.service-utility-actions { scroll-margin-top: 6rem; }
+.service-utility-actions__intro > strong { font-size: 1rem; }
+.service-utility-actions__intro > span { font-size: .75rem; }
+.service-utility-actions__status:empty { min-height: 0; margin: 0; }
+@media (min-width: 761px) {
+  .service-utility-actions { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); padding-block: 1.2rem; }
+  .service-utility-actions__intro { grid-column: 1; }
+  .service-save-actions { grid-column: 2; grid-row: 1 / 3; align-content: center; }
+  .service-utility-actions__buttons { grid-column: 1; }
+}

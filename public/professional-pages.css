@@ -370,3 +370,55 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 #service .service-utility-actions button:focus-visible { outline: 3px solid #356c4e; }
 #service [data-service-save] { transition: none; }
 #service .directory-record { margin-top: 1.5rem; }
+
+/* Service facts are the destination, not collapsed directory-card metadata. */
+#service > .legal-hero .legal-hero__inner { max-width: 1000px; }
+#service > .legal-hero h1 { max-width: 32ch; overflow-wrap: anywhere; }
+#service .directory-shell > .directory-downloads[aria-label="Breadcrumb"] span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#service .directory-record { min-width: 0; }
+#service .directory-record:hover { background: #fff !important; }
+#service .service-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 2rem;
+  margin: .75rem 0 1.5rem;
+}
+#service .service-facts > div { min-width: 0; padding: .9rem 0; }
+#service .service-facts dt { font-size: .8125rem; color: #52665b; }
+#service .service-facts dd {
+  margin: .3rem 0 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+#service .service-facts dd a { display: inline-block; padding-block: .35rem; }
+#service .directory-record > h3 { margin: 1.5rem 0 .6rem; font-size: 1.0625rem; }
+#service .directory-record > :is(p, ul) { max-width: 75ch; font-size: 1rem; line-height: 1.65; }
+#service .directory-record > .directory-links { gap: .5rem; }
+#service .directory-record > .directory-links a { min-height: 44px; font-size: .8125rem; }
+#service .service-tools-jump {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: .2rem;
+  font-size: .875rem;
+  font-weight: 650;
+  color: #24583e;
+}
+#service .service-next-steps__context { font-size: .8125rem; line-height: 1.55; }
+#service .service-accessibility :is(strong, p) { font-size: .9375rem; }
+#service .related-services__grid strong { font-size: .9375rem; }
+#service .related-services__grid :is(span, small) { font-size: .8125rem; }
+#service .related-services__grid > a { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 650px) {
+  #service .service-facts { grid-template-columns: minmax(0, 1fr); }
+  #service .related-services__heading { flex-wrap: wrap; gap: .4rem; }
+}
+@media print {
+  #service .service-tools-jump { display: none; }
+  #service .service-facts > div { break-inside: avoid; }
+}
