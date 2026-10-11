@@ -417,8 +417,11 @@ async function run() {
       menu.querySelector("summary").click();
       const input = document.getElementById("resourceSearch");
       const rect = input.getBoundingClientRect();
-      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      if (!menu.open || document.elementFromPoint(point.x, point.y) !== input) throw new Error("The open-menu search target is not exposed");
+      // A bounded menu may cover the input's center; exercise its exposed area.
+      const point = [rect.left + 8, rect.right - 8, rect.left + rect.width / 2]
+        .flatMap((x) => [rect.top + 8, rect.bottom - 8, rect.top + rect.height / 2].map((y) => ({ x, y })))
+        .find(({ x, y }) => document.elementFromPoint(x, y) === input);
+      if (!menu.open || !point) throw new Error("The open-menu search target is not exposed");
       return point;
     })()`);
     await client.call("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, ...searchPointer });
