@@ -22,6 +22,15 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
     await navigate(client, "about:blank");
     await navigate(client, `${host}/#resource=${encodeURIComponent(id)}`);
   };
+  const checkSearchRecovery = async (label) => {
+    await check(`document.activeElement.id === 'resourceSearch' && !document.getElementById('resourceSearch').value && document.getElementById('resourcePanel').hidden && document.getElementById('openInspector').getClientRects().length === 0`, `${label} lost focus or changed search`);
+    await check(`(() => {
+      const input = document.activeElement, box = input.getBoundingClientRect();
+      const exposed = [box.left + 8, box.right - 8, box.left + box.width / 2]
+        .some(x => [box.top + 8, box.bottom - 8, box.top + box.height / 2].some(y => document.elementFromPoint(x, y) === input));
+      return box.width > 0 && box.height > 0 && box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight && exposed;
+    })()`, `${label} focus is outside the visible viewport`);
+  };
   for (const width of [390, 1440]) {
     await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: width, screenHeight: 1000 });
     await openResource(resources[1].id);
@@ -38,9 +47,9 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
     await enter("previousResource");
     await check(`document.activeElement.id === 'resourcePanelHeading' && document.getElementById('previousResource').disabled`, `First-result boundary lost focus at ${width}px`);
     await enter("closeInspector");
-    await check(`document.getElementById('resourcePanel').hidden && document.activeElement.id === 'openInspector' && !document.activeElement.hidden`, `Close failed to return focus at ${width}px`);
-    await enter("openInspector");
-    await check(`!document.getElementById('resourcePanel').hidden && document.activeElement.id === 'resourcePanelHeading'`, `Reopening lost focus at ${width}px`);
+    // The public presentation intentionally hides the legacy map-only opener
+    // at every width. Close must recover to exposed search instead.
+    await checkSearchRecovery(`Close at ${width}px`);
 
     await openResource(resources.at(-2).id);
     await enter("nextResource");
@@ -49,13 +58,7 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
     // inspector opener. Close must recover to visible search without changing it.
     await evaluate(client, `document.getElementById('globeCanvas').dispatchEvent(new Event('webglcontextlost', {cancelable:true}))`);
     await enter("closeInspector");
-    await check(`document.activeElement.id === 'resourceSearch' && !document.getElementById('resourceSearch').value && document.getElementById('resourcePanel').hidden && document.getElementById('openInspector').getClientRects().length === 0`, `Fallback Close lost focus or changed search at ${width}px`);
-    await check(`(() => {
-      const input = document.activeElement, box = input.getBoundingClientRect();
-      const exposed = [box.left + 8, box.right - 8, box.left + box.width / 2]
-        .some(x => [box.top + 8, box.bottom - 8, box.top + box.height / 2].some(y => document.elementFromPoint(x, y) === input));
-      return box.width > 0 && box.height > 0 && box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight && exposed;
-    })()`, `Fallback Close focus is outside the visible viewport at ${width}px`);
+    await checkSearchRecovery(`Fallback Close at ${width}px`);
   }
 
   await openResource(resources[1].id);
