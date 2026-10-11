@@ -3,6 +3,7 @@
 // No application delay, replacement module, or browser launch belongs here.
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const QUERY = 'Drinking fountains for London';
+const IME_CANDIDATE = 'Drinking fountains for Lon';
 const FINDER = '/service/london-drinking-fountains';
 const assert = (condition, label, detail) => {
   if (!condition) throw new Error(`${label}: ${JSON.stringify(detail)}`);
@@ -15,8 +16,8 @@ function observeStartup(origin) {
     if (!event.target.matches?.('[data-directory-query]')) return;
     probe.inputs.push({ value: event.target.value, composing: event.isComposing, trusted: event.isTrusted, runtime: Boolean(document.querySelector('.directory-global-results')) });
   }, true);
-  for (const type of ['compositionstart', 'compositionend']) document.addEventListener(type, event => {
-    if (event.target.matches?.('[data-directory-query]')) probe.compositions.push({ type, trusted: event.isTrusted, runtime: Boolean(document.querySelector('.directory-global-results')) });
+  for (const type of ['compositionstart', 'compositionupdate', 'compositionend']) document.addEventListener(type, event => {
+    if (event.target.matches?.('[data-directory-query]')) probe.compositions.push({ type, data: event.data, value: event.target.value, trusted: event.isTrusted, runtime: Boolean(document.querySelector('.directory-global-results')) });
   }, true);
   // Observe completion of the actual JSON read, including a discarded stale
   // response. A DOM-only empty-state wait could pass before that response lands.
@@ -51,12 +52,14 @@ export function directoryStartupSnapshot() {
   try { pathname = new URL(href).pathname; } catch { /* Provisional or absent location is not ready. */ }
   const snapshot = storage => Object.fromEntries(Object.keys(storage).sort().map(key => [key, storage.getItem(key)]));
   return {
+    viewport: { width: globalThis.innerWidth ?? null, height: globalThis.innerHeight ?? null },
     href, pathname, title: document?.title || '', timeOrigin: globalThis.performance?.timeOrigin ?? null,
     documentPresent: Boolean(document?.documentElement),
     ready: Boolean(document?.documentElement && results && category),
     query: input?.value, disabled: input?.disabled, countryDisabled: country?.disabled,
     inputVisible: Boolean(rect?.width && rect?.height),
     focusedInput: Boolean(input && document?.activeElement === input), focusedHref: document?.activeElement?.getAttribute('href'),
+    focusedBrand: Boolean(document?.activeElement && document.activeElement === pick('.legal-header .legal-brand[href="/"]')),
     selection: input ? [input.selectionStart, input.selectionEnd] : null,
     country: country?.value, category: category?.textContent,
     rows: [...(document?.querySelectorAll('.directory-global-result') || [])].map(row => ({ href: row.getAttribute('href'), text: row.textContent })),
@@ -77,12 +80,60 @@ export const directoryStartupStaticReady = (snapshot, previousTimeOrigin, module
 
 export const isDirectoryStartupNavigationError = error => /^(?:Runtime\.evaluate: )?(?:Execution context was destroyed|Cannot find (?:default execution )?context|No execution context|Inspected target navigated)/i.test(error?.message || '');
 
+// The desktop Directory nav link is hidden at narrow widths. The brand is
+// outside both responsive navs; verify rendered visibility and actual focus
+// before using it as the pre-runtime blur witness.
+export function focusDirectoryStartupBlurTarget() {
+  const selector = '.legal-header .legal-brand[href="/"]';
+  const link = document.querySelector(selector);
+  if (!link) throw new Error('Startup blur brand link is missing');
+  const rect = link.getBoundingClientRect(), style = getComputedStyle(link);
+  const visible = rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0
+    && rect.bottom <= innerHeight && rect.right <= innerWidth
+    && style.display !== 'none' && !['hidden', 'collapse'].includes(style.visibility);
+  if (!visible) throw new Error(`Startup blur brand link is not visible: ${JSON.stringify({ width: innerWidth, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, display: style.display, visibility: style.visibility })}`);
+  link.focus({ preventScroll: true });
+  if (document.activeElement !== link) throw new Error('Startup blur brand link did not receive focus');
+  return { selector, href: link.getAttribute('href'), focused: true, visible };
+}
+
+export function directoryStartupClickPoint(selector) {
+  const node = document.querySelector(selector);
+  if (!node || node.hidden || node.disabled) throw new Error('Missing enabled control: ' + selector);
+  node.scrollIntoView({ block: 'center', behavior: 'instant' });
+  const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
+  const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  if (!rect.width || !rect.height || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)
+    || style.opacity === '0' || point.x < 0 || point.x >= innerWidth || point.y < 0 || point.y >= innerHeight) {
+    throw new Error(`Control is not visibly clickable: ${selector} ${JSON.stringify({ point, width: rect.width, height: rect.height, display: style.display, visibility: style.visibility })}`);
+  }
+  const hit = document.elementFromPoint(point.x, point.y);
+  if (!hit || !(hit === node || node.contains(hit))) throw new Error('Control click target is covered or clipped: ' + selector);
+  return point;
+}
+
+export function directoryStartupRequestLeaksQuery(request) {
+  const url = new URL(request.url);
+  const referrer = request.headers?.Referer || request.headers?.referer || '';
+  const fields = [request.url, request.postData || '', referrer, ...url.searchParams.values(), ...new URLSearchParams(request.postData || '').values()];
+  if (referrer) {
+    try { fields.push(...new URL(referrer).searchParams.values()); } catch { /* Raw referrers are still checked below. */ }
+  }
+  return fields.some(raw => {
+    let value = raw;
+    try { value = decodeURIComponent(raw); } catch { /* Literal percent signs can occur in bodies. */ }
+    const lower = value.toLowerCase();
+    return lower.includes(QUERY.toLowerCase()) || lower.includes(IME_CANDIDATE.toLowerCase()) || /\bWIC\b/i.test(value);
+  }) || [...url.searchParams.keys()].some(key => /^(q|query|search|search_term)$/i.test(key));
+}
+
 export async function verifyDirectoryStartup({ client, host, navigate, evaluate, capture }) {
   const origin = new URL(host).origin;
   const held = { module: [], catalog: [] };
   const hold = { module: false, catalog: false };
   const requests = [], errors = [], evidence = [];
   let interceptionError, instrumentation;
+  let viewportWidth = null, scenario = 'setup';
   const continueRequest = requestId => client.call('Fetch.continueRequest', { requestId });
   // This runner's small CDP client exposes its WebSocket but has no event API.
   // Subscribe here so the runner itself only needs an import and invocation.
@@ -147,13 +198,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
   };
   const click = async selector => {
-    const point = await evaluate(client, `(() => {
-      const node = document.querySelector(${JSON.stringify(selector)});
-      if (!node || node.hidden || node.disabled) throw new Error('Missing enabled control: ' + ${JSON.stringify(selector)});
-      node.scrollIntoView({ block: 'center', behavior: 'instant' });
-      const rect = node.getBoundingClientRect();
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-    })()`);
+    const point = await evaluate(client, `(${directoryStartupClickPoint.toString()})(${JSON.stringify(selector)})`);
     await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
     await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
   };
@@ -203,6 +248,8 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
 
     for (const width of [1440, 390]) {
       await client.call('Emulation.setDeviceMetricsOverride', { width, height: width < 600 ? 844 : 900, deviceScaleFactor: 1, mobile: width < 600 });
+      viewportWidth = width; scenario = 'empty startup and post-init control';
+      let compositionEvidence = null;
       // Untouched fresh startup stays cheap; normal post-init typing is the control.
       let before = await start();
       assert(!before.history, 'Fresh entry unexpectedly carried directory history', before.history);
@@ -217,6 +264,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       await click('[data-directory-clear]');
       current = await wait(s => s.query === '' && s.resultsHidden && s.focusedInput && s.clearHidden, 'Clear did not return focus and ordinary browsing');
       assert(current.history?.query === '', 'Clear did not replace saved query', current);
+      scenario = 'cleared reload';
       before = await start({ reload: true });
       await release('module');
       current = await wait(s => s.ready && s.query === '' && s.resultsHidden, 'Cleared query reappeared after reload');
@@ -224,6 +272,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       assertPrivate(before, current);
 
       // This is the original defect: one trusted input before listeners exist.
+      scenario = 'fresh early input';
       before = await start();
       await type(QUERY);
       await evaluate(client, "document.querySelector('[data-directory-query]').setSelectionRange(9, 9)");
@@ -236,6 +285,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
 
       // A reload has a valid old entry. A real edit wins over its query, filters,
       // pagination and listing focus; unedited restoration is covered separately.
+      scenario = 'stale-history reload edited to London';
       const stale = await seedStaleHistory();
       before = await start({ reload: true });
       assert(before.history?.query === 'WIC' && before.history?.country === 'United States' && before.history?.shown === 120, 'Reload did not carry the stale history fixture', before.history);
@@ -246,18 +296,22 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       await london(before);
 
       // Empty text is also an intentional edit, even after focus moves away.
+      scenario = 'early clear after blur';
       await seedStaleHistory();
       before = await start({ reload: true });
       await type('WIC'); await erase();
-      const blurTarget = await evaluate(client, `(() => { const link = document.querySelector('.legal-header a[href="/directory"]'); if (!link) throw new Error('Directory header link missing'); link.focus(); return link.getAttribute('href'); })()`);
+      const blurTarget = await evaluate(client, `(${focusDirectoryStartupBlurTarget.toString()})()`);
+      const blurred = await state();
+      assert(!blurred.ready && held.module.length > 0 && !blurred.focusedInput && blurred.focusedBrand && blurred.focusedHref === blurTarget.href, 'Pre-start blur was not established before releasing the module', { width, scenario, blurTarget, blurred });
       await release('module');
       current = await wait(s => s.ready && s.query === '' && s.country === '' && s.category === 'All help' && s.resultsHidden && s.history?.query === '', 'Pre-start clear resurrected stale query or filters');
       await frames(); current = await state();
-      assert(current.probe.catalogReads === 0 && current.focusedHref === blurTarget && current.rows.length === 0 && current.clearHidden, 'Pre-start clear fetched stale results or stole focus after blur', current);
+      assert(current.probe.catalogReads === 0 && !current.focusedInput && current.focusedBrand && current.focusedHref === blurTarget.href && current.rows.length === 0 && current.clearHidden, 'Pre-start clear fetched stale results or stole focus after blur', current);
       assertInputs(current, { count: 2 }); assertPrivate(before, current);
 
       // Newer input invalidates the original async search while its real catalog
       // request is held. Releasing it must never resurrect the London query.
+      scenario = 'newer input while startup catalog is pending';
       before = await start(); await type(QUERY); await pendingStartup();
       await type('WIC');
       await release('catalog');
@@ -266,6 +320,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       assert(current.rows.every(row => /\bWIC\b/i.test(row.text) && row.href !== FINDER) && current.focusedInput && JSON.stringify(current.selection) === '[3,3]', 'Stale startup results or caret replaced newer input', current);
       assertInputs(current, { count: 2, early: 1 }); assertPrivate(before, current);
 
+      scenario = 'clear while startup catalog is pending';
       before = await start(); await type(QUERY); await pendingStartup();
       await click('[data-directory-clear]');
       await wait(s => s.query === '' && s.resultsHidden && s.focusedInput && s.history?.query === '', 'Clear did not cancel pending startup state');
@@ -276,16 +331,21 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       assertInputs(current, { count: 1 }); assertPrivate(before, current);
       await capture(client, `directory-startup-cleared-${width}.png`);
       if (width === 390) {
+        scenario = 'native IME composition across startup';
         // Chromium's own inspector-protocol/input/imeSetComposition-01.js uses
         // this native pair: imeSetComposition starts a candidate; insertText
         // commits it. Do not synthesize composition events or a second input.
         before = await start();
-        const candidate = 'Drinking fountains for Lon';
+        assert(before.query === '', 'IME fixture requires an empty fresh input', before);
+        const candidate = IME_CANDIDATE;
         await evaluate(client, "document.querySelector('[data-directory-query]').focus()");
         await client.call('Input.imeSetComposition', { text: candidate, selectionStart: candidate.length, selectionEnd: candidate.length });
         current = await state();
         assertInputs(current, { count: 1 });
-        assert(current.probe.inputs[0].composing && current.probe.compositions.length === 1 && current.probe.compositions[0].type === 'compositionstart' && current.probe.compositions[0].trusted && !current.probe.compositions[0].runtime, 'Native composition did not begin before directory handlers', current.probe);
+        const starts = current.probe.compositions.filter(event => event.type === 'compositionstart');
+        assert(current.probe.inputs[0].composing && starts.length === 1 && starts[0].trusted && !starts[0].runtime
+          && current.probe.compositions.some(event => event.type === 'compositionupdate' && event.trusted && !event.runtime && event.data === candidate)
+          && !current.probe.compositions.some(event => event.type === 'compositionend'), 'Native composition did not begin before directory handlers', current.probe);
         await release('module');
         await wait(s => s.ready, 'Directory did not initialize during composition');
         // Observe beyond the 80ms input debounce: partial candidate text must
@@ -297,21 +357,27 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
         await release('catalog');
         await london(before, { inputCount: 2, early: 1, caret: QUERY.length });
         current = await state();
-        assert(current.probe.catalogReads === 1 && current.probe.compositions.length === 2 && current.probe.compositions[1].type === 'compositionend' && current.probe.compositions[1].trusted && current.probe.compositions[1].runtime, 'Composition did not commit once across startup', current.probe);
+        const ends = current.probe.compositions.filter(event => event.type === 'compositionend');
+        // As in qa-search-editing.mjs, Chromium dispatches compositionend through
+        // DispatchScopedEvent. Same-run CI evidence records isTrusted=false for
+        // that event even though CDP owns the composition. Keep trusted start,
+        // updates and both input events; verify and record the final lifecycle.
+        assert(current.probe.catalogReads === 1 && current.probe.compositions.filter(event => event.type === 'compositionstart').length === 1
+          && current.probe.compositions.filter(event => event.type === 'compositionupdate').every(event => event.trusted)
+          && ends.length === 1 && ends[0].runtime && ends[0].data === QUERY && ends[0].value === QUERY, 'Composition did not commit once across startup', current.probe);
+        compositionEvidence = { browser: await client.call('Browser.getVersion'), physicalImeExercised: false, events: current.probe.compositions, inputs: current.probe.inputs };
         await capture(client, 'directory-startup-ime-390.png');
       }
-      evidence.push({ width, earlyInput: true, staleReload: true, earlyClearAfterBlur: true, pendingInput: true, pendingClear: true, caret: true, ime: width === 390, staleShown: stale.history.shown });
+      console.log(`PASS directory startup scenarios at ${width}px`);
+      evidence.push({ width, earlyInput: true, staleReload: true, earlyClearAfterBlur: true, pendingInput: true, pendingClear: true, caret: true, ime: compositionEvidence, staleShown: stale.history.shown });
     }
-    const leaked = requests.filter(request => {
-      const url = new URL(request.url);
-      const raw = `${request.url} ${request.postData || ''} ${request.headers?.Referer || request.headers?.referer || ''}`;
-      let value = raw;
-      try { value = decodeURIComponent(raw); } catch { /* A literal percent is allowed in a body. */ }
-      return value.includes(QUERY) || /\bWIC\b/.test(value) || [...url.searchParams.keys()].some(key => /^(q|query|search|search_term)$/i.test(key));
-    }).map(request => ({ url: request.url, postData: request.postData }));
+    scenario = 'cross-scenario privacy and console';
+    const leaked = requests.filter(directoryStartupRequestLeaksQuery).map(request => ({ url: request.url, postData: request.postData }));
     assert(leaked.length === 0, 'Startup query leaked into a network request or referrer', leaked);
     assert(errors.length === 0, 'Browser errors during directory startup QA', errors);
     console.log(`PASS directory startup: ${JSON.stringify(evidence)}; trusted pre-handler typing, complete stale-response settlement and URL/storage/network privacy`);
+  } catch (error) {
+    throw new Error(`Directory startup QA (${viewportWidth ?? 'unset'}px, ${scenario}): ${error.message}`, { cause: error });
   } finally {
     hold.module = false; hold.catalog = false;
     await Promise.all([...held.module.splice(0), ...held.catalog.splice(0)].map(id => continueRequest(id).catch(() => {})));
