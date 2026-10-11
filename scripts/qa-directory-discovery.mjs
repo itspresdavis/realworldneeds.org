@@ -11,9 +11,11 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     count: document.querySelector('[data-directory-count]')?.textContent,
     focus: document.activeElement?.getAttribute('href'), scroll: scrollY,
     focusedId: document.activeElement?.id,
+    focusVisible: (() => { const rect = document.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.bottom > (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0) && rect.top < innerHeight; })(),
     saved: document.querySelector('.directory-shell')?.classList.contains('has-saved-view'),
     href: location.href, history: history.state?.rwnDirectory,
-    overflow: document.documentElement.scrollWidth > innerWidth + 1,
+    heading: document.querySelector('h1')?.textContent, timeOrigin: performance.timeOrigin,
+    overflow: document.documentElement?.scrollWidth > innerWidth + 1,
     empty: document.querySelector('.directory-global-empty')?.textContent
   }))()`);
   const wait = async (condition, label) => {
@@ -25,10 +27,12 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
   };
   const click = async selector => {
     const point = await evaluate(client, `(() => {
-      const node = document.querySelector(${JSON.stringify(selector)});
+      const node = [...document.querySelectorAll(${JSON.stringify(selector)})].find(node => node.getBoundingClientRect().height && node.getBoundingClientRect().width);
       if (!node) throw new Error('Control missing');
-      node.scrollIntoView({ block: 'center', behavior: 'instant' });
-      const r = node.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      let r = node.getBoundingClientRect();
+      const edge = node.closest('.legal-header') ? 0 : (document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0);
+      if (r.top < edge || r.bottom > innerHeight) { node.scrollIntoView({ block: 'center', behavior: 'instant' }); r = node.getBoundingClientRect(); }
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
     })()`);
     await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
     await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
@@ -66,37 +70,46 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     const directoryId = directoryHistory.entries[directoryHistory.currentIndex].id;
     const target = before.rows[60].href;
     await click(`.directory-global-result[href="${target}"]`);
-    await wait(s => new URL(s.href).pathname === target, 'Native listing navigation failed');
+    await wait(s => new URL(s.href).pathname === target && Boolean(s.heading), 'Native listing navigation failed');
     const serviceHistory = await client.call('Page.getNavigationHistory');
     const serviceId = serviceHistory.entries[serviceHistory.currentIndex].id;
     await goEntry(directoryId);
     const returned = await wait(s => s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120, 'Back lost query, country, need or loaded rows');
     if (returned.scroll < 200) throw new Error('Back lost the visitor’s place in the results');
     await client.call('Page.reload', { ignoreCache: true });
-    const reloaded = await wait(s => s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120, 'Reload lost directory state');
+    const reloaded = await wait(s => s.timeOrigin !== returned.timeOrigin && s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120, 'Reload lost directory state');
     await wait(s => s.focus === target && s.scroll > 200, 'Reload did not restore listing focus and scroll');
     if (new URL(reloaded.href).search || new URL(reloaded.href).hash) throw new Error('Private filters leaked into the URL');
     await capture(client, `directory-discovery-return-${width}.png`);
-    await goEntry(serviceId); await wait(s => new URL(s.href).pathname === target, 'Forward did not return to the listing');
+    await goEntry(serviceId); await wait(s => new URL(s.href).pathname === target && Boolean(s.heading), 'Forward did not return to the listing');
     await goEntry(directoryId); await wait(s => s.rows.length === 120 && s.country === 'United States', 'Repeated Back lost filters');
 
-    await navigate(client, `${host}/directory#saved`);
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: width / 2, y: 400, deltaY: 500, deltaX: 0 });
+    await sleep(200);
+    const savedFrom = await state();
+    if (width < 900) await click('.rwn-page-menu > summary');
+    await click('.legal-header a[href="/directory#saved"]');
     await wait(s => s.saved && s.focusedId === 'saved-services-heading', 'Saved did not own focus after hash navigation');
     await sleep(250);
     if (!(await state()).saved || (await state()).focusedId !== 'saved-services-heading') throw new Error('Pending directory restoration stole Saved focus');
     await capture(client, `directory-discovery-saved-${width}.png`);
     await goEntry(directoryId);
-    await wait(s => !s.saved && s.query === 'WIC' && s.country === 'United States' && s.rows.length === 120, 'Saved Back did not restore the directory filters');
+    await wait(s => !s.saved && s.query === 'WIC' && s.country === 'United States' && s.rows.length === 120 && s.focusVisible && s.focus?.startsWith('/service/') && Math.abs(s.scroll - savedFrom.scroll) < 5, 'Saved Back did not restore the latest scroll with a visible return target');
+
+    await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key: '/', code: 'Slash', windowsVirtualKeyCode: 191 });
+    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: '/', code: 'Slash', windowsVirtualKeyCode: 191 });
+    await wait(s => s.focusVisible && s.scroll < 500, 'Search shortcut left the editable field offscreen after Saved Back');
 
     await type('zzzz-no-service-here');
     await wait(s => s.empty?.includes('does not mean help is unavailable'), 'No-match coverage explanation missing');
+    if (await evaluate(client, `Boolean(document.querySelector('.directory-global-empty a[href="/directory"]'))`)) throw new Error('Global empty results offer a self-restoring full-directory link');
     await capture(client, `directory-discovery-empty-${width}.png`);
     await click('[data-fewer-words]');
     await wait(s => s.query === '' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 60, 'Fewer words erased country or need');
     await click('[data-directory-clear]');
-    await wait(s => s.query === '' && s.country === '' && s.category === 'All help' && s.rows.length === 0, 'Clear filters did not restore ordinary browsing');
+    const cleared = await wait(s => s.query === '' && s.country === '' && s.category === 'All help' && s.rows.length === 0, 'Clear filters did not restore ordinary browsing');
     await client.call('Page.reload', { ignoreCache: true });
-    await wait(s => s.query === '' && s.country === '' && s.rows.length === 0, 'Cleared filters reappeared on reload');
+    await wait(s => s.timeOrigin !== cleared.timeOrigin && s.query === '' && s.country === '' && s.rows.length === 0, 'Cleared filters reappeared on reload');
     evidence.push({ width, back: true, refresh: true, forward: true, secondBatch: true, recovery: true });
   }
 
@@ -106,7 +119,14 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
   await type('zzzz-no-service-here');
   await wait(s => s.country === undefined && s.empty?.includes('browse global resource finders'), 'Scoped fallback is missing');
   await capture(client, 'directory-discovery-scoped-empty.png');
-  await navigate(client, `${host}/directory`);
+  await click('.directory-global-empty a[href="/directory"]');
+  await wait(s => new URL(s.href).pathname === '/directory' && s.query === '' && s.rows.length === 0, 'Scoped full-directory recovery retained the failed search');
+  await navigate(client, `${host}/directory/global`);
+  await type('zzzz-no-service-here');
+  await wait(s => Boolean(s.empty), 'Global scoped empty state is missing');
+  if (await evaluate(client, `Boolean(document.querySelector('.directory-global-empty a[href="/directory/global"]'))`)) throw new Error('Global resource directory offers a self-restoring link');
+  await click('.directory-global-empty a[href="/directory"]');
+  await wait(s => s.query === '' && s.country === '', 'Global scoped recovery did not broaden to the directory');
   await type('Drinking fountains for London');
   const finder = await wait(s => s.rows.length > 0, 'Finder example did not match');
   if (!finder.rows.some(row => row.text.includes('Help finder or referral · check coverage'))) throw new Error('A coverage finder appears to be a service location');

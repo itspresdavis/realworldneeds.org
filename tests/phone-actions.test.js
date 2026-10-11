@@ -122,7 +122,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     vm.runInContext(`${source.replace("export const createResultRow", "const createResultRow")}\nglobalThis.row = createResultRow;`, context);
     return context.row;
   };
-  const rows = [createRow(renderer), createRow(shipped.slice(0, shipped.indexOf('const root=document.querySelector')))];
+  const rows = [createRow(renderer), createRow(shipped.slice(0, shipped.search(/(?:const |,)root=document\.querySelector/)) + ';')];
   const offlineBody = offline.slice(offline.indexOf("  const actionLink ="), offline.indexOf("  const setOffline ="));
   for (const [phone, expected] of cases) {
     const resource = fixture(phone);

@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
-import { readDirectoryState, writeDirectoryState } from "../public/directory-state.js";
+import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from "../public/directory-state.js";
 import { createResultRow } from "../public/directory-results.js";
 
 const awaitStateSource = await readFile("public/directory-state.js", "utf8");
 const source = await readFile("public/directory.js", "utf8");
 const applySource = source.slice(source.indexOf("const apply="), source.indexOf("const reset="));
+const restoreViewSource = source.slice(source.indexOf("const restoreView="), source.indexOf("const apply="));
 
 test("directory state remains scoped to one path and never changes the URL", () => {
   const value = { query: "  New   York  ", country: "United States", category: "food", shown: 120, scroll: 2200, focus: "/service/bowery-mission" };
@@ -91,10 +92,10 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
     resultList: { replaceChildren() {}, querySelectorAll: () => [{ getAttribute: () => "/service/finder-fr", focus: () => effects.focus++ }] },
     renderNext: () => { f.visibleCount = Math.min(f.visibleCount + 1, f.activeMatches.length); },
     restorePending: Boolean(restored), restored, requestAnimationFrame: callback => frames.push(callback),
-    window: { scrollTo: value => { effects.scroll = value.top; } }, results: {}, shell: { classList: { add() {} } },
+    restoreDirectoryView: (_, value) => { effects.focus++; effects.scroll = value.scroll; }, results: {}, shell: { classList: { add() {}, contains: () => false } },
     navigator: { onLine: true }, remember: () => effects.remembers++, clearGlobalResults: () => effects.cleared++
   });
-  vm.runInContext(`${applySource}\nglobalThis.apply = apply`, f);
+  vm.runInContext(`${restoreViewSource}\n${applySource}\nglobalThis.apply = apply`, f);
   return { f, effects, frames };
 }
 
@@ -124,6 +125,45 @@ test("a visitor interaction or newer query cancels pending restoration", async (
     await f.apply(); change(f); frames[0]();
     assert.equal(effects.focus, 0); assert.equal(effects.scroll, null);
   }
+});
+
+test("directory view restoration focuses a visible result instead of an offscreen search field", () => {
+  const oldWindow = globalThis.window, oldDocument = globalThis.document;
+  let focused = "", scroll;
+  const link = (href, top, height = 30) => ({ getAttribute: () => href,
+    getBoundingClientRect: () => ({ top, bottom: top + height, height }),
+    focus: options => { assert.equal(options.preventScroll, true); focused = href; } });
+  const before = link("/service/before", -400), visible = link("/service/current", 130), after = link("/service/after", 1200);
+  const nav = link("/directory", 20);
+  globalThis.window = { innerHeight: 800, scrollTo: value => { scroll = value.top; } };
+  globalThis.document = { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 74 }), querySelectorAll: () => [nav] }) };
+  try {
+    const list = { querySelectorAll: () => [before, visible, after] };
+    restoreDirectoryView(list, { focus: "/service/before", scroll: 900 });
+    assert.equal(focused, "/service/current"); assert.equal(scroll, 900);
+    restoreDirectoryView({ querySelectorAll: () => [] }, { focus: "", scroll: 900 });
+    assert.equal(focused, "/directory", "sticky navigation is the fallback when no result is in view");
+  } finally { globalThis.window = oldWindow; globalThis.document = oldDocument; }
+});
+
+test("search recovery does not link the global directory back into its own restored empty state", async () => {
+  const global = await readFile("dist/directory/index.html", "utf8");
+  const scoped = await readFile("dist/directory/france/index.html", "utf8");
+  const globalScope = await readFile("dist/directory/global/index.html", "utf8");
+  const template = html => html.match(/<template data-directory-empty>([\s\S]*?)<\/template>/)?.[1];
+  assert.ok(template(global));
+  assert.doesNotMatch(template(global), /href="\/directory"/);
+  assert.match(template(scoped), /href="\/directory"/);
+  assert.doesNotMatch(template(globalScope), /href="\/directory\/global"/);
+  assert.match(template(globalScope), /href="\/directory"/);
+  assert.match(template(global), /data-clear-all/);
+  assert.doesNotMatch(await readFile("dist/directory.csv", "utf8"), /Help finder or referral/, "UI copy changes must not change export type labels");
+});
+
+test("Saved handoff hides its panel before requesting directory return-focus ownership", async () => {
+  const saved = await readFile("public/saved-services.js", "utf8");
+  assert.match(saved, /history\.state\?\.rwnDirectory[\s\S]*?dispatchEvent\(new Event\("rwn-directory-restore"\)\)/);
+  assert.match(source, /addEventListener\("rwn-directory-restore",restore\)/);
 });
 
 test("no filter restores the ordinary crawlable directory", async () => {
@@ -163,4 +203,27 @@ test("result metadata separates reviewed source dates from availability and reac
     globalThis.document = oldDocument;
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: oldNavigator });
   }
+});
+
+
+test("cleared searches and failed restored searches still have a visible return-focus owner", async () => {
+  for (const query of ["", "food"]) {
+    const { f, effects } = searchFixture({ query, restored: { shown: 60, focus: "", scroll: 900 } });
+    f.loadCatalog = async () => { throw new Error("Offline"); };
+    await f.apply();
+    assert.equal(effects.cleared, 1); assert.equal(effects.focus, 1);
+    assert.equal(effects.scroll, 900); assert.equal(f.restorePending, false);
+  }
+});
+
+test("Saved navigation snapshots current scroll before creating its fragment history entry", () => {
+  let capture, handler, snapshots = 0;
+  const f = vm.createContext({ document: { addEventListener(type, fn, flag) { assert.equal(type, "click"); handler = fn; capture = flag; } }, remember: () => snapshots++ });
+  const clickSource = source.split("\n").find(line => line.startsWith('document.addEventListener("click"'));
+  vm.runInContext(clickSource, f);
+  assert.equal(capture, true);
+  handler({ target: { closest: selector => selector === 'a[href$="#saved"]' } });
+  assert.equal(snapshots, 1);
+  handler({ target: { closest: () => null } });
+  assert.equal(snapshots, 1);
 });

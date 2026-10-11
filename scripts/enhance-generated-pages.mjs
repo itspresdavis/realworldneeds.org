@@ -154,6 +154,7 @@ function directorySearchMarkup(scope) {
     <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
     <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
+    <template data-directory-empty><div class="directory-global-empty"><h2>No matching listings.</h2><p>A missing result does not mean help is unavailable.</p><div class="directory-empty-actions"><button type="button" data-fewer-words>Try without search words</button><button type="button" data-clear-all>Clear all filters</button></div><p>Or ${scope !== "/directory/global" ? '<a href="/directory/global">browse global resource finders</a>' : ""}${scope !== "/directory" ? `${scope !== "/directory/global" ? " or " : ""}<a href="/directory">browse the full directory</a>` : ""}.</p></div></template>
   </section>`;
 }
 
@@ -216,7 +217,7 @@ const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"))
 const directoryEntry = await readFile("dist/directory.js", "utf8");
 const resultRenderer = await readFile("dist/directory-results.js", "utf8");
 const stateSource = (await readFile("public/directory-state.js", "utf8")).replaceAll("export ", "");
-const stateImport = 'import { readDirectoryState, writeDirectoryState } from "./directory-state.js";';
+const stateImport = 'import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from "./directory-state.js";';
 if (!directoryEntry.includes(stateImport)) throw new Error("Directory history import was not found.");
 const rendererImport = 'import { createResultRow } from "./directory-results.js";';
 if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
@@ -225,9 +226,9 @@ if (!directoryEntry.includes(searchImport)) throw new Error("Directory search im
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
 const directoryBundle = `${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
 // Keep the complete offline entry under its existing 14 KB ceiling, without
-// another runtime request. Conservative constant/boolean simplifications and
-// local name/whitespace minification preserve the self-contained entry.
-const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { defaults: false, booleans: true, conditionals: true, evaluate: true, sequences: true }, mangle: { reserved: ["createResultRow", "root"] } });
+// another runtime request. Terser uses its safe defaults (no unsafe transforms),
+// including declaration joining; rendered CI tests exercise the shipped bundle.
+const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow", "root"] } });
 await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search

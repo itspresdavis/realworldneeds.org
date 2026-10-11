@@ -13,3 +13,18 @@ export const writeDirectoryState = (history, path, value) => {
   try { history.replaceState({ ...history.state, rwnDirectory: { ...value, path } }, ""); }
   catch { /* Restricted history must not prevent browsing or navigation. */ }
 };
+
+export const restoreDirectoryView = (list, state) => {
+  window.scrollTo({ top: state.scroll, behavior: "instant" });
+  const header = document.querySelector(".legal-header");
+  const edge = header?.getBoundingClientRect().bottom || 0;
+  const visible = node => {
+    const rect = node.getBoundingClientRect();
+    return rect.height > 0 && rect.bottom > edge && rect.top < window.innerHeight;
+  };
+  const links = [...list.querySelectorAll("a")];
+  const target = links.find(link => link.getAttribute("href") === state.focus && visible(link))
+    || links.find(visible)
+    || [...(header?.querySelectorAll("a, summary") || [])].find(node => node.getBoundingClientRect().height > 0);
+  target?.focus({ preventScroll: true });
+};

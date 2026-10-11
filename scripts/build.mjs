@@ -443,7 +443,7 @@ const csvRows = resources.map((resource) => [
   resource.country,
   resource.lat,
   resource.lng,
-  kindLabel(resource),
+  kindLabel(resource).replace("Help finder or referral", "Resource finder"),
   aidLabels(resource).join("; "),
   resource.accessType,
   resource.costModel,
