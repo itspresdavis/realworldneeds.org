@@ -228,6 +228,22 @@ async function run() {
     await waitForUI(`document.querySelector('[data-saved-summary]').textContent.includes('No saved services yet')`);
     check(await evaluate(client, `localStorage.getItem('rwn-saved-resources') === null && localStorage.getItem('qa-unrelated') === 'keep' && document.activeElement.id === 'saved-services-heading'`), "Clear removed unrelated data or lost focus");
 
+    // Background list changes can hide controls without replacing their nodes.
+    await evaluate(client, `localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids))}); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
+    await waitForUI(`!document.querySelector('[data-saved-more]').hidden`);
+    await evaluate(client, `document.querySelector('[data-saved-more]').focus(); localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids.slice(0, 2)))}); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
+    await waitForUI(`document.querySelector('[data-saved-more]').hidden && document.activeElement.id === 'saved-services-heading'`);
+    await evaluate(client, `document.querySelector('[data-saved-clear]').focus(); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
+    await sleep(100);
+    check(await evaluate(client, `document.activeElement.matches('[data-saved-clear]')`), "Refresh stole focus from an available Clear control");
+    await evaluate(client, `localStorage.removeItem('rwn-saved-resources'); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
+    check(await evaluate(client, `document.querySelector('[data-saved-clear]').hidden && document.activeElement.id === 'saved-services-heading'`), "Cross-tab clear lost focus from the hidden Clear control");
+    await evaluate(client, `localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids))}); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'}))`);
+    await waitForUI(`!document.querySelector('[data-saved-more]').hidden`);
+    await evaluate(client, `document.querySelector('[data-saved-more]').focus(); localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids.slice(0, 2)))}); window.dispatchEvent(new StorageEvent('storage', {key:'rwn-saved-resources'})); document.querySelector('.saved-services__heading a').focus()`);
+    await waitForUI(`document.querySelector('[data-saved-more]').hidden`);
+    check(await evaluate(client, `document.activeElement === document.querySelector('.saved-services__heading a')`), "Background refresh overrode newer deliberate focus");
+
     // A failed catalog request never deletes the IDs; explicit retry recovers.
     await evaluate(client, `localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids.slice(0,2)))})`);
     // Leave the document: navigating to the same #saved URL would correctly

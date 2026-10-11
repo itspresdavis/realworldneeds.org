@@ -810,6 +810,8 @@ function renderResourcePanel() {
   const panel = document.getElementById("resourcePanel");
   const grid = document.querySelector(".finder__grid");
   const inspectorToggle = document.getElementById("openInspector");
+  const focused = document.activeElement;
+  const focusInPanel = panel.contains(focused);
   const resource = selectedResource();
   const inspectorVisible = Boolean(resource && state.inspectorOpen);
   panel.hidden = !inspectorVisible;
@@ -817,10 +819,12 @@ function renderResourcePanel() {
   if (inspectorToggle) inspectorToggle.hidden = !resource || inspectorVisible;
   if (!resource) {
     panel.innerHTML = "";
+    if (focusInPanel || focused === inspectorToggle) document.getElementById("resourceSearch")?.focus({ preventScroll: true });
     return;
   }
   if (!inspectorVisible) {
     panel.innerHTML = "";
+    if (focusInPanel) inspectorToggle?.focus({ preventScroll: true });
     return;
   }
 
@@ -838,7 +842,7 @@ function renderResourcePanel() {
   panel.innerHTML = `
     <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
-    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
+    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
     ${sourceClosureMarkup(resource)}
     <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
@@ -875,8 +879,12 @@ function renderResourcePanel() {
   `;
 
   document.getElementById("copyAddress")?.addEventListener("click", async () => {
-    await copyText(resource.address);
-    notify("Address copied");
+    try {
+      await copyText(resource.address);
+      notify(exact ? "Address copied" : "Coverage copied");
+    } catch {
+      notify(`${exact ? "The address" : "The coverage"} could not be copied. Select and copy it from Service details.`);
+    }
   });
   document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
   document.getElementById("shareResource")?.addEventListener("click", () => shareResource(resource));
@@ -886,6 +894,14 @@ function renderResourcePanel() {
     state.inspectorOpen = false;
     renderResourcePanel();
   });
+  // Replacing the inspector removes its focused controls. Keep the matching
+  // action usable, or orient the visitor at the new service at a list boundary.
+  if (focusInPanel || focused === inspectorToggle) {
+    const replacement = focused?.id ? document.getElementById(focused.id) : null;
+    const target = replacement && panel.contains(replacement) && !replacement.disabled
+      ? replacement : document.getElementById("resourcePanelHeading");
+    target?.focus({ preventScroll: true });
+  }
 }
 
 function resourceCard(resource) {
@@ -971,12 +987,21 @@ function toggleSavedResource(id) {
 
 async function copyText(value) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const focused = document.activeElement;
   const input = document.createElement("textarea");
   input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
   document.body.append(input);
-  input.select();
-  document.execCommand("copy");
-  input.remove();
+  try {
+    input.select();
+    if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+  } finally {
+    const restoreFocus = document.activeElement === input;
+    input.remove();
+    if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+  }
 }
 
 async function shareResource(resource) {
@@ -990,8 +1015,12 @@ async function shareResource(resource) {
       if (error.name === "AbortError") return;
     }
   }
-  await copyText(data.url);
-  notify("Service link copied");
+  try {
+    await copyText(data.url);
+    notify("Service link copied");
+  } catch {
+    notify("The service link could not be copied. Please try again.");
+  }
 }
 
 function downloadDirectory() {

@@ -90,6 +90,7 @@ export function initSavedServices() {
         const target = row?.querySelectorAll("a, button")[controlIndex] || next?.querySelector("[data-saved-remove]") || heading;
         target.focus();
       } else if (focused === retry) (retry.hidden ? heading : retry).focus();
+      else if ((focused === clear && clear.hidden) || (focused === more && more.hidden)) heading.focus();
       else if (confirmation.contains(focused) && confirmation.hidden) heading.focus();
     };
     retry.hidden = true;

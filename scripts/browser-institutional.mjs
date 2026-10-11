@@ -1,5 +1,6 @@
 import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
 import { randomQaHttpPort } from "./qa-port.mjs";
+import { verifyFocusContinuity } from "./qa-focus-continuity.mjs";
 import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
 import { verifyFinderSearchRelevance } from "./qa-search-relevance.mjs";
 import { spawn, spawnSync } from "node:child_process";
@@ -494,6 +495,8 @@ async function run() {
     await verifyMenuReflow({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderSearchRelevance({ client, host: HOST, navigate, evaluate, capture });
     await verifyFinderPresentation({ client, host: HOST, navigate, evaluate, capture });
+
+    await verifyFocusContinuity({ client, host: HOST, navigate, evaluate });
 
     if (exceptions.length) throw new Error(`Browser exceptions: ${exceptions.join(" | ")}`);
     console.log("Interaction QA passed: desktop/mobile finder, input bounds, no-result recovery, history restoration, location retry, menu focus, and established globe layout.");
