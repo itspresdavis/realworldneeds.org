@@ -82,7 +82,19 @@ export async function verifyServiceFacts({ client, host, payload, navigate, eval
         if (!jumped) throw new Error('Tools link did not focus its labelled destination.');
         await key('Tab', 9);
         await key('Enter', 13, '\r');
-        const saved = await evaluate(client, `({focused:document.activeElement.matches('[data-service-save]'),pressed:document.activeElement.getAttribute('aria-pressed'),top:document.activeElement.getBoundingClientRect().top,bottom:document.activeElement.getBoundingClientRect().bottom,height:innerHeight})`);
+        // A fragment jump uses the site's smooth scrolling. Wait for the
+        // actual visible destination, rather than sampling the first frame.
+        const saved = await evaluate(client, `(async () => {
+          const deadline = performance.now() + 3000;
+          let state;
+          do {
+            const active = document.activeElement, rect = active.getBoundingClientRect();
+            state = {focused:active.matches('[data-service-save]'),pressed:active.getAttribute('aria-pressed'),top:rect.top,bottom:rect.bottom,height:innerHeight};
+            if (state.focused && state.pressed === 'true' && state.top >= 0 && state.bottom <= state.height) return state;
+            await new Promise(resolve => requestAnimationFrame(resolve));
+          } while (performance.now() < deadline);
+          return state;
+        })()`);
         if (!saved.focused || saved.pressed !== 'true' || saved.top < 0 || saved.bottom > saved.height) throw new Error(`Save jump/key activation failed: ${JSON.stringify(saved)}`);
         await evaluate(client, `document.querySelector('[data-service-save]').click()`);
       }

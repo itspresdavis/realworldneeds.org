@@ -46,6 +46,9 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const title = document.querySelector("#service h1")?.textContent?.trim() || document.title;
   const place = document.querySelector("#service .legal-meta span")?.textContent?.trim() || "";
   const officialSource = nextSteps.querySelector("a.is-primary")?.href || "";
+  // The tools shortcut is local navigation. Recipients should begin at the
+  // listing title and dated warnings, not at the sharing controls below them.
+  const listingUrl = new URL(location.pathname, location.origin).href;
 
   const saveButton = utility.querySelector("[data-service-save]");
   const serviceId = document.querySelector("#service")?.dataset.serviceId;
@@ -92,7 +95,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       place,
       ...statusLines,
       ...rows,
-      `RWN listing: ${location.href}`,
+      `RWN listing: ${listingUrl}`,
       officialSource ? `Official source: ${officialSource}` : "",
       "Confirm current details before you go."
     ].filter(Boolean).join("\n");
@@ -128,14 +131,14 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     const shareData = {
       title,
       text: place ? `${title} — ${place}` : title,
-      url: location.href
+      url: listingUrl
     };
     try {
       if (navigator.share) {
         await navigator.share(shareData);
         status.textContent = "Share sheet opened.";
       } else {
-        await copyText(location.href);
+        await copyText(listingUrl);
         status.textContent = "Link copied. You can paste it into a message.";
       }
     } catch (error) {

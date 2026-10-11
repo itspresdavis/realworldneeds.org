@@ -187,7 +187,11 @@ async function run() {
       } catch {}
       window.print = () => { printed = true; };
 
+      // Sharing from the tools shortcut must still open the listing at its
+      // top, where the recipient sees the source warning and provider facts.
+      history.replaceState(null, "", '#service-listing-tools');
       const before = location.href;
+      const expectedListingUrl = new URL(location.pathname, location.origin).href;
       utility.querySelector("[data-service-copy]")?.click();
       await sleep(40);
       utility.querySelector("[data-service-share]")?.click();
@@ -201,6 +205,7 @@ async function run() {
         ok: true,
         minHeight,
         copied,
+        expectedListingUrl,
         shared,
         printed,
         navigated: location.href !== before,
@@ -211,10 +216,10 @@ async function run() {
     })()`);
 
     const copiedOk = result.copied.includes(resource.name)
-      && result.copied.includes("RWN listing:")
+      && result.copied.includes(`RWN listing: ${result.expectedListingUrl}\n`)
       && result.copied.includes("Official source:")
       && result.copied.includes("Confirm current details before you go.");
-    const sharedOk = result.shared?.url?.includes(`/service/${encodeURIComponent(resource.id)}`)
+    const sharedOk = result.shared?.url === result.expectedListingUrl
       && result.shared?.title?.includes(resource.name);
 
     if (!result.ok || result.minHeight < 44 || !copiedOk || !sharedOk || !result.printed || result.navigated || result.overflow > 8 || !result.privacyCopy) {

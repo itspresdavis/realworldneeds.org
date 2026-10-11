@@ -70,3 +70,12 @@ test("empty action feedback remains an established live region", async () => {
   assert.doesNotMatch(emptyRule, /display\s*:\s*none|visibility\s*:\s*hidden/);
   assert.match(await read("public/service-actions.js"), /data-service-action-status role="status" aria-live="polite"/);
 });
+
+test("sharing from listing tools always links to the warning-first service page", async () => {
+  const source = await read("public/service-actions.js");
+  assert.match(source, /const listingUrl = new URL\(location\.pathname, location\.origin\)\.href/);
+  assert.match(source, /RWN listing: \$\{listingUrl\}/);
+  assert.match(source, /url: listingUrl/);
+  assert.match(source, /await copyText\(listingUrl\)/);
+  assert.doesNotMatch(source, /location\.href/);
+});
