@@ -1,10 +1,11 @@
+import { randomQaHttpPort } from "./qa-port.mjs";
 import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const SERVER_PORT = 4178 + Math.floor(Math.random() * 200);
+const SERVER_PORT = randomQaHttpPort();
 const HOST = `http://127.0.0.1:${SERVER_PORT}`;
 const CDP_PORT = 9228 + Math.floor(Math.random() * 200);
 const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
