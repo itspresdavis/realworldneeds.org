@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { categories, resources } from "../src/data/resources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
+import { groupLocalities, localitySignature } from "./locality-groups.mjs";
 
 const slugify = (value) => String(value || "unknown")
   .normalize("NFKD")
@@ -15,18 +16,24 @@ const slugify = (value) => String(value || "unknown")
 
 const allTypes = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
 
-function administrativeArea(resource) {
-  const address = String(resource.address || "");
-  if (resource.country === "United States") return address.match(/,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/)?.[1] || "";
-  if (resource.country === "Canada") return address.match(/,\s*([A-Z]{2})\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d\b/i)?.[1]?.toUpperCase() || "";
-  return "";
-}
-
 let localIndex = { cities: [] };
 try {
   localIndex = JSON.parse(await readFile("dist/data/resources/local-index.json", "utf8"));
 } catch {
   // The global/country/region/category search index remains useful without local SEO pages.
+}
+
+// Use the same reviewed city membership as the static pages. A group label
+// must not become a stricter per-record geography test in the search index.
+const localGroups = new Map(groupLocalities(resources).map(group => [localitySignature(group.info), group.items]));
+const localScopes = new Map();
+for (const locality of localIndex.cities || []) {
+  for (const resource of localGroups.get(localitySignature(locality)) || []) {
+    const paths = [locality.path, ...(locality.categories || [])
+      .filter(category => allTypes(resource).includes(category.type))
+      .map(category => category.path)];
+    localScopes.set(resource.id, [...(localScopes.get(resource.id) || []), ...paths]);
+  }
 }
 
 function scopesFor(resource, types) {
@@ -36,15 +43,7 @@ function scopesFor(resource, types) {
   ]);
   if (resource.region) scopes.add(`/directory/region/${slugify(resource.region)}`);
 
-  const area = administrativeArea(resource);
-  for (const locality of localIndex.cities || []) {
-    if (locality.city !== resource.city || locality.country !== resource.country) continue;
-    if (locality.administrativeArea && locality.administrativeArea !== area) continue;
-    scopes.add(locality.path);
-    for (const category of locality.categories || []) {
-      if (types.includes(category.type)) scopes.add(category.path);
-    }
-  }
+  for (const path of localScopes.get(resource.id) || []) scopes.add(path);
   return scopes;
 }
 
