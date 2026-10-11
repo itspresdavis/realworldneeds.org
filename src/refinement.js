@@ -31,7 +31,7 @@ function syncQuickNeeds(container) {
 function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
-  input.placeholder = "Search by need, service, or place";
+  input.placeholder = "Search by service or place";
   input.setAttribute("aria-label", "Search by need, service, place, ZIP or postcode, or organization");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");

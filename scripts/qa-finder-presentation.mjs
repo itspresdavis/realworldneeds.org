@@ -22,6 +22,7 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       };
       return {
         width: document.documentElement.clientWidth,
+        resultCountHeight: document.querySelector('#matchingResultCount').getBoundingClientRect().height,
         scrollWidth: document.documentElement.scrollWidth,
         stage: rect('.globe-stage'),
         canvas: rect('.globe-canvas'),
@@ -32,6 +33,7 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         sections: ['.about-rwn', '.source-band', '.mission-steps', '.principle-grid'].map((selector) => ({selector,...rect(selector)}))
       };
     })()`);
+    if (view.resultCountHeight > 24) throw new Error(`Matching-result count wraps at ${width}px.`);
     if (view.scrollWidth > view.width + 1 || view.sections.some((section) => section.x < -1 || section.right > view.width + 1)) {
       throw new Error(`Finder or explanation section overflows at ${width}px: ${JSON.stringify(view)}`);
     }

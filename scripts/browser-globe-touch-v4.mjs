@@ -355,7 +355,9 @@ async function run() {
         const stage=document.querySelector('.globe-stage');
         const readout=document.getElementById('globeReadout')?.innerText || '';
         const zoom=Number((readout.match(/([0-9.]+)×/) || [0,0])[1]);
-        return { zoom, readout, overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), canvasWidth:canvas?.width||0, stageWidth:stage?.getBoundingClientRect().width||0, close:stage?.classList.contains('is-close-view')||false, detailed:/HD NASA|high-detail boundaries/.test(readout) };
+        const detailStatus=document.getElementById('globeDetailStatus')?.textContent || '';
+        const mobileTextureLoaded=performance.getEntriesByType('resource').some(e=>e.name.endsWith('/earth-blue-marble-mobile.jpg') && e.responseEnd > 0);
+        return { zoom, readout, detailStatus, overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), canvasWidth:canvas?.width||0, stageWidth:stage?.getBoundingClientRect().width||0, close:stage?.classList.contains('is-close-view')||false, detailed:/HD NASA/.test(detailStatus) && mobileTextureLoaded };
       };
       const drive=()=>{
         const state=read();

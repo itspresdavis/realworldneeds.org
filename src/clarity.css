@@ -824,6 +824,8 @@ body.rwn-professional main { display: block; }
 }
 .rwn-professional .jump-results::after { content: "↓"; font-size: .875rem; }
 .rwn-professional .jump-results small {
+  flex: none;
+  white-space: nowrap;
   padding: .14rem .38rem;
   border: 1px solid rgba(255,255,255,.48);
   border-radius: 999px;

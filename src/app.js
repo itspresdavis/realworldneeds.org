@@ -417,7 +417,7 @@ function shell() {
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by need, service, or place" autocomplete="off">
+                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by service or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>

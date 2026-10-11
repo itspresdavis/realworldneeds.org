@@ -125,3 +125,11 @@ test("compact navigation keeps full focus text and editorial heading weight", as
   assert.match(pages, /\[aria-label="Breadcrumb"\] span \{ flex:0 0 auto;/);
   assert.match(nav, /#directory>\.legal-hero h1\{[^}]*font-weight:400;/);
 });
+
+
+test("narrow search affordances use concise labels and unbroken counts", async () => {
+  const source = await readFile("src/app.js", "utf8");
+  const css = await readFile("src/clarity.css", "utf8");
+  assert.match(source, /placeholder="Search by service or place"/);
+  assert.match(css, /\.rwn-professional \.jump-results small \{[^}]*flex: none;[^}]*white-space: nowrap;/);
+});
