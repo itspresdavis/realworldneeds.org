@@ -230,6 +230,9 @@ async function run() {
 
     // A failed catalog request never deletes the IDs; explicit retry recovers.
     await evaluate(client, `localStorage.setItem('rwn-saved-resources', ${JSON.stringify(JSON.stringify(ids.slice(0,2)))})`);
+    // Leave the document: navigating to the same #saved URL would correctly
+    // retain its already-loaded catalog and never exercise the failed request.
+    await navigate(client, "about:blank");
     await client.call("Network.setBlockedURLs", { urls: ["*search-index.json*"] });
     await navigate(client, `${HOST}/directory#saved`);
     await waitForUI(`document.querySelector('[data-saved-summary]').textContent.includes('could not load')`);
