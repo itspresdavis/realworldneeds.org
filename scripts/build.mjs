@@ -33,7 +33,7 @@ const slugify = (value) => String(value || "unknown")
 
 const kindLabel = (resource) => resource.kind === "direct"
   ? "Service location"
-  : resource.kind === "locator" ? "Resource finder" : "Service network";
+  : resource.kind === "locator" ? "Help finder or referral" : "Service network";
 
 const aidTypes = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
 const aidLabels = (resource) => aidTypes(resource).map((type) => categories[type]?.label || type);
@@ -194,7 +194,7 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
     <a class="skip-link" href="#directory">Skip to directory</a>
     <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="/accessibility">Accessibility</a></nav></header>
     <main id="directory">
-      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p><div class="legal-meta"><span>${resources.length} reviewed listings</span><span>${directCount} service locations</span><span>${coverageCount} countries represented</span><span>Sources checked through ${escapeHtml(latestReview)}</span></div></div></section>
+      <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p></div></section>
       <div class="directory-shell">
         ${breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>

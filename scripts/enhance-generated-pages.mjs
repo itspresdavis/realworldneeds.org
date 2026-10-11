@@ -132,7 +132,10 @@ function assetLinks(release, includeScript) {
   return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
 }
 
-function directorySearchMarkup() {
+function directorySearchMarkup(scope) {
+  const records = scope === "/directory" ? searchIndex.records : (searchIndex.scopes[scope] || []).map(index => searchIndex.records[index]);
+  const countries = [...new Set(records.map(record => record.country))].sort((a, b) => a.localeCompare(b));
+  const countryControl = countries.length > 1 ? `<label class="directory-country-field"><span>Country or area listed</span><select data-directory-country disabled aria-describedby="directory-coverage-note"><option value="">All listed countries and areas</option>${countries.map(country => `<option value="${escapeHtml(country)}">${escapeHtml(country === "Global" ? "Global resources (check coverage)" : country)}</option>`).join("")}</select></label>` : "";
   return `<section id="saved" class="saved-services" data-saved-services aria-labelledby="saved-services-heading">
     <div class="saved-services__heading"><h2 id="saved-services-heading" tabindex="-1">Saved services</h2><a href="#directory-results">Browse directory</a></div>
     <p class="saved-services__privacy">Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.</p>
@@ -144,9 +147,11 @@ function directorySearchMarkup() {
     <p data-saved-status role="status" aria-live="polite"></p>
   </section><section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
-      <label class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></label>
+      <label class="directory-search-control"><span>Search this directory</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></span></label>
+      ${countryControl}
       <button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button>
     </div>
+    <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
     <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
   </section>`;
@@ -160,19 +165,22 @@ function localLinksMarkup(country, entries) {
     .join("")}</div></nav>`;
 }
 
-function enhanceCollectionPage(html, release) {
+function enhanceCollectionPage(html, release, scope) {
   if (!html.includes('<div class="directory-records">')) return html;
   if (!html.includes("directory-enhancements.css")) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n    ${assetLinks(release, true)}`);
   }
   if (!html.includes("data-directory-search")) {
-    const searchMarkup = directorySearchMarkup();
+    const searchMarkup = directorySearchMarkup(scope);
     html = html.replace("</head>", `<link rel="stylesheet" href="/saved-services.css?v=${savedRelease}" /><script type="module" src="/saved-loader.js?v=${savedRelease}"></script>\n</head>`);
     const breadcrumb = /(<nav class="directory-downloads" aria-label="Breadcrumb">[\s\S]*?<\/nav>)/;
     html = breadcrumb.test(html)
       ? html.replace(breadcrumb, `$1\n        ${searchMarkup}`)
       : html.replace('<div class="directory-records">', `${searchMarkup}\n        <div class="directory-records">`);
   }
+  // Keep the coverage and travel caution with the search controls, including
+  // filtered results, instead of repeating it below the form.
+  html = html.replace(/<div class="policy-note"><p><strong>Services can change\.<\/strong>[\s\S]*?<\/p><\/div>/, "<!-- directory-browse-extras -->");
   return html;
 }
 
@@ -207,15 +215,19 @@ const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"))
 // directory.js before it successfully installs a new complete offline release.
 const directoryEntry = await readFile("dist/directory.js", "utf8");
 const resultRenderer = await readFile("dist/directory-results.js", "utf8");
+const stateSource = (await readFile("public/directory-state.js", "utf8")).replaceAll("export ", "");
+const stateImport = 'import { readDirectoryState, writeDirectoryState } from "./directory-state.js";';
+if (!directoryEntry.includes(stateImport)) throw new Error("Directory history import was not found.");
 const rendererImport = 'import { createResultRow } from "./directory-results.js";';
 if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
 const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";';
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
-const directoryBundle = `${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${directoryEntry.replace(rendererImport, "").replace(searchImport, "")}`;
+const directoryBundle = `${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
 // Keep the complete offline entry under its existing 14 KB ceiling, without
-// another runtime request. Only local variable names/whitespace are minified.
-const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: false, mangle: { reserved: ["createResultRow", "root"] } });
+// another runtime request. Conservative constant/boolean simplifications and
+// local name/whitespace minification preserve the self-contained entry.
+const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { defaults: false, booleans: true, conditionals: true, evaluate: true, sequences: true }, mangle: { reserved: ["createResultRow", "root"] } });
 await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search
@@ -240,9 +252,10 @@ try {
   // Local pages are an enhancement; the global directory must still build without them.
 }
 
+const searchIndex = JSON.parse(await readFile("dist/data/search-index.json", "utf8"));
 for (const path of await walkHtml("dist/directory")) {
   const html = await readFile(path, "utf8");
-  await writeFile(path, enhanceCollectionPage(html, directoryRelease));
+  await writeFile(path, enhanceCollectionPage(html, directoryRelease, path.replace(/^dist/, "").replace(/\/index\.html$/, "").replace(/\/page\/\d+$/, "")));
 }
 
 const localByCountry = new Map();
@@ -256,7 +269,7 @@ for (const [country, entries] of localByCountry) {
     let html = await readFile(path, "utf8");
     if (!html.includes("directory-local-links")) {
       const markup = localLinksMarkup(country, entries);
-      html = html.replace('<div class="policy-note">', `${markup}\n        <div class="policy-note">`);
+      html = html.replace("<!-- directory-browse-extras -->", markup);
       await writeFile(path, html);
     }
   } catch {
