@@ -30,7 +30,7 @@ test("generated directory, service, and trust pages share the same professional 
 
   for (const path of pages) {
     const html = await readFile(path, "utf8");
-    assert.match(html, /\/professional-pages\.css\?v=[a-f0-9]{12}/, `${path} is missing professional page CSS`);
+    assert.match(html, /\/professional-pages\.[a-f0-9]{12}\.css\?v=[a-f0-9]{12}/, `${path} is missing professional page CSS`);
     assert.match(html, /\/brand\/rwn-logo-192\.png/, `${path} is missing the official RWN mark`);
     assert.match(html, /twitter:card[^>]+summary_large_image/i, `${path} is missing Twitter card metadata`);
     assert.match(html, /og:image[^>]+earth-blue-marble\.jpg/i, `${path} is missing social imagery`);

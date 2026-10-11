@@ -141,6 +141,6 @@ test("Saved's index version changes with catalog data and every lazy feature dep
   const release = JSON.parse(await readFile("dist/data/release.json", "utf8"));
   assert.equal(release.savedServicesRelease, hash.digest("hex").slice(0, 12));
   const page = await readFile("dist/directory/index.html", "utf8");
-  assert.ok(page.includes(`/saved-loader.js?v=${release.savedServicesRelease}`));
-  assert.ok(page.includes(`/saved-services.css?v=${release.savedServicesRelease}`));
+  assert.ok(page.includes(`${release.offlineAssets["/saved-loader.js"]}?v=${release.savedServicesRelease}`));
+  assert.ok(page.includes(`${release.offlineAssets["/saved-services.css"]}?v=${release.savedServicesRelease}`));
 });

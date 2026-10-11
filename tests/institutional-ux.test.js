@@ -37,8 +37,8 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
   assert.match(html, /data-directory-search/);
   assert.match(html, /data-directory-query/);
   assert.match(html, /data-directory-categories/);
-  assert.match(html, new RegExp(`/directory-enhancements\\.css\\?v=${release.directoryRelease}`));
-  assert.match(html, new RegExp(`/directory\\.js\\?v=${release.directoryRelease}`));
+  assert.ok(html.includes(`${release.offlineAssets["/directory-enhancements.css"]}?v=${release.directoryRelease}`));
+  assert.ok(html.includes(`${release.offlineAssets["/directory.js"]}?v=${release.directoryRelease}`));
   assert.match(html, /<article class="directory-record"/);
   assert.doesNotMatch(html, /noindex/);
 });

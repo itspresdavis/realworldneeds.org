@@ -63,7 +63,7 @@ test("directory connectivity is based on a real uncached same-origin probe", asy
 
 test("every generated directory page loads the hashed connectivity probe", async () => {
   const page = await read("dist/directory/help/food/index.html");
-  assert.match(page, /src="\/offline-status\.js\?v=[a-f0-9]{12}"/);
+  assert.match(page, /src="\/offline-status\.[a-f0-9]{12}\.js\?v=[a-f0-9]{12}"/);
   const release = JSON.parse(await read("dist/data/release.json"));
   assert.match(release.directoryResilienceRelease || "", /^[a-f0-9]{12}$/);
 });

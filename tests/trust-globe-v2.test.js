@@ -65,7 +65,7 @@ test("generated public pages use the same official mark and compact shared prese
   const pages = await readFile("public/professional-pages.css", "utf8");
 
   assert.match(directory, /\/brand\/rwn-logo-192\.png/);
-  assert.match(directory, /\/professional-pages\.css\?v=/);
+  assert.match(directory, /\/professional-pages\.[a-f0-9]{12}\.css\?v=/);
   assert.match(directory, /Find a service in the directory\./);
   assert.doesNotMatch(directory, /Text directory/);
   assert.match(pages, /--page-blue: #24583e/);
