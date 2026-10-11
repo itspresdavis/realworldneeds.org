@@ -1,3 +1,4 @@
+import { phoneLinks } from "../src/utils/phone.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -75,8 +76,8 @@ test("service landing pages surface reviewed next steps before the caution/detai
     assert.ok(html.includes(`href="${escapeHtml(resource.sourceUrl)}"`), `${resource.id} should link its reviewed source in the next steps`);
     assert.ok(html.includes(`/#resource=${encodeURIComponent(resource.id)}`), `${resource.id} should link back to its interactive RWN map state`);
 
-    if (resource.phone) {
-      assert.ok(html.includes(`href="tel:${escapeHtml(resource.phone.replace(/[^+\d]/g, ""))}"`), `${resource.id} should expose its reviewed phone number as a call action`);
+    for (const { href } of phoneLinks(resource.phone)) {
+      assert.ok(html.includes(`href="${href}"`), `${resource.id} should expose its unambiguous phone numbers as call actions`);
     }
     if (resource.kind === "direct") {
       assert.match(html, /maps\.apple\.com/);

@@ -63,8 +63,8 @@ if (notice) {
       actions.className = "directory-global-result-actions";
       actions.setAttribute("aria-label", `Quick actions for ${record.name}`);
 
-      if (record.phone) {
-        actions.append(actionLink(`Call ${record.phone}`, `tel:${record.phone.replace(/[^+\d]/g, "")}`, "is-call"));
+      for (const { label, href } of record.phoneLinks || []) {
+        actions.append(actionLink(`Call ${label}`, href, "is-call"));
       }
       if (record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
         const maps = mapUrls(record);
@@ -74,7 +74,13 @@ if (notice) {
       actions.append(actionLink("View details", link.href, "is-details"));
 
       link.before(wrapper);
-      wrapper.append(link, actions);
+      wrapper.append(link);
+      if (record.phone && (record.phoneLinks?.length !== 1 || record.phoneLinks[0].label !== record.phone)) {
+        const phone = document.createElement("small");
+        phone.textContent = `Phone: ${record.phone}`;
+        link.append(phone);
+      }
+      wrapper.append(actions);
     }
     setOffline(offline);
   };
