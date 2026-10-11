@@ -880,3 +880,68 @@ body.rwn-professional main { display: block; }
 /* Keep the map key and controls legible over both land and open water. */
 .rwn-professional.rwn-atlas .globe-meta { background: #f8fcf5ed; border: 1px solid #c3d4c8; border-radius: 10px; padding: .5rem .65rem; }
 .rwn-professional.rwn-atlas .atlas-key { width: fit-content; max-width: calc(100% - 2.8rem); padding: .6rem .75rem; border-radius: 8px; background: #f8fcf5ed; border: 1px solid #c3d4c8; }
+
+/* The text-first fallback is a quiet notice, never an empty map-sized panel.
+   Scope every rule to the existing failure state so a recovered globe keeps
+   its normal dimensions, controls and marker key. */
+.rwn-professional.rwn-atlas .globe-stage.is-globe-unavailable {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  align-self: start;
+  border-radius: 10px;
+  background: #f8fcf5 !important;
+  box-shadow: none;
+}
+.rwn-professional .globe-stage.is-globe-unavailable :is(.globe-meta, .atlas-key, .globe-empty, .globe-cluster-tray, .globe-gesture-hint, #globeHelp) {
+  display: none !important;
+}
+.rwn-professional .globe-stage.is-globe-unavailable .globe-readout {
+  /* Keep the existing live announcement, without repeating the visible notice. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.rwn-professional .globe-stage.is-globe-unavailable .globe-fallback {
+  position: static;
+  inset: auto;
+  gap: .85rem;
+  padding: 1.35rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #405a50;
+  font-size: .94rem;
+  line-height: 1.6;
+}
+.rwn-professional .globe-stage.is-globe-unavailable #globeFallbackMessage {
+  color: #153c30;
+  font-weight: 700;
+}
+.rwn-professional .globe-stage.is-globe-unavailable .globe-fallback__action {
+  border: 1px solid #24583e;
+  border-radius: 6px;
+  background: #24583e;
+  color: #fff;
+}
+.rwn-professional .globe-stage.is-globe-unavailable .globe-fallback__retry {
+  border: 1px solid #8baea0;
+  border-radius: 6px;
+  color: #24583e;
+}
+.rwn-professional .globe-stage.is-globe-unavailable .globe-fallback__action:hover {
+  background: #153c30;
+}
+.rwn-professional .globe-stage.is-globe-unavailable .globe-fallback__retry:hover {
+  background: #e0eee4;
+}
+.rwn-professional .globe-stage.is-globe-unavailable :is(.globe-fallback__action, .globe-fallback__retry):focus-visible {
+  outline: 3px solid #24583e;
+  outline-offset: 3px;
+}
