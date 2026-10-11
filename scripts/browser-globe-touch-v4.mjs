@@ -1,3 +1,4 @@
+import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -103,11 +104,20 @@ async function waitForExpression(client, expression, message) {
 const touchPoint = (x, y, id = 0) => ({ x, y, id, radiusX: 8, radiusY: 8, force: 1 });
 const touch = (client, type, points) => client.call("Input.dispatchTouchEvent", { type, touchPoints: points });
 
-async function canvasGeometry(client) {
+async function canvasGeometry(client, recenter = true) {
+  if (recenter) await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
+  const stable = await waitForScrollStability({
+    sample: () => evaluate(client, `new Promise(resolve => requestAnimationFrame(() => {
+      const rect=document.getElementById('globeCanvas').getBoundingClientRect();
+      const viewport=window.visualViewport;
+      resolve({at:performance.now(),scrollX,scrollY,viewportX:viewport?.offsetLeft || 0,viewportY:viewport?.offsetTop || 0,viewportWidth:viewport?.width || innerWidth,viewportHeight:viewport?.height || innerHeight,canvasX:rect.left,canvasY:rect.top,canvasWidth:rect.width,canvasHeight:rect.height});
+    }))`),
+    wait: sleep
+  });
+  await evaluate(client, `(window.__rwnScrollPreconditions ||= []).push(${JSON.stringify(stable)})`);
   return evaluate(client, `(() => {
     const canvas = document.getElementById('globeCanvas');
     const stage = document.querySelector('.globe-stage');
-    canvas.scrollIntoView({ block: 'center', behavior: 'auto' });
     const rect = canvas.getBoundingClientRect();
     const candidates = [];
     for (const yf of [.34,.46,.58,.68]) for (const xf of [.25,.38,.5,.62,.75]) {
@@ -118,7 +128,7 @@ async function canvasGeometry(client) {
     }
     return {
       point: candidates.find((item) => item.canvas) || null,
-      scrollY,
+      scrollX, scrollY,
       stageTouchAction: getComputedStyle(stage).touchAction,
       canvasTouchAction: getComputedStyle(canvas).touchAction,
       rect: { x: rect.left + scrollX, y: rect.top + scrollY, width: rect.width, height: rect.height }
@@ -203,6 +213,17 @@ async function run() {
       window.__rwnInputTimings = [];
       window.__rwnFrameSamples = {};
       window.__rwnInputTrace = [];
+      window.__rwnScrollPreconditions = [];
+      window.__rwnScrollTrace = [];
+      const recordScroll = (type) => {
+        const rows=window.__rwnScrollTrace;
+        rows.push({type,at:performance.now(),scrollX,scrollY,viewportX:window.visualViewport?.offsetLeft || 0,viewportY:window.visualViewport?.offsetTop || 0});
+        if(rows.length>200)rows.shift();
+      };
+      window.addEventListener('scroll', () => recordScroll('scroll'), {passive:true});
+      window.addEventListener('resize', () => recordScroll('resize'), {passive:true});
+      window.visualViewport?.addEventListener('scroll', () => recordScroll('viewport-scroll'), {passive:true});
+      window.visualViewport?.addEventListener('resize', () => recordScroll('viewport-resize'), {passive:true});
       window.__rwnStartFrameSample = (label) => {
         window.__rwnSamplingFrames=true;
         const deltas=[]; window.__rwnFrameSamples[label]=deltas;
@@ -214,7 +235,7 @@ async function run() {
         document.addEventListener(type, (event) => {
           if (!event.target.closest?.('.globe-stage')) return;
           const rows=window.__rwnInputTrace;
-          rows.push({type,at:performance.now(),target:event.target.id || event.target.className,touches:Array.from(event.touches || []).map(t=>({id:t.identifier,x:t.clientX,y:t.clientY})),changed:Array.from(event.changedTouches || []).map(t=>t.identifier)});
+          rows.push({type,at:performance.now(),scrollX,scrollY,target:event.target.id || event.target.className,touches:Array.from(event.touches || []).map(t=>({id:t.identifier,x:t.clientX,y:t.clientY})),changed:Array.from(event.changedTouches || []).map(t=>t.identifier)});
           if(rows.length>100)rows.shift();
         }, {capture:true,passive:true});
       }
@@ -237,6 +258,7 @@ async function run() {
 
     phase = "vertical-scroll";
     const vertical = await canvasGeometry(client);
+    observations.verticalStart = vertical;
     if (!vertical.point) throw new Error("No unobstructed WebGL touch point was available.");
     if (vertical.stageTouchAction !== "pan-y" || vertical.canvasTouchAction !== "pan-y") throw new Error(`Map touch policy is not pan-y: ${JSON.stringify(vertical)}`);
     await touch(client, "touchStart", [touchPoint(vertical.point.x, vertical.point.y)]);
@@ -252,8 +274,15 @@ async function run() {
 
     observations.vertical = verticalEnd;
     phase = "horizontal-drag";
-    const horizontal = await canvasGeometry(client);
-    const beforeDigest = await cropDigest(client, horizontal.rect);
+    let horizontal = await canvasGeometry(client);
+    const captureGeometry = horizontal;
+    observations.horizontalCapture = captureGeometry;
+    const beforeDigest = await cropDigest(client, captureGeometry.rect);
+    // A screenshot can take a slow compositor several frames. Observe again
+    // afterward and record the actual start position immediately before input.
+    horizontal = await canvasGeometry(client, false);
+    observations.horizontalStart = horizontal;
+    if (!sameCaptureGeometry(captureGeometry, horizontal)) throw new Error("Globe capture geometry changed before horizontal input; rotation pixel comparison would be invalid.");
     await evaluate(client, "window.__rwnStartFrameSample('horizontalDrag')");
     await touch(client, "touchStart", [touchPoint(horizontal.point.x, horizontal.point.y)]);
     for (let i = 1; i <= 6; i += 1) {
@@ -274,8 +303,9 @@ async function run() {
     await touch(client, "touchEnd", []);
     await sleep(320);
     await evaluate(client, "window.__rwnSamplingFrames=false");
-    const afterDigest = await cropDigest(client, horizontal.rect);
+    const afterDigest = await cropDigest(client, captureGeometry.rect);
     const horizontalEnd = await evaluate(client, `({ scrollY, moving:document.querySelector('.globe-stage')?.classList.contains('is-globe-moving') || false, pinOpacity:Number(getComputedStyle(document.getElementById('pinLayer')).opacity || 0) })`);
+    observations.horizontalEnd = horizontalEnd;
     if (Math.abs(horizontalEnd.scrollY - horizontal.scrollY) > 18) throw new Error(`Horizontal globe drag moved the page by ${Math.abs(horizontalEnd.scrollY - horizontal.scrollY)}px.`);
     // Markers stay mounted and keep tracking their coordinates while the globe
     // moves; only the text label chrome fades, so nothing flickers in and out.
@@ -381,6 +411,8 @@ async function run() {
       longTasks: window.__rwnLongTasks || [],
       inputTimings: window.__rwnInputTimings || [],
       frameIntervals: window.__rwnFrameSamples || {},
+      scrollTrace: window.__rwnScrollTrace || [],
+      scrollPreconditions: window.__rwnScrollPreconditions || [],
       navigation: performance.getEntriesByType('navigation').map(e=>({responseEnd:e.responseEnd,domContentLoaded:e.domContentLoadedEventEnd,load:e.loadEventEnd})),
       globeAssets: performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration})),
       device: {width:390,height:844,emulatedTouch:true,engine:'Chromium'}
@@ -461,10 +493,10 @@ async function run() {
           const canvas=document.getElementById('globeCanvas');
           const gl=canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
           const stage=document.querySelector('.globe-stage');
-          return {readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
+          return {readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,scrollTrace:window.__rwnScrollTrace,scrollPreconditions:window.__rwnScrollPreconditions,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
         })()`);
         failure.runtime = await inspectFailedGlobeState(client);
-        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions });
+        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions, scrollPreconditionFailure: error.scrollStability || null });
         await mkdir("qa-screenshots", { recursive: true });
         await writeFile("qa-screenshots/globe-touch-failure.json", JSON.stringify(failure, null, 2));
         const shot=await client.call("Page.captureScreenshot", {format:"png",fromSurface:true,captureBeyondViewport:false});
