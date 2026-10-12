@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import {
   PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
-  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady
+  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded
 } from '../scripts/qa-page-menu-return.mjs';
 
 const event = (persisted, timeOrigin = 100, extra = {}) => ({ persisted, trusted: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, timeOrigin, ...extra });
@@ -212,4 +212,56 @@ test('worker readiness observes actual activation and control without unregister
     clearTimeout() {}
   });
   assert.equal(state.state, 'activated'); assert.equal(state.controller, 'http://rwn.test/sw.js'); assert.equal(state.durationMs, 50);
+});
+
+
+const historySnapshot = (entries, index = entries.length - 1) => ({ entries, index, entry: entries[index] });
+const historyEntry = (id, path = `/previous-${id}`) => ({ id, url: `http://127.0.0.1:9999${path}` });
+
+test('native menu navigation accepts capped Chrome history with unchanged currentIndex and exact adjacent entry IDs', () => {
+  const before = historySnapshot([...Array.from({ length: 49 }, (_, index) => historyEntry(index + 1)), historyEntry(424, PAGE_MENU_LOCAL)]);
+  const after = historySnapshot([...before.entries.slice(1), historyEntry(426, '/directory#saved')]);
+  assert.equal(before.index, 49); assert.equal(after.index, 49);
+  assert.equal(after.entries[48].id, before.entry.id);
+  assert.equal(pageMenuNativeEntryWasAdded(before, after, after.entry.url), true);
+});
+
+test('native menu navigation accepts uncapped entry growth and discarded forward history', () => {
+  const before = historySnapshot([historyEntry(1), historyEntry(424, PAGE_MENU_LOCAL)]);
+  const after = historySnapshot([...before.entries, historyEntry(426, '/directory#saved')]);
+  assert.equal(pageMenuNativeEntryWasAdded(before, after, after.entry.url), true);
+  const withForward = historySnapshot([...before.entries, historyEntry(425, '/sources')], 1);
+  assert.equal(pageMenuNativeEntryWasAdded(withForward, after, after.entry.url), true);
+});
+
+
+test('native menu history oracle rejects intervening, extra, replaced, reused and wrong-target entries', () => {
+  const before = historySnapshot([historyEntry(1), historyEntry(424, PAGE_MENU_LOCAL)]);
+  const destination = historyEntry(426, '/directory#saved');
+  const after = historySnapshot([...before.entries, destination]);
+  for (const [name, previous, current] of [
+    ['intervening navigation', before, historySnapshot([...before.entries, historyEntry(425, '/sources'), destination])],
+    ['extra navigation after destination', before, historySnapshot([...after.entries, historyEntry(427, '/transparency')])],
+    ['replaced source', before, historySnapshot([before.entries[0], destination])],
+    ['reused source ID', before, historySnapshot([...before.entries, { ...destination, id: 424 }])],
+    ['reused earlier entry ID', before, historySnapshot([...before.entries, { ...destination, id: 1 }])],
+    ['reused forward entry ID', historySnapshot([...before.entries, destination], 1), after],
+    ['wrong preceding ID with same source URL', before, historySnapshot([before.entries[0], { ...before.entry, id: 425 }, destination])],
+    ['mutated preceding source URL', before, historySnapshot([before.entries[0], { ...before.entry, url: 'http://127.0.0.1:9999/directory' }, destination])],
+    ['wrong destination URL', before, historySnapshot([...before.entries, historyEntry(426, '/sources')])],
+    ['old forward history remains after selected destination', before, historySnapshot([...after.entries, historyEntry(427)], 2)],
+    ['selected source does not match source snapshot', { ...before, entry: before.entries[0] }, after],
+    ['selected destination does not match destination snapshot', before, { ...after, entry: before.entry }],
+    ['invalid destination index', before, { ...after, index: -1 }],
+    ['missing source history', null, after],
+    ['missing destination history', before, { ...after, entries: null }],
+    ['malformed history entry', before, historySnapshot([null, before.entry, destination])]
+  ]) assert.equal(pageMenuNativeEntryWasAdded(previous, current, destination.url), false, name);
+});
+
+test('browser orchestration uses the tested adjacency oracle and retains full native history evidence', async () => {
+  const helper = await readFile(new URL('../scripts/qa-page-menu-return.mjs', import.meta.url), 'utf8');
+  assert.match(helper, /entries: history\.entries/);
+  assert.match(helper, /assert\(pageMenuNativeEntryWasAdded\(sourceEntry, destinationEntry, destinationUrl\)/);
+  assert.doesNotMatch(helper, /destinationEntry\.index === sourceEntry\.index \+ 1/);
 });

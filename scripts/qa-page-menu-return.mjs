@@ -133,6 +133,22 @@ export function pageMenuReturnedFromBFCache(actual, source) {
     && hide?.persisted === true && hide.trusted === true && hide.href === source.href && hide.timeOrigin === source.timeOrigin);
 }
 
+export function pageMenuNativeEntryWasAdded(source, destination, destinationUrl) {
+  const valid = snapshot => Boolean(Array.isArray(snapshot?.entries) && Number.isInteger(snapshot.index)
+    && snapshot.index >= 0 && snapshot.index < snapshot.entries.length
+    && snapshot.entries.every(entry => Number.isInteger(entry?.id) && typeof entry.url === 'string' && entry.url.length > 0)
+    && new Set(snapshot.entries.map(entry => entry.id)).size === snapshot.entries.length
+    && snapshot.entry?.id === snapshot.entries[snapshot.index].id && snapshot.entry?.url === snapshot.entries[snapshot.index].url);
+  if (!valid(source) || !valid(destination)) return false;
+  const preceding = destination.entries[destination.index - 1];
+  // Chrome drops its oldest entry at the history cap, so a real new navigation
+  // can leave currentIndex unchanged. Verify exact adjacent identities in the
+  // post-navigation snapshot instead of comparing absolute array positions.
+  return destination.index === destination.entries.length - 1 && preceding?.id === source.entry.id
+    && preceding.url === source.entry.url && destination.entry.url === destinationUrl
+    && destination.entry.id !== source.entry.id && !source.entries.some(entry => entry.id === destination.entry.id);
+}
+
 export function pageMenuFreshDocument(actual, previousTimeOrigin) {
   const shows = actual.probe?.shows;
   return Boolean(actual.documentPresent && actual.ready && Number.isFinite(actual.timeOrigin) && actual.timeOrigin !== previousTimeOrigin
@@ -245,7 +261,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 2 });
     await client.call('Input.insertText', { text: query });
   };
-  const entry = async () => { const history = await client.call('Page.getNavigationHistory'); return { entry: history.entries[history.currentIndex], index: history.currentIndex }; };
+  const entry = async () => { const history = await client.call('Page.getNavigationHistory'); return { entry: history.entries[history.currentIndex], index: history.currentIndex, entries: history.entries }; };
   const open = async path => {
     const before = (await snapshot()).timeOrigin;
     await navigate(client, 'about:blank');
@@ -286,8 +302,8 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     const destination = await settled(s => s.href === destinationUrl && pageMenuFreshDocument(s, source.timeOrigin) && !s.menuOpen
       && (target !== '/directory#saved' || s.saved && s.panelVisible), 'Native menu link destination');
     const destinationEntry = await entry();
-    assert(destinationEntry.index === sourceEntry.index + 1 && destinationEntry.entry.id !== sourceEntry.entry.id
-      && destinationEntry.entry.url === destinationUrl, 'Menu link did not create one native history entry', { sourceEntry, destinationEntry });
+    assert(pageMenuNativeEntryWasAdded(sourceEntry, destinationEntry, destinationUrl),
+      'Menu link did not add one new native entry adjacent to its exact source', { sourceEntry, destinationEntry });
     await client.call('Page.navigateToHistoryEntry', { entryId: sourceEntry.entry.id });
     let returned = await settled(s => pageMenuReturnedFromBFCache(s, source) && pageMenuRetainedState(s, source)
       && !s.menuOpen && !s.saved && !s.panelVisible && s.focus.visible && !s.focus.inMenu && Math.abs(s.scroll - source.scroll) <= 1,
