@@ -250,3 +250,85 @@ test('quiet waiter rejects unchanged wrong documents and continuously moving nat
     assert.equal(time, 400);
   }
 });
+
+
+async function nativeKeyCalls(value, shift = false, mutate = source => source) {
+  const source = verifyPageMenuReflow.toString(), calls = [];
+  const helper = mutate(source.slice(source.indexOf('  const key = async'), source.indexOf('  const click = async')));
+  const key = vm.runInNewContext(`${helper}; key`, {
+    client: { call: async (method, params) => { calls.push({ method, params: JSON.parse(JSON.stringify(params)) }); } },
+    frame: async () => { calls.push({ frame: true }); }
+  });
+  await key(value, shift); return calls;
+}
+
+const enterSequence = () => [
+  { method: 'Input.dispatchKeyEvent', params: { type: 'keyDown', key: 'Enter', code: 'Enter',
+    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 0, text: '\r', unmodifiedText: '\r' } },
+  { method: 'Input.dispatchKeyEvent', params: { type: 'keyUp', key: 'Enter', code: 'Enter',
+    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 0 } },
+  { frame: true }
+];
+
+test('actual Enter helper sends character-bearing keyDown then keyUp before observing close/reopen', async () => {
+  assert.deepEqual(await nativeKeyCalls('Enter'), enterSequence());
+  assert.deepEqual(await nativeKeyCalls('Enter'), enterSequence(), 'Reopening uses the same complete native activation sequence');
+});
+
+test('exact activation contract rejects the original raw-only Enter mutation', async () => {
+  const calls = await nativeKeyCalls('Enter', false, source => source.replace(
+    "const keyDown = value === 'Enter' ? 'keyDown' : 'rawKeyDown';", "const keyDown = 'rawKeyDown';"));
+  assert.equal(calls[0].params.type, 'rawKeyDown');
+  assert.equal(calls[0].params.text, undefined);
+  assert.equal(calls[0].params.unmodifiedText, undefined);
+  assert.throws(() => assert.deepEqual(calls, enterSequence()), assert.AssertionError);
+});
+
+for (const shift of [false, true]) test(`native Tab sequence is unchanged (Shift=${shift})`, async () => {
+  assert.deepEqual(await nativeKeyCalls('Tab', shift), [
+    ...['rawKeyDown', 'keyUp'].map(type => ({ method: 'Input.dispatchKeyEvent', params: { type, key: 'Tab', code: 'Tab',
+      windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9, modifiers: shift ? 8 : 0 } })), { frame: true }
+  ]);
+});
+
+
+test('actual wheel helper observes bounded quiet state after native dispatch instead of a fixed delay', async () => {
+  const source = verifyPageMenuReflow.toString(), calls = [];
+  const helper = source.slice(source.indexOf('  const wheel = async'), source.indexOf('  const load = async'));
+  const sample = () => {}, predicate = () => {}, result = { settled: true };
+  const wheel = vm.runInNewContext(`${helper}; wheel`, {
+    client: { call: async (method, params) => { calls.push({ method, params: JSON.parse(JSON.stringify(params)) }); } },
+    frame: async () => { calls.push('frame'); }, snapshot: () => {},
+    waitForPageMenuReflowQuiet: async options => { assert.equal(options.sample, sample); assert.equal(options.predicate, predicate); calls.push('quiet'); return result; }
+  });
+  assert.equal(await wheel(box(10, 60, 300, 150), 2000, { sample, predicate }), result);
+  assert.deepEqual(calls, [
+    { method: 'Input.dispatchMouseEvent', params: { type: 'mouseWheel', x: 160, y: 135, deltaX: 0, deltaY: 2000 } },
+    'frame', 'quiet'
+  ]);
+  assert.doesNotMatch(helper, /sleep\(/);
+});
+
+test('actual fixed-wheel sampler rejects even a transient page-scroll leak before it could return to baseline', async () => {
+  const source = verifyPageMenuReflow.toString();
+  const helper = source.slice(source.indexOf('      const menuWheel ='), source.indexOf('      if (scrollable)', source.indexOf('      const menuWheel =')));
+  let time = 0, sampleCount = 0;
+  const initial = fixture(); initial.scrollY = 241;
+  const menuWheel = vm.runInNewContext(`${helper}; menuWheel`, {
+    expected: expected(), reverseScrollY: 241,
+    snapshot: async () => ({ ...initial, scrollY: ++sampleCount === 2 ? 245 : 241 }),
+    check: (state, expected, options) => { assert.deepEqual(pageMenuReflowViolations(state, expected, options), []); return state; },
+    wheel: async (_box, _delta, options) => waitForPageMenuReflowQuiet({ ...options, now: () => time, wait: async ms => { time += ms; } })
+  });
+  await assert.rejects(menuWheel(initial, -2000), error => error instanceof assert.AssertionError && /page-scroll-leak/.test(error.message));
+  assert.equal(sampleCount, 2, 'A later return to baseline must not hide observed leakage');
+});
+
+test('baseline keyboard motion must become quiet before wheel can claim separate page-scroll movement', () => {
+  const source = verifyPageMenuReflow.toString();
+  const quiet = source.indexOf('const keyboard = await waitForPageMenuReflowQuiet');
+  const wheel = source.indexOf('const pointer = await wheel(panel, 800');
+  assert.ok(quiet >= 0 && wheel > quiet);
+  assert.match(source.slice(quiet, wheel), /pageMenuReflowIdentity\(state, baselineExpected\) && state.links\[5\].focused/);
+  assert.match(source.slice(wheel), /state.nav.scrollTop === 0 && state.scrollY > keyboard.scrollY/);
+});

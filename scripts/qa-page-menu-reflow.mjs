@@ -199,8 +199,12 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
   };
   const key = async (value, shift = false) => {
     const code = value === 'Tab' ? 9 : 13;
-    for (const type of ['rawKeyDown', 'keyUp']) await client.call('Input.dispatchKeyEvent', {
-      type, key: value, code: value, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers: shift ? 8 : 0
+    // Enter needs the character-bearing keyDown used by the existing native
+    // keyboard QA. rawKeyDown alone dispatches keydown without activation.
+    const keyDown = value === 'Enter' ? 'keyDown' : 'rawKeyDown';
+    for (const type of [keyDown, 'keyUp']) await client.call('Input.dispatchKeyEvent', {
+      type, key: value, code: value, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers: shift ? 8 : 0,
+      ...(type === 'keyDown' ? { text: '\r', unmodifiedText: '\r' } : {})
     });
     await frame();
   };
@@ -209,9 +213,10 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
     for (const type of ['mousePressed', 'mouseReleased']) await client.call('Input.dispatchMouseEvent', { type, ...point, button: 'left', clickCount: 1 });
     if (settle) await frame();
   };
-  const wheel = async (box, deltaY) => {
+  const wheel = async (box, deltaY, { sample = snapshot, predicate }) => {
     await client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2, deltaX: 0, deltaY });
-    await sleep(160); await frame();
+    await frame();
+    return waitForPageMenuReflowQuiet({ sample, predicate });
   };
   const load = async (href, width, height) => {
     await client.call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width <= 650, screenWidth: width, screenHeight: height });
@@ -246,15 +251,17 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
       await click((await snapshot()).summary.box);
       const opened = await snapshot();
       for (let index = 0; index < 6; index++) await key('Tab');
-      const keyboard = await snapshot();
+      const keyboard = await waitForPageMenuReflowQuiet({ sample: snapshot,
+        predicate: state => pageMenuReflowIdentity(state, baselineExpected) && state.links[5].focused });
       const issues = pageMenuReflowViolations(keyboard, baselineExpected, { focusedIndex: 5 });
       assert(pageMenuReflowIdentity(keyboard, baselineExpected) && keyboard.links[5].focused
         && keyboard.links[5].box.bottom > keyboard.height && issues.includes('panel-outside-viewport')
         && issues.includes('focused-link-clipped'), 'Real baseline did not reproduce the short-height defect', { keyboard, issues });
       await capture(client, 'page-menu-reflow-baseline-320x250.png');
       const panel = { ...opened.nav.box, bottom: Math.min(opened.nav.box.bottom, opened.height - 1) };
-      await wheel(panel, 800);
-      const pointer = await snapshot();
+      const pointer = await wheel(panel, 800, {
+        predicate: state => pageMenuReflowIdentity(state, baselineExpected) && state.nav.scrollTop === 0 && state.scrollY > keyboard.scrollY
+      });
       assert(pageMenuReflowIdentity(pointer, baselineExpected) && keyboard.nav.scrollTop === 0 && pointer.nav.scrollTop === 0
         && pointer.scrollY > keyboard.scrollY && pointer.links[5].box.bottom > pointer.height,
         'Baseline wheel did not reproduce page-scroll leakage', { keyboard, pointer });
@@ -293,21 +300,25 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
       await key('Enter');
       record.reopened = check(await snapshot(), expected, { scrollY: reverseScrollY });
       const scrollable = record.reopened.nav.scrollHeight > record.reopened.nav.clientHeight;
+      const menuWheel = (state, deltaY) => wheel(state.nav.port, deltaY, {
+        // Every intermediate sample retains the original page-scroll baseline;
+        // leaked scroll must throw, never settle into an accepted new baseline.
+        sample: async () => check(await snapshot(), expected, { scrollY: reverseScrollY }),
+        predicate: state => deltaY < 0 ? state.nav.scrollTop === 0
+          : Math.abs(state.nav.scrollTop - (state.nav.scrollHeight - state.nav.clientHeight)) <= .5
+      });
       if (scrollable) {
         // Reverse traversal resets toward the first link naturally. A negative
         // wheel reaches the boundary; the following wheel must scroll the menu.
-        await wheel(record.reopened.nav.port, -2000);
-        record.top = check(await snapshot(), expected, { scrollY: reverseScrollY });
+        record.top = await menuWheel(record.reopened, -2000);
         assert(record.top.nav.scrollTop === 0, `${current} wheel cannot reach first link`, record.top.nav);
-        await wheel(record.top.nav.port, 2000);
-      }
-      record.pointer = check(await snapshot(), expected, { scrollY: reverseScrollY });
+        record.pointer = await menuWheel(record.top, 2000);
+      } else record.pointer = check(await snapshot(), expected, { scrollY: reverseScrollY });
       const final = record.pointer.links[5], viewport = { left: 0, top: 0, right: width, bottom: height };
       assert(final.hit && contained(final.box, record.pointer.nav.port) && contained(final.box, viewport)
         && (!scrollable || record.pointer.nav.scrollTop > 0), `${current} pointer cannot reach Transparency`, record.pointer);
       if (scrollable) {
-        await wheel(record.pointer.nav.port, 2000);
-        record.boundary = check(await snapshot(), expected, { scrollY: reverseScrollY });
+        record.boundary = await menuWheel(record.pointer, 2000);
         assert(record.boundary.nav.scrollTop === record.pointer.nav.scrollTop, `${current} wheel did not settle at bottom`, record.boundary.nav);
       }
       const input = (record.boundary || record.pointer).inputs;
