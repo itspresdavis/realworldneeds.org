@@ -1,3 +1,4 @@
+import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 
 // Exercise rendered results with trusted keyboard input. Keep the oracle based
@@ -132,7 +133,9 @@ async function resultsThroughRecord(context, surface, maximum, ids) {
 }
 
 async function activateCategory(context, surface) {
-  const activation = await activate(context, surface.category);
+  const activation = surface === surfaces.directory
+    ? await selectDirectoryNeed({ ...context, click: selector => activate(context, selector) }, "Food")
+    : await activate(context, surface.category);
   try {
     // Quick needs synchronize their pressed state after the scheduled render;
     // a fixed sleep can observe the prior state while a busy frame is pending.

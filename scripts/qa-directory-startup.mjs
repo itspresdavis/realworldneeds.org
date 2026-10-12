@@ -1,3 +1,4 @@
+import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 
 // CI-only regression: hold the real entry module at the network boundary, type
@@ -206,7 +207,7 @@ export function directoryStartupSavedSnapshot(base) {
   const inputRect = pick('[data-directory-query]')?.getBoundingClientRect();
   const headerRect = pick('.legal-header')?.getBoundingClientRect();
   const style = active ? getComputedStyle(active) : null;
-  const useful = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-category], [data-directory-clear], .directory-global-result, .directory-records h2 a'));
+  const useful = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-need], [data-directory-category], [data-directory-clear], .directory-global-result, .directory-records h2 a'));
   const visible = useful && rect.width > 0 && rect.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6
     && rect.bottom <= innerHeight - 6 && rect.left >= 0 && rect.right <= innerWidth && style.display !== 'none'
     && !['hidden', 'collapse'].includes(style.visibility) && style.opacity !== '0';
@@ -478,7 +479,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       && s.history?.path === '/directory' && s.history.query === 'WIC' && s.history.country === 'United States'
       && s.history.category === category.toLowerCase() && s.history.shown === 60;
     await wait(s => committed(s, ''), 'Stale-history WIC and country search did not commit before selecting Food');
-    await click('[data-directory-category="Food"]');
+    await selectDirectoryNeed({ client, evaluate, click }, "Food");
     await wait(s => committed(s, 'Food'), 'Stale-history setup did not find WIC');
     await click('[data-directory-more]');
     const stale = await wait(s => s.rows.length === 120 && s.history?.shown === 120 && s.history?.focus === s.rows[60].href && s.scroll > 200, 'Stale-history setup did not remember listing focus and pagination');

@@ -1,3 +1,4 @@
+import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { isDirectoryStartupNavigationError } from "./qa-directory-startup.mjs";
 
@@ -123,7 +124,7 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
       await filtered(referralPath, "library", "", library, scopeIds);
       await capture(client, `local-search-referral-library-${width}.png`);
       await clear(referralPath, scopeIds);
-      await click('[data-directory-category="Food"]');
+      await selectDirectoryNeed({ client, evaluate, click }, "Food");
       await filtered(referralPath, "", "Food", wic, scopeIds);
       await type("WIC");
       const searched = await filtered(referralPath, "WIC", "Food", wic, scopeIds);

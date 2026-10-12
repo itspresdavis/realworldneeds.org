@@ -1,3 +1,4 @@
+import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { isDirectoryStartupNavigationError, directoryStartupClickPoint, directoryStartupClickWasDelivered, directorySavedBrowseHeaderPoint } from "./qa-directory-startup.mjs";
 export { directorySavedBrowseHeaderPoint } from "./qa-directory-startup.mjs";
@@ -81,7 +82,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     await type('WIC');
     await wait(s => s.query === 'WIC' && s.rows.length === 60 && s.country === 'United States', 'Country and program search did not settle');
     if (!(await evaluate(client, 'window.__directoryInputs.length > 0 && window.__directoryInputs.every(Boolean)'))) throw new Error('Search was not entered through native browser input');
-    await click('[data-directory-category="Food"]');
+    await selectDirectoryNeed({ client, evaluate, click }, "Food");
     await wait(s => s.category === 'Food' && s.rows.length === 60, 'Need filter did not settle');
     await click('[data-directory-more]');
     const before = await wait(s => s.rows.length === 120 && s.focus === s.rows[60].href, 'Second result batch did not focus its first listing');
@@ -176,7 +177,7 @@ export function directorySavedBrowseSnapshot(base) {
     return Boolean(hit && (hit === node || node.contains(hit)));
   };
   const service = Boolean(active?.matches('.directory-global-result, .directory-records h2 a'));
-  const control = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-category], [data-directory-clear], [data-fewer-words], [data-clear-all]'));
+  const control = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-need], [data-directory-category], [data-directory-clear], [data-fewer-words], [data-clear-all]'));
   const rect = active?.getBoundingClientRect();
   const storage = value => Object.fromEntries(Object.keys(value).sort().map(key => [key, value.getItem(key)]));
   return {
@@ -408,7 +409,7 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
       await type('WIC');
       await evaluate(client, `(() => { const country = document.querySelector('[data-directory-country]'); country.value = 'United States'; country.dispatchEvent(new Event('change', { bubbles: true })); })()`);
       await wait(s => committed(s, { ...wic(60), category: 'All help' }), 'WIC and US history must commit before selecting Food');
-      await click('[data-directory-category="Food"]');
+      await selectDirectoryNeed({ client, evaluate, click }, "Food");
       const first = await wait(s => committed(s, wic(60)) && s.history.shown === 60, 'WIC/US/Food first batch must commit before Saved');
       assert(new Set(first.rows.map(row => row.href)).size === 60 && first.rows.every(row => row.text.includes('United States') && row.text.includes('Source checked')), 'First WIC batch identities or source metadata failed', first);
       const sixty = await browse(await position(`.directory-global-result[href="${first.rows[12].href}"]`), 'wic-60');
@@ -449,7 +450,7 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
         assert(scopeInitial.country === undefined, 'Single-country/local scope unexpectedly has a country picker', scopeInitial);
         await type(fixture.query);
         await wait(s => committed(s, { ...fixture, category: 'All help', country: undefined }), 'Scoped query must commit before its category');
-        if (fixture.category === 'Food') await click('[data-directory-category="Food"]');
+        if (fixture.category === 'Food') await selectDirectoryNeed({ client, evaluate, click }, "Food");
         const filtered = await wait(s => committed(s, { ...fixture, country: undefined }), 'Scoped Saved fixture did not settle');
         if (fixture.query === 'library') assert(filtered.rows[0].href === '/service/new-york-public-library-access', 'Local library scope returned the wrong identity', filtered);
         const before = await position(`.directory-global-result[href="${filtered.rows[Math.min(12, filtered.rows.length - 1)].href}"]`);

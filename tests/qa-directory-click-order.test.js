@@ -98,6 +98,7 @@ test('stale-history setup commits WIC/country before Food and Food/history befor
   const order = [];
   let pending = '';
   const helper = closure('seedStaleHistory', {
+    selectDirectoryNeed: ({ click }, value) => click(`[data-directory-category=${JSON.stringify(value)}]`),
     client: {}, type: async query => { order.push('type'); state.query = query; },
     evaluate: async () => { order.push('country'); state.country = 'United States'; state.count = 'Searching this directory…'; pending = 'country'; },
     click: async selector => {
