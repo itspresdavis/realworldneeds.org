@@ -1,3 +1,4 @@
+import { relatedResources } from "./related-resources.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { minify } from "terser";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -5,7 +6,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
-import { formatResourcePlace } from "../src/utils/geo.js";
+import { formatResourcePlace, isExactServiceSite } from "../src/utils/geo.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
 
 const SITE_ORIGIN = "https://www.realworldneeds.org";
@@ -49,60 +50,33 @@ async function directoryAssetRelease() {
   return hash.digest("hex").slice(0, 12);
 }
 
-function haversineKm(a, b) {
-  const rad = (value) => value * Math.PI / 180;
-  const earthRadiusKm = 6371;
-  const dLat = rad(b.lat - a.lat);
-  const dLng = rad(b.lng - a.lng);
-  const lat1 = rad(a.lat);
-  const lat2 = rad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-}
-
-function relatedResources(resource) {
-  const sourceTypes = new Set(allTypes(resource));
-  return resources
-    .filter((candidate) => candidate.id !== resource.id && !sourceClosureNotice(candidate))
-    .map((candidate) => {
-      const sameCountry = candidate.country === resource.country;
-      const sameCity = !isContactOnly(resource) && !isContactOnly(candidate) && sameCountry && candidate.city && resource.city && candidate.city === resource.city;
-      const typeOverlap = allTypes(candidate).filter((type) => sourceTypes.has(type)).length;
-      const distance = hasMapCoordinates(resource) && hasMapCoordinates(candidate)
-        ? haversineKm(resource, candidate)
-        : Number.POSITIVE_INFINITY;
-      let score = 0;
-      if (sameCountry) score += 70;
-      if (sameCity) score += 120;
-      score += typeOverlap * 45;
-      if (candidate.kind === "direct") score += 8;
-      if (distance <= 25) score += 70 - distance;
-      else if (distance <= 100) score += 30 - distance * .18;
-      else if (distance <= 250) score += 8;
-      return { candidate, distance, score };
-    })
-    .filter(({ candidate, score }) => score >= 55 || candidate.country === "Global")
-    .sort((a, b) => b.score - a.score || a.distance - b.distance || a.candidate.name.localeCompare(b.candidate.name))
-    .slice(0, 6);
-}
-
 function relatedMarkup(resource) {
-  const related = relatedResources(resource);
-  if (!related.length) return "";
-  const nearby = related.some(({ distance }) => Number.isFinite(distance) && distance <= 100);
-  const heading = nearby && resource.city
-    ? `Other help near ${resource.city}`
-    : resource.country && resource.country !== "Global" ? `Related help in ${resource.country}` : "Related essential services";
-  const countryHref = resource.country && resource.country !== "Global" ? `/directory/${slugify(resource.country)}` : "/directory";
+  const related = relatedResources(resource, resources);
+  const country = String(resource.country || "").trim();
+  const isCountry = Boolean(country && country !== "Global");
+  const heading = related.length
+    ? isCountry ? `Related help in ${country}` : "Related networks and finders"
+    : "Explore more help";
+  const countryHref = isCountry ? `/directory/${slugify(country)}` : "/directory/global";
+  const note = related.length
+    ? "Service areas and eligibility vary. Check details with each provider."
+    : "RWN has limited listings for this area. A missing listing does not mean help is unavailable.";
+  const broader = related.length < 6
+    ? `<p class="directory-caution related-services__broader"><strong>Other places and wider coverage</strong><br /><a href="/directory">Browse the full directory</a>. Listings may cover different places; check coverage and eligibility with the provider.</p>`
+    : "";
 
   return `<section class="related-services" aria-labelledby="related-services-title">
-    <div class="related-services__heading"><h2 id="related-services-title">${escapeHtml(heading)}</h2><a href="${countryHref}">Browse more services</a></div>
-    <div class="related-services__grid">${related.map(({ candidate, distance }) => {
-      const label = Number.isFinite(distance) && distance <= 250 && resource.kind === "direct" && candidate.kind === "direct"
-        ? `${Math.max(.1, distance).toFixed(distance < 10 ? 1 : 0)} km away`
-        : categories[candidate.category]?.label || "Essential help";
-      return `<a href="/service/${encodeURIComponent(candidate.id)}"><strong>${escapeHtml(candidate.name)}</strong><span>${escapeHtml(formatResourcePlace(candidate))}</span><small>${escapeHtml(label)}</small></a>`;
-    }).join("")}</div>
+    <div class="related-services__heading"><h2 id="related-services-title">${escapeHtml(heading)}</h2>${related.length ? `<a href="${countryHref}">Browse more services</a>` : ""}</div>
+    <p class="directory-caution related-services__note">${escapeHtml(note)}</p>
+    ${related.length ? `<div class="related-services__grid">${related.map(({ candidate }) => {
+      const kind = isContactOnly(candidate) ? "Phone or online help" : candidate.kind === "locator" ? "Resource finder" : candidate.kind === "network" ? "Service network" : "";
+      const label = [kind, categories[candidate.category]?.label || "Essential help"].filter(Boolean).join(" · ");
+      const place = candidate.kind === "direct" && isExactServiceSite(candidate)
+        ? formatResourcePlace(candidate)
+        : candidate.country === "Global" ? "Check provider coverage" : candidate.country;
+      return `<a href="/service/${encodeURIComponent(candidate.id)}"><strong>${escapeHtml(candidate.name)}</strong><span>${escapeHtml(place)}</span><small>${escapeHtml(label)}</small></a>`;
+    }).join("")}</div>` : ""}
+    ${broader}
   </section>`;
 }
 

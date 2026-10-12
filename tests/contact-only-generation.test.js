@@ -101,6 +101,10 @@ test("full static pipeline preserves contact-only access without map, city or tr
       assert.ok(main.includes(resource.coverageNote));
       assert.ok(main.includes(resource.eligibility));
       assert.doesNotMatch(main, /maps\.apple|google\.com\/maps|\/#resource=|before (?:you )?(?:go|travel)|near Boston|legacy coordinate note/i);
+      const related = main.match(/<section class="related-services"[\s\S]*?<\/section>/)?.[0];
+      assert.match(related, /Related help in United States/);
+      assert.doesNotMatch(related, /\bnear\b|\bkm\b|Directions|fixture-phone-and-online/);
+      assert.ok(!related.includes(`href="/service/${resource.id}"`));
       if (resource.phone) assert.ok(main.includes(resource.phoneAccess));
       if (resource.accessUrl) assert.ok(main.includes(resource.accessUrl.replaceAll("&", "&amp;")));
       const schema = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
@@ -125,6 +129,11 @@ test("full static pipeline preserves contact-only access without map, city or tr
       const html = await read(`service/${resource.id}/index.html`);
       assert.ok(html.includes(`/#resource=${resource.id}`));
       assert.ok(html.includes("google.com/maps/dir/"));
+      const related = html.match(/<section class="related-services"[\s\S]*?<\/section>/)?.[0];
+      assert.match(related, /Phone or online help/);
+      assert.ok(related.includes('href="/service/fixture-phone-only"'));
+      assert.ok(related.includes('href="/service/fixture-online-only"'));
+      assert.doesNotMatch(related, /fixture-phone-and-online|\bnear\b|\bkm\b|Directions/);
     }
   } finally {
     await rm(directory, { recursive: true, force: true });
