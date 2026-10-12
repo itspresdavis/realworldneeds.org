@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { verifyHomepageOfflineStartup } from "./qa-homepage-offline-startup.mjs";
 
 const HOST = "http://127.0.0.1:4176";
 const CDP_PORT = 9225;
@@ -153,6 +154,8 @@ async function run() {
     await client.connect();
     await Promise.all([client.call("Page.enable"), client.call("Runtime.enable"), client.call("Network.enable")]);
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true, screenWidth: 390, screenHeight: 844 });
+
+    await verifyHomepageOfflineStartup({ client, host: HOST, navigate, evaluate, capture, qaDir: QA_DIR });
 
     await navigate(client, `${HOST}/directory`, 800);
     const primed = await evaluate(client, `(async () => {
