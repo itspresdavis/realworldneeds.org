@@ -6,6 +6,8 @@ import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourc
 import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from "../public/directory-state.js";
 
 const source = await readFile(new URL("../public/directory.js", import.meta.url), "utf8");
+const savedSource = await readFile(new URL("../public/saved-services.js", import.meta.url), "utf8");
+const savedSyncSource = savedSource.slice(savedSource.indexOf("  const syncView ="), savedSource.indexOf('  window.addEventListener("hashchange"'));
 const startupSource = await readFile(new URL("../public/directory-startup.js", import.meta.url), "utf8");
 const catalog = JSON.parse(await readFile(new URL("../dist/data/search-index.json", import.meta.url), "utf8"));
 const runtime = source.replace(/^import .*;\n/gm, "").replaceAll("import.meta.url", '"https://example.org/directory.js?v=startup-fixture"');
@@ -59,7 +61,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
       for (const node of parents) node.invoke(event, false);
       return event;
     }
-    dispatchEvent(event) { this.dispatch(event.type, event); return true; }
+    dispatchEvent(event) { return !this.dispatch(event.type, event).defaultPrevented; }
     matches(selector) { return selector.split(",").some(value => this.selectors.has(value.trim())); }
     closest(selector) {
       for (let node = this; node; node = node.parentElement) if (node.matches(selector)) return node;
@@ -83,6 +85,8 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     replaceChildren(...children) { this.children = []; this.append(...children); }
     setAttribute(name, value) { this.attrs.set(name, String(value)); }
     getAttribute(name) { return this.attrs.get(name) || null; }
+    removeAttribute(name) { this.attrs.delete(name); }
+    scrollIntoView() { this.scrolled = true; }
     getBoundingClientRect() { return { top: 120, bottom: 150, height: 30 }; }
     focus() { if (document.activeElement === this) return; document.activeElement = this; this.dispatch("focus"); }
     blur() { if (document.activeElement === this) document.activeElement = document.body; this.dispatch("blur"); }
@@ -106,6 +110,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     }
     return node;
   };
+  document.getElementById = id => document.querySelectorAll("*").find(node => node.id === id) || null;
   document.createDocumentFragment = () => Object.assign(new Node(), { fragment: true });
   const writes = [], requests = [], timers = new Map(), frames = [], scrolls = [];
   let timerId = 0;
@@ -118,7 +123,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   const context = vm.createContext({ document, window, history, location, navigator, URL, Intl,
     normalize, queryTokens, scoreRecord, readDirectoryState, writeDirectoryState,
     HTMLInputElement: Node, HTMLTextAreaElement: Node,
-    Event: class { constructor(type) { this.type = type; } }, CustomEvent: class { constructor(type) { this.type = type; } },
+    Event: class { constructor(type, options) { this.type = type; Object.assign(this, options); } }, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     localStorage: storage, sessionStorage: storage,
     createResultRow(record) {
       const row = new Node("article"), link = new Node("a", ["a", ".directory-global-result", 'a[href^="/service/"]']);
@@ -132,8 +137,37 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   // A classic head script runs before static search controls exist.
   vm.runInContext(startupSource, context);
   document.body.append(shell);
+  const savedPanel = new Node("section", ["[data-saved-services]"]), savedHeading = new Node("h2"), savedLink = new Node("a", ['a[href$="#saved"]', "a[href]"]), browseLink = new Node("a", ["a[href]"]);
+  savedLink.setAttribute("href", "/directory#saved"); browseLink.setAttribute("href", "#directory-results");
+  savedPanel.append(savedHeading, browseLink); shell.append(savedPanel, savedLink);
+  Object.assign(context, { savedPanel, savedHeading });
+  vm.runInContext(`{ const panel = savedPanel, heading = savedHeading;
+    const active = () => location.hash === "#saved"; let generation = 0;
+    const render = () => {}, cancelClear = () => {};
+    ${savedSyncSource}
+ globalThis.savedSync = syncView;
+  }`, context);
   return { document, window, navigator, root, input, country, clear, count, chips, shell, resultList, more,
-    history, location, writes, requests, timers, scrolls,
+    history, location, writes, requests, timers, scrolls, savedHeading, savedLink, browseLink,
+    staticSavedBrowse(scroll = 450) {
+      window.scrollY = scroll; savedLink.dispatch("click"); location.hash = "#saved"; history.state = null;
+      browseLink.dispatch("click"); location.hash = "#directory-results"; history.state = null;
+      // Static :target navigation can reveal Saved and its Browse link while
+      // both deferred modules are still loading. The fragment then jumps away.
+      window.scrollY = 7000; document.activeElement = browseLink;
+    },
+    historySaved() {
+      history.state = null; location.hash = "#saved"; window.dispatch("popstate"); context.savedSync(true);
+    },
+    enterSaved() {
+      savedLink.dispatch("click"); history.state = null; location.hash = "#saved";
+      window.dispatch("popstate"); context.savedSync(true);
+    },
+    leaveSaved({ state = null, hash = "#directory-results" } = {}) {
+      history.state = state; location.hash = hash;
+      window.dispatch("popstate"); const beforeHandoff = { input: input.value, scrolls: [...scrolls] };
+      context.savedSync(true); return beforeHandoff;
+    },
     start() { vm.runInContext(runtime, context); },
     type(value, data = {}) { input.value = value; input.dispatch("input", data); },
     get results() { return results; },
@@ -337,8 +371,8 @@ test("startup search retains page scope and never fetches or persists the privat
   assert.deepEqual(f.location, { pathname: "/directory/france", hash: "", href: "https://example.org/directory/france" });
   assert.equal(readDirectoryState(f.history.state, "/directory/france").query, london);
   assert.doesNotMatch(startupSource, /localStorage|sessionStorage|replaceState|pushState|\.value/);
-  for (const type of ["input", "change", "compositionstart", "compositionend"]) {
-    assert.equal((f.document.handlers.get(type) || []).filter(handler => handler.capture).length, 0, `${type} capture listener must retire on readiness`);
+  for (const type of ["input", "change", "compositionstart", "compositionend", "click"]) {
+    assert.equal((f.document.handlers.get(type) || []).filter(handler => handler.capture).length, type === "click" ? 1 : 0, `${type} capture listener must retire on readiness`);
   }
 });
 
@@ -398,4 +432,155 @@ test("early events outside directory controls do not supersede valid saved state
   const unrelated = f.document.createElement("input"); f.document.body.append(unrelated); unrelated.dispatch("input");
   assert.equal(f.root.rwnDirectoryStartup, undefined);
   f.start(); await f.flush(); assert.equal(f.input.value, "WIC"); await f.resolve(); assert.equal(f.ids().length, 120);
+});
+
+// The actual Saved syncView handoff follows native fragment ordering: the new
+// entry has null classic state, popstate fires while Saved still owns the view,
+// then hashchange hides it and requests restoration.
+for (const shown of [60, 120]) {
+  test(`Saved Browse restores ${shown} rows from its captured entry after native-order null-state navigation`, async () => {
+    const state = stale(); state.rwnDirectory.shown = shown;
+    const f = fixture({ state }); f.start(); await f.flush(); await f.resolve(); f.frames();
+    f.window.scrollY = 1550; f.resultList.children[shown - 10].children[0].focus();
+    const focus = f.document.activeElement.getAttribute("href"); f.enterSaved();
+    assert.equal(f.document.activeElement, f.savedHeading); const savedScrolls = f.scrolls.length;
+    f.window.scrollY = 40; const before = f.leaveSaved();
+    assert.equal(before.scrolls.length, savedScrolls, "popstate must wait until Saved hides");
+    await f.flush(); f.frames();
+    assert.equal(f.ids().length, shown); assert.equal(f.input.value, "WIC"); assert.equal(f.country.value, "United States");
+    assert.equal(f.history.state.rwnDirectory.category, "food"); assert.equal(f.history.state.rwnDirectory.shown, shown);
+    assert.equal(f.scrolls.at(-1), 1550); assert.equal(f.document.activeElement.getAttribute("href"), focus);
+    assert.ok(f.writes.every(args => args.length === 2));
+  });
+}
+
+test("Saved Browse uses valid current history before the captured directory entry", async () => {
+  const f = fixture({ state: stale() }); f.start(); await f.flush(); await f.resolve(); f.frames(); f.enterSaved();
+  const newer = stale(); Object.assign(newer.rwnDirectory, { query: london, country: "", category: "", shown: 60, scroll: 345 });
+  f.leaveSaved({ state: newer }); await f.flush(); f.frames();
+  assertLondon(f); assert.equal(f.scrolls.at(-1), 345); assert.equal(f.history.state.rwnDirectory.query, london);
+});
+
+test("a repeated Saved visit captures the newest cleared context instead of old filters", async () => {
+  const f = fixture({ state: stale() }); f.start(); await f.flush(); await f.resolve(); f.frames(); f.enterSaved();
+  f.leaveSaved(); await f.flush(); f.frames(); f.clear.dispatch("click");
+  f.window.scrollY = 300; f.enterSaved(); f.leaveSaved(); await f.flush(); f.frames();
+  assertOrdinary(f); assert.equal(f.scrolls.at(-1), 300); assert.equal(f.history.state.rwnDirectory.query, "");
+});
+
+test("early Saved Browse keeps a deliberate query or clear ahead of stale history", async () => {
+  for (const value of [london, ""]) {
+    const f = fixture({ state: stale() }); f.type(value); f.location.hash = "#saved";
+    f.shell.classList.add("has-saved-view"); f.savedHeading.focus(); f.start(); await f.flush();
+    const before = f.leaveSaved({ state: stale() });
+    assert.equal(before.input, value, "hidden popstate must not replace the early edit");
+    await f.flush(); if (value) await f.resolve(); f.frames();
+    if (value) assertLondon(f); else assertOrdinary(f);
+    assert.equal(f.history.state.rwnDirectory.query, value); assert.ok(!f.scrolls.includes(900));
+    f.history.state = stale(); f.window.dispatch("popstate"); await f.flush();
+    if (!value) await f.resolve(); f.frames(); assert.equal(f.input.value, "WIC"); assert.equal(f.ids().length, 120);
+  }
+});
+
+test("Saved handoff leaves unrelated deliberate anchors and cold Saved to static fallback", async () => {
+  const f = fixture({ state: stale() }); f.start(); await f.flush(); await f.resolve(); f.frames(); f.enterSaved();
+  const prior = f.scrolls.length; f.leaveSaved({ hash: "#directory-search" }); await f.flush(); f.frames();
+  assert.equal(f.scrolls.length, prior); assert.equal(f.input.scrolled, true); assert.equal(f.history.state, null);
+  const cold = fixture({ hash: "#saved" }); cold.shell.classList.add("has-saved-view"); cold.start(); cold.leaveSaved();
+  await cold.flush(); cold.frames(); assert.equal(cold.scrolls.length, 0); assert.equal(cold.input.scrolled, true);
+});
+
+test("Saved Browse preserves in-progress early composition and searches only committed text", async () => {
+  const f = fixture({ state: stale() }); f.input.dispatch("compositionstart"); f.type("Drink", { isComposing: true });
+  f.location.hash = "#saved"; f.shell.classList.add("has-saved-view"); f.start(); f.leaveSaved({ state: stale() });
+  await f.flush(); assert.equal(f.input.value, "Drink"); assert.equal(f.requests.length, 0);
+  f.input.value = london; f.input.dispatch("compositionend"); await f.flush(); await f.resolve(); f.frames(); assertLondon(f);
+});
+
+test("a search finishing inside Saved cannot replace its pre-entry return position", async () => {
+  const f = fixture(); f.start(); f.type("WIC"); await f.flush(); f.window.scrollY = 650; f.enterSaved();
+  f.window.scrollY = 20; await f.resolve(); f.leaveSaved(); await f.flush(); f.frames();
+  assert.equal(f.input.value, "WIC"); assert.equal(f.ids().length, 60); assert.equal(f.scrolls.at(-1), 650);
+});
+
+
+test("Clear during composition immediately discards results and invalidates an older search", async () => {
+  const f = fixture({ state: stale() }); f.start(); await f.flush();
+  f.input.dispatch("compositionstart"); f.type("Drink", { isComposing: true }); f.clear.dispatch("click");
+  assertOrdinary(f); await f.resolve(); await f.flush(); f.frames(); assertOrdinary(f);
+  assert.equal(f.history.state.rwnDirectory.query, "");
+});
+
+test("retained Browse state survives restricted history without reading a stale write-back", async () => {
+  const f = fixture(); f.start(); f.type(london); await f.flush(); await f.resolve();
+  f.history.replaceState = () => { throw new Error("denied"); }; f.window.scrollY = 765; f.enterSaved();
+  f.leaveSaved(); await f.flush(); f.frames(); assertLondon(f); assert.equal(f.scrolls.at(-1), 765);
+});
+
+
+test("restricted history cannot make stale entry filters beat an early Saved edit", async () => {
+  for (const value of [london, ""]) {
+    const f = fixture({ state: stale() }); f.type(value);
+    f.history.replaceState = () => { throw new Error("denied"); };
+    f.location.hash = "#saved"; f.shell.classList.add("has-saved-view"); f.start();
+    f.leaveSaved({ state: stale() }); await f.flush(); if (value) await f.resolve(); f.frames();
+    if (value) assertLondon(f); else assertOrdinary(f);
+    assert.ok(!f.scrolls.includes(900));
+  }
+});
+
+
+for (const value of [london, ""]) {
+  test(`static Saved and Browse before the runtime preserve ${value ? "early input" : "intentional blank"} and useful directory context`, async () => {
+    const f = fixture({ state: stale() }); f.type(value); f.staticSavedBrowse(455);
+    assert.deepEqual(Object.keys(f.root.rwnDirectoryStartup).sort(), ["browse", "edited", "scroll"]);
+    assert.equal(f.root.rwnDirectoryStartup.browse, true); assert.equal(f.root.rwnDirectoryStartup.scroll, 455);
+    f.start(); await f.flush(); if (value) await f.resolve(); f.frames();
+    if (value) assertLondon(f); else assertOrdinary(f);
+    assert.equal(f.scrolls.at(-1), 455); assert.equal(f.history.state.rwnDirectory.query, value);
+    assert.notEqual(f.document.activeElement.getAttribute("href"), "#directory-results");
+    assert.equal(f.root.rwnDirectoryStartup, undefined);
+  });
+}
+
+test("static Saved and Browse without any search input restore the default directory context", async () => {
+  const f = fixture(); f.staticSavedBrowse(380); f.start(); await f.flush(); f.frames();
+  assertOrdinary(f); assert.equal(f.scrolls.at(-1), 380); assert.equal(f.document.activeElement, f.input);
+});
+
+
+test("a pre-runtime input click is not an edit and cannot discard valid history", async () => {
+  const f = fixture({ state: stale() }); f.input.dispatch("click"); assert.equal(f.root.rwnDirectoryStartup, undefined);
+  f.start(); await f.flush(); await f.resolve(); f.frames();
+  assert.equal(f.input.value, "WIC"); assert.equal(f.country.value, "United States"); assert.equal(f.ids().length, 120);
+});
+
+test("repeated static Saved clicks retain the original directory return scroll", async () => {
+  const f = fixture(); f.type(london); f.window.scrollY = 450; f.savedLink.dispatch("click"); f.location.hash = "#saved";
+  f.window.scrollY = 700; f.savedLink.dispatch("click"); assert.equal(f.root.rwnDirectoryStartup.scroll, 450);
+  f.browseLink.dispatch("click"); f.location.hash = "#directory-results"; f.history.state = null;
+  f.start(); await f.flush(); await f.resolve(); f.frames(); assertLondon(f); assert.equal(f.scrolls.at(-1), 450);
+});
+
+test("a newer unrelated static anchor cancels early Browse return-focus ownership", async () => {
+  const f = fixture(); f.type(london); f.staticSavedBrowse(); f.location.hash = "#directory-search";
+  f.window.scrollY = 220; f.document.activeElement = f.document.body;
+  f.start(); await f.flush(); await f.resolve(); f.frames(); assertLondon(f);
+  assert.deepEqual(f.scrolls, []); assert.equal(f.document.activeElement, f.document.body); assert.equal(f.window.scrollY, 220);
+});
+
+test("untouched valid Back history wins over an earlier static Saved scroll capture", async () => {
+  const state = stale(), f = fixture({ state }); f.window.scrollY = 440; f.savedLink.dispatch("click");
+  f.location.hash = "#saved"; f.history.state = null;
+  f.location.hash = ""; f.history.state = state; f.start(); await f.flush(); await f.resolve(); f.frames();
+  assert.equal(f.input.value, "WIC"); assert.equal(f.ids().length, 120); assert.equal(f.scrolls.at(-1), 900);
+});
+
+
+test("Back to the pre-runtime Saved entry can Browse the accepted early return again", async () => {
+  const f = fixture(); f.type(london); f.staticSavedBrowse(455); f.start(); await f.flush(); await f.resolve(); f.frames();
+  assertLondon(f); const count = f.scrolls.length; f.historySaved(); f.window.scrollY = 30;
+  f.leaveSaved(); await f.flush(); f.frames(); assertLondon(f);
+  assert.equal(f.scrolls.length, count + 1); assert.equal(f.scrolls.at(-1), 455);
+  assert.equal(f.history.state.rwnDirectory.query, london);
 });

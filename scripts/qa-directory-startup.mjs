@@ -161,6 +161,93 @@ export function directoryStartupRequestLeaksQuery(request) {
   }) || [...url.searchParams.keys()].some(key => /^(q|query|search|search_term)$/i.test(key));
 }
 
+// The shared click preparer scrolls ordinary controls into view. A sticky
+// header action is already visible and must not move the directory baseline.
+// It gets the same settled-box/hit-test and trusted ordered-event requirements.
+export async function directorySavedBrowseHeaderPoint(selector) {
+  let previous, target;
+  for (let frame = 0; frame < 60; frame++) {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const node = document.querySelector(selector), rect = node?.getBoundingClientRect();
+    if (!node || node.hidden || node.disabled) throw new Error('Missing Saved header control: ' + selector);
+    const style = getComputedStyle(node), point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    if (!(rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight)
+      || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility) || style.opacity === '0') throw new Error('Saved header control is not visible: ' + selector);
+    const hit = document.elementFromPoint(point.x, point.y);
+    if (!hit || !(hit === node || node.contains(hit))) throw new Error('Saved header control is covered: ' + selector);
+    const signature = JSON.stringify([rect.x, rect.y, rect.width, rect.height, scrollX, scrollY]);
+    if (target === node && previous === signature) return point;
+    target = node; previous = signature;
+  }
+  throw new Error('Saved header control did not settle: ' + selector);
+}
+
+// Extra rendered evidence for an early edit that leaves through Saved before
+// the actual entry module is released. Existing startup snapshots stay intact.
+export function directoryStartupSavedSnapshot(base) {
+  const pick = selector => document.querySelector(selector);
+  const active = document.activeElement, rect = active?.getBoundingClientRect();
+  const style = active ? getComputedStyle(active) : null;
+  const useful = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-category], [data-directory-clear], .directory-global-result, .directory-records h2 a'));
+  const visible = useful && rect.width > 0 && rect.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6
+    && rect.bottom <= innerHeight - 6 && rect.left >= 0 && rect.right <= innerWidth && style.display !== 'none'
+    && !['hidden', 'collapse'].includes(style.visibility) && style.opacity !== '0';
+  const hit = visible ? document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2) : null;
+  return { ...base,
+    saved: Boolean(pick('.directory-shell.has-saved-view')),
+    panelVisible: Boolean(pick('[data-saved-services]')?.getBoundingClientRect().height),
+    menuOpen: Boolean(pick('.rwn-page-menu[open]')),
+    focusedId: active?.id || '',
+    meaningfulFocus: Boolean(visible && hit && (hit === active || active.contains(hit))),
+    focusBox: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null
+  };
+}
+
+export async function directoryStartupSavedHeaderPoint(selector, prepare) {
+  const point = await prepare(selector), node = document.querySelector(selector);
+  globalThis.__rwnEarlySavedHeaderQA?.stop();
+  const events = [], types = ['mousedown', 'mouseup', 'click'];
+  const record = event => events.push({ type: event.type, trusted: event.isTrusted,
+    expected: Boolean(node && (event.target === node || node.contains(event.target))) });
+  for (const type of types) document.addEventListener(type, record, true);
+  globalThis.__rwnEarlySavedHeaderQA = { selector, point, events, stop: () => {
+    for (const type of types) document.removeEventListener(type, record, true);
+  } };
+  return point;
+}
+
+export const directoryStartupSavedReturnReady = (s, query) => Boolean(s.documentPresent && s.ready
+  && s.pathname === '/directory' && new URL(s.href).hash === '#directory-results' && !s.saved && !s.panelVisible && !s.menuOpen
+  && s.meaningfulFocus && s.query === query && s.country === '' && s.category === 'All help'
+  && s.history?.path === '/directory' && s.history.query === query && s.history.country === '' && s.history.category === ''
+  && s.history.shown <= 60 && (query
+    ? s.rows.length === 1 && s.rows[0].href === FINDER && s.rows[0].text.includes('Help finder or referral · check coverage') && s.count === '1 matching listing' && !s.resultsHidden
+    : s.rows.length === 0 && s.resultsHidden && s.clearHidden && /listings on this page/.test(s.count)));
+
+export async function waitForDirectoryStartupSavedReturn({ sample, query, wait = sleep, now = () => performance.now(), timeoutMs = 8000 }) {
+  const started = now();
+  let latest, anchor, since = started, count = 0;
+  const failure = () => new Error(`Early Saved Browse did not settle within ${timeoutMs}ms with useful visible focus: ${JSON.stringify(latest)}`);
+  while (now() - started < timeoutMs) {
+    let deadline;
+    try {
+      latest = await Promise.race([sample(), new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(failure()), Math.max(1, timeoutMs - (now() - started)));
+      })]);
+    } catch (error) { if (!isDirectoryStartupNavigationError(error)) throw error; latest = { documentPresent: false }; }
+    finally { clearTimeout(deadline); }
+    const geometry = [latest.scroll, latest.focusBox?.x, latest.focusBox?.y, latest.focusBox?.width, latest.focusBox?.height];
+    const signature = JSON.stringify([latest.query, latest.country, latest.category, latest.rows, latest.focusedInput, latest.focusedHref, latest.focusedId]);
+    const valid = directoryStartupSavedReturnReady(latest, query) && geometry.every(Number.isFinite);
+    const same = valid && anchor?.signature === signature && geometry.every((value, index) => Math.abs(value - anchor.geometry[index]) <= .5);
+    if (!same) { anchor = valid ? { signature, geometry } : null; since = now(); count = valid ? 1 : 0; }
+    else count++;
+    if (now() - started < timeoutMs && count >= 6 && now() - since >= 500) return latest;
+    await wait(50);
+  }
+  throw failure();
+}
+
 export async function verifyDirectoryStartup({ client, host, navigate, evaluate, capture }) {
   const origin = new URL(host).origin;
   const held = { module: [], catalog: [] };
@@ -280,6 +367,97 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     await click('[data-directory-more]');
     const stale = await wait(s => s.rows.length === 120 && s.history?.shown === 120 && s.history?.focus === s.rows[60].href && s.scroll > 200, 'Stale-history setup did not remember listing focus and pagination');
     return stale;
+  };
+
+
+  const savedState = () => evaluate(client, `(${directoryStartupSavedSnapshot.toString()})((${directoryStartupSnapshot.toString()})())`);
+  const clickEarlySavedHeader = async selector => {
+    const point = await evaluate(client, `(${directoryStartupSavedHeaderPoint.toString()})(${JSON.stringify(selector)}, (${directorySavedBrowseHeaderPoint.toString()}))`);
+    let activation;
+    try {
+      await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+      await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+    } finally {
+      activation = await evaluate(client, `(() => { const probe = globalThis.__rwnEarlySavedHeaderQA; probe?.stop(); if (!probe) return null; const { stop, ...detail } = probe; return detail; })()`);
+    }
+    assert(directoryStartupClickWasDelivered(activation), 'Early Saved header did not receive exactly one trusted native click', activation);
+  };
+  const earlySavedBrowse = async (width, { clear = false, browseBeforeRuntime = false } = {}) => {
+    scenario = `${clear ? 'early clear' : 'early input'} through native Saved and Browse ${browseBeforeRuntime ? 'before' : 'after'} runtime`;
+    if (clear) await seedStaleHistory();
+    const before = await start({ reload: clear });
+    if (clear) assert(before.history?.query === 'WIC' && before.history.country === 'United States' && before.history.category === 'food' && before.history.shown === 120, 'Early Saved clear requires a real stale WIC entry', before.history);
+    await type(clear ? 'WIC' : QUERY);
+    if (clear) await erase();
+    const query = clear ? '' : QUERY, inputCount = clear ? 2 : 1;
+    await evaluate(client, `document.querySelector('[data-directory-query]').scrollIntoView({ block: 'center', behavior: 'instant' })`);
+    await frames();
+    const preSaved = await savedState();
+    assert(preSaved.meaningfulFocus && preSaved.focusedInput, 'Early Saved must begin at the visible editable query', preSaved);
+    if (width < 900) await clickEarlySavedHeader('.rwn-page-menu > summary');
+    await clickEarlySavedHeader(`${width < 900 ? '.rwn-page-menu' : '.rwn-page-nav'} a[href="/directory#saved"]`);
+    const early = await wait(s => new URL(s.href).hash === '#saved' && !s.ready && held.module.length > 0 && s.query === query, 'Native Saved did not occur while the real directory module remained held');
+    assert(early.probe.catalogReads === 0 && !held.catalog.length, 'Early Saved searched the private input before runtime', early);
+    assertInputs(early, { count: inputCount });
+    let opened = await savedState();
+    if (browseBeforeRuntime) {
+      // :target exposes the genuine static panel even while its deferred
+      // modules are held. Native details can close its still-uninitialized menu.
+      if (opened.menuOpen) await clickEarlySavedHeader('.rwn-page-menu > summary');
+      opened = await savedState();
+      assert(!opened.ready && opened.panelVisible && held.module.length > 0, 'Static Saved panel was not available before module release', opened);
+      await click('[data-saved-services] a[href="#directory-results"]');
+      const departed = await wait(s => new URL(s.href).hash === '#directory-results' && !s.ready && held.module.length > 0 && s.query === query, 'Native Browse did not precede the held entry module');
+      assert(departed.probe.catalogReads === 0 && !held.catalog.length, 'Browse before runtime unexpectedly searched the input', departed);
+      assertInputs(departed, { count: inputCount });
+      await release('module');
+    } else {
+      await release('module');
+      await wait(s => s.ready && new URL(s.href).hash === '#saved' && s.query === query, 'Directory did not initialize behind the native Saved view');
+      for (let attempt = 0; attempt < 160; attempt++) {
+        opened = await savedState();
+        if (opened.saved && opened.panelVisible && !opened.menuOpen && opened.focusedId === 'saved-services-heading') break;
+        await sleep(50);
+      }
+      assert(opened.saved && opened.panelVisible && !opened.menuOpen && opened.focusedId === 'saved-services-heading', 'Saved did not own focus after early runtime release', opened);
+      await sleep(550); await frames(); opened = await savedState();
+      assert(opened.saved && opened.panelVisible && !opened.menuOpen && opened.focusedId === 'saved-services-heading'
+        && opened.query === query && opened.rows.length === 0 && opened.resultsHidden && opened.probe.catalogReads === 0 && !held.catalog.length,
+      'Early runtime searched or stole focus before the visitor clicked Browse', opened);
+      await click('[data-saved-services] a[href="#directory-results"]');
+    }
+    // Existing privacy assertions stay strict; only the two public navigation
+    // fragments are explicitly permitted for this additional Saved scenario.
+    const assertSavedPrivate = snapshot => {
+      const url = new URL(snapshot.href);
+      assert(['#saved', '#directory-results'].includes(url.hash), 'Unexpected early Saved navigation fragment', snapshot.href);
+      url.hash = '';
+      assertPrivate(before, { ...snapshot, href: url.href });
+    };
+    assertSavedPrivate(opened);
+    if (!clear) {
+      await wait(s => s.ready && new URL(s.href).hash === '#directory-results' && s.query === QUERY && held.catalog.length > 0 && /Searching/.test(s.count), 'Browse did not start the retained early query');
+      await release('catalog');
+      await wait(s => s.probe.catalogSettled === 1 && s.rows.length === 1 && s.rows[0].href === FINDER, 'Early Saved Browse did not render its sole finder');
+    } else {
+      await wait(s => s.ready && new URL(s.href).hash === '#directory-results' && s.query === '' && s.resultsHidden && s.history?.query === '', 'Early Saved blank clear resurrected stale filters');
+      // Returning focus to the real search field may warm the catalog. That
+      // permitted post-Browse read must settle without searching old WIC text.
+      await sleep(160);
+      if (held.catalog.length) await release('catalog');
+      else hold.catalog = false;
+      await wait(s => s.probe.catalogSettled === s.probe.catalogReads, 'Post-Browse empty-field warmup did not finish');
+    }
+    const returned = await waitForDirectoryStartupSavedReturn({ sample: savedState, query });
+    assertInputs(returned, { count: inputCount });
+    assertSavedPrivate(returned);
+    if (browseBeforeRuntime) assert(Math.abs(returned.scroll - preSaved.scroll) < 5, 'Early native Browse failed to restore the pre-Saved directory scroll', { before: preSaved.scroll, after: returned.scroll, query });
+    assert(returned.probe.catalogReads === (clear ? returned.probe.catalogSettled : 1) && returned.probe.catalogReads <= 1, 'Early Saved Browse repeated its catalog request', returned.probe);
+    await capture(client, `directory-startup-${clear ? 'clear' : 'input'}-browse-${browseBeforeRuntime ? 'before' : 'after'}-runtime-${width}.png`);
+    return { clear, browseBeforeRuntime, inputs: returned.probe.inputs, query: returned.query, country: returned.country, category: returned.category,
+      rows: returned.rows.map(row => row.href), meaningfulFocus: returned.meaningfulFocus, focusedHref: returned.focusedHref, focusedInput: returned.focusedInput,
+      preSavedScroll: preSaved.scroll, finalScroll: returned.scroll, staticSavedVisibleBeforeRelease: browseBeforeRuntime ? opened.panelVisible : null,
+      catalogReadsWhileSaved: opened.probe.catalogReads, catalogReadsAfterBrowse: returned.probe.catalogReads, href: returned.href };
   };
 
   client.ws.addEventListener('message', onMessage);
@@ -415,6 +593,13 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
         compositionEvidence = { browser: await client.call('Browser.getVersion'), physicalImeExercised: false, events: current.probe.compositions, inputs: current.probe.inputs };
         await capture(client, 'directory-startup-ime-390.png');
       }
+      // Keep every original startup/IME scenario above, then exercise actual
+      // Saved and Browse anchors across the real held entry-module boundary.
+      const earlySaved = await earlySavedBrowse(width);
+      const earlySavedClear = await earlySavedBrowse(width, { clear: true });
+      const earlySavedBeforeRuntime = await earlySavedBrowse(width, { browseBeforeRuntime: true });
+      const earlySavedClearBeforeRuntime = await earlySavedBrowse(width, { clear: true, browseBeforeRuntime: true });
+      evidence.push({ width, earlySaved, earlySavedClear, earlySavedBeforeRuntime, earlySavedClearBeforeRuntime });
       console.log(`PASS directory startup scenarios at ${width}px`);
       evidence.push({ width, earlyInput: true, staleReload: true, earlyClearAfterBlur: true, pendingInput: true, pendingClear: true, caret: true, ime: compositionEvidence, staleShown: stale.history.shown });
     }
