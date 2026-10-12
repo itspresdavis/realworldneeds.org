@@ -13,7 +13,7 @@ import {
   resourceSearchScore,
   THREE_SPHERE_TEXTURE_OFFSET
 } from "../src/utils/geo.js";
-import { resources } from "../src/data/resources.js";
+import { curatedResources, resources } from "../src/data/resources.js";
 
 test("country framing remains stable across the antimeridian", () => {
   const feature = {
@@ -91,11 +91,19 @@ test("search tolerates diacritics and common help-language synonyms", () => {
 });
 
 test("expanded catalog preserves location precision and minimum coverage", () => {
-  const reviewedExpansion = resources.filter((resource) => resource.lastChecked === "2026-08-05" && !resource.datasetId);
+  const reviewedSourceExpansion = curatedResources.filter((resource) => resource.lastChecked === "2026-08-05" && !resource.datasetId);
+  const expansionIds = new Set(reviewedSourceExpansion.map((resource) => resource.id));
+  const reviewedWithheldIds = new Set(["breakthrough-daytime-support", "father-joes-day-center"]);
+  const reviewedExpansion = resources.filter((resource) => expansionIds.has(resource.id));
   assert.ok(resources.length >= 1900);
   assert.ok(resources.filter(isExactServiceSite).length >= 1800);
   assert.ok(new Set(resources.map((resource) => resource.country)).size >= 109);
-  assert.equal(reviewedExpansion.length, 112);
+  assert.equal(reviewedSourceExpansion.length, 112);
+  assert.equal(expansionIds.size, 112);
+  assert.deepEqual(
+    reviewedExpansion.map((resource) => resource.id).sort(),
+    [...expansionIds].filter((id) => !reviewedWithheldIds.has(id)).sort()
+  );
   assert.ok(reviewedExpansion.every((resource) => resource.locationPrecision === (resource.kind === "direct" ? "exact" : "coverage")));
   assert.ok(reviewedExpansion.every((resource) => resource.sourceUrl.startsWith("https://")));
   assert.equal(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").length, 101);

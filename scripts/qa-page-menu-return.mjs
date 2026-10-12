@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { newYorkCatalogFixtures } from './qa-catalog-expectations.mjs';
 import { directorySavedBrowseHeaderPoint, isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
 
 // CI-only native history regression. The ordinary QA server remains no-store.
@@ -271,6 +272,8 @@ export async function pageMenuWorkerReady() {
 }
 
 export async function verifyPageMenuReturn({ client, host, navigate, evaluate, capture }) {
+  const expectedLocalHrefs = newYorkCatalogFixtures().referral.map(id => `/service/${encodeURIComponent(id)}`).sort();
+  assert(expectedLocalHrefs.includes(PAGE_MENU_SERVICE), 'Known library fixture is missing from reviewed local source membership', expectedLocalHrefs);
   const fixture = await startFixtureProxy(host), origin = fixture.host;
   const binding = '__rwnPageMenuReturnReport';
   const evidence = [], events = [], errors = [], notRestored = [];
@@ -334,7 +337,10 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       'Exact local query and scoped result commitment');
       assert(source.probe.inputs.some(input => input.value === query && input.trusted), 'Local query was not entered with trusted input', source.probe.inputs);
     } else if (path === PAGE_MENU_LOCAL) {
-      assert(source.query === '' && !source.filtered && source.rows.length === 0 && source.staticRows.length === 15 && source.count === '15 listings on this page', 'Default local browse fixture changed', source);
+      assert(source.query === '' && !source.filtered && source.rows.length === 0
+        && JSON.stringify(source.staticRows.map(row => row.href).sort()) === JSON.stringify(expectedLocalHrefs)
+        && source.count === `${expectedLocalHrefs.length.toLocaleString('en-US')} listings on this page`,
+      'Default local browse disagrees with reviewed source membership', source);
     }
     // Only prepare a meaningful, nonzero reading position. No query, result,
     // history, focus or menu state is synthesized by this preparation.

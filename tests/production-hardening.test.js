@@ -95,7 +95,16 @@ test("every reviewed resource gets an indexable service detail page", async () =
   assert.match(html, /Show on interactive globe/);
 
   const serviceDirectories = await readdir("dist/service");
-  assert.equal(serviceDirectories.length, resources.length);
+  const reviewedNoticeIds = ["breakthrough-daytime-support", "father-joes-day-center"];
+  const resourceIds = resources.map((resource) => resource.id).sort();
+  assert.deepEqual(serviceDirectories.filter((id) => !reviewedNoticeIds.includes(id)).sort(), resourceIds);
+  assert.deepEqual(serviceDirectories.filter((id) => reviewedNoticeIds.includes(id)).sort(), [...reviewedNoticeIds].sort());
+  for (const id of reviewedNoticeIds) {
+    assert.ok(!resourceIds.includes(id), `${id} must not also be an active service`);
+    const notice = await text(`dist/service/${id}/index.html`);
+    assert.match(notice, /<meta name="robots" content="noindex, follow"\s*\/>/);
+    assert.ok(notice.includes(`data-rwn-service-notice="${id}"`));
+  }
 });
 
 test("sitemap includes need pages and individual service pages", async () => {

@@ -1,5 +1,6 @@
 import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
+import { newYorkCatalogFixtures } from "./qa-catalog-expectations.mjs";
 import { isDirectoryStartupNavigationError } from "./qa-directory-startup.mjs";
 
 // Keep the oracle independent of the scope builder and search matcher: these
@@ -47,7 +48,9 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
   const wic = ids(newYork.filter(record => record.id.startsWith("ny-wic-")));
   const library = ["new-york-public-library-access"];
   const boston = payload.resources.filter(record => record.country === "United States" && record.city === "Boston");
-  assert(newYork.length === 16 && referral.length === 15 && wic.length === 14 && referral.some(record => record.id === library[0]), "New York catalog fixtures changed", { newYork: ids(newYork), referral: ids(referral), wic });
+  const expected = newYorkCatalogFixtures();
+  assert(sameIds(ids(newYork), expected.city) && sameIds(ids(referral), expected.referral) && sameIds(wic, expected.wic), "New York published payload disagrees with reviewed source membership", { newYork: ids(newYork), referral: ids(referral), wic, expected });
+  assert(wic.length > 0 && wic.every(id => expected.referral.includes(id)) && referral.some(record => record.id === library[0]), "New York WIC/referral or known library fixture missing", { referral: ids(referral), wic });
   assert(boston.some(record => record.id === "boston-homeless-services" && record.kind === "locator"), "Boston locator fixture missing", ids(boston));
 
   const snapshot = () => evaluate(client, `(${localDirectorySnapshot.toString()})()`);

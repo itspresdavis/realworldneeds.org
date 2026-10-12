@@ -1,5 +1,6 @@
 import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
+import { directoryWicFixture } from "./qa-catalog-expectations.mjs";
 import { isDirectoryStartupNavigationError, directoryStartupClickPoint, directoryStartupClickWasDelivered, directorySavedBrowseHeaderPoint } from "./qa-directory-startup.mjs";
 export { directorySavedBrowseHeaderPoint } from "./qa-directory-startup.mjs";
 
@@ -341,8 +342,7 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
       && s.history?.path === path && s.history.query === query && s.history.country === (country || '') && s.history.category === (category === 'All help' ? '' : category.toLowerCase())
       && !/Searching|unavailable/i.test(s.count || '') && (count === undefined || s.count === count) && (summary === undefined || s.summary === summary));
   };
-  const wic = shown => ({ query: 'WIC', country: 'United States', category: 'Food', rows: shown,
-    count: '395 matching listings', summary: `Showing ${shown} of 395 matches across 439 listings` });
+  const wic = directoryWicFixture;
   const privateState = (before, after) => {
     const url = new URL(after.href);
     assert(!url.search && ['', '#saved', '#directory-results'].includes(url.hash), 'Saved Browse leaked filters in its URL', after.href);
@@ -408,7 +408,7 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
       await browse(defaults, 'default');
       await type('WIC');
       await evaluate(client, `(() => { const country = document.querySelector('[data-directory-country]'); country.value = 'United States'; country.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-      await wait(s => committed(s, { ...wic(60), category: 'All help' }), 'WIC and US history must commit before selecting Food');
+      await wait(s => committed(s, wic(60, 'All help')), 'WIC and US history must commit before selecting Food');
       await selectDirectoryNeed({ client, evaluate, click }, "Food");
       const first = await wait(s => committed(s, wic(60)) && s.history.shown === 60, 'WIC/US/Food first batch must commit before Saved');
       assert(new Set(first.rows.map(row => row.href)).size === 60 && first.rows.every(row => row.text.includes('United States') && row.text.includes('Source checked')), 'First WIC batch identities or source metadata failed', first);
@@ -442,7 +442,7 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
       // Public scoped headers deliberately open the global Saved page. Test
       // those actual links, never manufacture a scope-local Saved anchor.
       for (const fixture of [
-        { path: '/directory/united-states', query: 'WIC', category: 'Food', count: '395 matching listings', rows: 60 },
+        { ...wic(60), path: '/directory/united-states', country: undefined },
         { path: '/directory/local/united-states/new-york/help/referral', query: 'library', category: 'All help', count: '1 matching listing', rows: 1 }
       ]) {
         scenario = `scope-${fixture.path}`;
