@@ -459,7 +459,7 @@ main#directory > .legal-hero { background: #f5f4ee; }
 #directory .directory-search-tools__meta > span:last-child { margin-left: auto; }
 #directory .directory-search-tools__meta .directory-search-tools__clear { min-height: 44px; padding: .45rem .65rem; font-size: .8125rem; }
 @media (max-width: 760px) {
-  #directory .directory-category-chips { display: none; }
+  #directory .directory-search-tools .directory-category-chips { display: none; }
   #directory .directory-need-field { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .8rem; min-width: 0; }
   #directory .directory-need-field > span { color: #24583e; font-size: .8125rem; font-weight: 650; }
   #directory .directory-need-field select { width: 100%; min-width: 0; min-height: 48px; padding: .6rem .7rem; border: 1px solid #aebfba; border-radius: 7px; background: #fff; color: #153c30; font: 500 .9375rem/1.4 system-ui, sans-serif; }
