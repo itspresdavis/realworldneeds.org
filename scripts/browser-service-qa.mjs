@@ -10,6 +10,7 @@ import { verifySourceConfidence } from "./qa-source-confidence.mjs";
 import { verifyDirectorySearchRelevance } from "./qa-search-relevance.mjs";
 import { verifyContactOnly } from "./qa-contact-only.mjs";
 import { verifyConnectivityRecovery } from "./qa-connectivity-recovery.mjs";
+import { verifyDirectoryPagination } from "./qa-directory-pagination.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -384,6 +385,7 @@ async function run() {
     await verifyPageMenuReturn({ client, host: HOST, navigate, evaluate, capture });
     await verifyPageMenuReflow({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
     await verifyPageMenuDismissal({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
+    await verifyDirectoryPagination({ client, host: HOST, navigate, evaluate, capture, qaDir: QA_DIR });
 
     console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, one clear Directions path, phone contact, current-source verification, directory search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
   } finally {

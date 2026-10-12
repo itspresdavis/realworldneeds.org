@@ -201,6 +201,17 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 
 .directory-downloads { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin-bottom:1.25rem; }
 .directory-downloads > strong { margin-right:.2rem; color:var(--page-ink-strong); font-size:.71rem; }
+.directory-pagination > a { min-height:44px; }
+.directory-page-picker { flex-basis:100%; min-width:0; }
+.directory-page-picker > summary { width:fit-content; max-width:100%; min-height:44px; padding:.55rem .7rem; border:1px solid var(--page-line-strong); border-radius:7px; color:var(--page-blue-dark); font-size:.8125rem; font-weight:650; cursor:pointer; }
+.directory-page-picker > summary:hover { background:var(--page-green-soft); }
+.directory-page-list { display:flex; flex-wrap:wrap; gap:.5rem; margin:.65rem 0 0; padding:.4rem; list-style:none; }
+.directory-page-list > li { margin:0; padding:0; }
+.directory-page-list a,
+.directory-page-list [aria-current="page"] { display:flex; min-width:44px; min-height:44px; align-items:center; justify-content:center; padding:.5rem; border:1px solid var(--page-line-strong); border-radius:7px; font-size:.8125rem; line-height:1.2; }
+.directory-page-list a:first-of-type { background:#fff; color:var(--page-blue-dark); }
+.directory-page-list a:hover { background:var(--page-green-soft); }
+.directory-page-list [aria-current="page"] { border-color:var(--page-blue); background:var(--page-blue); color:#fff; font-weight:750; }
 .directory-local-links { margin:0 0 1.35rem; padding:.85rem 0; border-top:1px solid var(--page-line); border-bottom:1px solid var(--page-line); background:transparent; }
 .directory-local-links a { border:0; border-bottom:1px solid #e5eae8; border-radius:0; background:transparent; }
 .directory-local-links a:hover { background:var(--page-paper); }
