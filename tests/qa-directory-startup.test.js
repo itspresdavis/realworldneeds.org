@@ -185,20 +185,20 @@ test('snapshot distinguishes retained brand focus from a duplicate home navigati
 function clickFixture({ rect = { x: 12, y: 100, width: 200, height: 44 }, visibility = 'visible', opacity = '1', covered = false, child = false } = {}) {
   const childNode = {};
   const node = { hidden: false, disabled: false, scrollIntoView() {}, getBoundingClientRect: () => rect, contains: target => target === childNode };
-  return { innerWidth: 390, innerHeight: 844, getComputedStyle: () => ({ display: 'block', visibility, opacity }),
-    document: { querySelector: () => node, elementFromPoint: () => covered ? {} : child ? childNode : node } };
+  return { innerWidth: 390, innerHeight: 844, scrollX: 0, scrollY: 0, requestAnimationFrame: callback => queueMicrotask(() => callback(0)), getComputedStyle: () => ({ display: 'block', visibility, opacity }),
+    document: { querySelector: () => node, addEventListener() {}, removeEventListener() {}, elementFromPoint: () => covered ? {} : child ? childNode : node } };
 }
 const clickPoint = globals => vm.runInNewContext(`(${directoryStartupClickPoint.toString()})('[data-directory-clear]')`, globals);
 
-test('native click setup requires a visible in-viewport center and the actual hit target', () => {
+test('native click setup requires a visible in-viewport center and the actual hit target', async () => {
   for (const child of [false, true]) {
-    const point = clickPoint(clickFixture({ child }));
+    const point = await clickPoint(clickFixture({ child }));
     assert.equal(point.x, 112); assert.equal(point.y, 122);
   }
   for (const options of [{ visibility: 'hidden' }, { opacity: '0' }, { rect: { x: 12, y: 100, width: 0, height: 0 } }, { rect: { x: 500, y: 100, width: 40, height: 44 } }]) {
-    assert.throws(() => clickPoint(clickFixture(options)), /not visibly clickable/);
+    await assert.rejects(() => clickPoint(clickFixture(options)), /not visibly clickable/);
   }
-  assert.throws(() => clickPoint(clickFixture({ covered: true })), /covered or clipped/);
+  await assert.rejects(() => clickPoint(clickFixture({ covered: true })), /covered or clipped/);
 });
 
 test('privacy checks include candidate text and form/URLSearchParams decoding', () => {

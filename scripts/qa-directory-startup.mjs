@@ -67,6 +67,7 @@ export function directoryStartupSnapshot() {
     count: pick('[data-directory-count]')?.textContent,
     history: globalThis.history?.state?.rwnDirectory, scroll: globalThis.scrollY ?? null,
     probe: globalThis.__rwnDirectoryStartupQA || null,
+    click: globalThis.__rwnDirectoryClickQA ? { selector: globalThis.__rwnDirectoryClickQA.selector, point: globalThis.__rwnDirectoryClickQA.point, events: globalThis.__rwnDirectoryClickQA.events } : null,
     storage: input ? { local: snapshot(globalThis.localStorage), session: snapshot(globalThis.sessionStorage) } : null,
     overflow: document?.documentElement ? document.documentElement.scrollWidth - globalThis.innerWidth : null,
     overlay: Boolean(pick('vite-error-overlay, nextjs-portal, #webpack-dev-server-client-overlay'))
@@ -97,20 +98,53 @@ export function focusDirectoryStartupBlurTarget() {
   return { selector, href: link.getAttribute('href'), focused: true, visible };
 }
 
-export function directoryStartupClickPoint(selector) {
-  const node = document.querySelector(selector);
-  if (!node || node.hidden || node.disabled) throw new Error('Missing enabled control: ' + selector);
-  node.scrollIntoView({ block: 'center', behavior: 'instant' });
-  const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
-  const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-  if (!rect.width || !rect.height || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)
-    || style.opacity === '0' || point.x < 0 || point.x >= innerWidth || point.y < 0 || point.y >= innerHeight) {
-    throw new Error(`Control is not visibly clickable: ${selector} ${JSON.stringify({ point, width: rect.width, height: rect.height, display: style.display, visibility: style.visibility })}`);
+export async function directoryStartupClickPoint(selector) {
+  let target = document.querySelector(selector);
+  if (!target || target.hidden || target.disabled) throw new Error('Missing enabled control: ' + selector);
+  globalThis.__rwnDirectoryClickQA?.stop();
+  target.scrollIntoView({ block: 'center', behavior: 'instant' });
+  let previous, last;
+  // scrollIntoView and scroll anchoring can settle on later rendering frames.
+  // Take coordinates only after the same node/box/scroll is stable across two
+  // frames. This prepares one native action; it never retries a delivered click.
+  for (let frame = 0; frame < 60; frame++) {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const node = document.querySelector(selector);
+    if (!node || node.hidden || node.disabled) throw new Error('Missing enabled control: ' + selector);
+    const rect = node.getBoundingClientRect(), style = getComputedStyle(node);
+    const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    if (!rect.width || !rect.height || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)
+      || style.opacity === '0' || point.x < 0 || point.x >= innerWidth || point.y < 0 || point.y >= innerHeight) {
+      throw new Error(`Control is not visibly clickable: ${selector} ${JSON.stringify({ point, width: rect.width, height: rect.height, display: style.display, visibility: style.visibility })}`);
+    }
+    const hit = document.elementFromPoint(point.x, point.y);
+    if (!hit || !(hit === node || node.contains(hit))) throw new Error('Control click target is covered or clipped: ' + selector);
+    last = { selector, point, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, scroll: [scrollX, scrollY], frames: frame + 1 };
+    const signature = JSON.stringify([last.rect, last.scroll]);
+    if (node === target && signature === previous) {
+      const events = [], types = ['mousedown', 'mouseup', 'click'];
+      const record = event => events.push({
+        type: event.type, trusted: event.isTrusted, expected: event.target === node || node.contains(event.target),
+        x: event.clientX, y: event.clientY, tag: event.target?.tagName || '', id: event.target?.id || '',
+        category: event.target?.closest?.('[data-directory-category]')?.dataset.directoryCategory ?? null,
+        href: event.target?.closest?.('a')?.getAttribute('href') ?? null,
+        text: event.target?.textContent?.trim().slice(0, 100) || ''
+      });
+      for (const type of types) document.addEventListener(type, record, true);
+      globalThis.__rwnDirectoryClickQA = { ...last, events, stop: () => {
+        for (const type of types) document.removeEventListener(type, record, true);
+      } };
+      return point;
+    }
+    target = node; previous = signature;
   }
-  const hit = document.elementFromPoint(point.x, point.y);
-  if (!hit || !(hit === node || node.contains(hit))) throw new Error('Control click target is covered or clipped: ' + selector);
-  return point;
+  throw new Error(`Control geometry did not settle before native click: ${JSON.stringify(last)}`);
 }
+
+export const directoryStartupClickWasDelivered = evidence => Boolean(evidence
+  && evidence.events?.length === 3
+  && ['mousedown', 'mouseup', 'click'].every((type, index) => evidence.events[index].type === type
+    && evidence.events[index].trusted && evidence.events[index].expected));
 
 export function directoryStartupRequestLeaksQuery(request) {
   const url = new URL(request.url);
@@ -199,8 +233,14 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   };
   const click = async selector => {
     const point = await evaluate(client, `(${directoryStartupClickPoint.toString()})(${JSON.stringify(selector)})`);
-    await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
-    await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+    let activation;
+    try {
+      await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+      await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+    } finally {
+      activation = await evaluate(client, `(() => { const evidence = globalThis.__rwnDirectoryClickQA; evidence?.stop(); if (!evidence) return null; const { stop, ...detail } = evidence; return detail; })()`);
+    }
+    assert(directoryStartupClickWasDelivered(activation), 'Native click did not reach the intended control', activation);
   };
   const assertPrivate = (before, after) => {
     const url = new URL(after.href);
@@ -228,8 +268,15 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   const seedStaleHistory = async () => {
     await type('WIC');
     await evaluate(client, `(() => { const country = document.querySelector('[data-directory-country]'); country.value = 'United States'; country.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    // Country change starts an async search. Let its exact UI/history commit
+    // before preparing a native category click against the resulting layout.
+    const committed = (s, category) => s.ready && s.query === 'WIC' && s.country === 'United States' && s.category === (category || 'All help')
+      && s.rows.length === 60 && !s.resultsHidden && /^\d[\d,]* matching listings$/.test(s.count || '')
+      && s.history?.path === '/directory' && s.history.query === 'WIC' && s.history.country === 'United States'
+      && s.history.category === category.toLowerCase() && s.history.shown === 60;
+    await wait(s => committed(s, ''), 'Stale-history WIC and country search did not commit before selecting Food');
     await click('[data-directory-category="Food"]');
-    await wait(s => s.query === 'WIC' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 60, 'Stale-history setup did not find WIC');
+    await wait(s => committed(s, 'Food'), 'Stale-history setup did not find WIC');
     await click('[data-directory-more]');
     const stale = await wait(s => s.rows.length === 120 && s.history?.shown === 120 && s.history?.focus === s.rows[60].href && s.scroll > 200, 'Stale-history setup did not remember listing focus and pagination');
     return stale;
