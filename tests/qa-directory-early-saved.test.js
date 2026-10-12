@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { directoryStartupSavedSnapshot, directoryStartupSavedHeaderPoint, directoryStartupSavedReturnReady,
   waitForDirectoryStartupSavedReturn, directoryStartupClickWasDelivered, directorySavedBrowseHeaderPoint,
-  directoryStartupSavedBaselineReady, waitForDirectoryStartupSavedBaseline, directoryStartupSavedBaselinePreserved } from '../scripts/qa-directory-startup.mjs';
+  directoryStartupSavedBaselineReady, waitForDirectoryStartupSavedBaseline, directoryStartupSavedBaselinePreserved,
+  directoryStartupReloadSourceReady, directoryStartupReloadDestinationReady, waitForDirectoryStartupReloadGeometry } from '../scripts/qa-directory-startup.mjs';
 
 const query = 'Drinking fountains for London';
 const ready = (clear = false) => ({ documentPresent: true, ready: true, pathname: '/directory', href: 'https://rwn.test/directory#directory-results',
@@ -242,4 +243,102 @@ for (const movement of ['none', 'during-preparation', 'between-native-events']) 
   if (movement === 'none') await click('.rwn-page-nav a[href="/directory#saved"]', before);
   else await assert.rejects(click('.rwn-page-nav a[href="/directory#saved"]', before), /settled directory baseline/);
   assert.deepEqual(calls, movement === 'during-preparation' ? [] : ['mousePressed', 'mouseReleased']);
+});
+
+const reloadSource = () => ({ ...baseline(), ready: true, bodyPresent: true, documentReadyState: 'complete', country: 'United States', countryDisabled: false,
+  query: 'WIC', category: 'Food', rows: Array.from({ length: 120 }, (_, i) => ({ href: `/service/wic-${i}` })), resultsHidden: false,
+  history: { path: '/directory', query: 'WIC', country: 'United States', category: 'food', shown: 120, scroll: 5505 }, scroll: 5505,
+  documentHeight: 12000, staticCount: 60, inputBox: { x: 190, y: -5155, width: 632, height: 44 }, headerBox: { x: 0, y: 0, width: 1440, height: 74 },
+  viewport: { width: 1440, height: 900 }, moduleHeld: 0, focusedInput: false, meaningfulFocus: true });
+const reloadDestination = () => ({ ...reloadSource(), ready: false, timeOrigin: 200, documentReadyState: 'interactive', query: '', country: '', countryDisabled: true,
+  category: undefined, rows: [], resultsHidden: undefined, moduleHeld: 1, meaningfulFocus: false,
+  probe: { inputs: [], catalogReads: 0, catalogSettled: 0 } });
+const reloadFixture = (change = () => ({}), destination = true) => {
+  let time = 0, calls = 0;
+  return { sample: async () => ({ ...(destination ? reloadDestination() : reloadSource()), ...change(time, calls++) }), now: () => time,
+    wait: async ms => { time += ms; }, calls: () => calls };
+};
+
+test('reload source requires the genuine stable WIC/US/Food/120 entry and agreement between actual scroll and history', () => {
+  assert.equal(directoryStartupReloadSourceReady(reloadSource()), true);
+  for (const change of [{ ready: false }, { bodyPresent: false }, { query: '' }, { rows: [] }, { country: '' }, { category: 'All help' },
+    { scroll: 5504 }, { history: { ...reloadSource().history, scroll: 0 } }, { saved: true }, { menuOpen: true }]) {
+    assert.equal(directoryStartupReloadSourceReady({ ...reloadSource(), ...change }), false, JSON.stringify(change));
+  }
+});
+
+test('reload destination accepts a parsed, offscreen-input static page at its true native restored position', () => {
+  const state = reloadDestination();
+  assert.equal(state.meaningfulFocus, false);
+  assert.equal(directoryStartupReloadDestinationReady(state, reloadSource(), 200), true);
+  for (const change of [{ documentReadyState: 'loading' }, { timeOrigin: 100 }, { ready: true }, { moduleHeld: 0 }, { scroll: 0 },
+    { scroll: 5504 }, { documentHeight: 5505 }, { staticCount: 0 }, { countryDisabled: false },
+    { probe: { ...state.probe, inputs: [{ trusted: true, value: 'WIC' }] } }, { probe: { ...state.probe, catalogReads: 1 } }, { catalogHeld: 1 }]) {
+    assert.equal(directoryStartupReloadDestinationReady({ ...state, ...change }, reloadSource(), 200), false, JSON.stringify(change));
+  }
+  assert.equal(directoryStartupReloadDestinationReady({ ...state, scroll: 0 }, { ...reloadSource(), scroll: 0 }, 200), false, 'zero cannot be an invented clamp target');
+});
+
+test('neutral initial geometry never accepts a quiet zero plateau before delayed native restoration', async () => {
+  const f = reloadFixture(time => time < 1200 ? { scroll: 0, inputBox: { ...reloadDestination().inputBox, y: 350 } } : {});
+  const found = await waitForDirectoryStartupReloadGeometry({ ...f, source: reloadSource(), timeOrigin: 200 });
+  assert.ok(found.durationMs >= 1700); assert.equal(found.state.scroll, 5505); assert.equal(found.state.inputBox.y, -5155);
+  assert.equal(found.state.probe.inputs.length, 0); assert.equal(found.state.probe.catalogReads, 0); assert.equal(found.state.moduleHeld, 1);
+});
+
+test('reload waiting requires parsing and sufficient static extent before timing a full exact quiet interval', async () => {
+  const f = reloadFixture(time => time < 300 ? { documentReadyState: 'loading' } : time < 800 ? { documentHeight: 5000 } : {});
+  const found = await waitForDirectoryStartupReloadGeometry({ ...f, source: reloadSource(), timeOrigin: 200 });
+  assert.ok(found.durationMs >= 1300); assert.equal(found.state.documentHeight, 12000);
+});
+
+test('source quiet sampling does not trust the first seedStaleHistory scroll while it is still moving', async () => {
+  const f = reloadFixture(time => { const scroll = time < 1000 ? 4000 + time : 5505; return { scroll, history: { ...reloadSource().history, scroll } }; }, false);
+  const found = await waitForDirectoryStartupReloadGeometry(f);
+  assert.ok(found.durationMs >= 1500); assert.equal(found.state.scroll, 5505); assert.equal(found.state.history.scroll, 5505);
+});
+
+test('reload geometry rejects perpetual movement, premature edits and a hung browser', async () => {
+  for (const change of [(_time, index) => ({ inputBox: { ...reloadDestination().inputBox, y: -5155 + index * .01 } }),
+    () => ({ probe: { ...reloadDestination().probe, inputs: [{ trusted: true, value: 'WIC' }] } }), () => ({ scroll: 0 })]) {
+    const f = reloadFixture(change);
+    await assert.rejects(waitForDirectoryStartupReloadGeometry({ ...f, source: reloadSource(), timeOrigin: 200, timeoutMs: 800 }), /did not settle/);
+  }
+  await assert.rejects(waitForDirectoryStartupReloadGeometry({ sample: () => new Promise(() => {}), source: reloadSource(), timeOrigin: 200, timeoutMs: 20 }), /within 20ms/);
+});
+
+test('reload geometry retries only navigation-context loss and resets the complete quiet window', async () => {
+  const f = reloadFixture(); let calls = 0;
+  const found = await waitForDirectoryStartupReloadGeometry({ ...f, source: reloadSource(), timeOrigin: 200, sample: async () => {
+    if (calls++ === 4) throw new Error('Runtime.evaluate: Execution context was destroyed.');
+    return f.sample();
+  } });
+  assert.ok(found.durationMs >= 750);
+  await assert.rejects(waitForDirectoryStartupReloadGeometry({ ...f, sample: async () => { throw new Error('Application failure'); } }), /Application failure/);
+});
+
+test('actual start helper captures source state immediately before Page.reload without changing entry state', async () => {
+  const source = await readFile(new URL('../scripts/qa-directory-startup.mjs', import.meta.url), 'utf8');
+  const closure = source.match(/  const start = async \(\{ reload = false, catalog = true, beforeReload \} = \{\}\) => \{[\s\S]*?\n  \};/)[0];
+  const order = [], before = reloadSource(), held = { module: [], catalog: [] }, hold = {};
+  const context = { hold, held, host: 'https://rwn.test', directoryStartupStaticReady: () => true,
+    navigate: async () => { throw new Error('Reload must not manufacture another entry'); },
+    state: async () => { order.push('read-source'); return before; },
+    client: { call: async method => { order.push(method); } },
+    wait: async () => { order.push('read-destination'); return { ...reloadDestination(), rows: [], disabled: false }; },
+    assert: (ok, label) => assert.ok(ok, label) };
+  const start = vm.runInNewContext(`${closure}; start`, context);
+  await start({ reload: true, beforeReload: current => { order.push('capture-source'); assert.equal(current, before); assert.equal(current.scroll, 5505); } });
+  assert.deepEqual(order, ['read-source', 'capture-source', 'Page.reload', 'read-destination']);
+  assert.equal(before.history.scroll, 5505); assert.equal(before.href, 'https://rwn.test/directory#directory-results');
+});
+
+test('reload fixture completes native restoration before its first focus/type and keeps the later visible baseline unchanged', async () => {
+  const source = await readFile(new URL('../scripts/qa-directory-startup.mjs', import.meta.url), 'utf8');
+  assert.match(source, /await seedStaleHistory\(\);[\s\S]*?source: await waitForDirectoryStartupReloadGeometry\(\{ sample: savedState \}\)/);
+  assert.match(source, /initialReloadEvidence\.destination = await waitForDirectoryStartupReloadGeometry\([\s\S]*?await type\(clear \? 'WIC' : QUERY\);/);
+  assert.match(source, /captured\.scroll === stable\.scroll/);
+  assert.match(source, /baselineEvidence = await waitForDirectoryStartupSavedBaseline/);
+  assert.match(source, /Math\.abs\(returned\.scroll - preSaved\.scroll\) < 5/);
+  assert.doesNotMatch(waitForDirectoryStartupReloadGeometry.toString(), /focus\(|scrollIntoView|scrollTo\(|replaceState|pushState|dispatchMouseEvent|\.hash\s*=/);
 });

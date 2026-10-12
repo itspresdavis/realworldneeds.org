@@ -204,6 +204,7 @@ export function directoryStartupSavedSnapshot(base) {
   const pick = selector => document.querySelector(selector);
   const active = document.activeElement, rect = active?.getBoundingClientRect();
   const inputRect = pick('[data-directory-query]')?.getBoundingClientRect();
+  const headerRect = pick('.legal-header')?.getBoundingClientRect();
   const style = active ? getComputedStyle(active) : null;
   const useful = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-category], [data-directory-clear], .directory-global-result, .directory-records h2 a'));
   const visible = useful && rect.width > 0 && rect.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6
@@ -218,7 +219,11 @@ export function directoryStartupSavedSnapshot(base) {
     meaningfulFocus: Boolean(visible && hit && (hit === active || active.contains(hit))),
     focusBox: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
     inputBox: inputRect ? { x: inputRect.x, y: inputRect.y, width: inputRect.width, height: inputRect.height } : null,
-    headerGeometry: globalThis.__rwnSavedHeaderGeometryQA || null
+    headerGeometry: globalThis.__rwnSavedHeaderGeometryQA || null,
+    documentReadyState: document.readyState || '', bodyPresent: Boolean(document.body),
+    documentHeight: document.documentElement?.scrollHeight ?? null,
+    staticCount: [...(document.querySelectorAll?.('.directory-records > .directory-record') || [])].length,
+    headerBox: headerRect ? { x: headerRect.x, y: headerRect.y, width: headerRect.width, height: headerRect.height } : null
   };
 }
 
@@ -233,6 +238,55 @@ export async function directoryStartupSavedHeaderPoint(selector, prepare) {
     for (const type of types) document.removeEventListener(type, record, true);
   } };
   return point;
+}
+
+export const directoryStartupReloadSourceReady = s => Boolean(s.documentPresent && s.bodyPresent && s.ready
+  && s.pathname === '/directory' && !s.saved && !s.panelVisible && !s.menuOpen && s.query === 'WIC'
+  && s.country === 'United States' && s.category === 'Food' && s.rows.length === 120 && !s.resultsHidden
+  && s.history?.path === '/directory' && s.history.query === 'WIC' && s.history.country === 'United States'
+  && s.history.category === 'food' && s.history.shown === 120 && s.history.scroll === s.scroll && s.scroll > 200);
+
+export const directoryStartupReloadDestinationReady = (s, source, timeOrigin) => Boolean(
+  s.documentPresent && s.bodyPresent && ['interactive', 'complete'].includes(s.documentReadyState)
+  && Number.isFinite(s.timeOrigin) && s.timeOrigin === timeOrigin && s.timeOrigin !== source.timeOrigin
+  && s.pathname === '/directory' && s.href === source.href && !s.ready && s.moduleHeld > 0 && s.catalogHeld === 0
+  && !s.saved && !s.panelVisible && !s.menuOpen && s.countryDisabled && s.country === '' && s.rows.length === 0
+  && s.probe?.inputs.length === 0 && s.probe.catalogReads === 0 && s.probe.catalogSettled === 0
+  && Number.isFinite(source.scroll) && source.scroll > 200 && s.scroll === source.scroll
+  && Number.isFinite(s.documentHeight) && s.documentHeight - s.viewport.height >= source.scroll && s.staticCount === 60
+);
+
+// The native reload can restore scroll after the editable form first appears.
+// Observe that real restoration before interacting with the new document.
+// A quiet initial zero plateau is insufficient for this seeded nonzero entry.
+export async function waitForDirectoryStartupReloadGeometry({ sample, source = null, timeOrigin,
+  wait = sleep, now = () => performance.now(), timeoutMs = 8000 }) {
+  const started = now(), trace = [], phase = source ? 'destination' : 'source';
+  let latest, anchor, since = started, count = 0;
+  const failure = () => new Error(`Native reload ${phase} geometry did not settle within ${timeoutMs}ms: ${JSON.stringify({ expectedScroll: source?.scroll, latest, trace })}`);
+  while (now() - started < timeoutMs) {
+    let deadline;
+    try {
+      latest = await Promise.race([sample(), new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(failure()), Math.max(1, timeoutMs - (now() - started)));
+      })]);
+    } catch (error) { if (!isDirectoryStartupNavigationError(error)) throw error; latest = { documentPresent: false }; }
+    finally { clearTimeout(deadline); }
+    const geometry = [latest.scroll, latest.documentHeight, latest.viewport?.width, latest.viewport?.height,
+      ...['inputBox', 'headerBox'].flatMap(box => ['x', 'y', 'width', 'height'].map(key => latest[box]?.[key]))];
+    const valid = Boolean((source ? directoryStartupReloadDestinationReady(latest, source, timeOrigin) : directoryStartupReloadSourceReady(latest)) && geometry.every(Number.isFinite));
+    const signature = JSON.stringify([latest.href, latest.timeOrigin, latest.documentReadyState, latest.query, latest.country,
+      latest.history, latest.probe?.inputs, latest.staticCount, geometry]);
+    if (!valid || signature !== anchor) { anchor = valid ? signature : null; since = now(); count = valid ? 1 : 0; }
+    else count++;
+    trace.push({ elapsedMs: now() - started, valid, expectedScroll: source?.scroll, scroll: latest.scroll,
+      documentReadyState: latest.documentReadyState, documentHeight: latest.documentHeight, staticCount: latest.staticCount,
+      inputBox: latest.inputBox, headerBox: latest.headerBox, moduleHeld: latest.moduleHeld, ready: latest.ready, inputs: latest.probe?.inputs.length });
+    if (trace.length > 40) trace.shift();
+    if (now() - started < timeoutMs && count >= 6 && now() - since >= 500) return { state: latest, durationMs: now() - started, samples: count, trace };
+    await wait(50);
+  }
+  throw failure();
 }
 
 export const directoryStartupSavedBaselineReady = (s, { query, inputCount, timeOrigin }) => Boolean(
@@ -316,7 +370,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   const hold = { module: false, catalog: false };
   const requests = [], errors = [], evidence = [];
   let interceptionError, instrumentation;
-  let viewportWidth = null, scenario = 'setup', baselineEvidence = null;
+  let viewportWidth = null, scenario = 'setup', baselineEvidence = null, initialReloadEvidence = null;
   const continueRequest = requestId => client.call('Fetch.continueRequest', { requestId });
   // This runner's small CDP client exposes its WebSocket but has no event API.
   // Subscribe here so the runner itself only needs an import and invocation.
@@ -357,12 +411,12 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     hold[kind] = false;
     await Promise.all(held[kind].splice(0).map(continueRequest));
   };
-  const start = async ({ reload = false, catalog = true } = {}) => {
+  const start = async ({ reload = false, catalog = true, beforeReload } = {}) => {
     if (!reload) await navigate(client, 'about:blank');
     const previous = await state();
     assert(!held.module.length && !held.catalog.length, 'A previous request gate remained open', held);
     hold.module = true; hold.catalog = catalog;
-    if (reload) await client.call('Page.reload', { ignoreCache: true });
+    if (reload) { beforeReload?.(previous); await client.call('Page.reload', { ignoreCache: true }); }
     else await client.call('Page.navigate', { url: `${host}/directory` });
     const early = await wait(s => directoryStartupStaticReady(s, previous.timeOrigin, held.module.length), 'Static directory form did not become editable before its module');
     assert(!early.ready && !early.disabled && early.countryDisabled && early.rows.length === 0 && early.probe.catalogReads === 0, 'Entry-module gate did not establish the pre-handler window', early);
@@ -451,10 +505,22 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   };
   const earlySavedBrowse = async (width, { clear = false, browseBeforeRuntime = false } = {}) => {
     scenario = `${clear ? 'early clear' : 'early input'} through native Saved and Browse ${browseBeforeRuntime ? 'before' : 'after'} runtime`;
-    baselineEvidence = null;
-    if (clear) await seedStaleHistory();
-    const before = await start({ reload: clear });
-    if (clear) assert(before.history?.query === 'WIC' && before.history.country === 'United States' && before.history.category === 'food' && before.history.shown === 120, 'Early Saved clear requires a real stale WIC entry', before.history);
+    baselineEvidence = null; initialReloadEvidence = null;
+    if (clear) {
+      await seedStaleHistory();
+      initialReloadEvidence = { source: await waitForDirectoryStartupReloadGeometry({ sample: savedState }) };
+    }
+    const before = await start({ reload: clear, beforeReload: current => {
+      const stable = initialReloadEvidence.source.state;
+      const captured = { ...stable, ...current };
+      assert(directoryStartupReloadSourceReady(captured) && captured.timeOrigin === stable.timeOrigin && captured.scroll === stable.scroll,
+        'Seeded source moved before native reload', { stable, captured });
+      initialReloadEvidence.captured = captured;
+    } });
+    if (clear) {
+      assert(before.history?.query === 'WIC' && before.history.country === 'United States' && before.history.category === 'food' && before.history.shown === 120, 'Early Saved clear requires a real stale WIC entry', before.history);
+      initialReloadEvidence.destination = await waitForDirectoryStartupReloadGeometry({ sample: savedState, source: initialReloadEvidence.captured, timeOrigin: before.timeOrigin });
+    }
     await type(clear ? 'WIC' : QUERY);
     if (clear) await erase();
     const query = clear ? '' : QUERY, inputCount = clear ? 2 : 1;
@@ -523,6 +589,8 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     await capture(client, `directory-startup-${clear ? 'clear' : 'input'}-browse-${browseBeforeRuntime ? 'before' : 'after'}-runtime-${width}.png`);
     return { clear, browseBeforeRuntime, inputs: returned.probe.inputs, query: returned.query, country: returned.country, category: returned.category,
       rows: returned.rows.map(row => row.href), meaningfulFocus: returned.meaningfulFocus, focusedHref: returned.focusedHref, focusedInput: returned.focusedInput,
+      initialReload: initialReloadEvidence ? { expectedScroll: initialReloadEvidence.captured.scroll, observedScroll: initialReloadEvidence.destination.state.scroll,
+        sourceQuietMs: initialReloadEvidence.source.durationMs, destinationQuietMs: initialReloadEvidence.destination.durationMs, trace: initialReloadEvidence.destination.trace } : null,
       preSavedScroll: preSaved.scroll, baselineQuiet: { durationMs: baselineEvidence.durationMs, samples: baselineEvidence.samples, trace: baselineEvidence.trace }, finalScroll: returned.scroll, staticSavedVisibleBeforeRelease: browseBeforeRuntime ? opened.panelVisible : null,
       catalogReadsWhileSaved: opened.probe.catalogReads, catalogReadsAfterBrowse: returned.probe.catalogReads, href: returned.href };
   };
@@ -686,7 +754,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     const failed = await bounded(savedState);
     await bounded(() => capture(client, `directory-startup-failure-${viewportWidth ?? 'unset'}.png`));
     await mkdir('qa-screenshots', { recursive: true });
-    await writeFile('qa-screenshots/directory-startup-failure.json', JSON.stringify({ width: viewportWidth, scenario, error: error.message, held, baselineEvidence, state: failed }, null, 2));
+    await writeFile('qa-screenshots/directory-startup-failure.json', JSON.stringify({ width: viewportWidth, scenario, error: error.message, held, initialReloadEvidence, baselineEvidence, state: failed }, null, 2));
     throw new Error(`Directory startup QA (${viewportWidth ?? 'unset'}px, ${scenario}): ${error.message}`, { cause: error });
   } finally {
     hold.module = false; hold.catalog = false;
