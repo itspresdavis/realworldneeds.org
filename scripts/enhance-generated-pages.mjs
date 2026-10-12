@@ -135,6 +135,7 @@ function assetLinks(release, includeScript) {
 function directorySearchMarkup(scope) {
   const records = scope === "/directory" ? searchIndex.records : (searchIndex.scopes[scope] || []).map(index => searchIndex.records[index]);
   const countries = [...new Set(records.map(record => record.country))].sort((a, b) => a.localeCompare(b));
+  const needs = [...new Set(records.flatMap(record => record.categoryLabels || []))].sort((a, b) => a.localeCompare(b));
   const countryControl = countries.length > 1 ? `<label class="directory-country-field"><span>Country or area listed</span><select data-directory-country disabled aria-describedby="directory-coverage-note"><option value="">All listed countries and areas</option>${countries.map(country => `<option value="${escapeHtml(country)}">${escapeHtml(country === "Global" ? "Global resources (check coverage)" : country)}</option>`).join("")}</select></label>` : "";
   return `<section id="saved" class="saved-services" data-saved-services aria-labelledby="saved-services-heading">
     <div class="saved-services__heading"><h2 id="saved-services-heading" tabindex="-1">Saved services</h2><a href="#directory-results">Browse directory</a></div>
@@ -149,21 +150,24 @@ function directorySearchMarkup(scope) {
     <div class="directory-search-tools__top">
       <label class="directory-search-control"><span>Search this directory</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Search services, organizations, cities, or addresses" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="/ Escape" /></span></label>
       ${countryControl}
-      <button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button>
     </div>
-    <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
-    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
+    <label class="directory-need-field"><span>Type of help</span><select data-directory-need disabled><option value="">All help</option>${needs.map(need => `<option value="${escapeHtml(need)}">${escapeHtml(need)}</option>`).join("")}</select></label>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
+    <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
+    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
     <template data-directory-empty><div class="directory-global-empty"><h2>No matching listings.</h2><p>A missing result does not mean help is unavailable.</p><div class="directory-empty-actions"><button type="button" data-fewer-words>Try without search words</button><button type="button" data-clear-all>Clear all filters</button></div><p>Or ${scope !== "/directory/global" ? '<a href="/directory/global">browse global resource finders</a>' : ""}${scope !== "/directory" ? `${scope !== "/directory/global" ? " or " : ""}<a href="/directory">browse the full directory</a>` : ""}.</p></div></template>
   </section>`;
 }
 
 function localLinksMarkup(country, entries) {
   if (!entries.length) return "";
-  return `<nav class="directory-local-links" aria-label="Local directories in ${escapeHtml(country)}"><div><strong>Browse local directories</strong><span>City pages are published only where RWN has at least three reviewed listings.</span></div><div>${entries
-    .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city))
-    .map((entry) => `<a href="${escapeHtml(entry.path)}">${escapeHtml([entry.city, entry.administrativeArea].filter(Boolean).join(", "))} <span>${entry.count}</span></a>`)
-    .join("")}</div></nav>`;
+  return `<section class="directory-local-browse"><details><summary><strong>Browse local directories</strong><span>${entries.length} ${entries.length === 1 ? "place" : "places"}</span></summary>
+    <nav class="directory-local-links" aria-label="Local directories in ${escapeHtml(country)}"><div>${entries
+      .sort((a, b) => a.city.localeCompare(b.city) || (a.administrativeArea || "").localeCompare(b.administrativeArea || ""))
+      .map((entry) => `<a href="${escapeHtml(entry.path)}">${escapeHtml([entry.city, entry.administrativeArea].filter(Boolean).join(", "))} <span>${entry.count}</span></a>`)
+      .join("")}</div></nav></details>
+    <p>City pages are published only where RWN has at least three reviewed listings.</p>
+  </section>`;
 }
 
 function enhanceCollectionPage(html, release, scope) {
@@ -225,7 +229,7 @@ const searchImport = 'import { normalizeSearch as normalize, querySearchTokens a
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
 const directoryBundle = `${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
-// Keep the complete offline entry under its existing 14 KB ceiling, without
+// Keep the complete offline entry under its 15 KB ceiling, without
 // another runtime request. Terser uses its safe defaults (no unsafe transforms),
 // including declaration joining; rendered CI tests exercise the shipped bundle.
 const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow", "root"] } });

@@ -37,6 +37,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     set value(value) { this._value = String(value); this.selectionStart = this.selectionEnd = this._value.length; }
     setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
     get childElementCount() { return this.children.length; }
+    get options() { return this.children; }
     addEventListener(type, callback, options = {}) {
       const capture = options === true || Boolean(options.capture);
       const handlers = this.handlers.get(type) || [];
@@ -95,9 +96,14 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   document = new Node("document"); document.body = new Node("body"); document.append(document.body); document.activeElement = document.body;
   const shell = new Node("main", [".directory-shell"]), root = new Node("form", ["[data-directory-search]"]);
   const input = new Node("input", ["[data-directory-query]"]), country = new Node("select", ["[data-directory-country]"]);
+  const need = new Node("select", ["[data-directory-need]"]);
+  for (const label of ["", ...new Set(catalog.records.flatMap(record => record.categoryLabels))].sort()) {
+    const option = new Node("option"); option.value = label; option.textContent = label || "All help"; need.append(option);
+  }
+  need.disabled = true;
   const clear = new Node("button", ["[data-directory-clear]"]), count = new Node("span", ["[data-directory-count]"]), chips = new Node("div", ["[data-directory-categories]"]);
   clear.hidden = true; country.disabled = true;
-  root.append(input, country, clear, count, chips); shell.append(root);
+  root.append(input, country, need, clear, count, chips); shell.append(root);
   for (let i = 0; i < 60; i++) shell.append(new Node("article", [".directory-records > .directory-record"]));
   const resultList = new Node("div", ["[data-global-list]"]), summary = new Node("span", ["[data-global-summary]"]), more = new Node("button", ["[data-directory-more]"]);
   let results;
@@ -147,7 +153,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     ${savedSyncSource}
  globalThis.savedSync = syncView;
   }`, context);
-  return { document, window, navigator, root, input, country, clear, count, chips, shell, resultList, more,
+  return { document, window, navigator, root, input, country, need, clear, count, chips, shell, resultList, more,
     history, location, writes, requests, timers, scrolls, savedHeading, savedLink, browseLink,
     staticSavedBrowse(scroll = 450) {
       window.scrollY = scroll; savedLink.dispatch("click"); location.hash = "#saved"; history.state = null;
@@ -644,4 +650,33 @@ for (const destination of ["#saved", "#directory-search"]) test(`leaving for ${d
   const calls = f.scrolls.length; f.frames();
   assert.equal(f.window.scrollY, 321); assert.equal(f.scrolls.length, calls); assert.equal(f.document.activeElement, f.document.body);
   assert.equal(f.history.state, null); assert.equal(f.location.hash, destination);
+});
+
+
+test("native need selection intersects existing country and query and synchronizes desktop controls", async () => {
+  const f = fixture(); f.start();
+  assert.equal(f.need.disabled, false);
+  assert.ok(f.need.options.some(option => option.value === "Water"));
+  f.country.value = "United States"; f.country.dispatch("change"); await f.resolve();
+  f.type("Portland"); await f.flush();
+  f.need.focus(); f.need.value = "Water"; f.need.dispatch("change"); await tick();
+  assert.equal(f.history.state.rwnDirectory.category, "water");
+  assert.equal(f.history.state.rwnDirectory.country, "United States");
+  assert.equal(f.history.state.rwnDirectory.query, "Portland");
+  assert.deepEqual(f.ids(), ["blanchet-house"]);
+  assert.equal(f.document.activeElement, f.need);
+  assert.equal(f.chips.children.find(button => button.getAttribute("aria-pressed") === "true").textContent, "Water");
+  assert.ok(f.writes.every(args => args.length === 2), "Need choice never changes or transmits the URL");
+  f.clear.dispatch("click"); await tick();
+  assert.equal(f.need.value, ""); assertOrdinary(f);
+});
+
+test("restored need and desktop chip changes keep the narrow selector in sync", async () => {
+  const f = fixture({ state: stale() }); f.start(); await f.resolve(); f.frames();
+  assert.equal(f.need.value, "Food");
+  const water = f.chips.children.find(button => button.dataset.directoryCategory === "Water");
+  water.dispatch("click"); await tick();
+  assert.equal(f.need.value, "Water"); assert.equal(f.history.state.rwnDirectory.category, "water");
+  f.input.dispatch("keydown", { key: "Escape" }); await tick();
+  assert.equal(f.need.value, ""); assertOrdinary(f);
 });

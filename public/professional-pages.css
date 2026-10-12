@@ -363,7 +363,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 }
 #service > .legal-hero { background: #f5f4ee; }
 main#directory > .legal-hero { background: #f5f4ee; }
-#directory .directory-shell .directory-search-tools__top { grid-template-columns: minmax(0, 1.65fr) minmax(12rem, 1fr) auto; align-items: end; }
+#directory .directory-shell .directory-search-tools__top { grid-template-columns: minmax(0, 1.65fr) minmax(12rem, 1fr); align-items: end; }
 #directory .directory-search-control, #directory .directory-country-field { display: grid; min-width: 0; gap: .4rem; }
 #directory .directory-search-control > span:first-child, #directory .directory-country-field > span { color: #24583e; font-size: .8125rem; font-weight: 650; }
 #directory .directory-country-field select { width: 100%; min-width: 0; min-height: 58px; padding: .7rem .8rem; border: 1px solid #aebfba; border-radius: 7px; background: #fff; color: #153c30; font: 500 .9375rem/1.4 system-ui, sans-serif; }
@@ -443,7 +443,7 @@ main#directory > .legal-hero { background: #f5f4ee; }
   #service .service-facts > div { break-inside: avoid; }
 }
 
-#directory .directory-shell .directory-search-tools__top:not(:has(.directory-country-field)) { grid-template-columns: minmax(0, 1fr) auto; }
+#directory .directory-shell .directory-search-tools__top:not(:has(.directory-country-field)) { grid-template-columns: minmax(0, 1fr); }
 #directory .directory-empty-actions button:hover { background: #f0f6f1; }
 #directory .directory-global-empty a { display: inline-block; min-height: 44px; }
 @media (max-width: 760px) {
@@ -452,3 +452,27 @@ main#directory > .legal-hero { background: #f5f4ee; }
   #directory .directory-global-result-actions a { padding-inline: .45rem; }
   #directory .directory-global-result-actions .is-call, #directory .directory-global-result-actions .is-details { grid-column: 1 / -1; }
 }
+
+/* Keep every need discoverable without a sideways-scroll gesture. */
+#directory .directory-need-field { display: none; }
+#directory .directory-search-tools__meta { min-height: 44px; justify-content: flex-start; }
+#directory .directory-search-tools__meta > span:last-child { margin-left: auto; }
+#directory .directory-search-tools__meta .directory-search-tools__clear { min-height: 44px; padding: .45rem .65rem; font-size: .8125rem; }
+@media (max-width: 760px) {
+  #directory .directory-category-chips { display: none; }
+  #directory .directory-need-field { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .8rem; min-width: 0; }
+  #directory .directory-need-field > span { color: #24583e; font-size: .8125rem; font-weight: 650; }
+  #directory .directory-need-field select { width: 100%; min-width: 0; min-height: 48px; padding: .6rem .7rem; border: 1px solid #aebfba; border-radius: 7px; background: #fff; color: #153c30; font: 500 .9375rem/1.4 system-ui, sans-serif; }
+  #directory .directory-need-field select:focus-visible { outline: 3px solid #356c4e; outline-offset: 3px; }
+  #directory .directory-search-tools__meta .directory-search-tools__clear { margin-left: auto; }
+}
+
+#directory .directory-local-browse { margin: 0 0 1rem; padding-block: .35rem .8rem; border-block: 1px solid var(--page-line); }
+#directory .directory-local-browse summary { min-height: 48px; padding-block: .7rem; color: #24583e; cursor: pointer; font-size: .875rem; }
+#directory .directory-local-browse summary strong { font-weight: 650; }
+#directory .directory-local-browse summary span { margin-left: .5rem; color: #52665b; font-size: .8125rem; }
+#directory .directory-local-browse summary:focus-visible { outline: 3px solid #356c4e; outline-offset: 3px; }
+#directory .directory-local-browse > p { margin: 0; color: #52665b; font-size: .8125rem; line-height: 1.55; }
+#directory .directory-local-browse .directory-local-links { margin: 0; padding-block: 0 .65rem; border: 0; }
+#directory .directory-local-browse .directory-local-links > div { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
+#directory .directory-local-browse .directory-local-links a { min-height: 44px; font-size: .8125rem; }

@@ -150,7 +150,7 @@ test("interaction layers and search index stay within deliberate budgets", async
   const budgets = [
     ["src/accessibility.js", 10_000],
     ["src/clarity.css", 38_000],
-    ["public/directory.js", 12_000],
+    ["public/directory.js", 14_000],
     ["public/directory-results.js", 4_000],
     ["public/directory-enhancements.css", 18_000],
     ["dist/data/search-index.json", 1_500_000]

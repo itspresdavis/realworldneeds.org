@@ -271,7 +271,8 @@ async function run() {
       const menu = document.querySelector(".rwn-page-menu");
       const toolsRect = tools?.getBoundingClientRect();
       const chips = [...document.querySelectorAll("[data-directory-category]")];
-      if (!tools || !input || !list || !menu || chips.length < 2) return { ok: false, reason: "directory mobile controls missing" };
+      const need = document.querySelector("[data-directory-need]");
+      if (!tools || !input || !list || !menu || !need || chips.length < 2) return { ok: false, reason: "directory mobile controls missing" };
 
       menu.open = true;
       await sleep(30);
@@ -293,10 +294,15 @@ async function run() {
       const found = await waitUntil(() => [...list.querySelectorAll("a")].some((link) => new URL(link.href).pathname === targetHref));
       const actionsReady = await waitUntil(() => list.querySelectorAll(".directory-global-result-actions a").length >= (target.phone ? 4 : 3));
       const quickActions = [...list.querySelectorAll(".directory-global-result-actions a")];
+      const focusBefore = document.activeElement;
+      chips[0].focus();
+      const hiddenChipsInert = document.activeElement === focusBefore && chips.every(chip => !chip.getBoundingClientRect().height);
       return {
         ok: true,
         searchAboveFold: Boolean(toolsRect && toolsRect.top < innerHeight - 44 && toolsRect.bottom > 0),
-        minimumChipHeight: Math.min(...chips.map((chip) => chip.getBoundingClientRect().height)),
+        needHeight: need.getBoundingClientRect().height,
+        completeNeeds: JSON.stringify([...need.options].map(option => option.value)) === JSON.stringify(["", ...new Set(catalog.records.flatMap(record => record.categoryLabels))].sort((a, b) => a.localeCompare(b))),
+        hiddenChipsInert,
         found,
         actionsReady,
         actionLabels: quickActions.map((link) => link.textContent.trim()),
@@ -311,7 +317,7 @@ async function run() {
     const expectedActions = ["Apple Maps", "Google Maps", "View details"];
     const hasCall = directoryMobile.actionLabels?.some((label) => label.startsWith("Call "));
     const hasAllActions = expectedActions.every((label) => directoryMobile.actionLabels?.includes(label));
-    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.minimumChipHeight < 44 || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || directoryMobile.overflow > 8) {
+    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || directoryMobile.overflow > 8) {
       throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions })}`);
     }
 
