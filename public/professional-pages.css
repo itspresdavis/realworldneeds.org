@@ -430,6 +430,12 @@ main#directory > .legal-hero { background: #f5f4ee; }
   color: #24583e;
 }
 #service .service-next-steps__context { font-size: .8125rem; line-height: 1.55; }
+
+/* Keep the offline recovery action reachable without disabling keyboard focus. */
+#offlineDirectoryNotice .directory-connection-retry { min-height: 44px; margin-top: .5rem; font-size: .875rem; }
+#offlineDirectoryNotice .directory-connection-retry[aria-disabled="true"] { cursor: wait; }
+#offlineDirectoryNotice .directory-connection-retry:focus-visible { outline: 3px solid #07538d; outline-offset: 3px; }
+#offlineDirectoryNotice [data-directory-connection-status]:empty { margin: 0; }
 #service .service-accessibility :is(strong, p) { font-size: .9375rem; }
 #service .related-services__grid strong { font-size: .9375rem; }
 #service .related-services__grid :is(span, small) { font-size: .8125rem; }

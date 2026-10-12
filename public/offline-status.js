@@ -4,7 +4,24 @@ const notice = document.getElementById("offlineDirectoryNotice");
 if (notice) {
   let offline = false;
   let probeGeneration = 0;
+  let pendingProbe;
   let catalogPromise;
+  const explanation = notice.querySelector("p");
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "directory-search-tools__clear directory-connection-retry";
+  retry.setAttribute("data-directory-reconnect", "");
+  retry.setAttribute("aria-disabled", "false");
+  retry.textContent = "Retry connection";
+  const status = document.createElement("p");
+  status.setAttribute("data-directory-connection-status", "");
+  notice.append(retry, status);
+
+  const checking = (value) => {
+    // Native disabled can drop keyboard focus while the request is pending.
+    retry.setAttribute("aria-disabled", String(value));
+    retry.textContent = value ? "Checking connection…" : "Retry connection";
+  };
 
   const setText = (element, value) => {
     if (element && element.textContent !== value) element.textContent = value;
@@ -96,7 +113,9 @@ if (notice) {
   const setOffline = (value) => {
     offline = Boolean(value);
     document.documentElement.classList.toggle("rwn-directory-offline", offline);
-    notice.hidden = !offline;
+    // Let someone using Retry keep their focus and read the recovery message.
+    notice.hidden = !offline && !notice.contains(document.activeElement);
+    if (explanation) explanation.hidden = !offline;
     notice.dataset.networkState = offline ? "offline" : "online";
 
     for (const link of document.querySelectorAll(".directory-global-result")) {
@@ -122,22 +141,53 @@ if (notice) {
     }
   };
 
-  const probe = async () => {
+  const probe = () => {
+    if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
-    try {
-      const response = await fetch(PROBE_URL, {
+    const controller = new AbortController();
+    let timer;
+    const request = {};
+    const interrupted = new Promise((_, reject) => {
+      request.cancel = () => { controller.abort(); reject(new Error("Connection check interrupted")); };
+      timer = setTimeout(request.cancel, 8000);
+    });
+    pendingProbe = request;
+    checking(true);
+    setText(status, "Checking connection…");
+    request.promise = Promise.race([
+      fetch(PROBE_URL, {
         method: "GET",
         cache: "no-store",
         credentials: "same-origin",
-        headers: { "X-RWN-Connectivity-Probe": "1" }
-      });
+        headers: { "X-RWN-Connectivity-Probe": "1" },
+        signal: controller.signal
+      }),
+      interrupted
+    ]).then((response) => {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
-    } catch {
+      setText(status, response.ok ? "Connection restored. Listing details and online links are available." : "Could not reach RWN. Check your connection and try again.");
+    }).catch(() => {
       if (generation !== probeGeneration) return;
       setOffline(true);
-    }
+      setText(status, "Could not reach RWN. Check your connection and try again.");
+    }).finally(() => {
+      clearTimeout(timer);
+      if (pendingProbe !== request) return;
+      pendingProbe = undefined;
+      checking(false);
+    });
+    return request.promise;
   };
+
+  retry.addEventListener("click", probe);
+  const hideRecoveredNotice = () => {
+    if (!offline && !notice.contains(document.activeElement)) notice.hidden = true;
+  };
+  document.addEventListener("focusin", hideRecoveredNotice);
+  notice.addEventListener("focusout", (event) => {
+    if (!notice.contains(event.relatedTarget)) queueMicrotask(hideRecoveredNotice);
+  });
 
   document.addEventListener("click", (event) => {
     if (!offline) return;
@@ -160,7 +210,17 @@ if (notice) {
   if (savedList) observer.observe(savedList, { childList: true, subtree: true });
 
   window.addEventListener("online", probe);
-  window.addEventListener("offline", () => setOffline(true));
+  window.addEventListener("offline", () => {
+    // A late success from the old connection must not override this event.
+    probeGeneration += 1;
+    pendingProbe?.cancel();
+    pendingProbe = undefined;
+    checking(false);
+    setText(status, "Check your connection, then try again.");
+    setOffline(true);
+  });
+  // Own visibility immediately, including while an initially offline probe hangs.
+  setOffline(!navigator.onLine);
   probe();
   enhanceSearchActions();
 }
