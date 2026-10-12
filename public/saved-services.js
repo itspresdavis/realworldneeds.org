@@ -178,7 +178,8 @@ export function initSavedServices() {
     if (!visible || focus) cancelClear();
     if (visible) {
       render();
-      if (focus) { heading.focus({ preventScroll: true }); panel.scrollIntoView({ block: "start", behavior: "auto" }); }
+      // Focus-owned navigation must not inherit the page’s smooth-scroll animation.
+      if (focus) { heading.focus({ preventScroll: true }); panel.scrollIntoView({ block: "start", behavior: "instant" }); }
     } else if (focus) {
       // History restoration owns the return target after the saved panel hides.
       if ((wasSaved || history.state?.rwnDirectory) && !window.dispatchEvent(new CustomEvent("rwn-directory-restore", {

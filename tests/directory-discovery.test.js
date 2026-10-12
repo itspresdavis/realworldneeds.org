@@ -189,13 +189,13 @@ test("Saved navigation closes the narrow menu before moving focus into either vi
     const effects = [];
     const f = vm.createContext({ active: () => visible, generation: 0, navigation: [], directoryTitle: "Directory | Real World Needs",
       document: { querySelector(selector) { assert.equal(selector, ".rwn-page-menu"); return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } }; } },
-      panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }), scrollIntoView() {} },
+      panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }), scrollIntoView(options) { assert.equal(options.behavior, "instant"); effects.push("instant-entry"); } },
       cancelClear() {}, render() {}, heading: { focus() { effects.push("focus"); } },
       history: { state: { rwnDirectory: {} } }, location: { hash: "#directory-results" }, CustomEvent: class {},
       window: { dispatchEvent() { effects.push("handoff"); return false; } }
     });
     vm.runInContext(`${syncSource}\nsyncView(true);`, f);
-    assert.deepEqual(effects, ["closed", "toggled", visible ? "focus" : "handoff"]);
+    assert.deepEqual(effects, ["closed", "toggled", ...(visible ? ["focus", "instant-entry"] : ["handoff"])]);
   }
 });
 

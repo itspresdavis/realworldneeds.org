@@ -16,7 +16,8 @@ export function savedReturnSnapshot() {
   const panel = document.querySelector('[data-saved-services]');
   const focus = document.activeElement;
   return {
-    path:location.pathname, hash:location.hash, title:document.title, width:innerWidth,
+    path:location.pathname, hash:location.hash, title:document.title, width:innerWidth, height:innerHeight, scroll:scrollY,
+    headingBox:box(document.querySelector('#saved-services-heading')),headerBottom:document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0,
     overflow:document.documentElement.scrollWidth > innerWidth + 1,
     savedEntry: saved ? { text:saved.textContent.trim(), href:saved.getAttribute('href'), visible:visible(saved), box:box(saved),
       focused:focus === saved, focusVisible:saved.matches(':focus-visible'), neighbors } : null,
@@ -46,6 +47,11 @@ export function savedViewViolations(s, ids=[]) {
   if (s?.current.length !== 2 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
   if (!s?.privacy?.includes('Only in this browser, on this device') || !s.privacy.includes('Anyone using this browser can see your list') || !s.privacy.includes('does not reserve a service or confirm availability')) issues.push('privacy');
   return issues;
+}
+export function savedFocusViolations(s) {
+  const b=s?.headingBox;
+  return !b || s.focus?.id !== 'saved-services-heading' || b.height <= 0 || b.top < s.headerBottom+6 || b.bottom > s.height-6
+    ? ['saved-heading-focus-not-visible'] : [];
 }
 export function directoryReturnViolations(s, expected) {
   return !s || s.path !== '/directory' || s.hash !== '#directory-results' || s.savedVisible || s.overflow || s.overlay
@@ -98,7 +104,7 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
     await destination("location.pathname === '/directory' && location.hash === '#saved' && document.querySelector('[data-saved-empty]')?.hidden === false");
     state=await snapshot();
     assert(savedViewViolations(state).length===0,'Empty Saved layout failed',{width,issues:savedViewViolations(state),state});
-    assert(state.focus.id==='saved-services-heading','Direct Saved entry lost heading focus',state);
+    assert(savedFocusViolations(state).length===0,'Direct Saved entry lost visible heading focus',state);
     await capture(client,`saved-return-empty-${width}.png`);
     evidence.push({width,state,stage:'empty'});
     await tabTo('.saved-services__empty a');
@@ -110,7 +116,7 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
     await client.call('Page.navigateToHistoryEntry',{entryId:history.entries[history.currentIndex-1].id});
     await waitForUI("location.hash === '#saved' && document.querySelector('.has-saved-view')");
     state=await snapshot();
-    assert(savedViewViolations(state).length===0,'Browser Back did not restore Saved',state);
+    assert(savedViewViolations(state).length===0 && savedFocusViolations(state).length===0,'Browser Back did not restore Saved with visible focus',state);
     await client.call('Page.navigateToHistoryEntry',{entryId:history.entries[history.currentIndex].id});
     await waitForUI("location.hash === '#directory-results' && !document.querySelector('.has-saved-view')");
     state=await snapshot();
@@ -127,6 +133,7 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
     await destination("location.pathname === '/directory' && location.hash === '#saved' && document.querySelectorAll('[data-saved-id]').length === 1");
     state=await snapshot();
     assert(savedViewViolations(state,[record.id]).length===0,'Populated Saved layout failed',{width,issues:savedViewViolations(state,[record.id]),state});
+    assert(savedFocusViolations(state).length===0,'First-save return lost visible heading focus',state);
     assert(state.rows[0].text.includes(record.name)&&state.rows[0].text.includes(record.checked),'Saved contact or source review date disappeared',state);
     await capture(client,`saved-return-populated-${width}.png`);
     evidence.push({width,state,stage:'first-save-return'});
@@ -134,7 +141,7 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
     await key('Enter');
     await waitForUI("document.querySelectorAll('[data-saved-id]').length === 0 && document.querySelector('[data-saved-empty]').hidden === false");
     state=await snapshot();
-    assert(savedViewViolations(state).length===0 && state.focus.id==='saved-services-heading','Final removal lost empty state or focus',state);
+    assert(savedViewViolations(state).length===0 && savedFocusViolations(state).length===0,'Final removal lost empty state or focus',state);
     evidence.push({width,state,stage:'last-removal'});
   }
   await client.call('Emulation.setEmulatedMedia',{features:[]});

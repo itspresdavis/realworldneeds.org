@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { SAVED_RETURN_WIDTHS, homeSavedViolations, savedViewViolations, directoryReturnViolations, waitForSavedReturnDestination } from '../scripts/qa-saved-return-brand.mjs';
+import { SAVED_RETURN_WIDTHS, homeSavedViolations, savedViewViolations, directoryReturnViolations, waitForSavedReturnDestination, savedFocusViolations } from '../scripts/qa-saved-return-brand.mjs';
+import { verifySavedEntryViewport } from '../scripts/qa-directory-discovery.mjs';
 const home=()=>({path:'/',width:320,overflow:false,overlay:false,savedEntry:{text:'Saved',href:'/directory#saved',visible:true,box:{left:251,top:10,right:309,bottom:54,width:58,height:44},neighbors:[{left:10,top:10,right:179,bottom:54},{left:189,top:10,right:240,bottom:54}]}});
 const saved=(ids=[])=>({hash:'#saved',savedVisible:true,overlay:false,overflow:false,title:'Saved services | Real World Needs',empty:!ids.length,rows:ids.map(id=>({id})),current:[1,2].map(()=>({href:'/directory#saved',value:'page'})),privacy:'Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.'});
 test('Saved return CI covers exact narrow, intermediate and desktop widths',()=>assert.deepEqual(SAVED_RETURN_WIDTHS,[320,508,1180]));
@@ -39,4 +40,28 @@ test('cross-document polling retries only expected execution-context loss and re
  assert.equal(result,undefined);assert.equal(attempts,3);assert.equal(time,200);
  await assert.rejects(waitForSavedReturnDestination({sample:async()=>{throw new Error('TypeError: real app failure');}}),/real app failure/);
  time=0;await assert.rejects(waitForSavedReturnDestination({sample:async()=>false,wait:async ms=>{time+=ms;},now:()=>time,timeoutMs:300}),/did not settle/);
+});
+
+test('Saved focus oracle rejects a correctly focused heading behind the header or outside the viewport',()=>{
+ const state={focus:{id:'saved-services-heading'},headerBottom:66,height:844,headingBox:{height:45,top:90,bottom:135}};
+ assert.deepEqual(savedFocusViolations(state),[]);
+ for(const change of [{headingBox:{height:45,top:-350,bottom:-305}},{headingBox:{height:45,top:55,bottom:100}},{headingBox:{height:45,top:825,bottom:870}},{focus:{id:'other'}}])assert.ok(savedFocusViolations({...state,...change}).length);
+});
+test('scrolled-result Saved entry rejects offscreen first focus even if later sampling would recover',async()=>{
+ let sampled=false;
+ await assert.rejects(verifySavedEntryViewport({initial:{saved:true,focusedId:'saved-services-heading',focusVisible:false},sample:async()=>{sampled=true;return {};}}),/offscreen heading/);
+ assert.equal(sampled,false);
+});
+test('Saved entry must keep its initial visible focus geometry and scroll stable throughout the observation',async()=>{
+ const initial={saved:true,menuOpen:false,focusedId:'saved-services-heading',focusVisible:true,scroll:120,focusBox:{top:100,bottom:145,left:20,right:290,width:270,height:45}};
+ const run=async change=>{
+  let time=0,count=0;
+  await verifySavedEntryViewport({initial,sample:async()=>{count++;return count===6?{...initial,...change}:initial;},wait:async ms=>{time+=ms;},now:()=>time});
+  assert.equal(count,10);assert.equal(time,500);
+ };
+ await run({});
+ for(const change of [{scroll:150},{focusVisible:false},{focusedId:'other'},{menuOpen:true},{saved:false},{focusBox:{...initial.focusBox,top:110}}])await assert.rejects(run(change),/pending scroll or layout shift/);
+ const source=await readFile('scripts/qa-directory-discovery.mjs','utf8');
+ assert.match(source,/const savedEntry = await wait\(s => s.saved && !s.menuOpen && s.focusedId === 'saved-services-heading'/);
+ assert.match(source,/await verifySavedEntryViewport\(\{ initial: savedEntry, sample: state \}\)/);
 });
