@@ -138,7 +138,15 @@ function pagination(basePath, page, totalPages) {
   if (page > 1) links.push(`<a rel="prev" href="${pageHref(basePath, page - 1)}">Previous</a>`);
   links.push(`<span>Page ${page} of ${totalPages}</span>`);
   if (page < totalPages) links.push(`<a rel="next" href="${pageHref(basePath, page + 1)}">Next</a>`);
-  return `<nav class="directory-downloads" aria-label="Directory pages"><strong>Browse pages</strong>${links.join("")}</nav>`;
+  // Keep long collections one link away without making visitors scroll past
+  // dozens of page buttons. Native details and real anchors work without JS.
+  const pages = Array.from({ length: totalPages }, (_, index) => {
+    const number = index + 1;
+    return number === page
+      ? `<li><span aria-current="page" aria-label="Page ${number}, current page">${number}</span></li>`
+      : `<li><a href="${pageHref(basePath, number)}" aria-label="Page ${number}">${number}</a></li>`;
+  }).join("");
+  return `<nav class="directory-downloads directory-pagination" aria-label="Directory pages"><strong>Browse pages</strong>${links.join("")}<details class="directory-page-picker"><summary>Choose a page</summary><ol class="directory-page-list">${pages}</ol></details></nav>`;
 }
 
 function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, browseMarkup = "", breadcrumbItems = [] }) {
