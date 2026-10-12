@@ -187,13 +187,14 @@ async function run() {
         mobileTaskbar: Boolean(document.querySelector(".mobile-taskbar")),
         finderRoute: Boolean(document.querySelector(".finder-route")),
         headerAction: document.querySelector(".header-action")?.textContent?.trim() || "",
+        headerActionHref: document.querySelector(".header-action")?.getAttribute("href") || "",
         searchShortcuts: input?.getAttribute("aria-keyshortcuts") || "",
         motionLabel: (motion?.getAttribute("aria-label") || "") + " " + (motion?.getAttribute("title") || ""),
         stylesheets
       };
     })()`);
 
-    if (!desktop.professional || !desktop.accessibility || !desktop.noHorizontalOverflow || desktop.sidebarOverflow === "auto" || desktop.sidebarOverflow === "scroll" || desktop.scrollBehavior !== "auto" || desktop.panelRole !== "region" || desktop.panelLive || desktop.resultLinks < 1 || desktop.directActions < 1 || !desktop.jumpResults || desktop.mobileTaskbar || desktop.finderRoute || desktop.headerAction !== "Browse directory" || !desktop.searchShortcuts.includes("Escape") || /pause globe rotation/i.test(desktop.motionLabel)) {
+    if (!desktop.professional || !desktop.accessibility || !desktop.noHorizontalOverflow || desktop.sidebarOverflow === "auto" || desktop.sidebarOverflow === "scroll" || desktop.scrollBehavior !== "auto" || desktop.panelRole !== "region" || desktop.panelLive || desktop.resultLinks < 1 || desktop.directActions < 1 || !desktop.jumpResults || desktop.mobileTaskbar || desktop.finderRoute || desktop.headerAction !== "Saved" || desktop.headerActionHref !== "/directory#saved" || !desktop.searchShortcuts.includes("Escape") || /pause globe rotation/i.test(desktop.motionLabel)) {
       throw new Error(`Institutional desktop homepage failed: ${JSON.stringify(desktop)}`);
     }
     if (desktop.stylesheets.some((href) => /\/(?:experience|refinement|world-class)\.css(?:\?|$)/.test(href))) {
