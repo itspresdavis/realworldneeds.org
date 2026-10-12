@@ -472,7 +472,7 @@ main#directory > .legal-hero { background: #f5f4ee; }
 #directory .directory-local-browse summary strong { font-weight: 650; }
 #directory .directory-local-browse summary span { margin-left: .5rem; color: #52665b; font-size: .8125rem; }
 #directory .directory-local-browse summary:focus-visible { outline: 3px solid #356c4e; outline-offset: 3px; }
-#directory .directory-local-browse > p { margin: 0; color: #52665b; font-size: .8125rem; line-height: 1.55; }
+#directory .directory-local-browse > p { margin: .4rem 0 0; color: #52665b; font-size: .8125rem; line-height: 1.55; }
 #directory .directory-local-browse .directory-local-links { margin: 0; padding-block: 0 .65rem; border: 0; }
 #directory .directory-local-browse .directory-local-links > div { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
 #directory .directory-local-browse .directory-local-links a { min-height: 44px; font-size: .8125rem; }
