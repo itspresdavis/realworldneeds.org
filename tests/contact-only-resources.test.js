@@ -174,3 +174,23 @@ test("contact inspector shows scope and contact route without stale coordinate n
   for (const field of ["accessUrl", "coverageNote", "eligibility", "phoneAccess"]) assert.ok(panel.innerHTML.includes(resource[field]));
   assert.doesNotMatch(panel.innerHTML, /Legacy office|Directions|maps\.apple|google\.com\/maps|before you go|this marker shows|<dt>Distance<\/dt>/);
 });
+
+test("copied listing facts retain the actual online access URL, not only its button label", async () => {
+  const source = await readFile(new URL("../public/service-actions.js", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("  const publicDetails ="), source.indexOf("  const fallbackCopy ="));
+  const context = vm.createContext({
+    title: route.name, place: route.country, listingUrl: "https://www.realworldneeds.org/service/example", officialSource: "https://example.org/source",
+    document: {
+      querySelectorAll: () => [{ querySelector: selector => selector === "dt" ? { textContent: "Online access" } : selector === "dd" ? { textContent: "Get help online" } : { href: route.accessUrl } }],
+      querySelector: selector => selector === "#service" ? { dataset: { locationPrecision: "contact-only" } } : null,
+    },
+  });
+  vm.runInContext(`${body}\nglobalThis.copy = publicDetails;`, context);
+  assert.ok(context.copy().includes(`Online access: Get help online (${route.accessUrl})`));
+  assert.doesNotMatch(context.copy(), /before you go/);
+});
+
+test("Saved contact facts explicitly wrap unbroken access URLs", async () => {
+  const css = await readFile(new URL("../public/saved-services.css", import.meta.url), "utf8");
+  assert.match(css, /\.directory-global-result > small[^{}]*\{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/);
+});

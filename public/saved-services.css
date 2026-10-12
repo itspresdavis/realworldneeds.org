@@ -14,7 +14,7 @@
 .saved-services [data-saved-confirmation] p { margin-top: 0; }
 .saved-service-row { padding: 1rem 0; border-bottom: 1px solid #d8e0dd; }
 .saved-service-row > button { margin-top: .6rem; justify-self: start; }
-.directory-global-result > span, .directory-global-result strong { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.directory-global-result > span, .directory-global-result > small, .directory-global-result strong { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 @media (forced-colors: active) { .saved-services button, .saved-services [data-saved-confirmation] { border: 1px solid CanvasText; } }
 @media print { .saved-services__tools, .saved-services button, .saved-services [data-saved-confirmation] { display: none !important; } }
 

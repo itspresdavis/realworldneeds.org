@@ -25,3 +25,5 @@ The current database's generated latitude and longitude columns are NOT NULL. Th
 Deploy compatible code first. Apply a reviewed migration only after approval, then reconcile reviewed data through the normal guarded publication process. Reverting to the old NOT NULL schema is unsafe while any row retains missing coordinates, including withheld rows. Never fill invented points to enable rollback.
 
 `tests/contact-only-generation.test.js` runs synthetic physical, phone-only, web-only and mixed fixtures through validation and the full static build in a temporary copy. No test fixture is published in the catalog.
+
+The rendered CI harness also creates an isolated, loopback-only fixture app using the normal renderer. It checks the homepage exports, phone-only/web-only/mixed service pages, copied facts, domestic shortcodes, long URLs, search, Saved, failed-probe recovery at desktop and narrow widths, plus no-JavaScript reading at 320px. The temporary pages are visibly labelled synthetic and noindex; the production build never imports them. Provider feeds are stubbed, external resources are rejected, and the app is cleaned up after the checks.
