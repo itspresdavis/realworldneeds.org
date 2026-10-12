@@ -7,6 +7,21 @@ import { directorySavedBrowseHeaderPoint, isDirectoryStartupNavigationError } fr
 // only for the exact HTML fixtures below. No production behavior is replaced.
 export const PAGE_MENU_LOCAL = '/directory/local/united-states/new-york/help/referral';
 export const PAGE_MENU_SERVICE = '/service/new-york-public-library-access';
+export const PAGE_MENU_VIEWPORTS = [
+  { name: '390', width: 390, height: 844, mobile: true, deviceScaleFactor: 1 },
+  { name: '320', width: 320, height: 780, mobile: true, deviceScaleFactor: 1 },
+  // Equivalent CSS reflow to a 780 x 1000 viewport at 200% browser zoom;
+  // Chrome's actual browser zoom setting is not changed by this emulation.
+  { name: 'zoom-equivalent-200', width: 390, height: 500, mobile: false, deviceScaleFactor: 2 }
+];
+export const PAGE_MENU_SHORT_HEIGHT_LIMITATION = {
+  excludedViewport: { width: 390, height: 422 },
+  measuredMenuBottom: 426.671875,
+  observedViewport: { width: 390, height: 844 },
+  observedMenuOpen: false,
+  source: 'CI 38200935924: page-menu-return.json, retained menu-link geometry in the Saved failure snapshot',
+  note: 'Prior CI reported a last-link box bottom of 426.671875px, suggesting clipping risk at a 422px height. That shorter viewport was not rendered in this observation. This suite uses a 500px-high zoom-equivalent viewport; it does not verify 422px-height coverage or change existing menu CSS.'
+};
 const fixturePaths = new Set([PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, '/directory', '/editorial-policy', '/sources', '/transparency']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const assert = (ok, label, detail) => { if (!ok) throw new Error(`${label}: ${JSON.stringify(detail)}`); };
@@ -133,13 +148,14 @@ export function pageMenuReturnedFromBFCache(actual, source) {
     && hide?.persisted === true && hide.trusted === true && hide.href === source.href && hide.timeOrigin === source.timeOrigin);
 }
 
+const validNativeHistory = snapshot => Boolean(Array.isArray(snapshot?.entries) && Number.isInteger(snapshot.index)
+  && snapshot.index >= 0 && snapshot.index < snapshot.entries.length
+  && snapshot.entries.every(entry => Number.isInteger(entry?.id) && typeof entry.url === 'string' && entry.url.length > 0)
+  && new Set(snapshot.entries.map(entry => entry.id)).size === snapshot.entries.length
+  && snapshot.entry?.id === snapshot.entries[snapshot.index].id && snapshot.entry?.url === snapshot.entries[snapshot.index].url);
+
 export function pageMenuNativeEntryWasAdded(source, destination, destinationUrl) {
-  const valid = snapshot => Boolean(Array.isArray(snapshot?.entries) && Number.isInteger(snapshot.index)
-    && snapshot.index >= 0 && snapshot.index < snapshot.entries.length
-    && snapshot.entries.every(entry => Number.isInteger(entry?.id) && typeof entry.url === 'string' && entry.url.length > 0)
-    && new Set(snapshot.entries.map(entry => entry.id)).size === snapshot.entries.length
-    && snapshot.entry?.id === snapshot.entries[snapshot.index].id && snapshot.entry?.url === snapshot.entries[snapshot.index].url);
-  if (!valid(source) || !valid(destination)) return false;
+  if (!validNativeHistory(source) || !validNativeHistory(destination)) return false;
   const preceding = destination.entries[destination.index - 1];
   // Chrome drops its oldest entry at the history cap, so a real new navigation
   // can leave currentIndex unchanged. Verify exact adjacent identities in the
@@ -154,6 +170,21 @@ export function pageMenuFreshDocument(actual, previousTimeOrigin) {
   return Boolean(actual.documentPresent && actual.ready && Number.isFinite(actual.timeOrigin) && actual.timeOrigin !== previousTimeOrigin
     && shows?.length === 1 && shows[0].persisted === false && shows[0].trusted === true && shows[0].timeOrigin === actual.timeOrigin
     && shows[0].href === actual.href && actual.probe?.hides?.length === 0);
+}
+
+// Secondary history cycles may legitimately rebuild an evicted document.
+// Classify that separately; each primary Back above remains BFCache-only.
+export function pageMenuHistoryTraversalClassification(actual, previous, expectedEntry) {
+  if (!actual?.ready || !Number.isFinite(previous?.timeOrigin) || !validNativeHistory(actual.nativeHistory)
+    || actual.nativeHistory.entry.id !== expectedEntry?.id || actual.nativeHistory.entry.url !== expectedEntry?.url
+    || actual.href !== expectedEntry.url || actual.href !== previous.href || actual.path !== previous.path
+    || actual.menuOpen || !actual.focus?.visible || actual.focus.inMenu) return null;
+  let saved;
+  try { saved = new URL(expectedEntry.url).hash === '#saved'; } catch { return null; }
+  if (saved ? !(actual.saved && actual.panelVisible && actual.focus.id === 'saved-services-heading') : actual.saved || actual.panelVisible) return null;
+  if (pageMenuReturnedFromBFCache(actual, previous)) return 'persisted';
+  if (actual.navigationType === 'back_forward' && pageMenuFreshDocument(actual, previous.timeOrigin)) return 'fresh-history';
+  return null;
 }
 
 export async function waitForPageMenuSettled({ sample, predicate, label = 'Page menu return', timeoutMs = 8000,
@@ -235,7 +266,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     if (message.method === 'Page.backForwardCacheNotUsed') notRestored.push(message.params);
   };
   const snapshot = () => evaluate(client, `(${pageMenuReturnSnapshot.toString()})()`);
-  const settled = async (predicate, label) => (await waitForPageMenuSettled({ sample: snapshot, predicate, label })).state;
+  const settled = async (predicate, label, sample = snapshot) => (await waitForPageMenuSettled({ sample, predicate, label })).state;
   const nativeClick = async (selector, header = true) => {
     const start = events.length;
     const point = await evaluate(client, `(async () => {
@@ -262,6 +293,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     await client.call('Input.insertText', { text: query });
   };
   const entry = async () => { const history = await client.call('Page.getNavigationHistory'); return { entry: history.entries[history.currentIndex], index: history.currentIndex, entries: history.entries }; };
+  const historySnapshot = async () => ({ ...await snapshot(), nativeHistory: await entry() });
   const open = async path => {
     const before = (await snapshot()).timeOrigin;
     await navigate(client, 'about:blank');
@@ -309,20 +341,37 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       && !s.menuOpen && !s.saved && !s.panelVisible && s.focus.visible && !s.focus.inMenu && Math.abs(s.scroll - source.scroll) <= 1,
     'Actual persisted Back must close the menu and retain query, exact rows, scroll and visible focus');
     assert(returned.probe.hides.at(-1).menuOpen, 'The real source must enter BFCache with its menu open', returned.probe);
-    assert((await entry()).entry.id === sourceEntry.entry.id, 'Back returned to the wrong history entry', await entry());
-    await capture(client, `page-menu-${name}-back.png`);
+    const primaryBackEntry = await entry();
+    assert(primaryBackEntry.entry.id === sourceEntry.entry.id && primaryBackEntry.entry.url === sourceEntry.entry.url,
+      'Back returned to the wrong history entry', primaryBackEntry);
     const repeated = [];
+    // Publish the passed primary proof before any later cycle can fail. The
+    // artifact must retain real progress as well as the final failure state.
+    const record = { name, phase: 'primary-back-verified', source, opened, openedBy, leftBy, sourceEntry, destinationEntry,
+      destination, primaryBackClassification: 'persisted', primaryBackEntry, back: returned, repeated };
+    evidence.push(record);
+    await capture(client, `page-menu-${name}-back.png`);
     if (repeat) for (let iteration = 0; iteration < 2; iteration++) {
       const previousReturn = returned;
       const previousDestination = iteration ? repeated.at(-1).forward : destination;
+      const cycle = { iteration: iteration + 1 };
+      repeated.push(cycle);
+      record.phase = `secondary-forward-${iteration + 1}`;
       await client.call('Page.navigateToHistoryEntry', { entryId: destinationEntry.entry.id });
-      const forward = await settled(s => pageMenuReturnedFromBFCache(s, previousDestination) && s.href === destinationUrl && !s.menuOpen
-        && (target !== '/directory#saved' || s.saved && s.panelVisible), 'Repeated Forward must be a real persisted destination');
+      const forward = await settled(s => pageMenuHistoryTraversalClassification(s, previousDestination, destinationEntry.entry) !== null,
+        'Repeated Forward requires an explicitly classified native history destination', historySnapshot);
+      cycle.forward = forward;
+      cycle.forwardClassification = pageMenuHistoryTraversalClassification(forward, previousDestination, destinationEntry.entry);
+      record.phase = `secondary-back-${iteration + 1}`;
       await client.call('Page.navigateToHistoryEntry', { entryId: sourceEntry.entry.id });
-      returned = await settled(s => pageMenuReturnedFromBFCache(s, previousReturn) && pageMenuRetainedState(s, source) && !s.menuOpen
-        && s.focus.visible && !s.focus.inMenu && Math.abs(s.scroll - source.scroll) <= 1, 'Repeated native Back retained source state');
-      repeated.push({ forward, back: returned });
+      returned = await settled(s => pageMenuHistoryTraversalClassification(s, previousReturn, sourceEntry.entry) !== null
+        && pageMenuRetainedState(s, source) && Math.abs(s.scroll - source.scroll) <= 1,
+        'Repeated native Back must retain exact source state and classified lifecycle evidence', historySnapshot);
+      cycle.back = returned;
+      cycle.backClassification = pageMenuHistoryTraversalClassification(returned, previousReturn, sourceEntry.entry);
     }
+    record.finalBack = returned;
+    record.phase = 'keyboard';
     // Inspect focus only after an actual Tab. This is keyboard-ring evidence,
     // not the assumption that a script-focused element looks focused.
     await client.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
@@ -330,8 +379,9 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     const keyboard = await settled(s => pageMenuRetainedState(s, source) && !s.menuOpen && s.focus.visible && !s.focus.inMenu && s.focus.keyboardRing,
       'Visible native keyboard focus after menu return');
     await capture(client, `page-menu-${name}-keyboard.png`);
-    const record = { name, source, opened, openedBy, leftBy, sourceEntry, destinationEntry, destination, back: returned, repeated, keyboard };
+    record.keyboard = keyboard;
     if (repeat) {
+      record.phase = 'reload';
       await client.call('Page.reload', { ignoreCache: true });
       record.reload = await settled(s => pageMenuFreshDocument(s, keyboard.timeOrigin) && pageMenuRetainedState(s, keyboard) && !s.menuOpen
         && Math.abs(s.scroll - keyboard.scroll) <= 1 && s.focus.visible && !s.focus.inMenu,
@@ -339,7 +389,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       assert(record.reload.navigationType === 'reload', 'Reload was not a native new-document reload', record.reload);
       await capture(client, `page-menu-${name}-reload.png`);
     }
-    evidence.push(record);
+    record.phase = 'complete';
   };
   client.ws.addEventListener('message', onMessage);
   try {
@@ -347,14 +397,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     await client.call('Network.setBypassServiceWorker', { bypass: true });
     await client.call('Runtime.addBinding', { name: binding });
     instrumentation = await client.call('Page.addScriptToEvaluateOnNewDocument', { source: `(${observePageMenuReturn.toString()})(${JSON.stringify(origin)}, ${JSON.stringify(binding)})` });
-    const viewports = [
-      { name: '390', width: 390, height: 844, mobile: true, deviceScaleFactor: 1 },
-      { name: '320', width: 320, height: 780, mobile: true, deviceScaleFactor: 1 },
-      // 780 x 844 at 200% browser zoom has this CSS viewport. This tests
-      // equivalent reflow, not a claim to have changed Chrome's zoom setting.
-      { name: 'zoom-equivalent-200', width: 390, height: 422, mobile: false, deviceScaleFactor: 2 }
-    ];
-    for (const viewport of viewports) {
+    for (const viewport of PAGE_MENU_VIEWPORTS) {
       const { name, ...metrics } = viewport;
       await client.call('Emulation.setDeviceMetricsOverride', { ...metrics, screenWidth: metrics.width, screenHeight: metrics.height });
       await roundTrip({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: 'library', name: `${name}-library`, repeat: true });
@@ -385,10 +428,10 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       cleanupErrors.push(...await cleanupPageMenuQA([['close separate fixture server', () => fixture.close()]]));
       cleanupErrors.push(...await cleanupPageMenuQA([['write QA evidence', async () => {
         await mkdir('qa-screenshots', { recursive: true });
-        await writeFile('qa-screenshots/page-menu-return.json', JSON.stringify({ evidence, worker, responses: fixture.responses, errors, notRestored, cleanupErrors }, null, 2));
+        await writeFile('qa-screenshots/page-menu-return.json', JSON.stringify({ evidence, viewports: PAGE_MENU_VIEWPORTS, shortHeightLimitation: PAGE_MENU_SHORT_HEIGHT_LIMITATION, worker, responses: fixture.responses, errors, notRestored, cleanupErrors }, null, 2));
       }]]));
     }
     if (!failure && cleanupErrors.length) throw new Error(`Page-menu QA cleanup failed: ${JSON.stringify(cleanupErrors)}`);
   }
-  console.log(`PASS page-menu history: ${evidence.length} native persisted Back cases, repeated persisted Forward/Back, new-document reload, keyboard focus, exact local states and 390/320/200%-equivalent reflow.`);
+  console.log(`PASS page-menu history: ${evidence.length} primary native persisted Back cases, explicitly classified secondary Forward/Back, new-document reload, keyboard focus, exact local states and 390/320/200%-equivalent reflow.`);
 }

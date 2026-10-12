@@ -3,8 +3,8 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import {
-  PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
-  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded
+  PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, PAGE_MENU_VIEWPORTS, PAGE_MENU_SHORT_HEIGHT_LIMITATION, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
+  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded, pageMenuHistoryTraversalClassification, verifyPageMenuReturn
 } from '../scripts/qa-page-menu-return.mjs';
 
 const event = (persisted, timeOrigin = 100, extra = {}) => ({ persisted, trusted: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, timeOrigin, ...extra });
@@ -264,4 +264,114 @@ test('browser orchestration uses the tested adjacency oracle and retains full na
   assert.match(helper, /entries: history\.entries/);
   assert.match(helper, /assert\(pageMenuNativeEntryWasAdded\(sourceEntry, destinationEntry, destinationUrl\)/);
   assert.doesNotMatch(helper, /destinationEntry\.index === sourceEntry\.index \+ 1/);
+});
+
+
+const forwardFixture = ({ fresh = false } = {}) => {
+  const href = 'http://127.0.0.1:9999/directory#saved';
+  const destinationEvent = (persisted, timeOrigin) => event(persisted, timeOrigin, { href });
+  const expectedEntry = historyEntry(426, '/directory#saved');
+  const nativeHistory = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL), expectedEntry]);
+  const previous = { ...returned(), href, path: '/directory', timeOrigin: 100, saved: true, panelVisible: true,
+    focus: { visible: true, inMenu: false, id: 'saved-services-heading' }, probe: { shows: [destinationEvent(false, 100)], hides: [] } };
+  const actual = fresh
+    ? { ...previous, timeOrigin: 101, navigationType: 'back_forward', nativeHistory, probe: { shows: [destinationEvent(false, 101)], hides: [] } }
+    : { ...previous, navigationType: 'navigate', nativeHistory, probe: { shows: [destinationEvent(false, 100), destinationEvent(true, 100)], hides: [destinationEvent(true, 100)] } };
+  return { actual, previous, expectedEntry };
+};
+
+test('Forward explicitly classifies a rebuilt history destination without calling it a BFCache restoration', () => {
+  const { actual, previous, expectedEntry } = forwardFixture({ fresh: true });
+  assert.equal(pageMenuReturnedFromBFCache(actual, previous), false);
+  assert.equal(pageMenuHistoryTraversalClassification(actual, previous, expectedEntry), 'fresh-history');
+});
+
+
+test('secondary Forward still recognizes genuine persisted pageshow without requiring a new-document timing type', () => {
+  const { actual, previous, expectedEntry } = forwardFixture();
+  assert.equal(pageMenuHistoryTraversalClassification(actual, previous, expectedEntry), 'persisted');
+});
+
+test('secondary traversal rejects unknown, contradictory, ordinary navigate/reload and wrong native-entry evidence', () => {
+  for (const mutate of [
+    s => { s.navigationType = 'navigate'; }, s => { s.navigationType = 'reload'; }, s => { s.navigationType = ''; },
+    s => { s.timeOrigin = 100; }, s => { s.probe.shows[0].persisted = true; }, s => { s.probe.shows[0].trusted = false; },
+    s => { s.probe.shows[0].timeOrigin = 100; }, s => { s.probe.shows[0].href = 'http://127.0.0.1:9999/other'; },
+    s => { s.probe.shows.push(structuredClone(s.probe.shows[0])); }, s => { s.probe.hides.push(event(true)); }, s => { s.probe = null; },
+    s => { s.nativeHistory.entry = { ...s.nativeHistory.entry, id: 999 }; },
+    s => { s.nativeHistory = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]); }, s => { s.nativeHistory = null; },
+    s => { s.href = 'http://127.0.0.1:9999/directory'; }, s => { s.path = PAGE_MENU_LOCAL; }, s => { s.menuOpen = true; },
+    s => { s.saved = false; }, s => { s.panelVisible = false; }, s => { s.focus.id = 'different-heading'; },
+    s => { s.focus.visible = false; }, s => { s.focus.inMenu = true; }, s => { s.ready = false; }
+  ]) {
+    const { actual, previous, expectedEntry } = forwardFixture({ fresh: true });
+    mutate(actual);
+    assert.equal(pageMenuHistoryTraversalClassification(actual, previous, expectedEntry), null, JSON.stringify(actual));
+  }
+  const f = forwardFixture(); f.actual.timeOrigin = 101;
+  assert.equal(pageMenuHistoryTraversalClassification(f.actual, f.previous, f.expectedEntry), null, 'Persisted=true cannot accompany a replacement time origin');
+  assert.equal(pageMenuHistoryTraversalClassification(null, f.previous, f.expectedEntry), null);
+});
+
+test('fresh secondary source Back requires exact native identity while source state and primary BFCache gates remain separate', () => {
+  const previous = returned(), expectedEntry = historyEntry(424, PAGE_MENU_LOCAL);
+  const actual = { ...returned(), timeOrigin: 101, navigationType: 'back_forward',
+    nativeHistory: historySnapshot([expectedEntry, historyEntry(426, '/directory#saved')], 0),
+    probe: { shows: [event(false, 101)], hides: [] } };
+  assert.equal(pageMenuHistoryTraversalClassification(actual, previous, expectedEntry), 'fresh-history');
+  assert.equal(pageMenuRetainedState(actual, source()), true);
+  assert.equal(pageMenuReturnedFromBFCache(actual, source()), false, 'This can never pass a primary persisted Back');
+  assert.equal(pageMenuRetainedState({ ...actual, query: '' }, source()), false);
+  assert.equal(pageMenuRetainedState({ ...actual, rows: [] }, source()), false);
+  assert.equal(pageMenuRetainedState({ ...actual, history: undefined }, source()), false);
+});
+
+test('Saved fresh-history destination does not require unrelated directory query history', () => {
+  const { actual, previous, expectedEntry } = forwardFixture({ fresh: true });
+  actual.query = ''; actual.history = undefined;
+  previous.query = ''; previous.history = undefined;
+  assert.equal(pageMenuHistoryTraversalClassification(actual, previous, expectedEntry), 'fresh-history');
+});
+
+test('actual round-trip orchestration preserves passed primary Back evidence when secondary Forward fails', async () => {
+  const code = verifyPageMenuReturn.toString();
+  const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
+  const src = { ...source(), menuOpen: false, summaryVisible: true };
+  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 6 }, () => ({ visible: true, box: { height: 50 } })) };
+  const dest = { ...forwardFixture({ fresh: true }).actual, timeOrigin: 102,
+    probe: { shows: [event(false, 102, { href: 'http://127.0.0.1:9999/directory#saved' })], hides: [] } };
+  const back = returned();
+  const sourceEntry = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]);
+  const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
+  let samples = 0, entries = 0;
+  const evidence = [], navigation = [];
+  const globals = { URL, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, source: src, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999',
+    evidence, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
+    pageMenuHistoryTraversalClassification, historySnapshot: async () => {},
+    open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
+    client: { call: async (method, params) => navigation.push({ method, params }) },
+    entry: async () => (++entries === 2 ? destinationEntry : sourceEntry),
+    assert: (ok, label) => assert.ok(ok, label),
+    settled: async predicate => {
+      const states = [src, src, opened, dest, back];
+      if (samples >= states.length) throw new Error('Intentional secondary Forward failure');
+      const state = states[samples++]; assert.equal(Boolean(predicate(state)), true); return state;
+    }
+  };
+  const roundTrip = vm.runInNewContext(`${closure}; roundTrip`, globals);
+  await assert.rejects(roundTrip({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: 'library', name: 'partial-proof', repeat: true }), /Intentional secondary Forward failure/);
+  assert.equal(evidence.length, 1); assert.equal(evidence[0].primaryBackClassification, 'persisted');
+  assert.equal(evidence[0].back.probe.shows.at(-1).persisted, true); assert.equal(evidence[0].primaryBackEntry.entry.id, 424);
+  assert.equal(evidence[0].phase, 'secondary-forward-1'); assert.equal(evidence[0].repeated.length, 1);
+  assert.equal(navigation.filter(call => call.method === 'Page.navigateToHistoryEntry').length, 2, 'One primary Back and one Forward; no retry until cached');
+});
+
+test('lifecycle viewport coverage is explicit and does not claim the excluded short-height geometry', () => {
+  assert.deepEqual(PAGE_MENU_VIEWPORTS.map(({ width, height }) => [width, height]), [[390, 844], [320, 780], [390, 500]]);
+  const zoom = PAGE_MENU_VIEWPORTS[2];
+  assert.equal(zoom.name, 'zoom-equivalent-200'); assert.equal(zoom.deviceScaleFactor, 2); assert.equal(zoom.mobile, false);
+  assert.deepEqual([zoom.width * 2, zoom.height * 2], [780, 1000]);
+  assert.equal(PAGE_MENU_SHORT_HEIGHT_LIMITATION.excludedViewport.height, 422);
+  assert.ok(PAGE_MENU_SHORT_HEIGHT_LIMITATION.measuredMenuBottom > 422);
+  assert.match(PAGE_MENU_SHORT_HEIGHT_LIMITATION.note, /does not verify 422px-height coverage/);
 });
