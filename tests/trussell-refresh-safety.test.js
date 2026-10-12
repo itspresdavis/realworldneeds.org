@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, access } from "node:fs/promises";
-import vm from "node:vm";
+import { makeResource } from "../scripts/refresh-trussell-foodbanks.mjs";
 import { trussellFoodbankMetadata, trussellFoodbankResources } from "../src/data/generated/trussell-foodbanks.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
@@ -11,13 +11,7 @@ const sourceHiddenIds = [
   "trussell-5c12be3b-8869-4fa7-9fd6-f14fb303a7fa"
 ];
 
-async function importer() {
-  const text = await readFile("scripts/refresh-trussell-foodbanks.mjs", "utf8");
-  const prefix = text.slice(text.indexOf("const FINDER_BASE"), text.indexOf("const checkedOn ="));
-  const context = vm.createContext({ URL });
-  vm.runInContext(prefix.replace("import.meta.url", '"file:///fixture/scripts/refresh-trussell-foodbanks.mjs"') + "\nglobalThis.make = makeResource;", context);
-  return context.make;
-}
+async function importer() { return makeResource; }
 
 const publicRecord = {
   uuid: "00000000-0000-4000-8000-000000000001",

@@ -1,40 +1,30 @@
-import { writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { preserveReviewedFields, replaceSourceSnapshot, assertReviewedMembership } from "./source-refresh-safety.mjs";
 
 const FINDER_BASE = "https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank";
 const OUTPUT = new URL("../src/data/generated/trussell-foodbanks.js", import.meta.url);
 const USER_AGENT = "RealWorldNeeds/1.0 source refresh (public humanitarian directory)";
 const MIN_EXPECTED_SOURCE_RECORDS = 1300;
 const MIN_EXPECTED_PUBLISHED_RECORDS = 1250;
-const MAX_CONCURRENCY = 8;
-const RETRIES = 3;
+const PAGE_SIZE = 10;
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function fetchText(url) {
+  const response = await fetch(url, {
+    headers: {
+      accept: "text/html,application/xhtml+xml",
+      "user-agent": USER_AGENT
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(25000)
+  });
+  // Stop on any failed request, including access restrictions. Never retry a
+  // denied route or treat a partial set of pages as a successful refresh.
+  if (!response.ok) throw new Error(`HTTP ${response.status} for Trussell source`);
+  return response.text();
 }
 
-async function fetchText(url, attempt = 1) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
-  try {
-    const response = await fetch(url, {
-      headers: {
-        accept: "text/html,application/xhtml+xml",
-        "user-agent": USER_AGENT
-      },
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
-    return await response.text();
-  } catch (error) {
-    if (attempt >= RETRIES) throw error;
-    await sleep(350 * attempt);
-    return fetchText(url, attempt + 1);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function decodeNextPayloads(html) {
+export function decodeNextPayloads(html) {
   const decoded = [];
   const expression = /self\.__next_f\.push\(\[1,"((?:\\.|[^"\\])*)"\]\)<\/script>/g;
   for (const match of html.matchAll(expression)) {
@@ -73,7 +63,7 @@ function jsonObjectAt(text, start) {
   throw new Error("Unterminated JSON object in Trussell payload");
 }
 
-function extractResultObjects(payload) {
+export function extractResultObjects(payload) {
   const records = [];
   const needle = '"result":';
   let cursor = 0;
@@ -91,7 +81,7 @@ function extractResultObjects(payload) {
     }
     try {
       const value = JSON.parse(slice);
-      if (value?.uuid && value?.title && value?.geoLocation) records.push(value);
+      if (value?.uuid) records.push(value);
     } catch {
       // Ignore non-food-bank result objects; completeness checks below fail closed.
     }
@@ -101,13 +91,13 @@ function extractResultObjects(payload) {
 }
 
 function totalPagesFromPayload(payload) {
-  const match = payload.match(/"totalPages":(\d+)/);
-  return match ? Number(match[1]) : null;
+  const values = [...payload.matchAll(/"totalPages":(\d+)/g)].map((match) => Number(match[1]));
+  return values.length && new Set(values).size === 1 ? values[0] : null;
 }
 
 function totalResultsFromPayload(payload) {
   const candidates = [...payload.matchAll(/\[(\d+)," results"\]/g)].map((match) => Number(match[1]));
-  return candidates.length ? Math.max(...candidates) : null;
+  return candidates.length && new Set(candidates).size === 1 ? candidates[0] : null;
 }
 
 function normalizeText(value) {
@@ -128,7 +118,8 @@ function parseCoordinates(record) {
   } catch {
     return null;
   }
-  const [lng, lat] = geometry?.coordinates || [];
+  if (geometry?.type !== "Point" || !Array.isArray(geometry.coordinates) || geometry.coordinates.length !== 2) return null;
+  const [lng, lat] = geometry.coordinates;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < 49 || lat > 61.5 || lng < -9.5 || lng > 2.7) return null;
   return { lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) };
@@ -173,11 +164,18 @@ function sourceHidesAddress(value) {
   return !["", "off", "false", "no", "0"].includes(flag);
 }
 
-function makeResource(record, sourcePage, checkedOn) {
-  if (sourceHidesAddress(record.hideAddressLink)) return null;
-  if (!normalizeText(record.address01) && !normalizeText(record.address02)) return null;
+export function publicationExclusion(record) {
+  if (sourceHidesAddress(record.hideAddressLink)) return "source_hidden_location";
+  if (!normalizeText(record.address01) && !normalizeText(record.address02)) return "missing_street_address";
+  if (!parseCoordinates(record)) return "invalid_coordinates";
+  if (!normalizeText(record.title) || !normalizeText(record.postcode)) return "incomplete_location";
+  if (uniqueParts([record.address01, record.address02, record.town, record.county, record.postcode, "United Kingdom"]).length < 3) return "incomplete_location";
+  return null;
+}
+
+export function makeResource(record, sourcePage, checkedOn) {
+  if (publicationExclusion(record)) return null;
   const coordinates = parseCoordinates(record);
-  if (!coordinates) return null;
 
   const title = normalizeText(record.title);
   const groupTitle = normalizeText(record.groupTitle);
@@ -225,7 +223,7 @@ function makeResource(record, sourcePage, checkedOn) {
     providerUrl,
     collectionStatus,
     collectionStatusCheckedOn: checkedOn,
-    summary: `An official Trussell food-bank centre${groupTitle ? ` in the ${groupTitle} network` : ""} where people with an approved food-bank voucher can access a free emergency food parcel.`,
+    summary: "An official Trussell food-bank centre where people with an approved food-bank voucher can access a free emergency food parcel.",
     services: [
       "Free emergency food parcel with voucher/referral",
       "Food-bank referral guidance"
@@ -244,21 +242,6 @@ function makeResource(record, sourcePage, checkedOn) {
   };
 }
 
-async function mapConcurrent(values, limit, task) {
-  const results = new Array(values.length);
-  let cursor = 0;
-  async function worker() {
-    while (true) {
-      const index = cursor;
-      cursor += 1;
-      if (index >= values.length) return;
-      results[index] = await task(values[index], index);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
-  return results;
-}
-
 async function loadPage(page) {
   const url = `${FINDER_BASE}?lat=&lng=&page=${page}`;
   const html = await fetchText(url);
@@ -273,66 +256,95 @@ async function loadPage(page) {
   };
 }
 
-const checkedOn = new Date().toISOString().slice(0, 10);
-const firstPage = await loadPage(1);
-if (!firstPage.totalPages || firstPage.totalPages < 100 || firstPage.totalPages > 250) {
-  throw new Error(`Unexpected Trussell page count: ${firstPage.totalPages}`);
-}
-if (!firstPage.totalResults || firstPage.totalResults < MIN_EXPECTED_SOURCE_RECORDS) {
-  throw new Error(`Unexpected Trussell result count: ${firstPage.totalResults}`);
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
+  return value;
 }
 
-const pageNumbers = Array.from({ length: firstPage.totalPages - 1 }, (_, index) => index + 2);
-const remainingPages = await mapConcurrent(pageNumbers, MAX_CONCURRENCY, (page) => loadPage(page));
-const pages = [firstPage, ...remainingPages];
-
-const rawByUuid = new Map();
-for (const page of pages) {
-  for (const record of page.records) {
-    const existing = rawByUuid.get(record.uuid);
-    if (existing) {
-      if (JSON.stringify(existing.record) !== JSON.stringify(record)) {
-        throw new Error(`Conflicting duplicate Trussell UUID ${record.uuid}`);
+export async function fetchTrussellSnapshot({ loadPageImpl = loadPage, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  const firstPage = await loadPageImpl(1);
+  const { totalPages, totalResults } = firstPage;
+  if (!Number.isSafeInteger(totalResults) || totalResults < MIN_EXPECTED_SOURCE_RECORDS || totalResults > 2500) {
+    throw new Error(`Unexpected Trussell result count: ${totalResults}`);
+  }
+  if (!Number.isSafeInteger(totalPages) || totalPages !== Math.ceil(totalResults / PAGE_SIZE)) {
+    throw new Error(`Inconsistent Trussell page count: ${totalPages}`);
+  }
+  const rawByUuid = new Map();
+  function acceptPage(page, expectedPage) {
+    if (page.page !== expectedPage || page.totalPages !== totalPages || page.totalResults !== totalResults) {
+      throw new Error(`Trussell totals or page number changed on page ${expectedPage}`);
+    }
+    const expectedSize = Math.min(PAGE_SIZE, totalResults - (expectedPage - 1) * PAGE_SIZE);
+    if (!Array.isArray(page.records) || page.records.length !== expectedSize) {
+      throw new Error(`Incomplete Trussell page ${expectedPage}: expected ${expectedSize} identities`);
+    }
+    for (const record of page.records) {
+      if (typeof record?.uuid !== "string" || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(record.uuid)) {
+        throw new Error(`Invalid Trussell source identity on page ${expectedPage}`);
       }
+      if (rawByUuid.has(record.uuid)) throw new Error(`Duplicate Trussell UUID ${record.uuid}; snapshot may have shifted`);
+      rawByUuid.set(record.uuid, { record, page: expectedPage });
+    }
+  }
+  acceptPage(firstPage, 1);
+  // Sequential requests, at least one second apart, stop at the first failure.
+  for (let page = 2; page <= totalPages; page += 1) {
+    await wait(1000);
+    acceptPage(await loadPageImpl(page), page);
+  }
+  if (rawByUuid.size !== totalResults) throw new Error(`Incomplete Trussell snapshot: ${rawByUuid.size}/${totalResults} identities`);
+  await wait(1000);
+  const bracket = await loadPageImpl(1);
+  if (bracket.page !== 1 || bracket.totalPages !== totalPages || bracket.totalResults !== totalResults ||
+      JSON.stringify(stableValue(bracket.records)) !== JSON.stringify(stableValue(firstPage.records))) {
+    throw new Error("Trussell first page changed during collection; refusing an unstable snapshot");
+  }
+  return { rawByUuid, totalPages, totalResults };
+}
+
+const SOURCE_FIELDS = ["name", "city", "lat", "lng", "address", "phone", "email", "providerUrl", "collectionStatus", "collectionStatusCheckedOn", "sourceUrl", "lastChecked"];
+
+export function prepareTrussellResources(snapshot, checkedOn, previousResources = []) {
+  const previousById = new Map(previousResources.map((record) => [record.id, record]));
+  const exclusions = {};
+  const resources = [];
+  for (const { record, page } of snapshot.rawByUuid.values()) {
+    const reason = publicationExclusion(record);
+    if (reason) {
+      exclusions[reason] = (exclusions[reason] || 0) + 1;
       continue;
     }
-    rawByUuid.set(record.uuid, { record, page: page.page });
+    const resource = makeResource(record, page, checkedOn);
+    const previous = previousById.get(resource.id);
+    // Older generated records carry the referral mode only in these exact
+    // instructions. Do not retain a superseded mode while advancing its check.
+    const referralInstructions = [
+      "Call the food bank or an approved referral partner to arrange a voucher before collection.",
+      "Use the provider page or an approved referral partner to arrange a voucher before collection."
+    ];
+    if (referralInstructions.some((instruction) => previous?.availabilityNote?.includes(instruction) && !resource.availabilityNote.includes(instruction))) {
+      throw new Error(`Changed referral instructions for ${resource.id} require editorial reconciliation before refresh.`);
+    }
+    resources.push(preserveReviewedFields(resource, previous, SOURCE_FIELDS));
   }
+  if (resources.length < MIN_EXPECTED_PUBLISHED_RECORDS) throw new Error(`Only ${resources.length} publishable Trussell centres remained after privacy/location validation`);
+  resources.sort((a, b) => a.name.localeCompare(b.name, "en-GB") || a.id.localeCompare(b.id));
+  return { resources, exclusions };
 }
 
-if (rawByUuid.size < MIN_EXPECTED_SOURCE_RECORDS) {
-  throw new Error(`Only ${rawByUuid.size} unique Trussell records parsed from ${firstPage.totalResults} reported results`);
-}
-if (rawByUuid.size < Math.floor(firstPage.totalResults * 0.97)) {
-  throw new Error(`Parsed ${rawByUuid.size}/${firstPage.totalResults} Trussell records; refusing a materially incomplete snapshot`);
-}
-
-const resources = [...rawByUuid.values()]
-  .map(({ record, page }) => makeResource(record, page, checkedOn))
-  .filter(Boolean)
-  .sort((a, b) => a.name.localeCompare(b.name, "en-GB") || a.id.localeCompare(b.id));
-
-if (resources.length < MIN_EXPECTED_PUBLISHED_RECORDS) {
-  throw new Error(`Only ${resources.length} publishable Trussell centres remained after privacy/location validation`);
-}
-
-const ids = new Set();
-for (const resource of resources) {
-  if (ids.has(resource.id)) throw new Error(`Duplicate generated resource ID ${resource.id}`);
-  ids.add(resource.id);
-  if (!resource.address || resource.locationPrecision !== "exact") throw new Error(`Invalid direct-site semantics for ${resource.id}`);
-  if (!resource.providerUrl || !resource.sourceUrl) throw new Error(`Missing source link for ${resource.id}`);
-  if (!Number.isFinite(resource.lat) || !Number.isFinite(resource.lng)) throw new Error(`Invalid coordinate for ${resource.id}`);
-}
-
+export function renderTrussellSnapshot(snapshot, resources, exclusions, checkedOn) {
+const { rawByUuid, totalResults, totalPages } = snapshot;
 const header = `// Generated by scripts/refresh-trussell-foodbanks.mjs from Trussell's official food-bank finder.\n// Do not hand edit; rerun npm run refresh:data:trussell.\n`;
 const metadata = {
-  reportedSourceRecords: firstPage.totalResults,
+  reportedSourceRecords: totalResults,
   parsedSourceRecords: rawByUuid.size,
   publishedRecords: resources.length,
-  totalPages: firstPage.totalPages,
+  totalPages,
   checkedOn,
-  excludedRecords: rawByUuid.size - resources.length
+  excludedRecords: rawByUuid.size - resources.length,
+  exclusionReasons: exclusions
 };
 const compactRows = resources.map((resource) => {
   const source = rawByUuid.get(resource.sourceRecordId);
@@ -352,6 +364,11 @@ const compactRows = resources.map((resource) => {
     source?.page || 1
   ];
 });
+const preservedFields = Object.fromEntries(resources.map((resource) => {
+  const source = rawByUuid.get(resource.sourceRecordId);
+  const generated = makeResource(source.record, source.page, checkedOn);
+  return [resource.id, Object.fromEntries(Object.entries(resource).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(generated[key])))];
+}).filter(([, fields]) => Object.keys(fields).length));
 const runtime = `const FINDER_BASE = ${JSON.stringify(FINDER_BASE)};
 const CHECKED_ON = ${JSON.stringify(checkedOn)};
 const rows = ${JSON.stringify(compactRows)};
@@ -398,8 +415,31 @@ function fromRow(row) {
   };
 }
 
-export const trussellFoodbankResources = rows.map(fromRow);`;
+const preservedFields = ${JSON.stringify(preservedFields)};
+export const trussellFoodbankResources = rows.map((row) => {
+  const resource = fromRow(row);
+  return { ...resource, ...preservedFields[resource.id] };
+});`;
 const output = `${header}export const trussellFoodbankMetadata = ${JSON.stringify(metadata, null, 2)};\n\n${runtime}\n`;
-await writeFile(OUTPUT, output, "utf8");
-console.log(`Generated ${resources.length} Trussell food-bank centres from ${rawByUuid.size}/${firstPage.totalResults} official records across ${firstPage.totalPages} pages.`);
-console.log(`Excluded ${rawByUuid.size - resources.length} records that did not meet public-address/direct-location requirements.`);
+return output;
+}
+
+export async function refreshTrussell({ loadPageImpl, wait, checkedOn = new Date().toISOString().slice(0, 10), previousResources, writeOutput } = {}) {
+  const snapshot = await fetchTrussellSnapshot({ loadPageImpl, wait });
+  const { resources, exclusions } = prepareTrussellResources(snapshot, checkedOn, previousResources);
+  assertReviewedMembership(resources, previousResources);
+  const output = renderTrussellSnapshot(snapshot, resources, exclusions, checkedOn);
+  if (writeOutput) await writeOutput(output);
+  return { resources, exclusions, output, totalResults: snapshot.totalResults, totalPages: snapshot.totalPages };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const before = await readFile(OUTPUT);
+  const { trussellFoodbankResources } = await import(OUTPUT.href);
+  const result = await refreshTrussell({
+    previousResources: trussellFoodbankResources,
+    writeOutput: (output) => replaceSourceSnapshot(OUTPUT, before, output)
+  });
+  console.log(`Generated ${result.resources.length} Trussell centres from all ${result.totalResults} identities across ${result.totalPages} pages.`);
+  console.log(`Publication exclusions: ${JSON.stringify(result.exclusions)}. This is source reconciliation, not a database insertion or closure decision.`);
+}
