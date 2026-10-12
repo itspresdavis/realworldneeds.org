@@ -1,3 +1,5 @@
+import { makeResource, renderTrussellSnapshot } from "../scripts/refresh-trussell-foodbanks.mjs";
+import { makeNewYorkWicResource } from "../scripts/refresh-new-york-wic.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -182,32 +184,24 @@ test("affected records are not suggested as related alternatives and copied deta
   assert.ok(copied.indexOf(notice.detail) < copied.indexOf("RWN listing:"));
 });
 
-test("new Trussell imports generate the same explicit source-status fields without changing snapshot dates", async () => {
-  const script = await read("scripts/refresh-trussell-foodbanks.mjs");
-  const start = script.indexOf("const runtime = `");
-  const end = script.indexOf("\nconst output =", start);
-  const context = vm.createContext({ FINDER_BASE: "https://example.org", checkedOn: "2026-09-10", compactRows: [["id", "Fixture", "City", 51, 0, "Address", null, null, "https://example.org", "Temporarily closed", "telephone", 1]] });
-  vm.runInContext(`${script.slice(start, end)}\nglobalThis.output = runtime;`, context);
+test("new Trussell imports generate the same explicit source-status fields without changing snapshot dates", () => {
+  const record = { uuid: "00000000-0000-4000-8000-000000000001", title: "Fixture", town: "London", address01: "1 Fixture Street", postcode: "SW1A 1AA", geoLocation: '{"type":"Point","coordinates":[0,51]}', dcsStatusLabel: "Temporarily closed", referralType: "telephone" };
+  const resource = makeResource(record, 1, "2026-09-10");
+  const snapshot = { rawByUuid: new Map([[record.uuid, { record, page: 1 }]]), totalResults: 1, totalPages: 1 };
+  const output = renderTrussellSnapshot(snapshot, [resource], {}, "2026-09-10");
   const generated = vm.createContext({});
-  vm.runInContext(`${context.output.replace("export const trussellFoodbankResources", "const trussellFoodbankResources")}\nglobalThis.records = trussellFoodbankResources;`, generated);
+  vm.runInContext(`${output.replaceAll("export const", "const")}\nglobalThis.records = trussellFoodbankResources;`, generated);
   assert.equal(generated.records[0].collectionStatus, "Temporarily closed");
   assert.equal(generated.records[0].collectionStatusCheckedOn, "2026-09-10");
   assert.equal(generated.records[0].lastChecked, "2026-09-10");
 });
 
-test("New York importer never reuses an old publication date for freshly fetched rows", async () => {
-  const source = (await read("scripts/refresh-new-york-wic.mjs")).replace(/^import[^\n]+\n/, "");
-  const rows = Array.from({ length: 250 }, (_, i) => ({ site_number: String(i + 1), agency_name: "Fixture", city: "New York", location_1: { latitude: "40.7", longitude: "-73.9" } }));
-  const writes = [], requests = [];
-  const context = vm.createContext({ fetch: async (url) => { requests.push(url); return { ok: true, json: async () => rows }; }, mkdir: async () => {}, writeFile: async (...args) => writes.push(args), console: { log() {} } });
-  await vm.runInContext(`(async () => {${source}})()`, context);
-  assert.equal(requests.length, 1);
-  assert.equal(writes.length, 1);
-  const data = vm.createContext({});
-  vm.runInContext(`${writes[0][1].replace("export const newYorkWicResources", "const newYorkWicResources")}\nglobalThis.records = newYorkWicResources;`, data);
-  assert.equal(data.records.length, 250);
-  assert.ok(data.records.every((record) => !Object.hasOwn(record, "sourceUpdatedAt")));
-  assert.ok(data.records.every((record) => /^\d{4}-\d{2}-\d{2}$/.test(record.lastChecked)));
+test("New York importer distinguishes verified publisher metadata from the fetch date", () => {
+  const row = { site_number: "1", site_type: "Permanent", agency_name: "Fixture", city: "New York", street_address: "1 Fixture Street", location_1: { latitude: "40.7", longitude: "-73.9" } };
+  const record = makeNewYorkWicResource(row, { checkedOn: "2026-10-12", sourceUpdatedAt: "2026-04-30" });
+  assert.equal(record.sourceUpdatedAt, "2026-04-30");
+  assert.equal(record.lastChecked, "2026-10-12");
+  assert.throws(() => makeNewYorkWicResource(row, { checkedOn: "2026-10-12" }), /source update/);
 });
 
 test("aggregate refresh includes every separately supported snapshot importer", async () => {
