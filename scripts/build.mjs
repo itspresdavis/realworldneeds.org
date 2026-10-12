@@ -8,6 +8,7 @@ import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
+import { resourceDescription } from "./resource-description.mjs";
 
 // A page of 80 expanded records created a 34,000px scroll. Sixty compact
 // records keeps a browse page purposeful while whole-catalog search remains
@@ -259,7 +260,7 @@ function resourceSchema(resource, canonical) {
         "@id": `${canonical}#page`,
         url: canonical,
         name: `${resource.name} — ${place}`,
-        description: resource.summary,
+        description: resourceDescription(resource),
         isPartOf: { "@id": `${SITE_ORIGIN}/#website` },
         about: { "@id": `${canonical}#service` },
         dateModified: resource.lastChecked
@@ -268,7 +269,7 @@ function resourceSchema(resource, canonical) {
         "@type": "Service",
         "@id": `${canonical}#service`,
         name: resource.name,
-        description: resource.summary,
+        description: resourceDescription(resource),
         serviceType: aidLabels(resource),
         areaServed: isContactOnly(resource) ? resource.coverageNote : resource.country,
         ...(isContactOnly(resource) ? {
@@ -307,7 +308,7 @@ function resourcePage(resource) {
   const accessLink = contactOnly && resource.accessUrl ? `<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>` : "";
   const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
   const title = `${resource.name} — ${place}`;
-  const description = `${resource.summary} ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`;
+  const description = resourceDescription(resource, `${resource.summary} ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`);
 
   return `<!doctype html>
 <html lang="en">
