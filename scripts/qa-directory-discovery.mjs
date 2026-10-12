@@ -21,6 +21,7 @@ export function directoryDiscoverySnapshot() {
     count: pick('[data-directory-count]')?.textContent,
     focus: document?.activeElement?.getAttribute('href'), scroll: globalThis.scrollY ?? null,
     focusedId: document?.activeElement?.id,
+    focusBox: (() => { const r = document?.activeElement?.getBoundingClientRect(); return r ? { top:r.top, bottom:r.bottom, left:r.left, right:r.right, width:r.width, height:r.height } : null; })(),
     focusVisible: (() => { const rect = document?.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6; })(),
     saved: pick('.directory-shell')?.classList.contains('has-saved-view'),
     menuOpen: Boolean(pick('.rwn-page-menu[open]')),
@@ -29,6 +30,23 @@ export function directoryDiscoverySnapshot() {
     overflow: document?.documentElement ? document.documentElement.scrollWidth > globalThis.innerWidth + 1 : null,
     empty: pick('.directory-global-empty')?.textContent
   };
+}
+
+// Assert the first focus-owning frame before observing stability. Waiting for a
+// later visible frame would hide the smooth-scroll regression this gate catches.
+export async function verifySavedEntryViewport({ initial, sample, wait = sleep, now = Date.now, durationMs = 500 }) {
+  const valid = s => s?.saved && !s.menuOpen && s.focusedId === 'saved-services-heading' && s.focusVisible
+    && Number.isFinite(s.scroll) && s.focusBox && Object.values(s.focusBox).every(Number.isFinite);
+  if (!valid(initial)) throw new Error(`Saved focused an offscreen heading: ${JSON.stringify(initial)}`);
+  const start = now();
+  while (now() - start < durationMs) {
+    await wait(50);
+    const next = await sample();
+    if (!valid(next) || Math.abs(next.scroll - initial.scroll) > 1
+      || Object.keys(initial.focusBox).some(key => Math.abs(next.focusBox[key] - initial.focusBox[key]) > 1)) {
+      throw new Error(`A pending scroll or layout shift moved Saved away from its visible heading: ${JSON.stringify(next)}`);
+    }
+  }
 }
 
 export async function verifyDirectoryDiscovery({ client, host, navigate, evaluate, capture }) {
@@ -112,9 +130,8 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     const savedFrom = await state();
     if (width < 900) await click('.rwn-page-menu > summary');
     await click('.legal-header a[href="/directory#saved"]');
-    await wait(s => s.saved && !s.menuOpen && s.focusedId === 'saved-services-heading', 'Saved did not close its navigation overlay and own focus');
-    await sleep(250);
-    if (!(await state()).saved || (await state()).focusedId !== 'saved-services-heading') throw new Error('Pending directory restoration stole Saved focus');
+    const savedEntry = await wait(s => s.saved && !s.menuOpen && s.focusedId === 'saved-services-heading', 'Saved did not close its navigation overlay and own focus');
+    await verifySavedEntryViewport({ initial: savedEntry, sample: state });
     await capture(client, `directory-discovery-saved-${width}.png`);
     await goEntry(directoryId);
     await wait(s => !s.saved && !s.menuOpen && s.query === 'WIC' && s.country === 'United States' && s.rows.length === 120 && s.focusVisible && s.focus?.startsWith('/service/') && Math.abs(s.scroll - savedFrom.scroll) < 5, 'Saved Back did not restore the latest scroll with an unobscured return target');

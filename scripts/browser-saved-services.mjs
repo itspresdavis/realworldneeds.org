@@ -1,3 +1,4 @@
+import { verifySavedReturnBrand } from './qa-saved-return-brand.mjs';
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -291,6 +292,7 @@ async function run() {
       check(await evaluate(client, `document.documentElement.scrollWidth <= innerWidth + 1`), `Saved view overflows ${width}px`);
       await capture(client, `saved-list-${width}.png`);
     }
+    await verifySavedReturnBrand({ client, host: HOST, navigate, evaluate, capture, waitForUI, record: records[0], qaDir: QA_DIR });
     check(exceptions.length === 0, "Unexpected browser exceptions", exceptions);
     console.log("Saved-services browser QA passed: explicit local saving, denied/quota storage, lazy loading, history, unavailable IDs, pagination/focus, cross-tab refresh, confirmation, retry, hard-offline safeguards, and 320/390/1440px layouts.");
   } finally {
