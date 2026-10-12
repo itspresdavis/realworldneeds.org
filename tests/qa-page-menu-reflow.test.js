@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import {
   PAGE_MENU_REFLOW_LINKS, PAGE_MENU_REFLOW_VIEWPORTS, PAGE_MENU_BASELINE_RULES,
   pageMenuReflowSnapshot, pageMenuReflowIdentity, pageMenuReflowViolations, pageMenuRingContained,
-  pageMenuBaselineStyle, withPageMenuBaseline, verifyPageMenuReflow, waitForPageMenuReflowQuiet
+  pageMenuBaselineStyle, withPageMenuBaseline, verifyPageMenuReflow, waitForPageMenuReflowQuiet, waitForPageMenuFocus
 } from '../scripts/qa-page-menu-reflow.mjs';
 
 const expected = () => ({ href: 'http://127.0.0.1:4175/directory', width: 320, height: 250, timeOrigin: 100, title: 'Directory | RWN', heading: 'Free essential services' });
@@ -202,7 +202,7 @@ test('orchestration uses native inputs, exact destination identity, failure evid
   assert.match(source, /previousTimeOrigin: expected\.timeOrigin/);
   assert.match(source, /href: `\$\{host\}\/transparency`/);
   assert.match(source, /record\.outside = await waitForPageMenuReflowQuiet/);
-  assert.match(source, /scrollY: reverseScrollY/);
+  assert.match(source, /scrollY: wheelScrollY/);
   assert.match(source, /fixedCSSRestored = true/);
   assert.match(source, /page-menu-reflow\.json/);
   assert.match(source, /\[\['directory',[^\n]*\['service',[^\n]*\['trust',/);
@@ -315,7 +315,7 @@ test('actual fixed-wheel sampler rejects even a transient page-scroll leak befor
   let time = 0, sampleCount = 0;
   const initial = fixture(); initial.scrollY = 241;
   const menuWheel = vm.runInNewContext(`${helper}; menuWheel`, {
-    expected: expected(), reverseScrollY: 241,
+    expected: expected(), wheelScrollY: 241,
     snapshot: async () => ({ ...initial, scrollY: ++sampleCount === 2 ? 245 : 241 }),
     check: (state, expected, options) => { assert.deepEqual(pageMenuReflowViolations(state, expected, options), []); return state; },
     wheel: async (_box, _delta, options) => waitForPageMenuReflowQuiet({ ...options, now: () => time, wait: async ms => { time += ms; } })
@@ -354,7 +354,7 @@ async function actualWheelBoundary(state, deltaY = 2000, mutate = source => sour
   const source = verifyPageMenuReflow.toString();
   const helper = mutate(source.slice(source.indexOf('      const menuWheel ='), source.indexOf('      if (scrollable)', source.indexOf('      const menuWheel ='))));
   const menuWheel = vm.runInNewContext(`${helper}; menuWheel`, {
-    expected: { ...expected(), height: 422 }, reverseScrollY: 0, snapshot: async () => state,
+    expected: { ...expected(), height: 422 }, wheelScrollY: 0, snapshot: async () => state,
     check: (value, expected, options) => { assert.deepEqual(pageMenuReflowViolations(value, expected, options), []); return value; },
     wheel: async (_box, _delta, options) => options.predicate(await options.sample())
   });
@@ -397,4 +397,75 @@ test('metric rounding never replaces focused target, ring or second-wheel no-mot
     assert.ok(pageMenuReflowViolations(broken, expectedPage, { focusedIndex: 5 }).some(issue => /clipped/.test(issue)));
   }
   assert.match(verifyPageMenuReflow.toString(), /record.boundary.nav.scrollTop === record.pointer.nav.scrollTop/);
+});
+
+
+test('native link-focus phase permits recorded ancestor reveal only after exact focus and geometry settle', async () => {
+  let time = 0, index = 0;
+  const positions = [30, 27, 24, 22, 22];
+  const result = await waitForPageMenuFocus({ sample: async () => ({ ...fixture(), scrollY: positions[Math.min(index++, positions.length - 1)] }),
+    expected: expected(), target: 0, now: () => time, wait: async ms => { time += ms; } });
+  assert.equal(result.scrollY, 22);
+  assert.ok(time >= 320, 'Final keyboard position must remain quiet for200ms');
+  assert.equal(result.links[0].focused, true);
+  assert.deepEqual(pageMenuReflowViolations(result, expected(), { focusedIndex: 0, scrollY: 22 }), []);
+  assert.ok(pageMenuReflowViolations(result, expected(), { focusedIndex: 0, scrollY: 30 }).includes('page-scroll-leak'),
+    'The same movement still fails the separate fixed-position/wheel oracle');
+});
+
+test('native focus phase cannot excuse wrong documents, lost focus, clipped targets or rings, or nonstop movement', async () => {
+  for (const mutate of [
+    s => { s.timeOrigin++; }, s => { s.href += '#other'; }, s => { s.links[0].focused = false; },
+    s => { s.links[0].box.bottom = 224; }, s => { s.links[0].ring.top = 62; },
+    s => { s.links[0].outline.style = 'none'; }, s => { s.links[0].box.height = 43; }
+  ]) {
+    let time = 0; const state = fixture(); state.scrollY = 24; mutate(state);
+    await assert.rejects(waitForPageMenuFocus({ sample: async () => state, expected: expected(), target: 0,
+      now: () => time, wait: async ms => { time += ms; }, timeoutMs: 400 }), /did not settle/);
+  }
+  let time = 0;
+  await assert.rejects(waitForPageMenuFocus({ sample: async () => ({ ...fixture(), scrollY: time }), expected: expected(), target: 0,
+    now: () => time, wait: async ms => { time += ms; }, timeoutMs: 400 }), /did not settle/);
+});
+
+test('summary arrival has its own quiet focus gate and invalid keyboard targets cannot bypass it', async () => {
+  let time = 0;
+  const state = fixture(); state.links[0].focused = false; state.summary.focused = true; state.scrollY = 16;
+  const result = await waitForPageMenuFocus({ sample: async () => state, expected: expected(), target: 'summary',
+    now: () => time, wait: async ms => { time += ms; } });
+  assert.equal(result.summary.focused, true); assert.equal(result.scrollY, 16); assert.ok(time >= 200);
+  for (const target of [undefined, null, -1, 6, .5, 'wheel']) await assert.rejects(
+    waitForPageMenuFocus({ sample: async () => state, expected: expected(), target }), /Invalid expected/);
+  state.summary.focused = false; time = 0;
+  await assert.rejects(waitForPageMenuFocus({ sample: async () => state, expected: expected(), target: 'summary',
+    now: () => time, wait: async ms => { time += ms; }, timeoutMs: 400 }), /did not settle/);
+});
+
+test('one settled summary baseline owns Enter and every wheel; outside or wheel results cannot replace it', () => {
+  const source = verifyPageMenuReflow.toString();
+  assert.match(source, /record.forward.push\(await waitForPageMenuFocus/);
+  assert.match(source, /record.backward.push\(await waitForPageMenuFocus/);
+  assert.match(source, /record.summaryArrival = await waitForPageMenuFocus/);
+  assert.match(source, /const wheelScrollY = record.summaryArrival.scrollY/);
+  assert.match(source, /Math.abs\(state.scrollY - wheelScrollY\) <= .5/);
+  assert.match(source, /sample: async \(\) => check\(await snapshot\(\), expected, \{ scrollY: wheelScrollY \}\)/);
+  assert.equal((source.match(/const wheelScrollY =/g) || []).length, 1);
+  assert.doesNotMatch(source, /wheelScrollY = (?:record.outside|record.pointer|record.boundary|state)/);
+  assert.match(source, /record.focusScroll =/);
+  assert.doesNotMatch(source, /Page.navigateToHistoryEntry|pageshow|pagehide/);
+});
+
+
+test('recorded320x250 reverse-focus reveal passes geometry while retaining a separate strict wheel baseline', async () => {
+  const state = roundedWheelFixture(188); state.height = 250; state.scrollY = 24; state.summary.focused = false;
+  state.nav.box = box(11.203125, 61.6875, 296, 154); state.nav.port.bottom = 214.6875; state.nav.clientHeight = 152;
+  for (const link of state.links) link.hit = link.box.top >= state.nav.port.top && link.box.bottom <= state.nav.port.bottom;
+  state.links[3].focused = true; state.links[3].focusVisible = true;
+  assert.equal(state.links[3].box.top, 71.875);
+  assert.equal(state.links[3].ring.top, 65.875);
+  assert.deepEqual(pageMenuReflowViolations(state, expected(), { focusedIndex: 3, scrollY: 30 }), ['page-scroll-leak']);
+  let time = 0;
+  const result = await waitForPageMenuFocus({ sample: async () => state, expected: expected(), target: 3,
+    now: () => time, wait: async ms => { time += ms; } });
+  assert.equal(result.scrollY, 24); assert.ok(time >= 200);
 });

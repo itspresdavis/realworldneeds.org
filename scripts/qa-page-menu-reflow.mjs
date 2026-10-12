@@ -183,6 +183,21 @@ export async function waitForPageMenuReflowQuiet({ sample, predicate, wait = sle
   throw new Error(`Native menu focus scroll did not settle: ${JSON.stringify(latest)}`);
 }
 
+// Native keyboard focus can reveal a target through every ancestor scrollport,
+// including the document's existing scroll-padding. Record that movement while
+// requiring quiet exact-document focus and complete target/ring visibility.
+// This helper is never used for wheel input or history restoration.
+export async function waitForPageMenuFocus({ sample, expected, target, wait, now, timeoutMs, quietMs }) {
+  if (target !== 'summary' && (!Number.isInteger(target) || target < 0 || target >= PAGE_MENU_REFLOW_LINKS.length)) {
+    throw new Error('Invalid expected native menu focus target');
+  }
+  return waitForPageMenuReflowQuiet({ sample, wait, now, timeoutMs, quietMs,
+    predicate: state => pageMenuReflowViolations(state, expected, {
+      focusedIndex: target === 'summary' ? undefined : target, scrollY: state?.scrollY
+    }).length === 0 && (target !== 'summary' || state.summary.focused)
+  });
+}
+
 export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate, evaluate, capture }) {
   const evidence = { baseline: null, cases: [], errors: [] };
   let current = 'startup';
@@ -276,7 +291,8 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
       await click((await snapshot()).summary.box);
       record.opened = check(await snapshot(), expected);
       for (let index = 0; index < 6; index++) {
-        await key('Tab'); record.forward.push(check(await snapshot(), expected, { focusedIndex: index }));
+        await key('Tab');
+        record.forward.push(await waitForPageMenuFocus({ sample: snapshot, expected, target: index }));
       }
       await capture(client, `page-menu-reflow-${current}.png`);
       // Move beyond the final item, then reverse through all six links. This
@@ -284,26 +300,37 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
       await key('Tab');
       record.outside = await waitForPageMenuReflowQuiet({ sample: snapshot,
         predicate: state => pageMenuReflowIdentity(state, expected) && !state.summary.focused && state.links.every(link => !link.focused) });
-      // Focusing content outside the sticky header may legitimately scroll the
-      // page. Preserve that explicit baseline while input is back in the menu.
-      const reverseScrollY = record.outside.scrollY;
       await key('Tab', true);
       for (let index = 5; index >= 0; index--) {
         if (index < 5) await key('Tab', true);
-        record.backward.push(check(await snapshot(), expected, { focusedIndex: index, scrollY: reverseScrollY }));
+        record.backward.push(await waitForPageMenuFocus({ sample: snapshot, expected, target: index }));
       }
       await key('Tab', true);
-      assert((await snapshot()).summary.focused, `${current} reverse traversal did not return to Menu`);
+      record.summaryArrival = await waitForPageMenuFocus({ sample: snapshot, expected, target: 'summary' });
+      // Freeze one quiet post-keyboard position. Enter and every wheel sample
+      // must preserve it; later movement cannot be adopted as a new baseline.
+      const wheelScrollY = record.summaryArrival.scrollY;
+      record.focusScroll = { forward: record.forward.map(state => state.scrollY), outside: record.outside.scrollY,
+        backward: record.backward.map(state => state.scrollY), summary: wheelScrollY };
       await key('Enter');
-      record.closed = await snapshot();
+      record.closed = await waitForPageMenuReflowQuiet({
+        sample: async () => {
+          const state = await snapshot();
+          assert(pageMenuReflowIdentity(state, expected) && Math.abs(state.scrollY - wheelScrollY) <= .5,
+            `${current} Enter close changed document or page position`, state);
+          return state;
+        }, predicate: state => !state.menuOpen && state.summary.focused && state.summary.hit
+      });
       assert(pageMenuReflowIdentity(record.closed, expected) && !record.closed.menuOpen && record.closed.summary.focused, `${current} native close failed`, record.closed);
       await key('Enter');
-      record.reopened = check(await snapshot(), expected, { scrollY: reverseScrollY });
+      record.reopened = await waitForPageMenuReflowQuiet({
+        sample: async () => check(await snapshot(), expected, { scrollY: wheelScrollY }), predicate: state => state.summary.focused
+      });
       const scrollable = record.reopened.nav.scrollHeight > record.reopened.nav.clientHeight;
       const menuWheel = (state, deltaY) => wheel(state.nav.port, deltaY, {
         // Every intermediate sample retains the original page-scroll baseline;
         // leaked scroll must throw, never settle into an accepted new baseline.
-        sample: async () => check(await snapshot(), expected, { scrollY: reverseScrollY }),
+        sample: async () => check(await snapshot(), expected, { scrollY: wheelScrollY }),
         // CSSOM exposes rounded integer heights but a double scrollTop. Their
         // independently rounded extent can differ by 1px at the real boundary.
         // https://drafts.csswg.org/cssom-view/#extension-to-the-element-interface
@@ -316,7 +343,7 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
         record.top = await menuWheel(record.reopened, -2000);
         assert(record.top.nav.scrollTop === 0, `${current} wheel cannot reach first link`, record.top.nav);
         record.pointer = await menuWheel(record.top, 2000);
-      } else record.pointer = check(await snapshot(), expected, { scrollY: reverseScrollY });
+      } else record.pointer = check(await snapshot(), expected, { scrollY: wheelScrollY });
       const final = record.pointer.links[5], viewport = { left: 0, top: 0, right: width, bottom: height };
       assert(final.hit && contained(final.box, record.pointer.nav.port) && contained(final.box, viewport)
         && (!scrollable || record.pointer.nav.scrollTop > 0), `${current} pointer cannot reach Transparency`, record.pointer);
