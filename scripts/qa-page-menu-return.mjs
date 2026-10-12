@@ -172,6 +172,23 @@ export function pageMenuFreshDocument(actual, previousTimeOrigin) {
     && shows[0].href === actual.href && actual.probe?.hides?.length === 0);
 }
 
+// Reload is tested from a real committed reading position. Native Tab may
+// intentionally scroll the next control into view without updating history;
+// that live focus movement is not a new committed reload baseline.
+export function pageMenuReloadSourceReady(actual, source) {
+  return Boolean(actual.documentPresent && Number.isFinite(actual.timeOrigin) && actual.timeOrigin === source.timeOrigin
+    && pageMenuRetainedState(actual, source) && Number.isFinite(actual.scroll) && Number.isFinite(actual.history?.scroll)
+    && actual.scroll === actual.history.scroll && actual.scroll === source.scroll && source.history?.scroll === source.scroll
+    && !actual.menuOpen && !actual.saved && !actual.panelVisible && actual.focus?.visible && !actual.focus.inMenu);
+}
+
+export function pageMenuReloadRestored(actual, source) {
+  return Boolean(pageMenuFreshDocument(actual, source.timeOrigin) && actual.navigationType === 'reload'
+    && pageMenuRetainedState(actual, source) && Number.isFinite(source.scroll) && source.history?.scroll === source.scroll
+    && actual.scroll === source.scroll && actual.history?.scroll === source.scroll
+    && !actual.menuOpen && !actual.saved && !actual.panelVisible && actual.focus?.visible && !actual.focus.inMenu);
+}
+
 // Secondary history cycles may legitimately rebuild an evicted document.
 // Classify that separately; each primary Back above remains BFCache-only.
 export function pageMenuHistoryTraversalClassification(actual, previous, expectedEntry) {
@@ -371,24 +388,29 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       cycle.backClassification = pageMenuHistoryTraversalClassification(returned, previousReturn, sourceEntry.entry);
     }
     record.finalBack = returned;
-    record.phase = 'keyboard';
-    // Inspect focus only after an actual Tab. This is keyboard-ring evidence,
-    // not the assumption that a script-focused element looks focused.
-    await client.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
-    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
-    const keyboard = await settled(s => pageMenuRetainedState(s, source) && !s.menuOpen && s.focus.visible && !s.focus.inMenu && s.focus.keyboardRing,
-      'Visible native keyboard focus after menu return');
-    await capture(client, `page-menu-${name}-keyboard.png`);
-    record.keyboard = keyboard;
+    let keyboardSource = returned;
     if (repeat) {
+      record.phase = 'reload-source';
+      record.reloadSource = await settled(s => pageMenuReloadSourceReady(s, returned),
+        'Reload source must retain the exact committed state with matching live and saved scroll');
       record.phase = 'reload';
       await client.call('Page.reload', { ignoreCache: true });
-      record.reload = await settled(s => pageMenuFreshDocument(s, keyboard.timeOrigin) && pageMenuRetainedState(s, keyboard) && !s.menuOpen
-        && Math.abs(s.scroll - keyboard.scroll) <= 1 && s.focus.visible && !s.focus.inMenu,
-      'Fresh reload must retain directory state without pretending to be BFCache');
-      assert(record.reload.navigationType === 'reload', 'Reload was not a native new-document reload', record.reload);
+      record.reload = await settled(s => pageMenuReloadRestored(s, record.reloadSource),
+        'Fresh reload must retain exact committed state and scroll without pretending to be BFCache');
       await capture(client, `page-menu-${name}-reload.png`);
+      keyboardSource = record.reload;
     }
+    record.phase = 'keyboard';
+    record.keyboardAfter = repeat ? 'fresh-reload' : 'persisted-back';
+    // Repeated library cases independently check keyboard access after reload.
+    // Every non-repeat case still checks Tab directly after the strict BFCache
+    // Back. Neither check lets Tab's intentional scroll redefine saved history.
+    await client.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    record.keyboard = await settled(s => s.timeOrigin === keyboardSource.timeOrigin && pageMenuRetainedState(s, source)
+      && !s.menuOpen && s.focus.visible && !s.focus.inMenu && s.focus.keyboardRing,
+      'Visible native keyboard focus after the explicitly recorded lifecycle check');
+    await capture(client, `page-menu-${name}-keyboard.png`);
     record.phase = 'complete';
   };
   client.ws.addEventListener('message', onMessage);

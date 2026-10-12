@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import {
   PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, PAGE_MENU_VIEWPORTS, PAGE_MENU_SHORT_HEIGHT_LIMITATION, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
-  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded, pageMenuHistoryTraversalClassification, verifyPageMenuReturn
+  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded, pageMenuHistoryTraversalClassification, verifyPageMenuReturn, pageMenuReloadSourceReady, pageMenuReloadRestored
 } from '../scripts/qa-page-menu-return.mjs';
 
 const event = (persisted, timeOrigin = 100, extra = {}) => ({ persisted, trusted: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, timeOrigin, ...extra });
@@ -374,4 +374,95 @@ test('lifecycle viewport coverage is explicit and does not claim the excluded sh
   assert.equal(PAGE_MENU_SHORT_HEIGHT_LIMITATION.excludedViewport.height, 422);
   assert.ok(PAGE_MENU_SHORT_HEIGHT_LIMITATION.measuredMenuBottom > 422);
   assert.match(PAGE_MENU_SHORT_HEIGHT_LIMITATION.note, /does not verify 422px-height coverage/);
+});
+
+test('reload is exercised before deliberate native Tab changes the live viewport', () => {
+  const flow = verifyPageMenuReturn.toString();
+  const reload = flow.indexOf("client.call('Page.reload'");
+  const tab = flow.indexOf("key: 'Tab'");
+  assert.ok(reload >= 0 && tab >= 0 && reload < tab, 'Reload must use the retained browsing baseline before Tab scrolls focus into view');
+});
+
+
+test('reload baseline rejects post-Tab live/history disagreement, missing history, stale documents and changed retained state', () => {
+  const baseline = returned();
+  assert.equal(pageMenuReloadSourceReady(baseline, baseline), true);
+  for (const change of [{ scroll: 219 }, { history: { ...baseline.history, scroll: 219 } }, { history: undefined },
+    { scroll: NaN }, { history: { ...baseline.history, scroll: Infinity } }, { timeOrigin: 101 }, { timeOrigin: null },
+    { query: '' }, { rows: [] }, { menuOpen: true }, { saved: true }, { panelVisible: true },
+    { focus: { visible: false, inMenu: false } }, { documentPresent: false }]) {
+    assert.equal(pageMenuReloadSourceReady({ ...baseline, ...change }, baseline), false, JSON.stringify(change));
+  }
+  const uncommitted = { ...baseline, scroll: 219 };
+  assert.equal(pageMenuReloadSourceReady(uncommitted, uncommitted), false, 'A quiet mismatch cannot become its own accepted baseline');
+});
+
+test('fresh reload must retain both exact committed scroll and state, with true reload lifecycle and useful focus', () => {
+  const baseline = returned();
+  const fresh = { ...baseline, timeOrigin: 101, navigationType: 'reload', probe: { shows: [event(false, 101)], hides: [] } };
+  assert.equal(pageMenuReloadRestored(fresh, baseline), true);
+  for (const change of [{ scroll: 219 }, { history: { ...fresh.history, scroll: 219 } }, { history: undefined },
+    { navigationType: 'navigate' }, { navigationType: 'back_forward' }, { timeOrigin: 100 },
+    { query: '' }, { rows: [] }, { focus: { visible: false } }, { menuOpen: true }]) {
+    assert.equal(pageMenuReloadRestored({ ...fresh, ...change }, baseline), false, JSON.stringify(change));
+  }
+  assert.equal(pageMenuReloadRestored(fresh, { ...baseline, scroll: 219 }), false);
+});
+
+function completeRoundTripFixture(repeat) {
+  const code = verifyPageMenuReturn.toString();
+  const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
+  const src = { ...source(), menuOpen: false, summaryVisible: true };
+  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 6 }, () => ({ visible: true, box: { height: 50 } })) };
+  const destinationHref = 'http://127.0.0.1:9999/directory#saved';
+  const sourceEntry = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]);
+  const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
+  const freshDestination = timeOrigin => ({ ...forwardFixture({ fresh: true }).actual, timeOrigin,
+    probe: { shows: [event(false, timeOrigin, { href: destinationHref })], hides: [] } });
+  const destination = freshDestination(200), primary = returned();
+  const back = count => ({ ...returned(), nativeHistory: sourceEntry, probe: {
+    shows: [event(false), ...Array.from({ length: count }, () => event(true))],
+    hides: Array.from({ length: count }, () => event(true, 100, { menuOpen: true }))
+  } });
+  const finalBack = repeat ? back(3) : primary;
+  const reload = { ...finalBack, timeOrigin: 300, navigationType: 'reload', probe: { shows: [event(false, 300)], hides: [] } };
+  const keyboard = { ...(repeat ? reload : primary), scroll: 219,
+    focus: { visible: true, inMenu: false, keyboardRing: true, href: '/' } };
+  const states = [src, src, opened, destination, primary,
+    ...(repeat ? [freshDestination(201), back(2), freshDestination(202), finalBack, finalBack, reload] : []), keyboard];
+  let samples = 0, entries = 0;
+  const evidence = [], calls = [];
+  const globals = { URL, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999', evidence,
+    pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
+    pageMenuHistoryTraversalClassification, pageMenuReloadSourceReady, pageMenuReloadRestored, historySnapshot: async () => {},
+    open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
+    client: { call: async (method, params) => calls.push({ method, params }) },
+    entry: async () => (++entries === 2 ? destinationEntry : sourceEntry), assert: (ok, label) => assert.ok(ok, label),
+    settled: async (predicate, label) => {
+      const state = states[samples++]; assert.ok(state, `Unexpected state request: ${label}`);
+      assert.equal(Boolean(predicate(state)), true, label); return state;
+    }
+  };
+  return { run: vm.runInNewContext(`${closure}; roundTrip`, globals), evidence, calls };
+}
+
+for (const repeat of [true, false]) test(`actual orchestration separates committed reload from native Tab (repeat=${repeat})`, async () => {
+  const fixture = completeRoundTripFixture(repeat);
+  await fixture.run({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: 'library', name: 'reload-order', repeat });
+  const record = fixture.evidence[0];
+  assert.equal(record.phase, 'complete'); assert.equal(record.keyboard.scroll, 219); assert.equal(record.keyboard.history.scroll, 240);
+  assert.equal(record.keyboardAfter, repeat ? 'fresh-reload' : 'persisted-back');
+  const reloadIndex = fixture.calls.findIndex(call => call.method === 'Page.reload');
+  const tabIndex = fixture.calls.findIndex(call => call.method === 'Input.dispatchKeyEvent' && call.params.key === 'Tab');
+  assert.ok(tabIndex >= 0);
+  if (repeat) {
+    assert.ok(reloadIndex >= 0 && reloadIndex < tabIndex);
+    assert.equal(record.reloadSource.scroll, 240); assert.equal(record.reloadSource.history.scroll, 240);
+    assert.equal(record.reload.scroll, 240); assert.equal(record.reload.history.scroll, 240);
+    assert.notEqual(record.reload.timeOrigin, record.reloadSource.timeOrigin);
+    assert.equal(record.reload.probe.shows[0].persisted, false); assert.equal(record.keyboard.timeOrigin, record.reload.timeOrigin);
+  } else {
+    assert.equal(reloadIndex, -1); assert.equal(record.reloadSource, undefined);
+    assert.equal(record.keyboard.timeOrigin, record.back.timeOrigin); assert.equal(record.back.probe.shows.at(-1).persisted, true);
+  }
 });
