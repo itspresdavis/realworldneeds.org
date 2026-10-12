@@ -15,7 +15,8 @@ const bounded = async (task, timeoutMs = 5000) => {
 // and a native outside click whose mousedown deliberately leaves focus in place.
 // No DOM state, production code, history lifecycle, or synthetic input is used.
 export function observePageMenuDismissal() {
-  const probe = globalThis.__rwnMenuDismissal = { events: [], ids: new WeakMap(), sequence: 0, preventEscape: false, retainPointer: false };
+  const probe = globalThis.__rwnMenuDismissal = { events: [], ids: new WeakMap(), sequence: 0, preventEscape: false, retainPointer: false,
+    breakpoint: null, breakpointTrace: [], traceOrder: 0, traceEvents: 0, traceDropped: 0 };
   for (const type of ['keydown', 'mousedown', 'click']) window.addEventListener(type, event => {
     const outside = !document.querySelector('.rwn-page-menu')?.contains(event.target);
     if (type === 'keydown' && event.key === 'Escape' && probe.preventEscape) { probe.preventEscape = false; event.preventDefault(); }
@@ -23,6 +24,29 @@ export function observePageMenuDismissal() {
     const entry = { type, key: event.key || '', trusted: event.isTrusted, outside, prevented: event.defaultPrevented };
     probe.events.push(entry);
     setTimeout(() => { entry.prevented = event.defaultPrevented; }, 0);
+  }, true);
+  // Separate read-only diagnostics cannot alter the ordinary input-count oracle.
+  // Capture structural state only: defer CSS reads so observation cannot force
+  // style resolution before the native blur/resize handlers run.
+  for (const type of ['focusin', 'focusout', 'resize']) window.addEventListener(type, event => {
+    if (!probe.breakpoint) return;
+    const menu = document.querySelector('.rwn-page-menu');
+    const describe = node => {
+      if (!node) return null;
+      if (!probe.ids.has(node)) probe.ids.set(node, ++probe.sequence);
+      return { key: probe.ids.get(node), tag: node.tagName || (node === window ? 'WINDOW' : ''), id: node.id || '',
+        href: node.getAttribute?.('href') || '', inMenu: Boolean(node.nodeType && menu?.contains(node)) };
+    };
+    const source = { event: ++probe.traceEvents, type, label: probe.breakpoint, trusted: event.isTrusted,
+      target: describe(event.target), relatedTarget: describe(event.relatedTarget) };
+    const record = phase => {
+      const css = phase === 'after-dispatch' && menu ? getComputedStyle(menu) : null;
+      probe.breakpointTrace.push({ ...source, order: ++probe.traceOrder, phase, time: performance.now(),
+        viewport: { width: innerWidth, height: innerHeight }, active: describe(document.activeElement),
+        documentFocused: document.hasFocus(), menu: { open: Boolean(menu?.open), ...(css ? { display: css.display, visibility: css.visibility } : {}) } });
+      if (probe.breakpointTrace.length > 200) { probe.breakpointTrace.shift(); probe.traceDropped++; }
+    };
+    record('capture'); setTimeout(() => record('after-dispatch'), 0);
   }, true);
 }
 
@@ -51,7 +75,7 @@ export function pageMenuDismissalSnapshot(base) {
     focus: { key: active && probe ? probe.ids.get(active) : null, tag: active?.tagName || '', visible,
       inMenu: Boolean(active && menu?.contains(active)), inHeader: Boolean(active && header?.contains(active)),
       query: Boolean(active?.matches('[data-directory-query]')), body: Boolean(active && active === doc?.body) },
-    events: probe?.events || [] };
+    events: probe?.events || [], breakpointTrace: probe?.breakpointTrace || [], breakpointTraceDropped: probe?.traceDropped || 0 };
 }
 
 export function pageMenuDismissalViolations(actual, expected, { open, focus, focusKey, scrollY } = {}) {
@@ -189,16 +213,24 @@ export async function verifyPageMenuDismissal({ client, host, serviceUrl, naviga
       await open(expected); await key('Tab');
       record.reloadRepeat = await escape(expected, await settle(expected, { open: true, focus: 0 }));
       if (width === 900) {
-        await key('Enter'); await key('Tab');
-        record.inclusive900 = await settle(expected, { open: true, focus: 0 });
-        await resize(901, height);
-        record.desktop901 = await settle({ ...expected, width: 901 }, { open: false, focus: 'header' }, state => state.menuDisplay === 'none');
-        await resize(900, height); await settle(expected, { open: false });
-        record.resizeRepeat = await escape(expected, await open(expected));
-        await resize(901, height);
-        record.closedSummary901 = await settle({ ...expected, width: 901 }, { open: false, focus: 'header' }, state => state.menuDisplay === 'none');
-        await resize(900, height);
-        record.closedResizeRepeat = await escape(expected, await open(expected));
+        record.breakpointRepeats = [];
+        for (let cycle = 1; cycle <= 3; cycle++) {
+          current = `${name}-${width}x${height}-breakpoint-${cycle}`;
+          const transition = { cycle, instrumented: cycle > 1 }; record.breakpointRepeats.push(transition);
+          const label = value => cycle === 1 ? Promise.resolve() : read(`globalThis.__rwnMenuDismissal.breakpoint = ${JSON.stringify(`${value}-${cycle}`)}`);
+          await label('open-link'); await key('Enter'); await key('Tab');
+          transition.inclusive900 = await settle(expected, { open: true, focus: 0 });
+          await resize(901, height);
+          transition.desktop901 = await settle({ ...expected, width: 901 }, { open: false, focus: 'header' }, state => state.menuDisplay === 'none');
+          await label('return-from-link'); await resize(900, height); await settle(expected, { open: false });
+          transition.resizeRepeat = await escape(expected, await open(expected));
+          await label('closed-summary'); await resize(901, height);
+          transition.closedSummary901 = await settle({ ...expected, width: 901 }, { open: false, focus: 'header' }, state => state.menuDisplay === 'none');
+          await label('return-from-summary'); await resize(900, height);
+          transition.closedResizeRepeat = await escape(expected, await open(expected));
+        }
+        await read('globalThis.__rwnMenuDismissal.breakpoint = null');
+        current = `${name}-${width}x${height}`;
       }
       if (width === 390 && height === 844) await bounded(() => capture(client, `page-menu-dismissal-${name}-closed.png`));
       const events = beforeReload.events;

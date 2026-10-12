@@ -108,10 +108,78 @@ test('observer guards only one native Escape or outside mousedown and records fi
   assert.ok(probe.events.every(e => e.trusted));
 });
 
+function breakpointObserverFixture() {
+  const handlers = {}, pending = [], registrations = [];
+  const node = (tagName, href = '') => Object.freeze({ tagName, nodeType: 1, id: '', getAttribute: () => href,
+    focus: () => { throw new Error('Observer must not move focus'); } });
+  const summary = node('SUMMARY'), link = node('A', '/sources'), brand = node('A', '/'), body = node('BODY');
+  const state = { active: summary, open: true, display: 'block', focused: true, time: 0, dispatching: false, styleReads: 0 };
+  const menu = Object.freeze({ contains: target => target === summary || target === link, get open() { return state.open; } });
+  const context = { innerWidth: 900, innerHeight: 250, performance: { now: () => ++state.time },
+    window: { addEventListener: (type, fn, capture) => { handlers[type] = fn; registrations.push({ type, capture }); } },
+    document: { querySelector: () => menu, get activeElement() { return state.active; }, hasFocus: () => state.focused },
+    getComputedStyle: target => {
+      assert.equal(state.dispatching, false, 'A capture-phase style read would perturb native blur/resize ordering');
+      assert.equal(target, menu); state.styleReads++; return { display: state.display, visibility: 'visible' };
+    },
+    setTimeout: fn => pending.push(fn) };
+  vm.runInNewContext(`(${observePageMenuDismissal.toString()})()`, context);
+  const dispatch = (type, target, relatedTarget = null) => {
+    state.dispatching = true;
+    try { handlers[type]({ target, relatedTarget, isTrusted: true,
+      preventDefault: () => { throw new Error('Read-only trace must not prevent events'); },
+      stopPropagation: () => { throw new Error('Read-only trace must not intercept events'); } }); }
+    finally { state.dispatching = false; }
+  };
+  return { context, state, summary, link, brand, body, probe: context.__rwnMenuDismissal, registrations, dispatch,
+    flush: () => pending.splice(0).forEach(fn => fn()), pending };
+}
+
+test('breakpoint trace observes capture and post-dispatch focus/resize order without mixing input evidence', () => {
+  const f = breakpointObserverFixture(), { probe, state, context } = f;
+  f.dispatch('focusout', f.summary); assert.equal(probe.breakpointTrace.length, 0); assert.equal(f.pending.length, 0);
+  probe.breakpoint = 'open-link-1'; context.innerWidth = 901; state.active = f.body; state.display = 'none';
+  f.dispatch('focusout', f.link);
+  f.dispatch('resize', context.window);
+  state.active = f.brand; state.open = false;
+  f.dispatch('focusin', f.brand, f.link);
+  const capture = probe.breakpointTrace;
+  assert.deepEqual(Array.from(capture, event => [event.order, event.event, event.type, event.phase]),
+    [[1, 1, 'focusout', 'capture'], [2, 2, 'resize', 'capture'], [3, 3, 'focusin', 'capture']]);
+  assert.equal(capture[0].target.tag, 'A'); assert.equal(capture[0].target.href, '/sources'); assert.equal(capture[0].target.inMenu, true);
+  assert.equal(capture[0].relatedTarget, null); assert.equal(capture[0].active.tag, 'BODY'); assert.equal(capture[0].viewport.width, 901);
+  assert.equal(capture[0].menu.display, undefined); assert.equal(capture[0].menu.visibility, undefined);
+  assert.equal(state.styleReads, 0); assert.equal(capture[0].menu.open, true); assert.equal(capture[0].documentFocused, true);
+  assert.equal(capture[1].target.tag, 'WINDOW'); assert.equal(capture[1].target.inMenu, false);
+  assert.equal(capture[2].relatedTarget.key, capture[0].target.key); assert.equal(capture[2].active.href, '/');
+  probe.breakpoint = null; state.focused = false; f.flush();
+  assert.deepEqual(Array.from(probe.breakpointTrace.slice(3), event => [event.order, event.event, event.type, event.phase]),
+    [[4, 1, 'focusout', 'after-dispatch'], [5, 2, 'resize', 'after-dispatch'], [6, 3, 'focusin', 'after-dispatch']]);
+  for (const event of probe.breakpointTrace.slice(3)) {
+    assert.equal(event.label, 'open-link-1'); assert.equal(event.active.key, capture[2].active.key);
+    assert.equal(event.documentFocused, false); assert.equal(event.menu.open, false); assert.equal(event.trusted, true);
+    assert.equal(event.menu.display, 'none'); assert.equal(event.menu.visibility, 'visible');
+  }
+  assert.equal(probe.events.length, 0); assert.equal(probe.traceDropped, 0); assert.equal(state.styleReads, 3);
+  assert.ok(f.registrations.every(entry => entry.capture === true));
+  assert.equal(state.active, f.brand, 'Observation did not move the active element');
+});
+
+test('breakpoint trace retains only the latest 200 observations and counts discarded entries', () => {
+  const f = breakpointObserverFixture(); f.probe.breakpoint = 'closed-summary-3';
+  for (let index = 0; index < 105; index++) { f.dispatch('resize', f.context.window); f.flush(); }
+  assert.equal(f.probe.breakpointTrace.length, 200); assert.equal(f.probe.traceDropped, 10);
+  assert.equal(f.probe.breakpointTrace[0].order, 11); assert.equal(f.probe.breakpointTrace.at(-1).order, 210);
+  assert.equal(f.probe.traceEvents, 105); assert.equal(f.probe.events.length, 0);
+  f.probe.breakpoint = null; f.dispatch('focusin', f.brand, f.summary);
+  assert.equal(f.probe.breakpointTrace.at(-1).order, 210); assert.equal(f.pending.length, 0);
+});
+
 test('snapshot handles detached document and preserves supplied base identity', () => {
   const value = vm.runInNewContext(`(${pageMenuDismissalSnapshot.toString()})({ href: 'before', ready: false })`, {});
   assert.equal(value.href, 'before'); assert.equal(value.native, false); assert.equal(value.focus.key, null);
   assert.equal(value.focus.visible, false); assert.equal(value.focus.body, false); assert.equal(value.outsidePoint, null);
+  assert.equal(value.breakpointTrace.length, 0); assert.equal(value.breakpointTraceDropped, 0);
 });
 
 test('snapshot assigns stable exact-node IDs and finds a genuinely inert outside point', () => {
@@ -124,9 +192,10 @@ test('snapshot assigns stable exact-node IDs and finds a genuinely inert outside
   const document = { activeElement: summary, body: {}, querySelector: selector => selector === '.rwn-page-menu' ? menu : null,
     elementFromPoint: x => x < 14 ? header : x < 150 ? brand : summary };
   const globals = { document, innerWidth: 320, innerHeight: 250, getComputedStyle: () => ({ display: 'block', visibility: 'visible' }),
-    __rwnMenuDismissal: { ids: new WeakMap(), sequence: 0, events: [] } };
+    __rwnMenuDismissal: { ids: new WeakMap(), sequence: 0, events: [], breakpointTrace: [{ order: 11 }], traceDropped: 10 } };
   const snapshot = () => vm.runInNewContext(`(${pageMenuDismissalSnapshot.toString()})({ ready: true })`, globals);
   const initial = snapshot(); assert.equal(initial.native, true); assert.equal(initial.focus.visible, true);
+  assert.equal(initial.breakpointTrace[0].order, 11); assert.equal(initial.breakpointTraceDropped, 10);
   assert.equal(initial.focus.inMenu, true); assert.equal(initial.focus.inHeader, true);
   assert.deepEqual(JSON.parse(JSON.stringify(initial.outsidePoint)), { x: 2, y: 33 });
   assert.equal(snapshot().focus.key, initial.focus.key);
@@ -174,6 +243,34 @@ test('ordinary dismissal helper verifies its own new consumed Escape, never an e
   await assert.rejects(run([earlier, ordinary, ordinary]), /Ordinary owned Escape was not consumed/);
 });
 
+test('actual repeated breakpoint loop keeps every desktop transition closed and visibly header-focused', async () => {
+  const source = verifyPageMenuDismissal.toString(), sizes = [], desktop = [], record = {}, options = [], labels = [];
+  const start = source.indexOf('      if (width === 900) {');
+  const block = source.slice(start, source.indexOf('      if (width === 390 && height === 844) await bounded', start));
+  await vm.runInNewContext(`(async () => { ${block} })()`, { width: 900, height: 250, name: 'trust', current: '', record,
+    expected: { ...expected(), width: 900 }, key: async () => {}, read: async expression => labels.push(expression),
+    resize: async (width, height) => sizes.push([width, height]),
+    settle: async (identity, wanted, predicate) => {
+      options.push(wanted);
+      if (identity.width === 901) {
+        assert.equal(wanted.open, false); assert.equal(wanted.focus, 'header');
+        assert.equal(predicate({ menuDisplay: 'none' }), true); assert.equal(predicate({ menuDisplay: 'block' }), false);
+        desktop.push(identity);
+      }
+      return { ...fixture(), ...identity };
+    }, open: async () => fixture(), escape: async () => fixture() });
+  assert.equal(record.breakpointRepeats.length, 3); assert.equal(desktop.length, 6);
+  assert.equal(labels.length, 9); assert.match(labels[0], /open-link-2/); assert.match(labels[4], /open-link-3/);
+  assert.ok(labels.every(value => !/-1/.test(value)), 'The first complete pair runs without trace instrumentation');
+  assert.equal(labels.at(-1), 'globalThis.__rwnMenuDismissal.breakpoint = null');
+  assert.deepEqual(sizes, Array.from({ length: 3 }, () => [[901, 250], [900, 250], [901, 250], [900, 250]]).flat());
+  assert.equal(options.filter(value => value.open === true && value.focus === 0).length, 3);
+  for (const [index, transition] of record.breakpointRepeats.entries()) {
+    assert.equal(transition.cycle, index + 1); assert.equal(transition.instrumented, index > 0);
+    for (const key of ['inclusive900', 'desktop901', 'resizeRepeat', 'closedSummary901', 'closedResizeRepeat']) assert.ok(transition[key]);
+  }
+});
+
 test('CI matrix preserves real native inputs, existing history suites and same-document identity', async () => {
   assert.deepEqual(PAGE_MENU_DISMISSAL_VIEWPORTS, [[320, 780], [390, 844], [320, 250], [390, 250], [900, 250]]);
   const source = verifyPageMenuDismissal.toString();
@@ -181,6 +278,8 @@ test('CI matrix preserves real native inputs, existing history suites and same-d
   for (const requirement of ['Input.dispatchMouseEvent', 'Input.dispatchKeyEvent', 'Input.insertText', 'Page.reload',
     'preventedEscape', 'outsideEscape', 'outsideKept', 'outsideRepaired', 'queryEscape', 'reloadRepeat', 'inclusive900', 'desktop901',
     'closedSummary901', 'closedResizeRepeat', 'page-menu-dismissal.json', 'Runtime.exceptionThrown']) assert.ok(source.includes(requirement), requirement);
+  assert.match(source, /for \(let cycle = 1; cycle <= 3; cycle\+\+\)/);
+  assert.match(source, /record.breakpointRepeats.push\(transition\)/);
   assert.match(source, /const \{ timeOrigin, \.\.\.reloadExpected \} = expected/);
   assert.match(source, /previousTimeOrigin: timeOrigin/);
   assert.doesNotMatch(source, /timeOrigin: undefined|\.focus\(|\.click\(|\.dispatchEvent\(|\.scrollIntoView\(|\.open\s*=|scrollTop\s*=(?!=)|pageshow|pagehide|Page\.navigateToHistoryEntry|setBypassServiceWorker|setCacheDisabled/);

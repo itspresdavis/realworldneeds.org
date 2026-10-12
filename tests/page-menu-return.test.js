@@ -20,12 +20,12 @@ function fixture({ open = true, active = 'link', narrow = true, present = true }
     focus(options) { focused.push({ name, options: JSON.parse(JSON.stringify(options)) }); document.activeElement = this; }
   }]));
   const header = { querySelectorAll: () => [nodes.brand, nodes.desktop] };
-  const menu = { open, contains: node => [nodes.summary, nodes.link].includes(node),
+  const menu = { addEventListener: listen, open, contains: node => [nodes.summary, nodes.link].includes(node),
     removeAttribute(name) { assert.equal(name, 'open'); mutations.push(name); this.open = false; },
     querySelector: () => nodes.summary, closest: () => header };
-  const document = { addEventListener: listen, activeElement: nodes[active], querySelector(selector) { assert.equal(selector, '.rwn-page-menu'); return present ? menu : null; } };
+  const document = { body: nodes.body, hasFocus: () => true, addEventListener: listen, activeElement: nodes[active], querySelector(selector) { assert.equal(selector, '.rwn-page-menu'); return present ? menu : null; } };
   const context = { document, window: { innerHeight: 844, innerWidth: narrow ? 390 : 1180, addEventListener: listen },
-    getComputedStyle: () => ({ visibility: 'visible' }) };
+    getComputedStyle: node => ({ visibility: 'visible', display: node === menu && !narrow ? 'none' : 'block' }) };
   vm.runInNewContext(source, context);
   const fire = (type, event = {}) => {
     const input = { target: document.activeElement, preventDefault() { this.defaultPrevented = true; }, ...event };
@@ -83,7 +83,7 @@ test('closed menus, missing generated headers and unrelated same-document events
   const f = fixture();
   for (const type of ['hashchange', 'popstate', 'pagehide']) f.fire(type, { key: 'Escape', persisted: true });
   assert.equal(f.menu.open, true);
-  assert.deepEqual(Object.keys(f.events).sort(), ['click', 'keydown', 'pageshow', 'resize']);
+  assert.deepEqual(Object.keys(f.events).sort(), ['click', 'focusout', 'keydown', 'pageshow', 'resize']);
   assert.ok(Object.values(f.events).every(listeners => listeners.length === 1), 'one listener per event and no extra state owners');
 });
 
@@ -100,7 +100,7 @@ test('menu can reopen normally and each later retained return repairs it once', 
 });
 
 test('generated header lifecycle is bounded and does not write browsing state or navigate', () => {
-  assert.ok(Buffer.byteLength(source) <= 1_500, 'shared generated header lifecycle and dismissal stay below 1.5 KB');
+  assert.ok(Buffer.byteLength(source) <= 2_000, 'shared generated header lifecycle, dismissal and native focus repair stay below 2 KB');
   assert.doesNotMatch(source, /localStorage|sessionStorage|history\.|location\.|scrollTo|scrollIntoView|fetch\(|setTimeout|requestAnimationFrame|querySelectorAll\([^)]*directory/);
 });
 
@@ -195,4 +195,68 @@ test('no visible focus target, a closed menu or absent header never causes focus
     for (const type of ['keydown', 'click', 'resize']) missing.fire(type, { key: 'Escape', target: missing.nodes.body });
     assert.deepEqual(missing.mutations, []); assert.deepEqual(missing.focused, []);
   }
+});
+
+test('responsive focusout repairs browser-cleared menu focus before or after resize', () => {
+  for (const open of [true, false]) for (const resizeFirst of [true, false]) {
+    const f = fixture({ narrow: false, open, active: 'body' });
+    if (resizeFirst) f.fire('resize');
+    f.fire('focusout', { target: open ? f.nodes.link : f.nodes.summary, relatedTarget: null });
+    if (!resizeFirst) f.fire('resize');
+    assert.equal(f.menu.open, false);
+    assert.equal(f.document.activeElement, f.nodes.brand, 'browser-cleared menu focus must reach a visible header target');
+    assert.deepEqual(f.focused, [{ name: 'brand', options: { preventScroll: true } }]);
+  }
+});
+
+test('responsive focus repair never claims deliberate focus moves, visible controls or an unfocused document', () => {
+  for (const change of [
+    f => { f.context.window.innerWidth = 900; },
+    f => { f.context.getComputedStyle = () => ({ display: 'block', visibility: 'visible' }); },
+    f => { f.document.hasFocus = () => false; },
+    f => { f.document.activeElement = f.nodes.input; },
+    f => { f.nodes.link.closest = () => f.nodes.link; }
+  ]) {
+    const f = fixture({ narrow: false, active: 'body' }); change(f);
+    f.fire('focusout', { target: f.nodes.link, relatedTarget: null });
+    assert.equal(f.menu.open, true); assert.deepEqual(f.focused, []);
+  }
+  for (const relatedTarget of ['input', 'brand', 'body']) {
+    const f = fixture({ narrow: false, active: 'body' });
+    f.fire('focusout', { target: f.nodes.link, relatedTarget: f.nodes[relatedTarget] });
+    assert.equal(f.menu.open, true); assert.deepEqual(f.focused, []);
+  }
+  const closed = fixture({ narrow: false, open: false, active: 'body' }); closed.fire('resize');
+  assert.equal(closed.document.activeElement, closed.nodes.body); assert.deepEqual(closed.focused, [], 'closed menu cannot claim unrelated BODY focus');
+  const external = fixture({ narrow: false, active: 'body' });
+  external.fire('focusout', { target: external.nodes.input, relatedTarget: null });
+  assert.equal(external.menu.open, true); assert.deepEqual(external.focused, []);
+});
+
+test('reentrant responsive blur repairs once and preserves a new outside focus destination', () => {
+  for (const destination of ['brand', 'input']) {
+    const f = fixture({ narrow: false });
+    const remove = f.menu.removeAttribute.bind(f.menu);
+    f.menu.removeAttribute = name => {
+      remove(name);
+      f.document.activeElement = f.nodes.body;
+      f.fire('focusout', { target: f.nodes.link, relatedTarget: null });
+      if (destination === 'input') f.nodes.input.focus({ preventScroll: true });
+    };
+    f.fire('resize');
+    assert.equal(f.menu.open, false);
+    assert.equal(f.document.activeElement, f.nodes[destination]);
+    assert.equal(f.focused.filter(value => value.name === 'brand').length, 1, 'outer close cannot duplicate the nested repair');
+    assert.equal(f.focused.at(-1).name, destination, 'outer close cannot overwrite deliberate outside focus');
+  }
+  const f = fixture({ narrow: false });
+  const remove = f.menu.removeAttribute.bind(f.menu);
+  f.menu.removeAttribute = name => {
+    remove(name);
+    f.document.activeElement = f.nodes.input;
+    f.fire('focusout', { target: f.nodes.link, relatedTarget: f.nodes.input });
+  };
+  f.fire('resize');
+  assert.equal(f.document.activeElement, f.nodes.input);
+  assert.deepEqual(f.focused, [], 'deliberate outside focus during close requires no repair');
 });
