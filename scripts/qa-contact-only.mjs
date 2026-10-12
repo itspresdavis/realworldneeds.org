@@ -8,6 +8,47 @@ const check = (condition, message, detail) => {
 };
 
 // Serialized into the established CI browser client; no second browser process.
+export function contactHomepageSnapshot() {
+  const visible = node => {
+    const rect = node?.getBoundingClientRect();
+    return Boolean(rect?.width && rect?.height && getComputedStyle(node).visibility !== "hidden" && getComputedStyle(node).display !== "none");
+  };
+  const input = document.querySelector("#resourceSearch");
+  const banner = document.querySelector("[data-qa-fixture-banner]");
+  return {
+    presented: document.documentElement.classList.contains("rwn-professional") && document.documentElement.classList.contains("rwn-result-actions"),
+    inputReady: visible(input) && !input.disabled,
+    banner: visible(banner), bannerText: banner?.textContent.trim() || "",
+    rows: [...document.querySelectorAll("#resourceGrid .resource-card")].map(row => {
+      const link = row.querySelector(".result-row-link");
+      return {
+        id: row.dataset.resultResourceId, enhanced: row.dataset.resultEnhanced === "true",
+        href: link?.getAttribute("href"), text: link?.textContent.trim() || "", visible: visible(row) && visible(link)
+      };
+    })
+  };
+}
+
+export function isContactHomepageReady(state, expected) {
+  // Professional presentation replaces the initial trust copy. Real rendered
+  // fixture identities are the readiness contract, not that intermediate text.
+  return state.presented && state.inputReady && state.banner && state.bannerText.includes("SYNTHETIC LOCAL QA")
+    && state.rows.length === expected.length
+    && expected.every(resource => state.rows.some(row => row.id === resource.id && row.enhanced && row.visible && row.href === `/service/${encodeURIComponent(resource.id)}` && row.text.includes(resource.name)));
+}
+
+export function contactFailureSnapshot(expectedOrigin) {
+  const fixture = location.origin === expectedOrigin;
+  return {
+    fixture, url: fixture ? location.href : null, title: fixture ? document.title : null,
+    readyState: document.readyState, width: innerWidth, height: innerHeight,
+    serviceId: fixture ? document.querySelector("#service")?.dataset.serviceId || null : null,
+    searchRows: fixture ? document.querySelectorAll(".directory-global-results .directory-global-result-wrap").length : null,
+    savedRows: fixture ? document.querySelectorAll("[data-saved-list] .saved-service-row").length : null,
+    bodyText: fixture ? (document.body?.innerText || "").slice(0, 4000) : null
+  };
+}
+
 export function contactServiceSnapshot() {
   const visible = node => {
     const rect = node?.getBoundingClientRect();
@@ -164,9 +205,10 @@ export async function verifyContactOnly({ client, navigate, evaluate, capture, q
     await client.call("Network.setBypassServiceWorker", { bypass: true });
     await client.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
     await open("/");
-    await wait("document.querySelector('#principleGrid')?.textContent.includes('Synthetic local QA only') && document.querySelector('#resourceSearch')", "Synthetic homepage did not initialize; check fixture exports");
+    const expectedHomepage = app.resources.map(({ id, name }) => ({ id, name }));
+    await wait(`(${isContactHomepageReady})((${contactHomepageSnapshot})(), ${JSON.stringify(expectedHomepage)})`, "Synthetic homepage did not initialize its rendered fixture results");
     await capture(client, "contact-only-homepage.png");
-    evidence.push({ label: "homepage", initialized: true });
+    evidence.push({ label: "homepage", ...await evaluate(client, `(${contactHomepageSnapshot})()`) });
 
     for (const width of [1440, 390, 320]) {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
@@ -230,7 +272,8 @@ export async function verifyContactOnly({ client, navigate, evaluate, capture, q
     await auditResources();
     console.log(`Contact-only rendered QA passed: ${evidence.length} cases, synthetic local app only; service facts/copy, shortcodes, search, Saved, failed-probe recovery, physical directions and 320px URL wrapping.`);
   } catch (error) {
-    evidence.push({ error: error.message });
+    const context = await evaluate(client, `(${contactFailureSnapshot})(${JSON.stringify(app.host)})`).catch(failure => ({ unavailable: failure.message }));
+    evidence.push({ error: error.message, context });
     await capture(client, "contact-only-failure.png").catch(() => {});
     throw error;
   } finally {

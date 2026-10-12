@@ -168,6 +168,7 @@ async function run() {
     client = new CdpClient(target.webSocketDebuggerUrl);
     await client.connect();
     await Promise.all([client.call("Page.enable"), client.call("Runtime.enable")]);
+    await verifyContactOnly({ client, navigate, evaluate, capture, qaDir: QA_DIR });
 
     const serviceUrl = `${HOST}/service/${encodeURIComponent(resource.id)}`;
     await client.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
@@ -379,7 +380,6 @@ async function run() {
     await verifyFooterReflow({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
     await verifyPageMenuReturn({ client, host: HOST, navigate, evaluate, capture });
     await verifyPageMenuReflow({ client, host: HOST, serviceUrl, navigate, evaluate, capture });
-    await verifyContactOnly({ client, navigate, evaluate, capture, qaDir: QA_DIR });
 
     console.log(`RWN service/directory mobile QA passed for ${resource.id}: verified source action, one clear Directions path, phone contact, current-source verification, directory search actions, above-fold task flow, private map deep-link, touch targets, and no overflow.`);
   } finally {

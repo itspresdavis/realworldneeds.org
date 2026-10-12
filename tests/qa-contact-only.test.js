@@ -3,12 +3,13 @@ import { createHash } from "node:crypto";
 import { readFile, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import vm from "node:vm";
 import test from "node:test";
 import { phoneLinks } from "../src/utils/phone.js";
 import { validateResourceLocation } from "../src/utils/resource-location.js";
 import { resources } from "../src/data/resources.js";
 import { createContactFixtureApp, contactFixtureResources, contactFixtureLabel } from "../scripts/qa-contact-fixture-app.mjs";
-import { assertContactRows, assertContactService } from "../scripts/qa-contact-only.mjs";
+import { assertContactRows, assertContactService, contactHomepageSnapshot, isContactHomepageReady, contactFailureSnapshot } from "../scripts/qa-contact-only.mjs";
 
 const contacts = contactFixtureResources.filter(resource => resource.locationPrecision === "contact-only");
 const digest = async path => {
@@ -30,6 +31,63 @@ test("synthetic contact fixtures preserve domestic shortcodes and stay outside t
   assert.ok(contacts[1].accessUrl.length > 240);
   assert.match(new URL(contacts[1].accessUrl).pathname, /^\/[a-z]{280,}$/);
   assert.equal(contacts[2].collectionStatus, "Temporarily closed");
+});
+
+test("homepage readiness uses rendered fixture identities after professional copy replacement", () => {
+  const state = {
+    presented: true, inputReady: true, banner: true, bannerText: contactFixtureLabel,
+    rows: contactFixtureResources.map(resource => ({ id: resource.id, enhanced: true, href: `/service/${resource.id}`, text: resource.name, visible: true }))
+  };
+  assert.equal(isContactHomepageReady(state, contactFixtureResources), true);
+  assert.doesNotMatch(contactHomepageSnapshot.toString(), /principleGrid|trustPrinciples/);
+  for (const change of [
+    { presented: false }, { inputReady: false }, { banner: false }, { bannerText: "Production directory" },
+    { rows: state.rows.slice(1) }, { rows: state.rows.map(row => ({ ...row, visible: false })) },
+    { rows: state.rows.map(row => ({ ...row, enhanced: false })) }, { rows: state.rows.map(row => ({ ...row, href: "/" })) },
+    { rows: state.rows.map(row => ({ ...row, id: "actual-catalog-record" })) },
+    { rows: state.rows.map(row => ({ ...row, text: "Uninitialized placeholder" })) }
+  ]) assert.equal(isContactHomepageReady({ ...state, ...change }, contactFixtureResources), false);
+});
+
+test("homepage snapshot reads enhanced result links after transient buttons are replaced", () => {
+  const box = () => ({ width: 250, height: 60 });
+  const input = { disabled: false, getBoundingClientRect: box };
+  const banner = { textContent: contactFixtureLabel, getBoundingClientRect: box };
+  const rows = contactFixtureResources.map(resource => ({
+    dataset: { resultResourceId: resource.id, resultEnhanced: "true" }, getBoundingClientRect: box,
+    querySelector: selector => selector === ".result-row-link" ? {
+      textContent: resource.name, getBoundingClientRect: box,
+      getAttribute: name => name === "href" ? `/service/${resource.id}` : null
+    } : null
+  }));
+  const document = {
+    documentElement: { classList: { contains: value => ["rwn-professional", "rwn-result-actions"].includes(value) } },
+    querySelector: selector => ({ "#resourceSearch": input, "[data-qa-fixture-banner]": banner }[selector]),
+    querySelectorAll: selector => selector === "#resourceGrid .resource-card" ? rows : []
+  };
+  const snapshot = vm.runInNewContext(`(${contactHomepageSnapshot})()`, { document, getComputedStyle: () => ({ visibility: "visible", display: "block" }) });
+  assert.equal(isContactHomepageReady(snapshot, contactFixtureResources), true);
+  assert.equal(snapshot.rows.length, 6);
+  assert.equal(snapshot.rows[0].href, "/service/qa-contact-phone");
+});
+
+test("fixture failure evidence includes bounded document context without capturing other origins", () => {
+  const origin = "http://127.0.0.1:4175";
+  const context = {
+    location: { origin, href: `${origin}/service/qa-contact-phone` }, innerWidth: 390, innerHeight: 844,
+    document: { title: "Synthetic QA", readyState: "complete", body: { innerText: "x".repeat(5000) },
+      querySelector: () => ({ dataset: { serviceId: "qa-contact-phone" } }), querySelectorAll: () => [] }
+  };
+  const snapshot = vm.runInNewContext(`(${contactFailureSnapshot})(${JSON.stringify(origin)})`, context);
+  assert.equal(snapshot.url, context.location.href);
+  assert.equal(snapshot.title, "Synthetic QA");
+  assert.equal(snapshot.readyState, "complete");
+  assert.equal(snapshot.serviceId, "qa-contact-phone");
+  assert.equal(snapshot.width, 390);
+  assert.equal(snapshot.bodyText.length, 4000);
+  const outside = vm.runInNewContext(`(${contactFailureSnapshot})('http://127.0.0.1:9999')`, context);
+  assert.equal(outside.fixture, false);
+  for (const field of ["url", "title", "serviceId", "bodyText", "searchRows", "savedRows"]) assert.equal(outside[field], null);
 });
 
 test("full isolated fixture build has complete homepage exports, local-only labels and a static loopback server", { timeout: 60_000 }, async () => {
@@ -139,6 +197,9 @@ test("existing CI browser harness invokes isolated fixture QA and uses its scree
   const harness = await readFile("scripts/browser-service-qa.mjs", "utf8");
   assert.match(harness, /import \{ verifyContactOnly \} from "\.\/qa-contact-only\.mjs"/);
   assert.match(harness, /await verifyContactOnly\(\{ client, navigate, evaluate, capture, qaDir: QA_DIR \}\)/);
+  const fixtureStart = harness.indexOf("await verifyContactOnly(");
+  assert.ok(fixtureStart > harness.indexOf('await Promise.all([client.call("Page.enable"), client.call("Runtime.enable")])'));
+  assert.ok(fixtureStart < harness.indexOf("const serviceUrl ="), "fixture checks fail early, and existing checks exercise restored browser state afterward");
   const helper = await readFile("scripts/qa-contact-fixture-app.mjs", "utf8");
   assert.doesNotMatch(helper, /from ["'][^"']*(?:api|server)\//);
   const qa = await readFile("scripts/qa-contact-only.mjs", "utf8");
