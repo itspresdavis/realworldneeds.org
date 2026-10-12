@@ -241,10 +241,15 @@ test("result metadata separates reviewed source dates from availability and reac
 
 test("cleared searches and failed restored searches still have a visible return-focus owner", async () => {
   for (const query of ["", "food"]) {
-    const { f, effects } = searchFixture({ query, restored: { shown: 60, focus: "", scroll: 900 } });
+    const { f, effects, frames } = searchFixture({ query, restored: { shown: 60, focus: "", scroll: 900 } });
     f.loadCatalog = async () => { throw new Error("Offline"); };
     await f.apply();
-    assert.equal(effects.cleared, 1); assert.equal(effects.focus, 1);
+    assert.equal(effects.cleared, 1, "clearing the UI remains synchronous");
+    if (!query) {
+      assert.equal(effects.focus, 0); assert.equal(effects.scroll, null); assert.equal(f.restorePending, true);
+      assert.equal(frames.length, 1); frames[0]();
+    }
+    assert.equal(effects.focus, 1);
     assert.equal(effects.scroll, 900); assert.equal(f.restorePending, false);
   }
 });

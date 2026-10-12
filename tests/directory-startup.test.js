@@ -584,3 +584,64 @@ test("Back to the pre-runtime Saved entry can Browse the accepted early return a
   assert.equal(f.scrolls.length, count + 1); assert.equal(f.scrolls.at(-1), 455);
   assert.equal(f.history.state.rwnDirectory.query, london);
 });
+
+
+for (const lateScroll of [9, 121]) test(`early cleared Browse restores actual position after a late native ${lateScroll}px scroll before its first frame`, async () => {
+  const f = fixture({ state: stale() }); f.type("WIC"); f.type(""); f.staticSavedBrowse(0);
+  f.document.readyState = "interactive"; f.start();
+  assert.equal(f.history.state.rwnDirectory.scroll, 0, "pending restoration must retain the captured target in history");
+  // CI observed the browser's native fragment scroll arriving after the
+  // synchronous empty restore and load/pageshow, but before the first rAF.
+  // Model that witnessed ordering, without another input or application call.
+  f.document.dispatch("DOMContentLoaded"); f.document.readyState = "complete";
+  f.window.dispatch("load"); f.window.dispatch("pageshow"); f.window.scrollY = lateScroll;
+  f.window.dispatch("scroll"); f.window.dispatch("scrollend");
+  f.frames();
+  assert.equal(f.window.scrollY, 0, "the actual viewport must return, not merely an earlier recorded scrollTo argument");
+  assert.deepEqual(f.scrolls, [0]); assertOrdinary(f);
+  assert.equal(f.history.state.rwnDirectory.scroll, 0); assert.equal(f.history.state.rwnDirectory.query, "");
+  assert.equal(f.document.activeElement, f.input); assert.equal(f.requests.length, 1, "useful return focus may warm the catalog once");
+  await f.resolve(); await f.flush(); f.frames();
+  assertOrdinary(f); assert.equal(f.window.scrollY, 0); assert.deepEqual(f.scrolls, [0]);
+});
+
+for (const type of ["wheel", "pointerdown", "keydown", "touchstart"]) test(`a newer ${type} cancels the queued empty Browse restoration`, () => {
+  const f = fixture(); f.type(""); f.staticSavedBrowse(0); f.start();
+  f.window.dispatch(type); f.window.scrollY = 321; f.document.activeElement = f.document.body;
+  const calls = f.scrolls.length; f.frames();
+  assert.equal(f.window.scrollY, 321); assert.equal(f.scrolls.length, calls);
+  assert.equal(f.document.activeElement, f.document.body); assertOrdinary(f);
+});
+
+test("an older empty Browse frame cannot restore a newer history entry before its catalog is ready", async () => {
+  const f = fixture(); f.type(""); f.staticSavedBrowse(0); f.start();
+  f.history.state = stale(); f.location.hash = ""; f.window.dispatch("popstate");
+  f.window.scrollY = 321; f.document.activeElement = f.document.body;
+  const calls = f.scrolls.length; f.frames();
+  assert.equal(f.requests.length, 1); assert.deepEqual(f.ids(), []);
+  assert.equal(f.window.scrollY, 321); assert.equal(f.scrolls.length, calls);
+  assert.equal(f.document.activeElement, f.document.body, "the older generation must not own the newer entry's focus");
+  await f.resolve(); f.frames();
+  assert.equal(f.input.value, "WIC"); assert.equal(f.country.value, "United States"); assert.equal(f.ids().length, 120);
+  assert.equal(f.window.scrollY, 900); assert.equal(f.scrolls.length, calls + 1);
+});
+
+test("newer typing cancels the queued empty Browse frame before its debounce", async () => {
+  const f = fixture(); f.type(""); f.staticSavedBrowse(0); f.start();
+  f.type(london); f.window.scrollY = 321; f.document.activeElement = f.document.body;
+  const calls = f.scrolls.length; f.frames();
+  assert.equal(f.window.scrollY, 321); assert.equal(f.scrolls.length, calls); assert.equal(f.document.activeElement, f.document.body);
+  await f.flush(); await f.resolve(); f.frames(); assertLondon(f);
+  assert.equal(f.window.scrollY, 321); assert.equal(f.scrolls.length, calls);
+});
+
+
+for (const destination of ["#saved", "#directory-search"]) test(`leaving for ${destination} cancels the queued empty Browse return`, () => {
+  const f = fixture(); f.type(""); f.staticSavedBrowse(0); f.start();
+  f.location.hash = destination; f.history.state = null;
+  if (destination === "#saved") f.shell.classList.add("has-saved-view");
+  f.window.dispatch("popstate"); f.window.scrollY = 321; f.document.activeElement = f.document.body;
+  const calls = f.scrolls.length; f.frames();
+  assert.equal(f.window.scrollY, 321); assert.equal(f.scrolls.length, calls); assert.equal(f.document.activeElement, f.document.body);
+  assert.equal(f.history.state, null); assert.equal(f.location.hash, destination);
+});
