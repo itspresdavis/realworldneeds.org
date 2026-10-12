@@ -1,3 +1,4 @@
+import { hasMapCoordinates } from "../src/utils/resource-location.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -116,8 +117,10 @@ test("sitemap includes need pages and individual service pages", async () => {
 
 test("compact map index contains only lightweight globe fields", async () => {
   const data = JSON.parse(await text("dist/data/map-index.json"));
-  assert.equal(data.resourceCount, resources.length);
-  assert.equal(data.resources.length, resources.length);
+  const mapped = resources.filter(hasMapCoordinates);
+  assert.equal(data.resourceCount, mapped.length);
+  assert.equal(data.resources.length, mapped.length);
+  assert.deepEqual(data.resources.map(record => record.id), mapped.map(record => record.id));
   const allowed = ["category", "country", "id", "kind", "lat", "lng", "region"];
   for (const record of data.resources) {
     assert.deepEqual(Object.keys(record).sort(), allowed);

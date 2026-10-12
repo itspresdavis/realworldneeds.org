@@ -1,3 +1,4 @@
+import { hasMapCoordinates } from "./utils/resource-location.js";
 import * as THREE from "/vendor/three.module.js";
 
 const RWN_POINT_COLORS = {
@@ -125,7 +126,7 @@ function resourcePointKind(resource) {
 // Every GPU vertex is an actual catalog coordinate at every zoom. Screen-space
 // grouping handles overlapping controls; it never moves or removes map points.
 function locationEntries(resources) {
-  return resources.map((resource) => ({ resource, density: 1 }));
+  return resources.filter(hasMapCoordinates).map((resource) => ({ resource, density: 1 }));
 }
 
 function buildGeometry(entries) {

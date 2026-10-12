@@ -10,7 +10,7 @@ export function sourceClosureNotice(resource) {
     ? `Snapshot checked ${checked}.` : "Snapshot date unavailable.";
   return {
     title: `Source reported: ${resource.collectionStatus}`,
-    detail: `${resource.sourceName || "Original source"}. ${date} Current availability is unverified. Contact the provider before travel.`
+    detail: `${resource.sourceName || "Original source"}. ${date} Current availability is unverified. ${resource.locationPrecision === "contact-only" ? "Check current contact routes with the provider." : "Contact the provider before travel."}`
   };
 }
 

@@ -85,7 +85,8 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       .map((row) => {
         const label = row.querySelector("dt")?.textContent?.trim();
         const value = row.querySelector("dd")?.textContent?.replace(/\s+/g, " ")?.trim();
-        return label && value ? `${label}: ${value}` : "";
+        const href = row.querySelector('dd a[href^="https://"]')?.href;
+        return label && value ? `${label}: ${value}${href && !value.includes(href) ? ` (${href})` : ""}` : "";
       })
       .filter(Boolean);
     const sourceStatus = document.querySelector("#service > .directory-shell > .source-status-notice");
@@ -97,7 +98,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       ...rows,
       `RWN listing: ${listingUrl}`,
       officialSource ? `Official source: ${officialSource}` : "",
-      "Confirm current details before you go."
+      document.querySelector("#service")?.dataset?.locationPrecision === "contact-only" ? "Check coverage, eligibility and current contact details." : "Confirm current details before you go."
     ].filter(Boolean).join("\n");
   };
 

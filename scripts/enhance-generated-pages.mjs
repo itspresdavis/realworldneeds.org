@@ -1,3 +1,4 @@
+import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { minify } from "terser";
 import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
@@ -65,9 +66,9 @@ function relatedResources(resource) {
     .filter((candidate) => candidate.id !== resource.id && !sourceClosureNotice(candidate))
     .map((candidate) => {
       const sameCountry = candidate.country === resource.country;
-      const sameCity = sameCountry && candidate.city && resource.city && candidate.city === resource.city;
+      const sameCity = !isContactOnly(resource) && !isContactOnly(candidate) && sameCountry && candidate.city && resource.city && candidate.city === resource.city;
       const typeOverlap = allTypes(candidate).filter((type) => sourceTypes.has(type)).length;
-      const distance = Number.isFinite(resource.lat) && Number.isFinite(resource.lng) && Number.isFinite(candidate.lat) && Number.isFinite(candidate.lng)
+      const distance = hasMapCoordinates(resource) && hasMapCoordinates(candidate)
         ? haversineKm(resource, candidate)
         : Number.POSITIVE_INFINITY;
       let score = 0;
@@ -119,13 +120,19 @@ function serviceNextStepMarkup(resource) {
   for (const { label, href } of phones) {
     links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
   }
-  if (resource.kind === "direct" && Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+  if (resource.kind === "direct" && hasMapCoordinates(resource)) {
     const coordinate = `${resource.lat},${resource.lng}`;
     links.push(`<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open Apple Maps</span></a>`);
     links.push(`<a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Open location</span></a>`);
   }
-  links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong>${phoneContext}</div><div>${links.join("")}</div></nav>`;
+  if (hasMapCoordinates(resource)) links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
+  if (isContactOnly(resource) && resource.accessUrl) {
+    links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer"><strong>Get help online</strong><span>Use the reviewed access link</span></a>`);
+  }
+  const contactContext = isContactOnly(resource)
+    ? `<span class="service-next-steps__context">${escapeHtml(contactOnlyNotice(resource))}</span>${resource.phone ? `<span class="service-next-steps__context">Phone dialing scope: ${escapeHtml(resource.phoneAccess)}</span>` : ""}`
+    : "";
+  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong>${phoneContext}${contactContext}</div><div>${links.join("")}</div></nav>`;
 }
 
 function assetLinks(release, includeScript) {
@@ -239,7 +246,10 @@ await writeFile("dist/directory.js", `${directoryCode}\n`);
 // self-contained during upgrades from older offline workers.
 const privacySource = (await readFile("src/utils/privacy.js", "utf8")).replaceAll("export ", "");
 const savedSource = (await readFile("public/saved-services.js", "utf8")).replace(/^import[^\n]+\n/gm, "");
-await writeFile("dist/saved-services.js", `${privacySource}\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${savedSource}`);
+const savedBundle = `${privacySource}\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${savedSource}`;
+// Apply the same safe compiler settings to the lazy feature rather than grow its budget.
+const { code: savedCode } = await minify(savedBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["initSavedServices", "createResultRow", "readSavedResources", "setResourceSaved"] } });
+await writeFile("dist/saved-services.js", `${savedCode}\n`);
 const savedHash = createHash("sha256");
 for (const path of ["dist/saved-loader.js", "dist/saved-services.js", "dist/saved-services.css", "dist/data/search-index.json"]) {
   savedHash.update(path); savedHash.update(await readFile(path));

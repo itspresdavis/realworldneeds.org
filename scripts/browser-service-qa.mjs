@@ -7,6 +7,7 @@ import { verifyFooterReflow } from "./qa-footer-reflow.mjs";
 import { verifyServiceFacts } from "./qa-service-facts.mjs";
 import { verifySourceConfidence } from "./qa-source-confidence.mjs";
 import { verifyDirectorySearchRelevance } from "./qa-search-relevance.mjs";
+import { verifyContactOnly } from "./qa-contact-only.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -167,6 +168,7 @@ async function run() {
     client = new CdpClient(target.webSocketDebuggerUrl);
     await client.connect();
     await Promise.all([client.call("Page.enable"), client.call("Runtime.enable")]);
+    await verifyContactOnly({ client, navigate, evaluate, capture, qaDir: QA_DIR });
 
     const serviceUrl = `${HOST}/service/${encodeURIComponent(resource.id)}`;
     await client.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
