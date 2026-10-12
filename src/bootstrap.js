@@ -47,7 +47,10 @@ import("./telemetry.js")
   .catch(() => {});
 
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => {
+  const register = () => {
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(reportOfflineUnavailable);
-  }, { once: true });
+  };
+  // Dynamic imports can finish after the document's one-shot load event.
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }
