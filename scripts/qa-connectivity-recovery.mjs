@@ -35,7 +35,8 @@ export function connectivityRecoveryContext(savedKey) {
     events: globalThis.__rwnConnectivityRecoveryQA ? {
       online: globalThis.__rwnConnectivityRecoveryQA.online,
       clicks: [...globalThis.__rwnConnectivityRecoveryQA.clicks],
-      checking: [...globalThis.__rwnConnectivityRecoveryQA.checking]
+      checking: [...globalThis.__rwnConnectivityRecoveryQA.checking],
+      keyboard: [...(globalThis.__rwnConnectivityRecoveryQA.keyboard || [])]
     } : null
   };
 }
@@ -73,13 +74,21 @@ export function assertConnectivityFocusReleased(before, after) {
   check(after.events?.online === 0, "An online event occurred during the recovery journey", after.events);
 }
 
+export async function pressConnectivityRecoveryKey(client, name, code) {
+  // Match qa-search-relevance and qa-page-menu-reflow: native button Enter
+  // activation needs the character-bearing phase, not just raw keydown/keyup.
+  const text = name === "Enter" ? "\r" : "";
+  await client.call("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...(text ? { text, unmodifiedText: text } : {}) });
+  await client.call("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
+}
+
 // One local synthetic build serves all four additive cases. Optional fixtureApp
 // permits reuse without transferring fixture cleanup ownership to this verifier.
 export async function verifyConnectivityRecovery({ client, navigate, evaluate, capture, qaDir = "qa-screenshots", fixtureApp }) {
   const app = fixtureApp || await createContactFixtureApp();
   const evidence = [];
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-  let fixtureDocument = false;
+  let fixtureDocument = false, currentCase;
   const wait = async (expression, message) => {
     for (let attempt = 0; attempt < 120; attempt += 1) {
       if (await evaluate(client, expression)) return;
@@ -87,10 +96,7 @@ export async function verifyConnectivityRecovery({ client, navigate, evaluate, c
     }
     throw new Error(message);
   };
-  const key = async (name, code) => {
-    await client.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
-    await client.call("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
-  };
+  const key = (name, code) => pressConnectivityRecoveryKey(client, name, code);
   const click = async selector => {
     const point = await evaluate(client, `(() => {
       const target = document.querySelector(${JSON.stringify(selector)});
@@ -119,6 +125,7 @@ export async function verifyConnectivityRecovery({ client, navigate, evaluate, c
       for (const view of ["search", "saved"]) {
         const label = `${view}-${width}`;
         const selector = view === "saved" ? savedSelector : searchSelector;
+        currentCase = { label, selector };
         if (fixtureDocument) await auditResources();
         // Only release.json fails. The document, catalog and saved IDs stay
         // usable, and navigator.onLine remains true throughout the journey.
@@ -142,9 +149,10 @@ export async function verifyConnectivityRecovery({ client, navigate, evaluate, c
         }
         await evaluate(client, `(() => {
           const notice=document.getElementById('offlineDirectoryNotice'), retry=notice.querySelector('[data-directory-reconnect]');
-          const qa=globalThis.__rwnConnectivityRecoveryQA={online:0,clicks:[],checking:[]};
+          const qa=globalThis.__rwnConnectivityRecoveryQA={online:0,clicks:[],checking:[],keyboard:[]};
           window.addEventListener('online',()=>qa.online++);
           retry.addEventListener('click',event=>qa.clicks.push({trusted:event.isTrusted,detail:event.detail}),true);
+          for(const type of ['keydown','keypress','keyup']) retry.addEventListener(type,event=>qa.keyboard.push({type:event.type,key:event.key,trusted:event.isTrusted,defaultPrevented:event.defaultPrevented}));
           new MutationObserver(records=>{
             for(const record of records) if(record.target===retry && record.attributeName==='aria-disabled') qa.checking.push({ariaDisabled:retry.getAttribute('aria-disabled'),oldAriaDisabled:record.oldValue,status:notice.querySelector('[data-directory-connection-status]')?.textContent});
           }).observe(notice,{attributes:true,attributeOldValue:true,subtree:true,attributeFilter:['aria-disabled']});
@@ -199,7 +207,8 @@ export async function verifyConnectivityRecovery({ client, navigate, evaluate, c
     console.log("Connectivity recovery QA passed: search/Saved at 1440px and 390px; trusted mouse/keyboard Retry without online events, retained state and focus, local fixture only (one country, no country selector).");
   } catch (error) {
     const context = await evaluate(client, `(${contactFailureSnapshot})(${JSON.stringify(app.host)})`).catch(failure => ({ unavailable: failure.message }));
-    evidence.push({ error: error.message, context });
+    const recovery = context.fixture && currentCase ? await snapshot(currentCase.selector).catch(failure => ({ unavailable: failure.message })) : null;
+    evidence.push({ error: error.message, label: currentCase?.label, context, recovery });
     await capture(client, "connectivity-recovery-failure.png").catch(() => {});
     throw error;
   } finally {

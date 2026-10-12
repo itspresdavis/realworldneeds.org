@@ -7,7 +7,7 @@ import { SAVED_RESOURCES_KEY } from "../src/utils/privacy.js";
 import { contactFixtureResources as resources } from "../scripts/qa-contact-fixture-app.mjs";
 import {
   connectivityRecoveryContext, assertConnectivityFailure, assertConnectivityRetained,
-  assertConnectivityRecovered, assertConnectivityFocusReleased
+  assertConnectivityRecovered, assertConnectivityFocusReleased, pressConnectivityRecoveryKey
 } from "../scripts/qa-connectivity-recovery.mjs";
 
 const failureState = () => ({
@@ -127,7 +127,7 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
     getComputedStyle: () => ({ display: "block", visibility: "visible" }),
     location: { href: "http://127.0.0.1:12345/directory" }, performance: { timeOrigin: 234 }, history: { length: 4 }, navigator: { onLine: true },
     localStorage: { getItem: key => key === SAVED_RESOURCES_KEY ? '["qa-contact-phone"]' : null },
-    __rwnConnectivityRecoveryQA: { online: 0, clicks: [{ trusted: true, detail: 0 }], checking: [{ ariaDisabled: "true" }] }
+    __rwnConnectivityRecoveryQA: { online: 0, clicks: [{ trusted: true, detail: 0 }], checking: [{ ariaDisabled: "true" }], keyboard: [{ type: "keypress", key: "Enter", trusted: true, defaultPrevented: false }] }
   };
   const run = () => vm.runInNewContext(`(${connectivityRecoveryContext})(${JSON.stringify(SAVED_RESOURCES_KEY)})`, context);
   const state = run();
@@ -140,6 +140,8 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
   assert.equal(state.countryControlPresent, true);
   assert.equal(state.country, "United States");
   assert.equal(state.events.clicks[0].trusted, true);
+  assert.equal(state.events.keyboard[0].type, "keypress");
+  assert.equal(state.events.keyboard[0].trusted, true);
   delete controls["[data-directory-country]"];
   assert.equal(run().countryControlPresent, false);
   assert.equal(run().country, null);
@@ -147,6 +149,19 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
   assert.equal(run().focus.connected, false);
   assert.equal(run().focus.visible, false);
   assert.equal(run().retry.visible, false);
+});
+
+test("native retry Enter includes its activation character while Tab remains raw key input", async () => {
+  const calls = [];
+  const client = { call: async (method, params) => calls.push({ method, params }) };
+  await pressConnectivityRecoveryKey(client, "Enter", 13);
+  await pressConnectivityRecoveryKey(client, "Tab", 9);
+  assert.deepEqual(calls, [
+    { method: "Input.dispatchKeyEvent", params: { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" } },
+    { method: "Input.dispatchKeyEvent", params: { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 } },
+    { method: "Input.dispatchKeyEvent", params: { type: "rawKeyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 } },
+    { method: "Input.dispatchKeyEvent", params: { type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 } }
+  ]);
 });
 
 test("QA uses the existing CI browser with one local fixture, trusted retry and no online dispatch", async () => {
@@ -162,6 +177,8 @@ test("QA uses the existing CI browser with one local fixture, trusted retry and 
   assert.match(source, /await key\("Tab", 9\)/);
   assert.match(source, /await key\("Enter", 13\)/);
   assert.match(source, /trusted:event\.isTrusted/);
+  assert.match(source, /const recovery = context\.fixture && currentCase \? await snapshot\(currentCase\.selector\)/);
+  assert.match(source, /evidence\.push\(\{ error: error\.message, label: currentCase\?\.label, context, recovery \}\)/);
   assert.match(source, /await app\.cleanup\(\)/);
   assert.match(source, /join\(qaDir, "connectivity-recovery\.json"\)/);
 });
