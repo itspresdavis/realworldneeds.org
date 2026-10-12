@@ -1,3 +1,4 @@
+import { isContactOnly, validateResourceLocation } from "../src/utils/resource-location.js";
 const editable = new Set([
   "name",
   "summary",
@@ -73,4 +74,9 @@ export function validateEdit(body) {
     }
   }
   return null;
+}
+
+// Coordinates for a contact-only route cannot be introduced by the editor.
+export function validateLocationEdit(current, changes) {
+  return isContactOnly(current) ? validateResourceLocation({ ...current, ...changes }) : null;
 }

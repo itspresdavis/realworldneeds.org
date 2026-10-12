@@ -1,3 +1,4 @@
+import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -90,7 +91,7 @@ function inspectorFixture({ clipboard, execCommand = () => true, share } = {}) {
   const state = { filtered: records, selectedId: "second", inspectorOpen: true, savedIds: new Set() };
   let stored = new Set();
   const messages = [];
-  const context = vm.createContext({
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
     document, state, navigator: { clipboard, share }, URL,
     window: { innerWidth: 1440, innerHeight: 1000, location: { href: "https://www.realworldneeds.org/" } },
     categories: { food: { color: "blue" } }, icon: {}, freeAccessModels: {}, reduceMotion: true,
@@ -223,7 +224,7 @@ async function savedFixture(initialCount = 61) {
   const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
   let currentIds = ids.slice(0, initialCount), storageError = false;
   const events = {};
-  const context = vm.createContext({
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
     document, URL, location: { hash: "#saved" }, navigator: {}, SAVED_RESOURCES_KEY: "saved",
     window: { addEventListener: (name, handler) => { events[name] = handler; } },
     fetch: () => Promise.resolve({ ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) }),

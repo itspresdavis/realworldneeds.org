@@ -71,6 +71,7 @@ export function resourceSearchText(resource) {
     resource.accessType,
     resource.costNote,
     resource.coverageNote,
+    ...(resource.locationPrecision === "contact-only" ? [resource.eligibility, resource.phoneAccess, "phone online contact"] : []),
     resource.kind,
     ...types,
   ];

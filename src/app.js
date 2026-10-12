@@ -1,3 +1,4 @@
+import { isContactOnly, hasMapCoordinates, contactOnlyLabel, contactOnlyNotice } from "./utils/resource-location.js";
 import { warmSearchIndex } from "./utils/search-warmup.js";
 import { phoneMarkup } from "./utils/phone.js";
 import * as THREE from "/vendor/three.module.js";
@@ -356,6 +357,7 @@ function distanceLabel(resource) {
 }
 
 function locationResultLabel(resource) {
+  if (isContactOnly(resource)) return `${contactOnlyLabel} · check coverage`;
   if (!state.userLocation) return resource.accessType;
   if (isExactServiceSite(resource)) return distanceLabel(resource);
   if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Worldwide resource finder";
@@ -638,6 +640,7 @@ function renderStatic() {
 }
 
 function kindLabel(resource) {
+  if (isContactOnly(resource)) return contactOnlyLabel;
   if (resource.kind === "direct") return "Service location";
   if (resource.kind === "locator") return "Resource finder";
   return "Service network";
@@ -781,7 +784,8 @@ function renderControls() {
   document.getElementById("filterSummary").textContent = typeCount === resourceTypes.length
     ? `All ${resourceTypes.length} types of help`
     : `${typeCount} of ${resourceTypes.length} types of help`;
-  document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} listings` : "0 listings";
+  const mappedCount = state.filtered.filter(hasMapCoordinates).length;
+  document.getElementById("globeCount").textContent = aidMode ? (mappedCount === state.filtered.length ? `${mappedCount} listings` : `${mappedCount} mapped · ${state.filtered.length - mappedCount} phone/online`) : "0 listings";
   document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching services` : "No public requests are listed";
   const savedToggle = document.getElementById("toggleSaved");
   savedToggle.classList.toggle("is-active", state.savedOnly);
@@ -794,9 +798,11 @@ function renderControls() {
     : `<span><i></i>Public requests</span>`;
 
   const empty = document.getElementById("globeEmpty");
-  empty.hidden = state.filtered.length > 0;
+  empty.hidden = state.filtered.some(hasMapCoordinates);
   empty.innerHTML = state.viewMode === "needs"
     ? `<strong>No public requests are listed</strong><p>RWN does not guess where help is needed or publish requests that have not been reviewed.</p>`
+    : state.filtered.length
+      ? `<strong>Phone or online help</strong><p>Matching listings have no map location. Read their coverage and contact details in the results below.</p>`
     : state.savedOnly
       ? `<strong>No saved services match</strong><p>Turn off Saved or adjust the current filters.</p>`
       : `<strong>No matching services</strong><p>Adjust the search, layers, or resource type.</p>`;
@@ -840,15 +846,16 @@ function renderResourcePanel() {
   const next = resourceIndex >= 0 ? state.filtered[resourceIndex + 1] : null;
   const live = resource.verificationMethod === "live-official-feed";
   const freeModel = freeAccessModels[resource.costModel];
-  const actionUrl = resource.providerUrl || resource.sourceUrl;
-  const sourceAction = resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
+  const contactOnly = isContactOnly(resource);
+  const actionUrl = resource.accessUrl || resource.providerUrl || resource.sourceUrl;
+  const sourceAction = contactOnly ? "Open contact website" : resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
     <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
     ${sourceClosureMarkup(resource)}
-    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
+    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
@@ -860,16 +867,17 @@ function renderResourcePanel() {
           <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : ""}
+          ${contactOnly && resource.phoneAccess ? `<div><dt>Dialing scope</dt><dd>${resource.phoneAccess}</dd></div>` : ""}
           ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${resource.eligibility}</dd></div>` : ""}
           ${resource.validFrom && resource.validThrough ? `<div><dt>Active dates</dt><dd>${checkedDate(resource.validFrom)}–${checkedDate(resource.validThrough)}</dd></div>` : ""}
           ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
-          ${!exact && resource.coverageNote ? `<div><dt>Map note</dt><dd>${resource.coverageNote}</dd></div>` : ""}
+          ${!exact && resource.coverageNote ? `<div><dt>${contactOnly ? "Coverage limits" : "Map note"}</dt><dd>${resource.coverageNote}</dd></div>` : ""}
         </dl>
         <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
       </div>
     </details>
-    <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before you go</strong>${availabilityInstructions(resource)}</p></div>
-    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
+    <div class="availability-note"><span>${icon.info}</span><p><strong>${contactOnly ? "Check before contacting" : "Confirm before you go"}</strong>${availabilityInstructions(resource)}</p></div>
+    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${!contactOnly && resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
       ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
       <a class="secondary-button" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
@@ -912,7 +920,7 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
-  const listingType = isExactServiceSite(resource) ? "Service location" : "Resource finder";
+  const listingType = isContactOnly(resource) ? contactOnlyLabel : isExactServiceSite(resource) ? "Service location" : "Resource finder";
   const sourcePrefix = resource.sourceName === resource.name ? "" : `${resource.sourceName} · `;
   const costLabel = freeAccessLabel(resource, true);
   const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
@@ -963,6 +971,7 @@ function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
   state.inspectorOpen = true;
   state.clusterIds = [];
   const resource = selectedResource();
+  if (resource && !hasMapCoordinates(resource) && reveal === "map") reveal = "panel";
   if (focus && resource) focusGlobeOn(resource, reveal === "map");
   renderResourcePanel();
   renderResults();
@@ -1041,6 +1050,8 @@ async function shareResource(resource) {
 
 function downloadDirectory() {
   const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source"];
+  const includeContact = state.filtered.some(isContactOnly);
+  if (includeContact) fields.push("Location precision", "Coverage details", "Eligibility", "Phone", "Phone dialing scope", "Online access");
   const rows = state.filtered.map((resource) => [
     resource.name,
     resource.city,
@@ -1051,9 +1062,10 @@ function downloadDirectory() {
     resource.costNote,
     resource.address,
     resource.lastChecked,
-    resource.sourceUrl
+    resource.sourceUrl,
+    ...(includeContact ? [resource.locationPrecision, resource.coverageNote, resource.eligibility, resource.phone, resource.phoneAccess, resource.accessUrl] : [])
   ]);
-  const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+  const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -1065,6 +1077,13 @@ function downloadDirectory() {
 
 function focusGlobeOn(resource, immediate = false) {
   wakeGlobe();
+  if (!hasMapCoordinates(resource)) {
+    state.focusPoint = null;
+    state.targetLat = null;
+    state.targetLon = null;
+    setCountryHighlight(null);
+    return;
+  }
   const exact = isExactServiceSite(resource);
   const view = exact
     ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 3.8 : 4.8 }
@@ -1194,7 +1213,7 @@ function cachedResourceVector(resource) {
 }
 
 function projectResourceGlobePoint(resource, width, height) {
-  if (!globeWorld || !globeCamera) return OFFSCREEN_POINT;
+  if (!globeWorld || !globeCamera || !hasMapCoordinates(resource)) return OFFSCREEN_POINT;
   globeProjectionVector.copy(cachedResourceVector(resource)).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
   const depth = globeProjectionVector.z / scale;
@@ -1208,9 +1227,10 @@ function projectResourceGlobePoint(resource, width, height) {
 
 function syncGlobePointLayer() {
   if (!globeWorld || !globeRenderer) return;
-  const nextSignature = state.filtered.map((resource) => resource.id).join("|");
+  const mapped = state.filtered.filter(hasMapCoordinates);
+  const nextSignature = mapped.map((resource) => resource.id).join("|");
   if (!globeServicePoints) {
-    globeServicePoints = createGlobePointLayer(state.filtered, categories, {
+    globeServicePoints = createGlobePointLayer(mapped, categories, {
       pixelRatio: globeRenderer.getPixelRatio?.() || 1
     });
     globePointSignature = nextSignature;
@@ -1219,7 +1239,7 @@ function syncGlobePointLayer() {
     return;
   }
   if (nextSignature === globePointSignature) return;
-  replaceGlobePointResources(globeServicePoints, state.filtered, categories);
+  replaceGlobePointResources(globeServicePoints, mapped, categories);
   globePointSignature = nextSignature;
 }
 
@@ -1640,7 +1660,7 @@ function rebuildConnections() {
   if (signature === connectionSignature) return;
   connectionSignature = signature;
   clearConnections();
-  if (!selected || !state.focusPoint || state.viewMode !== "aid") return;
+  if (!hasMapCoordinates(selected) || !state.focusPoint || state.viewMode !== "aid") return;
 
   const start = latLngVector(selected.lat, selected.lng);
   connectionDestinations(selected).forEach((resource, index) => {
@@ -1825,7 +1845,7 @@ function projectGlobePoint(lat, lng, width, height) {
 
 function connectionDestinations(selected) {
   return state.filtered
-    .filter((resource) => resource.id !== selected.id && resource.category === selected.category)
+    .filter((resource) => hasMapCoordinates(resource) && resource.id !== selected.id && resource.category === selected.category)
     .sort((a, b) => distanceKm(selected.lat, selected.lng, a.lat, a.lng) - distanceKm(selected.lat, selected.lng, b.lat, b.lng))
     .slice(0, 3);
 }
@@ -1942,12 +1962,12 @@ function updateGlobeReadout(now = performance.now()) {
     ? "detailed + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
-    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`
-    : resource && state.focusPoint
+    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`
+    : hasMapCoordinates(resource) && state.focusPoint
     ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
     : state.focusedCountry && state.focusPoint
       ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
-    : `<strong>World view</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`;
+    : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
@@ -2120,7 +2140,7 @@ function renderClusterTray() {
 
 function focusCluster(ids) {
   wakeGlobe();
-  const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(Boolean);
+  const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(hasMapCoordinates);
   if (!members.length) return;
   state.clusterIds = members.map((resource) => resource.id);
   const centroid = members.reduce(

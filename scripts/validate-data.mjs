@@ -1,3 +1,4 @@
+import { validateResourceLocation } from "../src/utils/resource-location.js";
 import { categories, resources } from "../src/data/resources.js";
 import { freeAccessModels } from "../src/data/free-access.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
@@ -6,11 +7,8 @@ import { platformStatus, publicLedger } from "../src/data/platform.js";
 const required = [
   "id",
   "name",
-  "city",
   "country",
   "region",
-  "lat",
-  "lng",
   "category",
   "address",
   "summary",
@@ -67,9 +65,8 @@ for (const resource of resources) {
   if (!Array.isArray(resource.services) || resource.services.length === 0) {
     throw new Error(`Services must be a non-empty array: ${resource.id}`);
   }
-  if (resource.lat < -90 || resource.lat > 90 || resource.lng < -180 || resource.lng > 180) {
-    throw new Error(`Invalid coordinates: ${resource.id}`);
-  }
+  const locationError = validateResourceLocation(resource);
+  if (locationError) throw new Error(`${resource.id}: ${locationError}`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(resource.lastChecked)) {
     throw new Error(`Invalid review date: ${resource.id}`);
   }

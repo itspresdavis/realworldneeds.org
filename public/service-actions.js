@@ -97,7 +97,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       ...rows,
       `RWN listing: ${listingUrl}`,
       officialSource ? `Official source: ${officialSource}` : "",
-      "Confirm current details before you go."
+      document.querySelector("#service")?.dataset?.locationPrecision === "contact-only" ? "Check coverage, eligibility and current contact details." : "Confirm current details before you go."
     ].filter(Boolean).join("\n");
   };
 

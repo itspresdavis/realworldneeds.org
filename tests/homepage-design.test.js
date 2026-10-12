@@ -1,3 +1,4 @@
+import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -19,7 +20,7 @@ test('finder composition reuses each existing interactive node exactly once', ()
     querySelector: selector => selector === '.finder-sidebar' ? sidebar : nodes.get(selector),
     createElement: tag => ({tag, append: (...values) => appended.push(...values), contains: () => false})
   };
-  const context = vm.createContext({document});
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,document});
   const source = refinement.slice(refinement.indexOf('function composeFinderSurface()'), refinement.indexOf('function improveFilterSummary()'));
   vm.runInContext(source, context);
   context.composeFinderSurface();
@@ -63,7 +64,7 @@ test('regrouping restores a focused search and its selected text without scrolli
     querySelector: selector => selector === '.finder-sidebar' ? sidebar : search,
     createElement: tag => ({tag, append: node => {if(node===search) current=null;}, contains: node => node===input})
   };
-  const context = vm.createContext({document});
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,document});
   vm.runInContext(refinement.slice(refinement.indexOf('function composeFinderSurface()'), refinement.indexOf('function improveFilterSummary()')), context);
   context.composeFinderSurface();
   assert.equal(current,input);
@@ -86,7 +87,7 @@ test('all needs is first in DOM order and compact rows are balanced without smal
 test('empty results distinguish unsaved, filtered-saved, ordinary and unavailable requests', async () => {
   const app = await readFile('src/app.js','utf8');
   const source = app.slice(app.indexOf('function emptyResultsCopy('), app.indexOf('function renderResults()'));
-  const context = vm.createContext({});
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,});
   vm.runInContext(source, context);
   const inspect = state => JSON.parse(JSON.stringify(context.emptyResultsCopy({viewMode:'aid',savedOnly:false,savedCount:0,...state})));
   assert.equal(inspect({savedOnly:true}).title,'No saved services yet.');
@@ -107,7 +108,7 @@ test('actual resource finders show their type once and retain meaningful cost la
   const { isExactServiceSite } = await import('../src/utils/geo.js');
   const app = await readFile('src/app.js','utf8');
   const source = app.slice(app.indexOf('function resourceCard('), app.indexOf('function emptyResultsCopy('));
-  const context = vm.createContext({categories, freeAccessLabel, isExactServiceSite, state:{}, allTypes:r=>[r.category], formatResourcePlace:r=>r.city, locationResultLabel:()=>'', reviewLabel:r=>r.lastChecked, icon:{arrow:''}, sourceClosureMarkup:()=>''});
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,categories, freeAccessLabel, isExactServiceSite, state:{}, allTypes:r=>[r.category], formatResourcePlace:r=>r.city, locationResultLabel:()=>'', reviewLabel:r=>r.lastChecked, icon:{arrow:''}, sourceClosureMarkup:()=>''});
   vm.runInContext(source, context);
   const locator = resources.find(r=>r.id==='feeding-america');
   assert.ok(locator, 'the real catalog fixture exists');

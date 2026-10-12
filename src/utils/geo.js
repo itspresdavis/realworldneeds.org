@@ -1,3 +1,4 @@
+import { hasMapCoordinates } from "./resource-location.js";
 import { resourceTypes } from "../data/resources.js";
 import { normalizeSearch as normalizedText, resourceSearchScore } from "./search.js";
 export { resourceSearchScore } from "./search.js";
@@ -92,7 +93,7 @@ export function distanceKm(fromLat, fromLng, toLat, toLng) {
 }
 
 export function isExactServiceSite(resource) {
-  if (!resource) return false;
+  if (!hasMapCoordinates(resource)) return false;
   if (resource.locationPrecision) return resource.locationPrecision === "exact";
   return resource.kind === "direct";
 }
@@ -110,7 +111,7 @@ export function rankResourcesForLocation(resourceList, userLocation, userCountry
     const sameCountry = Boolean(country && normalizedText(resource.country) === country);
     const globalCoverage = !exact && ["global", "worldwide"].includes(normalizedText(resource.country));
     let tier = 5;
-    if (exact && distance <= 250) tier = 0;
+    if (exact && distance !== null && distance <= 250) tier = 0;
     else if (!exact && sameCountry) tier = 1;
     else if (exact && sameCountry) tier = 2;
     else if (globalCoverage) tier = 3;

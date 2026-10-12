@@ -183,6 +183,7 @@ if (document.body.dataset.page === "workspace") {
           lat: "Latitude",
           lng: "Longitude",
         })) {
+          if (r.locationPrecision === "contact-only" && ["lat", "lng"].includes(key)) continue;
           const field = node("label", label),
             input = node(
               key === "summary" || key === "eligibility" ? "textarea" : "input",
@@ -256,8 +257,8 @@ if (document.body.dataset.page === "workspace") {
           result.textContent = "Saving…";
           const values = Object.fromEntries(new FormData(form));
           const { reason, published, ...changes } = values;
-          changes.lat = Number(changes.lat);
-          changes.lng = Number(changes.lng);
+          if ("lat" in changes) changes.lat = Number(changes.lat);
+          if ("lng" in changes) changes.lng = Number(changes.lng);
           try {
             const saved = await request(
               "/api/catalog",
@@ -340,7 +341,7 @@ if (document.body.dataset.page === "workspace") {
               ? "Location coordinates"
               : "Coverage reference coordinates",
           ),
-          node("dd", `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`),
+          node("dd", Number.isFinite(r.latitude) && Number.isFinite(r.longitude) ? `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}` : "No map location supplied"),
         );
         card.append(facts);
         const links = node("div", null, "card-links");
@@ -348,8 +349,8 @@ if (document.body.dataset.page === "workspace") {
           safeLink("Source ↗", r.source_url),
           r.published
             ? safeLink(
-                "On the globe ↗",
-                `/#resource=${encodeURIComponent(r.id)}`,
+                "Open listing ↗",
+                `/service/${encodeURIComponent(r.id)}`,
               )
             : node("span", "Withheld"),
         );

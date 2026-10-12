@@ -6,7 +6,7 @@ import {
   requireUser,
   sameOrigin,
 } from "../server/supabase.js";
-import { validateEdit } from "../server/catalog-validation.js";
+import { validateEdit, validateLocationEdit } from "../server/catalog-validation.js";
 
 export default async function handler(req, res) {
   try {
@@ -49,6 +49,8 @@ export default async function handler(req, res) {
             error:
               "Another editor changed this listing. Reopen it before saving.",
           });
+        const invalidLocation = validateLocationEdit(current.record, body.changes);
+        if (invalidLocation) return json(res, 400, { error: invalidLocation });
         const { data: saved, error } = await client
           .from("rwn_locations")
           .update({

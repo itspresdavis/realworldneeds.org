@@ -66,10 +66,13 @@ if (notice) {
       for (const { label, href } of record.phoneLinks || []) {
         actions.append(actionLink(`Call ${label}`, href, "is-call"));
       }
-      if (record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
+      if (record.locationPrecision !== "contact-only" && record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
         const maps = mapUrls(record);
         actions.append(actionLink("Apple Maps", maps.apple));
         actions.append(actionLink("Google Maps", maps.google));
+      }
+      if (record.locationPrecision === "contact-only" && record.accessUrl?.startsWith("https://")) {
+        actions.append(actionLink("Contact website", record.accessUrl, "is-contact"));
       }
       actions.append(actionLink("View details", link.href, "is-details"));
 
@@ -79,6 +82,11 @@ if (notice) {
         const phone = document.createElement("small");
         phone.textContent = `Phone: ${record.phone}`;
         link.append(phone);
+      }
+      if (record.locationPrecision === "contact-only") {
+        const scope = document.createElement("small");
+        scope.textContent = ["Phone or online help; check coverage.", record.coverageNote, record.eligibility ? `Eligibility: ${record.eligibility}` : "", record.phoneAccess ? `Dialing scope: ${record.phoneAccess}` : "", record.accessUrl ? `Website (connection required): ${record.accessUrl}` : ""].filter(Boolean).join(" ");
+        link.append(scope);
       }
       wrapper.append(actions);
     }

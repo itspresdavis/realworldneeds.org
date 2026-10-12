@@ -1,3 +1,4 @@
+import { isContactOnly, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { resourceSearchText } from "../src/utils/search.js";
 import { phoneLinks } from "../src/utils/phone.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -69,9 +70,17 @@ const records = resources.map((resource, index) => {
     kind: resource.kind,
     phone: resource.phone || "",
     phoneLinks: phoneLinks(resource.phone),
-    lat: Number.isFinite(resource.lat) ? resource.lat : null,
-    lng: Number.isFinite(resource.lng) ? resource.lng : null,
+    lat: !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
+    lng: !isContactOnly(resource) && Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,
+    ...(isContactOnly(resource) ? {
+      locationPrecision: "contact-only",
+      coverageNote: resource.coverageNote,
+      eligibility: resource.eligibility,
+      locationNotice: contactOnlyNotice(resource),
+      ...(resource.phone ? { phoneAccess: resource.phoneAccess } : {}),
+      ...(resource.accessUrl ? { accessUrl: resource.accessUrl } : {})
+    } : {}),
     ...(sourceClosureNotice(resource) ? { sourceStatus: sourceClosureNotice(resource) } : {}),
     search
   };

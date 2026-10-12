@@ -1,3 +1,5 @@
+import { isContactOnly } from "../src/utils/resource-location.js";
+
 // Build-only geography grouping shared by local pages and their search scopes.
 // Retain unqualified records when the city/country has at most one known area.
 // When it has multiple known areas, exclude unqualified records rather than
@@ -14,6 +16,8 @@ function administrativeArea(resource) {
 }
 
 function locality(resource) {
+  // Coverage text and an optional city are never evidence of a service site.
+  if (isContactOnly(resource)) return null;
   const city = String(resource.city || "").trim();
   const country = String(resource.country || "").trim();
   if (!city || !country || country === "Global") return null;

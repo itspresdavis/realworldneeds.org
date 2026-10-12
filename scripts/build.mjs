@@ -1,3 +1,4 @@
+import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -37,6 +38,8 @@ const kindLabel = (resource) => resource.kind === "direct"
 
 const aidTypes = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
 const aidLabels = (resource) => aidTypes(resource).map((type) => categories[type]?.label || type);
+const mapResources = resources.filter(hasMapCoordinates);
+const hasContactOnlyResources = resources.some(isContactOnly);
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
 const coverageCount = new Set(resources.map((resource) => resource.country)).size;
 const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked || BUILD_DATE;
@@ -90,8 +93,11 @@ function directoryRecordActions(resource, coordinate) {
   for (const { label, href } of phoneLinks(resource.phone)) {
     links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
-  if (resource.kind === "direct") {
+  if (resource.kind === "direct" && hasMapCoordinates(resource)) {
     links.push(`<a class="is-directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Directions</a>`);
+  }
+  if (isContactOnly(resource) && resource.accessUrl) {
+    links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>`);
   }
   links.push(`<a class="is-details" href="/service/${encodeURIComponent(resource.id)}">Open listing</a>`);
   return `<nav class="directory-record__actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Actions for ${escapeHtml(resource.name)}">${links.join("")}</nav>`;
@@ -103,9 +109,12 @@ function resourceRecord(resource) {
   const phone = resource.phone
     ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>`
     : "";
-  const maps = resource.kind === "direct"
+  const contactOnly = isContactOnly(resource);
+  const maps = resource.kind === "direct" && hasMapCoordinates(resource)
     ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a>`
     : "";
+  const globeLink = hasMapCoordinates(resource) ? `<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a>` : "";
+  const contactFacts = contactOnly ? `<div><dt>Coverage details</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div><div><dt>Eligibility</dt><dd>${escapeHtml(resource.eligibility)}</dd></div>${resource.phone ? `<div><dt>Phone dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}` : "";
   const addressLabel = resource.kind === "direct" ? "Address" : "Coverage";
   return `<article class="directory-record" id="${escapeHtml(resource.id)}">
     <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2><a href="/service/${encodeURIComponent(resource.id)}">${escapeHtml(resource.name)}</a></h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
@@ -113,8 +122,9 @@ function resourceRecord(resource) {
     <p class="directory-record__summary">${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
     <div class="directory-record__facts" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
+    ${contactOnly ? `<p class="directory-caution">${escapeHtml(contactOnlyNotice(resource))}</p><p class="directory-caution"><strong>Coverage:</strong> ${escapeHtml(resource.coverageNote)} <strong>Eligibility:</strong> ${escapeHtml(resource.eligibility)}${resource.phone ? ` <strong>Phone dialing scope:</strong> ${escapeHtml(resource.phoneAccess)}` : ""}</p>` : ""}
     ${directoryRecordActions(resource, coordinate)}
-    <details class="directory-record__more"><summary>Hours, location &amp; source</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}</dl><p class="directory-caution"><strong>Check before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on the globe</a></nav></div></details>
+    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
   </article>`;
 }
 
@@ -252,7 +262,14 @@ function resourceSchema(resource, canonical) {
         name: resource.name,
         description: resource.summary,
         serviceType: aidLabels(resource),
-        areaServed: resource.country,
+        areaServed: isContactOnly(resource) ? resource.coverageNote : resource.country,
+        ...(isContactOnly(resource) ? {
+          availableChannel: {
+            "@type": "ServiceChannel",
+            ...(resource.accessUrl ? { serviceUrl: resource.accessUrl } : {}),
+            ...(resource.phone ? { servicePhone: { "@type": "ContactPoint", telephone: resource.phone, description: resource.phoneAccess } } : {})
+          }
+        } : {}),
         url: canonical,
         sameAs: resource.sourceUrl,
         provider: { "@type": "Organization", name: resource.sourceName, url: resource.sourceUrl }
@@ -274,9 +291,12 @@ function resourcePage(resource) {
   const canonical = `${SITE_ORIGIN}${canonicalPath}`;
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
+  const contactOnly = isContactOnly(resource);
   const direct = resource.kind === "direct";
   const phone = `<div><dt>Phone</dt><dd>${resource.phone ? phoneMarkup(resource.phone) : "Not listed in this snapshot. Check the official source for contact details."}</dd></div>`;
-  const mapLinks = direct ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
+  const mapLinks = direct && hasMapCoordinates(resource) ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
+  const globeLink = hasMapCoordinates(resource) ? `<a href="/#resource=${encodeURIComponent(resource.id)}">Show on interactive globe</a>` : "";
+  const accessLink = contactOnly && resource.accessUrl ? `<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>` : "";
   const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
   const title = `${resource.name} — ${place}`;
   const description = `${resource.summary} ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`;
@@ -302,17 +322,20 @@ function resourcePage(resource) {
 <body>
   <a class="skip-link" href="#service">Skip to service details</a>
   <header class="legal-header"><a class="legal-brand" href="/"><span class="legal-brand__mark">RWN</span><span><strong>Real World Needs</strong><small>Free essential services directory</small></span></a><nav aria-label="Directory navigation"><a class="home-link" href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a></nav></header>
-  <main id="service" data-service-id="${escapeHtml(resource.id)}">
+  <main id="service" data-service-id="${escapeHtml(resource.id)}"${contactOnly ? ' data-location-precision="contact-only"' : ""}>
     <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">${escapeHtml(kindLabel(resource))}</p><h1>${escapeHtml(resource.name)}</h1><p class="legal-hero__lede">${escapeHtml(resource.summary)}</p><div class="legal-meta"><span>${escapeHtml(place)}</span><span>${escapeHtml(freeAccessLabel(resource))}</span><span>Source checked ${escapeHtml(resource.lastChecked)}</span></div></div></section>
     <div class="directory-shell">
       ${breadcrumbs([{ href: "/directory", label: "Directory" }, { label: resource.name }])}
       ${sourceClosureMarkup(resource)}
-      <div class="policy-note"><p><strong>Confirm before you go.</strong> ${escapeHtml(availabilityInstructions(resource))}</p></div>
+      <div class="policy-note"><p><strong>${contactOnly ? "Before you contact" : "Confirm before you go"}.</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p></div>
       <article class="directory-record" aria-labelledby="service-details-heading">
         <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl class="service-facts">
           <div><dt>${direct ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
+          ${contactOnly ? `<div><dt>Coverage details</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
           ${phone}
+          ${contactOnly && resource.phone ? `<div><dt>Phone dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}
+          ${contactOnly && resource.accessUrl ? `<div><dt>Online access</dt><dd>${accessLink}</dd></div>` : ""}
           <div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div>
           <div><dt>Cost</dt><dd><strong>${escapeHtml(freeAccessLabel(resource))}.</strong> ${escapeHtml(resource.costNote)}${resource.costModel === "free-navigation" ? `<p class="service-cost-scope">${escapeHtml(freeAccessModels[resource.costModel].description)}</p>` : ""}</dd></div>
           ${resource.hours || direct ? `<div><dt>Hours</dt><dd>${resource.hours ? escapeHtml(resource.hours) : "Not listed in this snapshot. Confirm current hours with the provider before travel."}</dd></div>` : ""}
@@ -325,8 +348,8 @@ function resourcePage(resource) {
         <p class="service-source-review">This date records a review of the linked source, not a confirmation of current service availability.</p>
         <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
         <p>${escapeHtml(resource.sourceDetail)}</p>
-        ${resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
-        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}<a href="/#resource=${encodeURIComponent(resource.id)}">Show on interactive globe</a></div>
+        ${!contactOnly && resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
+        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}</div>
       </article>
       <div class="directory-downloads"><strong>Browse related help</strong>${categoryLinks}<a href="/directory/${slugify(resource.country)}">More in ${escapeHtml(resource.country)}</a></div>
     </div>
@@ -443,8 +466,8 @@ const csvRows = resources.map((resource) => [
   resource.name,
   formatResourcePlace(resource),
   resource.country,
-  resource.lat,
-  resource.lng,
+  isContactOnly(resource) ? null : resource.lat,
+  isContactOnly(resource) ? null : resource.lng,
   kindLabel(resource).replace("Help finder or referral", "Resource finder"),
   aidLabels(resource).join("; "),
   resource.accessType,
@@ -460,6 +483,14 @@ const csvRows = resources.map((resource) => [
   resource.lastChecked,
   resource.sourceUrl
 ]);
+// Preserve the legacy export shape until reviewed contact-only records are
+// present, then publish their access scope without discarding existing fields.
+if (hasContactOnlyResources) {
+  csvFields.push("Location precision", "Coverage details", "Phone dialing scope", "Online access");
+  resources.forEach((resource, index) => csvRows[index].push(
+    resource.locationPrecision || "", resource.coverageNote || "", resource.phoneAccess || "", resource.accessUrl || ""
+  ));
+}
 const directoryCsv = [csvFields, ...csvRows].map((row) => row.map(escapeCsv).join(",")).join("\n");
 await writeFile("dist/directory.csv", `${directoryCsv}\n`);
 
@@ -473,9 +504,9 @@ await writeFile("dist/data/resources.json", `${JSON.stringify({
 }, null, 2)}\n`);
 await writeFile("dist/data/map-index.json", `${JSON.stringify({
   schemaVersion: "1.0",
-  resourceCount: resources.length,
+  resourceCount: mapResources.length,
   fields: ["id", "lat", "lng", "category", "kind", "country", "region"],
-  resources: resources.map(({ id, lat, lng, category, kind, country, region }) => ({ id, lat, lng, category, kind, country, region }))
+  resources: mapResources.map(({ id, lat, lng, category, kind, country, region }) => ({ id, lat, lng, category, kind, country, region }))
 })}\n`);
 await writeFile("dist/data/resources/index.json", `${JSON.stringify({
   schemaVersion: "1.1",

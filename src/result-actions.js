@@ -1,3 +1,4 @@
+import { isContactOnly, hasMapCoordinates } from "./utils/resource-location.js";
 import { resources } from "./data/resources.js";
 import { phoneLinks } from "./utils/phone.js";
 
@@ -48,13 +49,16 @@ function enhanceCard(article) {
   actions.className = "result-direct-actions";
   actions.setAttribute("aria-label", `Actions for ${resource.name}`);
 
-  if (resource.kind === "direct") {
+  if (resource.kind === "direct" || isContactOnly(resource)) {
     const phones = phoneLinks(resource.phone);
     for (const { label, href } of phones) {
       actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
-    if (Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+    if (resource.kind === "direct" && hasMapCoordinates(resource)) {
       actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));
+    }
+    if (isContactOnly(resource) && resource.accessUrl) {
+      actions.append(createAction("Contact website", resource.accessUrl, `Open the contact website for ${resource.name}`, { newTab: true }));
     }
     if (!actions.childElementCount) {
       const providerUrl = resource.providerUrl || resource.sourceUrl;
@@ -67,6 +71,11 @@ function enhanceCard(article) {
     }
   }
 
+  if (isContactOnly(resource) && resource.phoneAccess) {
+    const scope = document.createElement("small");
+    scope.textContent = `Dialing scope: ${resource.phoneAccess}`;
+    article.append(scope);
+  }
   if (actions.childElementCount) article.append(actions);
 }
 
