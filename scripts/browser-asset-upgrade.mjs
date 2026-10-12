@@ -15,7 +15,7 @@ const LEGACY_RELEASE = "fixture-legacy-query";
 const VARIANT_RELEASE = "fixture-hashed-next";
 const FAILED_RELEASE = "fixture-hashed-failed";
 const SAVED = JSON.stringify(["survivor", "removed"]);
-const RUNTIME_PATTERN = /^\/(?:legal|directory-enhancements|professional-pages|directory|directory-startup|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
+const RUNTIME_PATTERN = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|directory|directory-startup|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
