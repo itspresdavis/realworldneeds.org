@@ -332,3 +332,69 @@ test('baseline keyboard motion must become quiet before wheel can claim separate
   assert.match(source.slice(quiet, wheel), /pageMenuReflowIdentity\(state, baselineExpected\) && state.links\[5\].focused/);
   assert.match(source.slice(wheel), /state.nav.scrollTop === 0 && state.scrollY > keyboard.scrollY/);
 });
+
+
+function roundedWheelFixture(scrollTop) {
+  // Exact scrollport and link geometry from the second CI failure. The browser
+  // stops at57px although its integer heights report382-324=58px.
+  const state = fixture(); state.height = 422; state.summary.focused = true;
+  state.nav = { ...state.nav, box: box(11.203125, 61.6875, 296, 326),
+    port: { left: 12.203125, top: 62.6875, right: 306.203125, bottom: 386.6875 },
+    clientHeight: 324, scrollHeight: 382, scrollTop };
+  state.links = state.links.map((link, index) => {
+    const top = 71.484375 + index * 62.796875 - scrollTop;
+    return { ...link, focused: false, focusVisible: false,
+      box: box(21, top, 276.40625, 50), ring: box(15, top - 6, 288.40625, 62),
+      hit: top >= state.nav.port.top && top + 50 <= state.nav.port.bottom };
+  });
+  return state;
+}
+
+async function actualWheelBoundary(state, deltaY = 2000, mutate = source => source) {
+  const source = verifyPageMenuReflow.toString();
+  const helper = mutate(source.slice(source.indexOf('      const menuWheel ='), source.indexOf('      if (scrollable)', source.indexOf('      const menuWheel ='))));
+  const menuWheel = vm.runInNewContext(`${helper}; menuWheel`, {
+    expected: { ...expected(), height: 422 }, reverseScrollY: 0, snapshot: async () => state,
+    check: (value, expected, options) => { assert.deepEqual(pageMenuReflowViolations(value, expected, options), []); return value; },
+    wheel: async (_box, _delta, options) => options.predicate(await options.sample())
+  });
+  return menuWheel(state, deltaY);
+}
+
+test('actual bottom predicate accepts the observed1px integer rounding discrepancy and valid fractional positions', async () => {
+  for (const scrollTop of [57, 57.25, 57.5, 58, 58.75, 59]) assert.equal(await actualWheelBoundary(roundedWheelFixture(scrollTop)), true, String(scrollTop));
+  for (const scrollTop of [0, 56, 56.99, 59.01, 60]) assert.equal(await actualWheelBoundary(roundedWheelFixture(scrollTop)), false, String(scrollTop));
+});
+
+test('old half-pixel bottom predicate mutation rejects the recorded reachable boundary', async () => {
+  const state = roundedWheelFixture(57);
+  assert.equal(await actualWheelBoundary(state), true);
+  assert.equal(await actualWheelBoundary(state, 2000, source => source.replace('clientHeight)) <= 1', 'clientHeight)) <= .5')), false);
+  assert.equal(state.links[5].hit, true);
+  assert.equal(state.links[5].box.bottom, 378.46875);
+  assert.ok(state.links[5].box.bottom < state.nav.port.bottom);
+});
+
+test('rounding allowance cannot admit invalid metrics, page leakage or a nonzero top boundary', async () => {
+  for (const scrollTop of [-1, NaN, Infinity]) await assert.rejects(actualWheelBoundary(roundedWheelFixture(scrollTop)), assert.AssertionError);
+  for (const property of ['clientHeight', 'scrollHeight']) {
+    const state = roundedWheelFixture(57); state.nav[property] = NaN;
+    await assert.rejects(actualWheelBoundary(state), assert.AssertionError);
+  }
+  const leaked = roundedWheelFixture(57); leaked.scrollY = 1;
+  await assert.rejects(actualWheelBoundary(leaked), error => /page-scroll-leak/.test(error.message));
+  assert.equal(await actualWheelBoundary(roundedWheelFixture(0), -2000), true);
+  assert.equal(await actualWheelBoundary(roundedWheelFixture(.25), -2000), false);
+});
+
+test('metric rounding never replaces focused target, ring or second-wheel no-motion proof', async () => {
+  const state = roundedWheelFixture(57), expectedPage = { ...expected(), height: 422 };
+  state.summary.focused = false; state.links[5].focused = true; state.links[5].focusVisible = true;
+  assert.deepEqual(pageMenuReflowViolations(state, expectedPage, { focusedIndex: 5 }), []);
+  for (const mutate of [s => { s.links[5].box.bottom = 388; }, s => { s.links[5].ring.bottom = 388; }, s => { s.links[5].hit = false; }]) {
+    const broken = structuredClone(state); mutate(broken);
+    assert.equal(await actualWheelBoundary(broken), true, 'The independent numeric boundary is still satisfied');
+    assert.ok(pageMenuReflowViolations(broken, expectedPage, { focusedIndex: 5 }).some(issue => /clipped/.test(issue)));
+  }
+  assert.match(verifyPageMenuReflow.toString(), /record.boundary.nav.scrollTop === record.pointer.nav.scrollTop/);
+});

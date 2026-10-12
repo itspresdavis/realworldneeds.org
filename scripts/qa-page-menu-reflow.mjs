@@ -304,8 +304,11 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
         // Every intermediate sample retains the original page-scroll baseline;
         // leaked scroll must throw, never settle into an accepted new baseline.
         sample: async () => check(await snapshot(), expected, { scrollY: reverseScrollY }),
+        // CSSOM exposes rounded integer heights but a double scrollTop. Their
+        // independently rounded extent can differ by 1px at the real boundary.
+        // https://drafts.csswg.org/cssom-view/#extension-to-the-element-interface
         predicate: state => deltaY < 0 ? state.nav.scrollTop === 0
-          : Math.abs(state.nav.scrollTop - (state.nav.scrollHeight - state.nav.clientHeight)) <= .5
+          : Math.abs(state.nav.scrollTop - (state.nav.scrollHeight - state.nav.clientHeight)) <= 1
       });
       if (scrollable) {
         // Reverse traversal resets toward the first link naturally. A negative
