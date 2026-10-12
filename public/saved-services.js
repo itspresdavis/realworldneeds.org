@@ -159,7 +159,9 @@ export function initSavedServices() {
   const syncView = (focus = false) => {
     if (focus) document.querySelector(".rwn-page-menu")?.removeAttribute("open");
     const visible = active();
-    panel.closest(".directory-shell")?.classList.toggle("has-saved-view", visible);
+    const shell = panel.closest(".directory-shell");
+    const wasSaved = shell?.classList.contains("has-saved-view");
+    shell?.classList.toggle("has-saved-view", visible);
     generation += 1;
     if (!visible || focus) cancelClear();
     if (visible) {
@@ -167,10 +169,9 @@ export function initSavedServices() {
       if (focus) { heading.focus({ preventScroll: true }); panel.scrollIntoView({ block: "start", behavior: "auto" }); }
     } else if (focus) {
       // History restoration owns the return target after the saved panel hides.
-      if (history.state?.rwnDirectory) {
-        window.dispatchEvent(new Event("rwn-directory-restore"));
-        return;
-      }
+      if ((wasSaved || history.state?.rwnDirectory) && !window.dispatchEvent(new CustomEvent("rwn-directory-restore", {
+        cancelable: true, detail: wasSaved && location.hash === "#directory-results" ? "browse" : "history"
+      }))) return;
       const target = document.getElementById(location.hash.slice(1)) || document.querySelector("[data-directory-query]");
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: "start", behavior: "auto" });

@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = await readFile(new URL("../public/directory.js", import.meta.url), "utf8");
 function bodyBetween(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
 const catalogSource = bodyBetween("const loadCatalog=", "const clearGlobalResults=");
-const paginationSource = bodyBetween("const renderNext=", "more.addEventListener");
+const paginationSource = bodyBetween("const renderNext=", "listen(more,");
 const applySource = bodyBetween("const apply=", "const reset=");
 
 function catalogFixture(fetch) {
@@ -53,7 +53,7 @@ function pageFixture(total) {
   const appended = [];
   const f = vm.createContext({
     activeMatches: Array.from({ length: total }, (_, id) => ({ id })), visibleCount: 0,
-    MAX_RESULTS: 60, scopedCount: 2019, resultRow: (record) => record,
+    format: value => value.toLocaleString(), BATCH: 60, scopedCount: 2019, resultRow: (record) => record,
     resultList: { append: (...rows) => appended.push(...rows) }, more: {}, resultSummary: {}
   });
   vm.runInContext(`${paginationSource}\nglobalThis.next = renderNext;`, f);
@@ -83,7 +83,7 @@ test("an older pending search cannot replace newer input or reset state", async 
   const f = vm.createContext({
     input: { value: "New York" }, activeCategory: "", generation: 0, composing: false,
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
-    count: {}, loadCatalog: () => pending,
+    count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending,
     syncCategoryLabels: () => { renderCalls += 1; }
   });
   vm.runInContext(`${applySource}\nglobalThis.search = apply;`, f);
@@ -101,7 +101,7 @@ test("shipped directory entry stays self-contained for existing offline workers"
   const { directoryRelease, offlineAssets } = JSON.parse(await readFile("dist/data/release.json", "utf8"));
   assert.match(client, /directory-global-result-wrap/);
   assert.doesNotMatch(client, /from[\s]*["\'].*search\.js/);
-  assert.doesNotMatch(client, /import.*directory-results/);
+  assert.doesNotMatch(client, /\bimport(?!\s*\.)[^;]*directory-results/);
   assert.ok(Buffer.byteLength(client) <= 14_000, "bundled entry must stay inside the existing directory client budget");
   const page = await readFile("dist/directory/index.html", "utf8");
   assert.ok(page.includes(`${offlineAssets["/directory.js"]}?v=${directoryRelease}`));
@@ -119,7 +119,7 @@ test("a failed older search cannot clear newer results after input changes or re
   const f = vm.createContext({
     input: { value: "New York" }, activeCategory: "", generation: 0, composing: false,
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
-    count: {}, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }
+    count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }
   });
   vm.runInContext(`${applySource}\nglobalThis.search = apply;`, f);
   const running = f.search();
@@ -137,15 +137,16 @@ const deferred = () => {
   const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
   return { promise, resolve, reject };
 };
-const controllerSource = bodyBetween('navigator.serviceWorker?.addEventListener("controllerchange"', 'input?.addEventListener("focus"');
+const controllerSource = bodyBetween('listen(navigator.serviceWorker,"controllerchange"', 'listen(input,"focus"');
 
 function updateFixture(fetch) {
   let changed, cleared = 0, searches = 0, cancelled;
   const f = vm.createContext({
-    fetch, catalogPromise: undefined, freshCatalog: false, searchIndexUrl: "/data/search-index.json?v=old",
+    fetch, listen: (node, ...args) => node?.addEventListener(...args), catalogPromise: undefined, freshCatalog: false, searchIndexUrl: "/data/search-index.json?v=old",
     input: { value: "Fixture" }, activeCategory: "food", generation: 0, inputTimer: 42,
     navigator: { serviceWorker: { addEventListener(type, handler) { assert.equal(type, "controllerchange"); changed = handler; } } },
     clearTimeout(timer) { cancelled = timer; },
+    cancelInput() { cancelled = 42; },
     clearGlobalResults() { cleared += 1; },
     apply() { searches += 1; }
   });
@@ -237,7 +238,7 @@ test("a pre-replacement focus prefetch cannot restore older category chips", asy
   const fixture = updateFixture(() => pending.promise);
   fixture.f.input.addEventListener = (type, handler) => { assert.equal(type, "focus"); focus = handler; };
   fixture.f.syncCategoryLabels = () => { categories += 1; };
-  const focusSource = bodyBetween('input?.addEventListener("focus"', 'input?.addEventListener("input"');
+  const focusSource = bodyBetween('listen(input,"focus"', 'listen(input,"input"');
   vm.runInContext(focusSource, fixture.f);
   focus();
   fixture.change();
@@ -245,4 +246,12 @@ test("a pre-replacement focus prefetch cannot restore older category chips", asy
   await pending.promise;
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(categories, 0);
+});
+
+
+test("self-contained bundle guard rejects helper imports without mistaking import.meta for one", () => {
+  const dependency = /\bimport(?!\s*\.)[^;]*directory-results/;
+  for (const text of ["import { row } from './directory-results.js'", "import{row}from'./directory-results.js'", "const row=import('./directory-results.js')"]) assert.match(text, dependency);
+  assert.doesNotMatch('const release=new URL(import.meta.url);if(location.hash==="#directory-results")restore()', dependency);
+  assert.doesNotMatch('const release=new URL(import.meta.url),target="#directory-results"', dependency);
 });

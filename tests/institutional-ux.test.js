@@ -57,7 +57,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.match(client, /payload\.scopes\[currentScope\]/);
   assert.doesNotMatch(client, /XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
   assert.doesNotMatch(client, /input\?\.value.*searchIndexUrl|searchIndexUrl.*input\?\.value/);
-  assert.match(client, /MAX_RESULTS\s*=\s*60/);
+  assert.match(client, /BATCH\s*=\s*60/);
   assert.match(client, /Escape/);
   for (const record of searchIndex.records.slice(0, 10)) {
     assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "phoneLinks", "place", "search"].sort());

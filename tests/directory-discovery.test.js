@@ -48,9 +48,9 @@ test("the real restore handler reads history.state and restores the filter contr
   const history = { state: null, replaceState(value) { this.state = value; } };
   writeDirectoryState(history, "/directory", { query: "WIC", category: "food", country: "United States", shown: 120, scroll: 900 });
   const f = vm.createContext({ history, location: { pathname: "/directory", hash: "" }, pagePath: "/directory", readDirectoryState,
-    startup: {}, restored: null, restorePending: false, clearTimeout() {}, inputTimer: null,
+    startup: {}, shell: null, saved: null, browse: false, readState: () => readDirectoryState(history.state, "/directory"), restored: null, restorePending: false, cancelInput() {}, clearTimeout() {}, inputTimer: null,
     input: {}, activeCategory: "", country: {}, renderChips() {}, apply: () => calls++ });
-  const restoreSource = source.slice(source.indexOf("const restore="), source.indexOf('window.addEventListener("popstate"'));
+  const restoreSource = source.slice(source.indexOf("const restore="), source.indexOf('listen(window,"popstate"'));
   vm.runInContext(`${restoreSource}\nrestore();`, f);
   assert.equal(f.input.value, "WIC"); assert.equal(f.activeCategory, "food");
   assert.equal(f.country.value, "United States"); assert.equal(f.restored.shown, 120);
@@ -70,7 +70,7 @@ test("reconnection retries a country-only search after its results were hidden b
   let searches = 0;
   const f = vm.createContext({ showConnectivityState() {}, results: { hidden: true },
     input: { value: "" }, activeCategory: "", country: { value: "France" }, apply: () => searches++ });
-  const changeSource = source.slice(source.indexOf("const connectivityChanged="), source.indexOf('window.addEventListener("online",connectivityChanged)'));
+  const changeSource = source.slice(source.indexOf("const connectivityChanged="), source.indexOf('for(const type of ["online","offline"])'));
   vm.runInContext(`${changeSource}\nconnectivityChanged();`, f);
   assert.equal(searches, 1);
 });
@@ -98,9 +98,9 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
   ];
   const frames = [], effects = { remembers: 0, focus: 0, scroll: null, cleared: 0 };
   const f = vm.createContext({
-    input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
+    format: value => value.toLocaleString(), browse: false, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
     queryTokens: value => value.trim().split(/\s+/).filter(Boolean), normalize: value => value.toLowerCase(),
-    clear: {}, root: { classList: { toggle() {} } }, count: {}, loadCatalog: async () => ({ records }),
+    clear: {}, root: { classList: { toggle() {} } }, count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: async () => ({ records }),
     syncCategoryLabels() {}, scopedRecords: payload => payload.records, scoreRecord: () => 1,
     collator: new Intl.Collator(), activeMatches: [], visibleCount: 0, scopedCount: 0,
     resultList: { replaceChildren() {}, querySelectorAll: () => [{ getAttribute: () => "/service/finder-fr", focus: () => effects.focus++ }] },
@@ -178,8 +178,8 @@ test("search recovery does not link the global directory back into its own resto
 
 test("Saved handoff hides its panel before requesting directory return-focus ownership", async () => {
   const saved = await readFile("public/saved-services.js", "utf8");
-  assert.match(saved, /history\.state\?\.rwnDirectory[\s\S]*?dispatchEvent\(new Event\("rwn-directory-restore"\)\)/);
-  assert.match(source, /addEventListener\("rwn-directory-restore",restore\)/);
+  assert.match(saved, /\(wasSaved \|\| history\.state\?\.rwnDirectory\) && !window\.dispatchEvent\(new CustomEvent\("rwn-directory-restore", \{[\s\S]*?cancelable: true/);
+  assert.match(source, /listen\(window,"rwn-directory-restore",restore\)/);
 });
 
 test("Saved navigation closes the narrow menu before moving focus into either view", async () => {
@@ -189,13 +189,13 @@ test("Saved navigation closes the narrow menu before moving focus into either vi
     const effects = [];
     const f = vm.createContext({ active: () => visible, generation: 0,
       document: { querySelector(selector) { assert.equal(selector, ".rwn-page-menu"); return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } }; } },
-      panel: { closest: () => ({ classList: { toggle() {} } }), scrollIntoView() {} },
+      panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }), scrollIntoView() {} },
       cancelClear() {}, render() {}, heading: { focus() { effects.push("focus"); } },
-      history: { state: { rwnDirectory: {} } }, Event: class {},
-      window: { dispatchEvent() { effects.push("handoff"); } }
+      history: { state: { rwnDirectory: {} } }, location: { hash: "#directory-results" }, CustomEvent: class {},
+      window: { dispatchEvent() { effects.push("handoff"); return false; } }
     });
     vm.runInContext(`${syncSource}\nsyncView(true);`, f);
-    assert.deepEqual(effects, ["closed", visible ? "focus" : "handoff"]);
+    assert.deepEqual(effects, ["closed", "toggled", visible ? "focus" : "handoff"]);
   }
 });
 
@@ -251,8 +251,8 @@ test("cleared searches and failed restored searches still have a visible return-
 
 test("Saved navigation snapshots current scroll before creating its fragment history entry", () => {
   let capture, handler, snapshots = 0;
-  const f = vm.createContext({ document: { addEventListener(type, fn, flag) { assert.equal(type, "click"); handler = fn; capture = flag; } }, remember: () => snapshots++ });
-  const clickSource = source.split("\n").find(line => line.startsWith('document.addEventListener("click"'));
+  const f = vm.createContext({ listen: (node, ...args) => node?.addEventListener(...args), location: { hash: "" }, saved: null, document: { addEventListener(type, fn, flag) { assert.equal(type, "click"); handler = fn; capture = flag; } }, remember: () => snapshots++ });
+  const clickSource = source.split("\n").find(line => line.startsWith('listen(document,"click"'));
   vm.runInContext(clickSource, f);
   assert.equal(capture, true);
   handler({ target: { closest: selector => selector === 'a[href$="#saved"]' } });

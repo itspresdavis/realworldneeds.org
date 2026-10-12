@@ -10,11 +10,13 @@ export const readDirectoryState = (state, path) => {
 };
 
 export const writeDirectoryState = (history, path, value) => {
-  try { history.replaceState({ ...history.state, rwnDirectory: { ...value, path } }, ""); }
+  const state = { ...history.state, rwnDirectory: { ...value, path } };
+  try { history.replaceState(state, ""); }
   catch { /* Restricted history must not prevent browsing or navigation. */ }
+  return readDirectoryState(state, path);
 };
 
-export const restoreDirectoryView = (list, state) => {
+export const restoreDirectoryView = (list, state, browseInput) => {
   window.scrollTo({ top: state.scroll, behavior: "instant" });
   const header = document.querySelector(".legal-header");
   const edge = header?.getBoundingClientRect().bottom || 0;
@@ -23,8 +25,12 @@ export const restoreDirectoryView = (list, state) => {
     return rect.height > 0 && rect.top >= edge + 6 && rect.bottom <= window.innerHeight - 6;
   };
   const links = [...list.querySelectorAll("h2 a,.directory-global-result")];
-  const target = links.find(link => link.getAttribute("href") === state.focus && visible(link))
-    || links.find(visible)
-    || [...(header?.querySelectorAll("a, summary") || [])].find(node => node.getBoundingClientRect().height > 0);
+  let target = links.find(link => link.getAttribute("href") === state.focus && visible(link))
+    || links.find(visible);
+  if (!target && browseInput) {
+    target = [browseInput, ...document.querySelectorAll("[data-directory-clear],.directory-global-empty button")].find(visible) || browseInput;
+    if (!visible(target)) target.scrollIntoView({ block: "center", behavior: "instant" });
+  }
+  target ||= [...(header?.querySelectorAll("a, summary") || [])].find(node => node.getBoundingClientRect().height > 0);
   target?.focus({ preventScroll: true });
 };
