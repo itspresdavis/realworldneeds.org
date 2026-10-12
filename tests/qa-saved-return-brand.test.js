@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { SAVED_RETURN_WIDTHS, homeSavedViolations, savedViewViolations, directoryReturnViolations, waitForSavedReturnDestination, savedFocusViolations } from '../scripts/qa-saved-return-brand.mjs';
+import { pressConnectivityRecoveryKey } from '../scripts/qa-connectivity-recovery.mjs';
 import { verifySavedEntryViewport } from '../scripts/qa-directory-discovery.mjs';
 const home=()=>({path:'/',width:320,overflow:false,overlay:false,savedEntry:{text:'Saved',href:'/directory#saved',visible:true,box:{left:251,top:10,right:309,bottom:54,width:58,height:44},neighbors:[{left:10,top:10,right:179,bottom:54},{left:189,top:10,right:240,bottom:54}]}});
 const saved=(ids=[])=>({hash:'#saved',savedVisible:true,overlay:false,overflow:false,title:'Saved services | Real World Needs',empty:!ids.length,rows:ids.map(id=>({id})),current:[1,2].map(()=>({href:'/directory#saved',value:'page'})),privacy:'Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.'});
@@ -22,7 +23,7 @@ test('rendered suite invokes the focused runner with explicit keyboard, history 
  const helper=await readFile('scripts/qa-saved-return-brand.mjs','utf8'),runner=await readFile('scripts/browser-saved-services.mjs','utf8');
  assert.match(runner,/await verifySavedReturnBrand\(\{ client, host: HOST, navigate, evaluate, capture, waitForUI, record: records\[0\], qaDir: QA_DIR \}\)/);
  for(const phase of ['home','empty','populated'])assert.ok(helper.includes(`saved-return-${phase}-`));
- for(const evidence of ['Input.dispatchKeyEvent','Page.getNavigationHistory','Page.navigateToHistoryEntry','prefers-reduced-motion','last-removal','first-save-return','saved-return-brand.json'])assert.ok(helper.includes(evidence));
+ for(const evidence of ['pressConnectivityRecoveryKey','Page.getNavigationHistory','Page.navigateToHistoryEntry','prefers-reduced-motion','last-removal','first-save-return','saved-return-brand.json'])assert.ok(helper.includes(evidence));
  assert.doesNotMatch(helper,/\.click\(|\.focus\(|dispatchEvent\(|history\.(?:back|forward|pushState|replaceState)/);
  assert.match(helper,/await tabTo\('\[data-service-save\]'\);\s*await key\('Enter'\)/);
  assert.match(helper,/await tabTo\('\[data-saved-remove\]'\);\s*await key\('Enter'\)/);
@@ -64,4 +65,22 @@ test('Saved entry must keep its initial visible focus geometry and scroll stable
  const source=await readFile('scripts/qa-directory-discovery.mjs','utf8');
  assert.match(source,/const savedEntry = await wait\(s => s.saved && !s.menuOpen && s.focusedId === 'saved-services-heading'/);
  assert.match(source,/await verifySavedEntryViewport\(\{ initial: savedEntry, sample: state \}\)/);
+});
+
+test('Saved journeys reuse the established native Enter and Tab protocol without divergent dispatch',async()=>{
+ const source=await readFile('scripts/qa-saved-return-brand.mjs','utf8');
+ assert.match(source,/import \{ pressConnectivityRecoveryKey \} from '\.\/qa-connectivity-recovery.mjs'/);
+ assert.match(source,/const key=name=>pressConnectivityRecoveryKey\(client,name,name==='Tab'\?9:13\)/);
+ assert.doesNotMatch(source,/Input\.dispatchKeyEvent|dispatchSavedReturnKey/);
+ const calls=[],client={call:async(method,event)=>calls.push({method,...event})};
+ await pressConnectivityRecoveryKey(client,'Enter',13);
+ assert.deepEqual(calls,[
+  {method:'Input.dispatchKeyEvent',type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'},
+  {method:'Input.dispatchKeyEvent',type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13}
+ ]);
+ calls.length=0;await pressConnectivityRecoveryKey(client,'Tab',9);
+ assert.deepEqual(calls,[
+  {method:'Input.dispatchKeyEvent',type:'rawKeyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9,nativeVirtualKeyCode:9},
+  {method:'Input.dispatchKeyEvent',type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9,nativeVirtualKeyCode:9}
+ ]);
 });

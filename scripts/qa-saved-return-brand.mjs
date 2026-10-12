@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
+import { pressConnectivityRecoveryKey } from './qa-connectivity-recovery.mjs';
 
 // CI-only coverage using the already-running browser. No new browser or service.
 export const SAVED_RETURN_WIDTHS = [320, 508, 1180];
@@ -72,10 +73,7 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
   const assert=(condition,message,data)=>{if(!condition)throw new Error(`${message}: ${JSON.stringify(data)}`);};
   const snapshot=()=>evaluate(client,`(${savedReturnSnapshot.toString()})()`);
   const destination=expression=>waitForSavedReturnDestination({sample:()=>evaluate(client,expression)});
-  const key=async(key,code=key,value=key==='Tab'?9:13)=>{
-    await client.call('Input.dispatchKeyEvent',{type:'keyDown',key,code,windowsVirtualKeyCode:value,nativeVirtualKeyCode:value});
-    await client.call('Input.dispatchKeyEvent',{type:'keyUp',key,code,windowsVirtualKeyCode:value,nativeVirtualKeyCode:value});
-  };
+  const key=name=>pressConnectivityRecoveryKey(client,name,name==='Tab'?9:13);
   const tabTo=async selector=>{
     for(let i=0;i<80;i++){
       await key('Tab');
