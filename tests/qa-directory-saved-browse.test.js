@@ -110,11 +110,12 @@ test('ordinary private-history navigation and versioned local assets are allowed
 });
 
 function headerFixture(positions = [20, 20]) {
-  let frame = 0, top = 20, scrollCalls = 0;
+  let frame = 0, time = 0, top = 20, scrollCalls = 0;
   const node = { hidden: false, disabled: false, contains: () => false, scrollIntoView: () => { scrollCalls++; },
     getBoundingClientRect: () => ({ x: 250, y: top, left: 250, right: 310, top, bottom: top + 44, width: 60, height: 44 }) };
   const globals = { innerWidth: 390, innerHeight: 844, scrollX: 0, scrollY: 4200,
-    requestAnimationFrame: callback => { top = positions[Math.min(frame++, positions.length - 1)]; queueMicrotask(callback); },
+    performance: { now: () => time }, setTimeout, clearTimeout,
+    requestAnimationFrame: callback => { time += 16; top = typeof positions === 'function' ? positions(frame++) : positions[Math.min(frame++, positions.length - 1)]; queueMicrotask(callback); },
     getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
     document: { querySelector: () => node, elementFromPoint: () => node } };
   return { globals, calls: () => scrollCalls, frames: () => frame };
@@ -127,7 +128,7 @@ test('Saved sticky header preparation preserves the actual pre-Saved scroll and 
 });
 
 test('covered and continuously moving Saved header targets fail before dispatch', async () => {
-  const moving = headerFixture(Array.from({ length: 60 }, (_, i) => 20 + i));
+  const moving = headerFixture(index => 20 + index);
   await assert.rejects(vm.runInNewContext(`(${directorySavedBrowseHeaderPoint.toString()})('a')`, moving.globals), /did not settle/);
   const covered = headerFixture(); covered.globals.document.elementFromPoint = () => ({});
   await assert.rejects(vm.runInNewContext(`(${directorySavedBrowseHeaderPoint.toString()})('a')`, covered.globals), /covered/);

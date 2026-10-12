@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+
 // CI-only regression: hold the real entry module at the network boundary, type
 // into the static form, then release it without synthesizing another input.
 // No application delay, replacement module, or browser launch belongs here.
@@ -164,22 +166,36 @@ export function directoryStartupRequestLeaksQuery(request) {
 // The shared click preparer scrolls ordinary controls into view. A sticky
 // header action is already visible and must not move the directory baseline.
 // It gets the same settled-box/hit-test and trusted ordered-event requirements.
-export async function directorySavedBrowseHeaderPoint(selector) {
+export async function directorySavedBrowseHeaderPoint(selector, { timeoutMs = 8000 } = {}) {
+  const started = performance.now(), trace = [];
+  const diagnostic = globalThis.__rwnSavedHeaderGeometryQA = { selector, timeoutMs, trace };
+  const failure = () => new Error(`Saved header control did not settle within ${timeoutMs}ms: ${JSON.stringify(diagnostic)}`);
   let previous, target;
-  for (let frame = 0; frame < 60; frame++) {
-    await new Promise(resolve => requestAnimationFrame(resolve));
+  while (performance.now() - started < timeoutMs) {
+    let deadline, frame;
+    try {
+      await Promise.race([
+        new Promise(resolve => { frame = requestAnimationFrame(resolve); }),
+        new Promise((_, reject) => { deadline = setTimeout(() => reject(failure()), Math.max(1, timeoutMs - (performance.now() - started))); })
+      ]);
+    } finally { clearTimeout(deadline); globalThis.cancelAnimationFrame?.(frame); }
+    if (performance.now() - started >= timeoutMs) break;
     const node = document.querySelector(selector), rect = node?.getBoundingClientRect();
     if (!node || node.hidden || node.disabled) throw new Error('Missing Saved header control: ' + selector);
     const style = getComputedStyle(node), point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    trace.push({ elapsedMs: performance.now() - started, sameNode: node === target,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, scroll: [scrollX, scrollY], point,
+      display: style.display, visibility: style.visibility, opacity: style.opacity });
+    if (trace.length > 40) trace.shift();
     if (!(rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight)
-      || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility) || style.opacity === '0') throw new Error('Saved header control is not visible: ' + selector);
+      || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility) || style.opacity === '0') throw new Error('Saved header control is not visible: ' + JSON.stringify(diagnostic));
     const hit = document.elementFromPoint(point.x, point.y);
-    if (!hit || !(hit === node || node.contains(hit))) throw new Error('Saved header control is covered: ' + selector);
+    if (!hit || !(hit === node || node.contains(hit))) throw new Error('Saved header control is covered: ' + JSON.stringify(diagnostic));
     const signature = JSON.stringify([rect.x, rect.y, rect.width, rect.height, scrollX, scrollY]);
-    if (target === node && previous === signature) return point;
+    if (target === node && previous === signature) { diagnostic.settled = true; return point; }
     target = node; previous = signature;
   }
-  throw new Error('Saved header control did not settle: ' + selector);
+  throw failure();
 }
 
 // Extra rendered evidence for an early edit that leaves through Saved before
@@ -187,6 +203,7 @@ export async function directorySavedBrowseHeaderPoint(selector) {
 export function directoryStartupSavedSnapshot(base) {
   const pick = selector => document.querySelector(selector);
   const active = document.activeElement, rect = active?.getBoundingClientRect();
+  const inputRect = pick('[data-directory-query]')?.getBoundingClientRect();
   const style = active ? getComputedStyle(active) : null;
   const useful = Boolean(active?.matches('[data-directory-query], [data-directory-country], [data-directory-category], [data-directory-clear], .directory-global-result, .directory-records h2 a'));
   const visible = useful && rect.width > 0 && rect.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6
@@ -199,7 +216,9 @@ export function directoryStartupSavedSnapshot(base) {
     menuOpen: Boolean(pick('.rwn-page-menu[open]')),
     focusedId: active?.id || '',
     meaningfulFocus: Boolean(visible && hit && (hit === active || active.contains(hit))),
-    focusBox: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null
+    focusBox: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+    inputBox: inputRect ? { x: inputRect.x, y: inputRect.y, width: inputRect.width, height: inputRect.height } : null,
+    headerGeometry: globalThis.__rwnSavedHeaderGeometryQA || null
   };
 }
 
@@ -207,7 +226,7 @@ export async function directoryStartupSavedHeaderPoint(selector, prepare) {
   const point = await prepare(selector), node = document.querySelector(selector);
   globalThis.__rwnEarlySavedHeaderQA?.stop();
   const events = [], types = ['mousedown', 'mouseup', 'click'];
-  const record = event => events.push({ type: event.type, trusted: event.isTrusted,
+  const record = event => events.push({ type: event.type, trusted: event.isTrusted, scroll: globalThis.scrollY ?? null,
     expected: Boolean(node && (event.target === node || node.contains(event.target))) });
   for (const type of types) document.addEventListener(type, record, true);
   globalThis.__rwnEarlySavedHeaderQA = { selector, point, events, stop: () => {
@@ -215,6 +234,49 @@ export async function directoryStartupSavedHeaderPoint(selector, prepare) {
   } };
   return point;
 }
+
+export const directoryStartupSavedBaselineReady = (s, { query, inputCount, timeOrigin }) => Boolean(
+  s.documentPresent && Number.isFinite(s.timeOrigin) && s.timeOrigin === timeOrigin && s.pathname === '/directory'
+  && !s.ready && s.moduleHeld > 0 && s.catalogHeld === 0 && !s.saved && !s.panelVisible && !s.menuOpen
+  && s.query === query && s.country === '' && s.countryDisabled && s.focusedInput && s.meaningfulFocus
+  && s.probe?.catalogReads === 0 && s.probe.catalogSettled === 0 && s.probe.inputs.length === inputCount
+  && s.probe.inputs.every(input => input.trusted && !input.runtime) && s.probe.inputs.at(-1)?.value === query && s.rows.length === 0
+);
+
+export async function waitForDirectoryStartupSavedBaseline({ sample, query, inputCount, timeOrigin,
+  wait = sleep, now = () => performance.now(), timeoutMs = 8000 }) {
+  const started = now(), trace = [];
+  let latest, anchor, since = started, count = 0;
+  const failure = () => new Error(`Pre-Saved directory baseline did not settle within ${timeoutMs}ms: ${JSON.stringify({ latest, trace })}`);
+  while (now() - started < timeoutMs) {
+    let deadline;
+    try {
+      latest = await Promise.race([sample(), new Promise((_, reject) => {
+        deadline = setTimeout(() => reject(failure()), Math.max(1, timeoutMs - (now() - started)));
+      })]);
+    } catch (error) { if (!isDirectoryStartupNavigationError(error)) throw error; latest = { documentPresent: false }; }
+    finally { clearTimeout(deadline); }
+    const geometry = [latest.scroll, ...['x', 'y', 'width', 'height'].map(key => latest.inputBox?.[key])];
+    const signature = JSON.stringify([latest.href, latest.timeOrigin, latest.query, latest.country, latest.selection, latest.viewport, geometry]);
+    const valid = directoryStartupSavedBaselineReady(latest, { query, inputCount, timeOrigin }) && geometry.every(Number.isFinite);
+    if (!valid || signature !== anchor) { anchor = valid ? signature : null; since = now(); count = valid ? 1 : 0; }
+    else count++;
+    trace.push({ elapsedMs: now() - started, valid, scroll: latest.scroll, inputBox: latest.inputBox,
+      focusedInput: latest.focusedInput, meaningfulFocus: latest.meaningfulFocus, moduleHeld: latest.moduleHeld, ready: latest.ready });
+    if (trace.length > 40) trace.shift();
+    if (now() - started < timeoutMs && count >= 6 && now() - since >= 500) return { state: latest, durationMs: now() - started, samples: count, trace };
+    await wait(50);
+  }
+  throw failure();
+}
+
+export const directoryStartupSavedBaselinePreserved = (current, baseline) => Boolean(
+  current.timeOrigin === baseline.timeOrigin && !current.ready && current.moduleHeld > 0 && current.catalogHeld === 0
+  && current.query === baseline.query && current.country === baseline.country && current.countryDisabled
+  && current.scroll === baseline.scroll && JSON.stringify(current.inputBox) === JSON.stringify(baseline.inputBox)
+  && JSON.stringify(current.viewport) === JSON.stringify(baseline.viewport)
+  && JSON.stringify(current.probe?.inputs) === JSON.stringify(baseline.probe?.inputs) && current.probe?.catalogReads === 0
+);
 
 export const directoryStartupSavedReturnReady = (s, query) => Boolean(s.documentPresent && s.ready
   && s.pathname === '/directory' && new URL(s.href).hash === '#directory-results' && !s.saved && !s.panelVisible && !s.menuOpen
@@ -254,7 +316,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   const hold = { module: false, catalog: false };
   const requests = [], errors = [], evidence = [];
   let interceptionError, instrumentation;
-  let viewportWidth = null, scenario = 'setup';
+  let viewportWidth = null, scenario = 'setup', baselineEvidence = null;
   const continueRequest = requestId => client.call('Fetch.continueRequest', { requestId });
   // This runner's small CDP client exposes its WebSocket but has no event API.
   // Subscribe here so the runner itself only needs an import and invocation.
@@ -370,9 +432,13 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
   };
 
 
-  const savedState = () => evaluate(client, `(${directoryStartupSavedSnapshot.toString()})((${directoryStartupSnapshot.toString()})())`);
-  const clickEarlySavedHeader = async selector => {
+  const savedState = async () => ({ ...(await evaluate(client, `(${directoryStartupSavedSnapshot.toString()})((${directoryStartupSnapshot.toString()})())`)), moduleHeld: held.module.length, catalogHeld: held.catalog.length });
+  const clickEarlySavedHeader = async (selector, baseline = null) => {
     const point = await evaluate(client, `(${directoryStartupSavedHeaderPoint.toString()})(${JSON.stringify(selector)}, (${directorySavedBrowseHeaderPoint.toString()}))`);
+    if (baseline) {
+      const current = await savedState();
+      assert(directoryStartupSavedBaselinePreserved(current, baseline), 'Menu/Saved preparation moved the settled directory baseline', { baseline, current });
+    }
     let activation;
     try {
       await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
@@ -381,9 +447,11 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       activation = await evaluate(client, `(() => { const probe = globalThis.__rwnEarlySavedHeaderQA; probe?.stop(); if (!probe) return null; const { stop, ...detail } = probe; return detail; })()`);
     }
     assert(directoryStartupClickWasDelivered(activation), 'Early Saved header did not receive exactly one trusted native click', activation);
+    if (baseline) assert(activation.events.every(event => event.scroll === baseline.scroll), 'Menu/Saved native input moved the settled directory baseline', { baselineScroll: baseline.scroll, activation });
   };
   const earlySavedBrowse = async (width, { clear = false, browseBeforeRuntime = false } = {}) => {
     scenario = `${clear ? 'early clear' : 'early input'} through native Saved and Browse ${browseBeforeRuntime ? 'before' : 'after'} runtime`;
+    baselineEvidence = null;
     if (clear) await seedStaleHistory();
     const before = await start({ reload: clear });
     if (clear) assert(before.history?.query === 'WIC' && before.history.country === 'United States' && before.history.category === 'food' && before.history.shown === 120, 'Early Saved clear requires a real stale WIC entry', before.history);
@@ -391,11 +459,10 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     if (clear) await erase();
     const query = clear ? '' : QUERY, inputCount = clear ? 2 : 1;
     await evaluate(client, `document.querySelector('[data-directory-query]').scrollIntoView({ block: 'center', behavior: 'instant' })`);
-    await frames();
-    const preSaved = await savedState();
-    assert(preSaved.meaningfulFocus && preSaved.focusedInput, 'Early Saved must begin at the visible editable query', preSaved);
-    if (width < 900) await clickEarlySavedHeader('.rwn-page-menu > summary');
-    await clickEarlySavedHeader(`${width < 900 ? '.rwn-page-menu' : '.rwn-page-nav'} a[href="/directory#saved"]`);
+    baselineEvidence = await waitForDirectoryStartupSavedBaseline({ sample: savedState, query, inputCount, timeOrigin: before.timeOrigin });
+    const preSaved = baselineEvidence.state;
+    if (width < 900) await clickEarlySavedHeader('.rwn-page-menu > summary', preSaved);
+    await clickEarlySavedHeader(`${width < 900 ? '.rwn-page-menu' : '.rwn-page-nav'} a[href="/directory#saved"]`, preSaved);
     const early = await wait(s => new URL(s.href).hash === '#saved' && !s.ready && held.module.length > 0 && s.query === query, 'Native Saved did not occur while the real directory module remained held');
     assert(early.probe.catalogReads === 0 && !held.catalog.length, 'Early Saved searched the private input before runtime', early);
     assertInputs(early, { count: inputCount });
@@ -456,7 +523,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     await capture(client, `directory-startup-${clear ? 'clear' : 'input'}-browse-${browseBeforeRuntime ? 'before' : 'after'}-runtime-${width}.png`);
     return { clear, browseBeforeRuntime, inputs: returned.probe.inputs, query: returned.query, country: returned.country, category: returned.category,
       rows: returned.rows.map(row => row.href), meaningfulFocus: returned.meaningfulFocus, focusedHref: returned.focusedHref, focusedInput: returned.focusedInput,
-      preSavedScroll: preSaved.scroll, finalScroll: returned.scroll, staticSavedVisibleBeforeRelease: browseBeforeRuntime ? opened.panelVisible : null,
+      preSavedScroll: preSaved.scroll, baselineQuiet: { durationMs: baselineEvidence.durationMs, samples: baselineEvidence.samples, trace: baselineEvidence.trace }, finalScroll: returned.scroll, staticSavedVisibleBeforeRelease: browseBeforeRuntime ? opened.panelVisible : null,
       catalogReadsWhileSaved: opened.probe.catalogReads, catalogReadsAfterBrowse: returned.probe.catalogReads, href: returned.href };
   };
 
@@ -609,6 +676,17 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     assert(errors.length === 0, 'Browser errors during directory startup QA', errors);
     console.log(`PASS directory startup: ${JSON.stringify(evidence)}; trusted pre-handler typing, complete stale-response settlement and URL/storage/network privacy`);
   } catch (error) {
+    // Capture a bounded diagnostic before releasing gates or leaving the failed
+    // document. A stalled browser must not stall the error path indefinitely.
+    const bounded = async operation => {
+      let timer;
+      try { return await Promise.race([operation().catch(cause => ({ error: cause.message })), new Promise(resolve => { timer = setTimeout(() => resolve({ error: 'Diagnostic timed out' }), 1500); })]); }
+      finally { clearTimeout(timer); }
+    };
+    const failed = await bounded(savedState);
+    await bounded(() => capture(client, `directory-startup-failure-${viewportWidth ?? 'unset'}.png`));
+    await mkdir('qa-screenshots', { recursive: true });
+    await writeFile('qa-screenshots/directory-startup-failure.json', JSON.stringify({ width: viewportWidth, scenario, error: error.message, held, baselineEvidence, state: failed }, null, 2));
     throw new Error(`Directory startup QA (${viewportWidth ?? 'unset'}px, ${scenario}): ${error.message}`, { cause: error });
   } finally {
     hold.module = false; hold.catalog = false;
