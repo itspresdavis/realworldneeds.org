@@ -265,7 +265,7 @@ ${baseline ? "" : `<script type="module" src="${asset("/directory.js")}?v=${toke
 
 async function fixtures() {
   const info = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-  assert.equal(Object.keys(info.offlineAssets || {}).length, 9, "Build the contenthashed runtime assets before browser QA");
+  assert.equal(Object.keys(info.offlineAssets || {}).length, 10, "Build the contenthashed runtime assets before browser QA");
   assert.match(info.offlineRelease, /^[a-f0-9]{12}$/);
   assert.equal(info.offlineAssetRelease, sha256(JSON.stringify(info.offlineAssets)).slice(0, 12), "Built HTML/worker manifest identity must match");
   const source = await readFile("dist/sw.js", "utf8");

@@ -270,6 +270,9 @@ function enhanceGeneratedPage(html, release) {
   const path = canonicalPathFrom(html);
   if (/<header class="legal-header">[\s\S]*?<\/header>/.test(html)) html = html.replace(/<header class="legal-header">[\s\S]*?<\/header>/, unifiedHeader(path));
   if (/<footer class="legal-footer">[\s\S]*?<\/footer>/.test(html)) html = html.replace(/<footer class="legal-footer">[\s\S]*?<\/footer>/, unifiedFooter());
+  if (html.includes('class="rwn-page-menu"')) {
+    html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
+  }
   html = enhanceActionOrientation(html);
   return html;
 }
