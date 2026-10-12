@@ -5,9 +5,11 @@ import vm from "node:vm";
 import { phoneLinks } from "../src/utils/phone.js";
 import { SAVED_RESOURCES_KEY } from "../src/utils/privacy.js";
 import { contactFixtureResources as resources } from "../scripts/qa-contact-fixture-app.mjs";
+import { directoryStartupClickPoint, directoryStartupClickWasDelivered } from "../scripts/qa-directory-startup.mjs";
 import {
   connectivityRecoveryContext, assertConnectivityFailure, assertConnectivityRetained,
-  assertConnectivityRecovered, assertConnectivityFocusReleased, pressConnectivityRecoveryKey
+  assertConnectivityRecovered, assertConnectivityFocusReleased, pressConnectivityRecoveryKey,
+  settleConnectivityFocus, observeConnectivityPointer
 } from "../scripts/qa-connectivity-recovery.mjs";
 
 const failureState = () => ({
@@ -17,7 +19,7 @@ const failureState = () => ({
   savedStorage: JSON.stringify(resources.map(resource => resource.id).reverse()),
   status: "Could not reach RWN. Check your connection and try again.",
   retry: { tag: "BUTTON", type: "button", text: "Retry connection", visible: true, disabled: false, ariaDisabled: "false" },
-  focus: { connected: true, visible: true, inNotice: true, retry: false, body: false },
+  focus: { connected: true, visible: true, inViewport: true, hit: true, inNotice: true, retry: false, body: false },
   events: { online: 0, clicks: [], checking: [] },
   rows: [...resources].reverse().map(resource => ({
     id: resource.id, text: `${resource.name} Phone or online help`, visible: true, clipped: false,
@@ -39,7 +41,7 @@ const failureState = () => ({
 const recoveredState = before => ({
   ...structuredClone(before), offline: false, networkState: "online",
   status: "Connection restored. Listing details and online links are available.",
-  focus: { connected: true, visible: true, inNotice: true, retry: true, body: false },
+  focus: { connected: true, visible: true, inViewport: true, hit: true, inNotice: true, retry: true, body: false },
   events: { online: 0, clicks: [{ trusted: true, detail: 0 }], checking: [{ ariaDisabled: "true", oldAriaDisabled: "false", status: "Checking connection…" }] },
   rows: before.rows.map(row => ({ ...structuredClone(row), actions: row.actions.map(action => ({ ...action, visible: true })) }))
 });
@@ -68,6 +70,7 @@ test("recovery assertions reject the original hidden-action defect and synthetic
     { events: { ...after.events, checking: [] } }, { status: "Checking connection…" },
     { retry: { ...after.retry, ariaDisabled: "true" } }, { retry: { ...after.retry, disabled: true } },
     { noticeVisible: false }, { focus: { ...after.focus, visible: false } },
+    { focus: { ...after.focus, inViewport: false } }, { focus: { ...after.focus, hit: false } },
     { focus: { ...after.focus, retry: false } }, { focus: { ...after.focus, connected: false } },
     { focus: { ...after.focus, body: true } }
   ]) assert.throws(() => assertConnectivityRecovered(before, { ...after, ...change }, resources));
@@ -114,7 +117,8 @@ test("notice is dismissed only after visible focus leaves it", () => {
 });
 
 test("serialized recovery snapshot reports actual focus, controls and saved storage", () => {
-  const box = () => ({ width: 180, height: 44 });
+  let top = 20, covered = false;
+  const box = () => ({ x: 20, y: top, left: 20, top, right: 200, bottom: top + 44, width: 180, height: 44 });
   const retry = { tagName: "BUTTON", type: "button", textContent: "Retry connection", isConnected: true, disabled: false, getBoundingClientRect: box, getAttribute: () => "false" };
   const status = { textContent: "Connection restored." };
   const notice = { dataset: { networkState: "online" }, isConnected: true, getBoundingClientRect: box, contains: node => node === retry, querySelector: selector => selector === "[data-directory-reconnect]" ? retry : status };
@@ -123,8 +127,9 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
     "[data-directory-need]": { value: "Food" }, '[data-directory-category][aria-pressed="true"]': { dataset: { directoryCategory: "Food" } }
   };
   const context = {
-    document: { activeElement: retry, body: {}, getElementById: () => notice, querySelector: selector => controls[selector] },
+    document: { activeElement: retry, body: {}, getElementById: () => notice, querySelector: selector => controls[selector], elementFromPoint: () => covered ? {} : retry },
     getComputedStyle: () => ({ display: "block", visibility: "visible" }),
+    innerWidth: 390, innerHeight: 844,
     location: { href: "http://127.0.0.1:12345/directory" }, performance: { timeOrigin: 234 }, history: { length: 4 }, navigator: { onLine: true },
     localStorage: { getItem: key => key === SAVED_RESOURCES_KEY ? '["qa-contact-phone"]' : null },
     __rwnConnectivityRecoveryQA: { online: 0, clicks: [{ trusted: true, detail: 0 }], checking: [{ ariaDisabled: "true" }], keyboard: [{ type: "keypress", key: "Enter", trusted: true, defaultPrevented: false }] }
@@ -134,6 +139,8 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
   assert.equal(state.focus.retry, true);
   assert.equal(state.focus.inNotice, true);
   assert.equal(state.focus.visible, true);
+  assert.equal(state.focus.inViewport, true);
+  assert.equal(state.focus.hit, true);
   assert.equal(state.retry.visible, true);
   assert.equal(state.savedStorage, '["qa-contact-phone"]');
   assert.equal(state.help, "Food");
@@ -142,6 +149,15 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
   assert.equal(state.events.clicks[0].trusted, true);
   assert.equal(state.events.keyboard[0].type, "keypress");
   assert.equal(state.events.keyboard[0].trusted, true);
+  covered = true;
+  retry.contains = () => false;
+  assert.equal(run().focus.hit, false);
+  covered = false;
+  top = -100;
+  assert.equal(run().focus.visible, true);
+  assert.equal(run().focus.inViewport, false);
+  assert.equal(run().focus.hit, false);
+  top = 20;
   delete controls["[data-directory-country]"];
   assert.equal(run().countryControlPresent, false);
   assert.equal(run().country, null);
@@ -149,6 +165,115 @@ test("serialized recovery snapshot reports actual focus, controls and saved stor
   assert.equal(run().focus.connected, false);
   assert.equal(run().focus.visible, false);
   assert.equal(run().retry.visible, false);
+});
+
+test("repeated same-document recovery keeps cumulative exact trusted activation counts", () => {
+  const before = failureState();
+  const failed = { ...failureState(), events: { online: 0, clicks: [{ trusted: true }, { trusted: true }], checking: [] } };
+  assertConnectivityFailure(failed, resources, { expectedClicks: 2 });
+  assert.throws(() => assertConnectivityFailure(failed, resources), /retry count/);
+  const recovered = recoveredState(before);
+  recovered.events.clicks = [{ trusted: true }, { trusted: true }, { trusted: true }];
+  assertConnectivityRecovered(before, recovered, resources, { expectedClicks: 3 });
+  assert.throws(() => assertConnectivityRecovered(before, recovered, resources), /exact expected/);
+  recovered.events.clicks[1].trusted = false;
+  assert.throws(() => assertConnectivityRecovered(before, recovered, resources, { expectedClicks: 3 }), /exact expected/);
+});
+
+test("focus settling waits through native scrolling without moving or repairing focus", async () => {
+  let frame = 0, top = 10;
+  const positions = [100, 230, 240, 240, 240];
+  const focus = { getBoundingClientRect: () => ({ x: 20, y: top, width: 180, height: 44 }) };
+  const context = {
+    scrollX: 0, scrollY: 0,
+    document: { activeElement: focus, getElementById: () => ({ hidden: false }) },
+    requestAnimationFrame: callback => { top = positions[Math.min(frame++, positions.length - 1)]; queueMicrotask(callback); }
+  };
+  const settled = await vm.runInNewContext(`(${settleConnectivityFocus})()`, context);
+  assert.equal(frame, 5);
+  assert.equal(settled.rect[1], 240);
+  frame = 0;
+  context.requestAnimationFrame = callback => { top = ++frame; queueMicrotask(callback); };
+  await assert.rejects(() => vm.runInNewContext(`(${settleConnectivityFocus})()`, context), /did not settle/);
+  assert.equal(frame, 120);
+});
+
+test("pointer evidence captures trusted targets before interception and final cancellation before navigation", () => {
+  const listeners = new Map(), timers = [], reports = [];
+  const target = { tagName: "A", textContent: "View details", contains: () => false, closest: () => target, getAttribute: () => "/service/qa-physical-3" };
+  const context = {
+    location: { origin: "http://127.0.0.1:12345", href: "http://127.0.0.1:12345/directory#saved" }, scrollX: 0, scrollY: 200,
+    document: { querySelector: () => target },
+    window: { addEventListener: (type, callback) => listeners.set(type, callback), removeEventListener: type => listeners.delete(type) },
+    setTimeout: callback => timers.push(callback), report: value => reports.push(JSON.parse(value))
+  };
+  vm.runInNewContext(`(${observeConnectivityPointer})('.is-details','report','saved-390-1','http://127.0.0.1:12345')`, context);
+  const event = { type: "click", target, isTrusted: true, clientX: 195, clientY: 500, defaultPrevented: false };
+  listeners.get("click")(event);
+  assert.equal(reports[0].phase, "capture");
+  assert.equal(reports[0].expected, true);
+  assert.equal(reports[0].trusted, true);
+  assert.equal(reports[0].defaultPrevented, false);
+  event.defaultPrevented = true;
+  listeners.get("pagehide")();
+  assert.equal(reports[1].phase, "settled");
+  assert.equal(reports[1].defaultPrevented, true);
+  assert.equal(listeners.size, 0, "completed pointer observation must end before a later keyboard activation");
+  listeners.get("click")?.({ ...event, detail: 0 });
+  timers.forEach(callback => callback());
+  assert.equal(reports.length, 2, "pagehide flush must not duplicate timer evidence");
+  context.__rwnConnectivityPointerQA.stop();
+  assert.equal(listeners.size, 0);
+});
+
+for (const shifted of [false, true]) test(`actual pointer orchestration records delivery and never retries (${shifted ? "shifted target" : "stable target"})`, async () => {
+  const source = await readFile(new URL("../scripts/qa-connectivity-recovery.mjs", import.meta.url), "utf8");
+  const closure = source.match(/  const click = async selector => \{[\s\S]*?\n  \};/)?.[0];
+  assert.ok(closure);
+  let top = 100, frame = 0, down;
+  const listeners = new Map(), timers = [], calls = [], evidence = [], clickRecords = new Map();
+  const target = {
+    tagName: "A", textContent: "View details", hidden: false, disabled: false, scrollIntoView() {}, contains: () => false,
+    closest: () => target, getAttribute: () => "/service/qa-physical-3",
+    getBoundingClientRect: () => ({ x: 100, y: top, width: 80, height: 44 })
+  };
+  const other = { tagName: "BODY", textContent: "Outside the target" };
+  const hit = (x, y) => x >= 100 && x <= 180 && y >= top && y <= top + 44 ? target : other;
+  const globals = {
+    innerWidth: 390, innerHeight: 1000, scrollX: 0, scrollY: 0,
+    location: { origin: "http://127.0.0.1:12345", href: "http://127.0.0.1:12345/directory#saved" },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }),
+    requestAnimationFrame: callback => { frame++; queueMicrotask(callback); },
+    setTimeout: callback => timers.push(callback),
+    document: { querySelector: () => target, elementFromPoint: hit, addEventListener() {}, removeEventListener() {} },
+    window: { addEventListener: (type, callback) => listeners.set(type, callback), removeEventListener: type => listeners.delete(type) },
+    report: payload => { const event = JSON.parse(payload); clickRecords.get(event.token).events.push(event); }
+  };
+  const dispatch = (type, node, x, y) => listeners.get(type)?.({ type, target: node, clientX: x, clientY: y, isTrusted: true, defaultPrevented: false });
+  const client = { call: async (_method, { type, x, y }) => {
+    calls.push(type);
+    const node = hit(x, y);
+    if (type === "mousePressed") { down = node; dispatch("pointerdown", node, x, y); dispatch("mousedown", node, x, y); }
+    else { dispatch("pointerup", node, x, y); dispatch("mouseup", node, x, y); if (down === node) dispatch("click", node, x, y); }
+  } };
+  const evaluate = async (_client, expression) => {
+    const result = await vm.runInNewContext(expression, globals);
+    if (shifted) top += 200;
+    return result;
+  };
+  const click = vm.runInNewContext(`${closure}; click`, {
+    currentCase: { label: "saved-390" }, clickRecords, evidence, client, evaluate, binding: "report", app: { host: globals.location.origin },
+    directoryStartupClickPoint, directoryStartupClickWasDelivered, observeConnectivityPointer,
+    pause: async () => { while (timers.length) timers.shift()(); },
+    check: (condition, message, detail) => assert.ok(condition, `${message}: ${JSON.stringify(detail)}`)
+  });
+  if (shifted) await assert.rejects(() => click(".is-details"), /did not reach its settled target/);
+  else await click(".is-details");
+  assert.deepEqual(calls, ["mousePressed", "mouseReleased"]);
+  assert.equal(frame, 2);
+  assert.equal(evidence.length, 1);
+  assert.equal(evidence[0].events.find(event => event.type === "click" && event.phase === "capture").expected, !shifted);
+  assert.equal(evidence[0].events.find(event => event.type === "click" && event.phase === "settled").defaultPrevented, false);
 });
 
 test("native retry Enter includes its activation character while Tab remains raw key input", async () => {
