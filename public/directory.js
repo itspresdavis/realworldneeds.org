@@ -43,7 +43,7 @@ const resultSummary=results.querySelector("[data-global-summary]");
 const more=results.querySelector("[data-directory-more]");
 const renderNext=()=>{const rows=activeMatches.slice(visibleCount,visibleCount+BATCH).map(resultRow);resultList.append(...rows);visibleCount+=rows.length;const remaining=activeMatches.length-visibleCount;more.hidden=!remaining;more.textContent=`Show ${Math.min(remaining,BATCH)} more listings`;resultSummary.textContent=`Showing ${format(visibleCount)} of ${format(activeMatches.length)} matches across ${format(scopedCount)} listings`;return rows[0];};
 listen(more,"click",()=>{renderNext()?.querySelector("a")?.focus();remember();});
-const showConnectivityState=()=>{notice.hidden=navigator.onLine;};
+const showConnectivityState=()=>{if(!notice.dataset.networkState)notice.hidden=navigator.onLine;};
 const scopedRecords=payload=>currentScope==="/directory"?payload.records:(payload.scopes[currentScope]||[]).map(index=>payload.records[index]).filter(Boolean);
 // One set of labels and one selected category drive both responsive controls.
 const renderChips = () => {
