@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
-import { directoryStartupSavedSnapshot, directoryStartupSavedHeaderPoint, directoryStartupSavedReturnReady,
+import { observeStartup, directoryStartupSavedSnapshot, directoryStartupSavedHeaderPoint, directoryStartupSavedReturnReady,
   waitForDirectoryStartupSavedReturn, directoryStartupClickWasDelivered, directorySavedBrowseHeaderPoint,
   directoryStartupSavedBaselineReady, waitForDirectoryStartupSavedBaseline, directoryStartupSavedBaselinePreserved,
   directoryStartupReloadSourceReady, directoryStartupReloadDestinationReady, waitForDirectoryStartupReloadGeometry } from '../scripts/qa-directory-startup.mjs';
@@ -341,4 +341,114 @@ test('reload fixture completes native restoration before its first focus/type an
   assert.match(source, /baselineEvidence = await waitForDirectoryStartupSavedBaseline/);
   assert.match(source, /Math\.abs\(returned\.scroll - preSaved\.scroll\) < 5/);
   assert.doesNotMatch(waitForDirectoryStartupReloadGeometry.toString(), /focus\(|scrollIntoView|scrollTo\(|replaceState|pushState|dispatchMouseEvent|\.hash\s*=/);
+});
+
+
+function observationFixture() {
+  const listeners = { window: new Map(), document: new Map() }, frames = [], calls = [];
+  const outcome = { value: {}, error: null };
+  let time = 0, geometryReads = 0;
+  class Element {
+    constructor(id = '') { this.id = id; this.tagName = 'INPUT'; }
+    getAttribute() { return null; }
+    matches(selector) { return selector === '[data-directory-query]' && this.id === 'query'; }
+    getBoundingClientRect() { geometryReads++; return { x: 190, y: (this.id === 'directory-results' ? 1000 : 349) - globals.scrollY, width: 632, height: 44 }; }
+    scrollIntoView(...args) { calls.push({ method: 'scrollIntoView', receiver: this, args }); if (outcome.error) throw outcome.error; return outcome.value; }
+  }
+  class HTMLElement extends Element {
+    focus(...args) { calls.push({ method: 'focus', receiver: this, args }); if (outcome.error) throw outcome.error; return outcome.value; }
+  }
+  const input = new HTMLElement('query'), root = new HTMLElement('root'), anchor = new HTMLElement('directory-results');
+  root.rwnDirectoryStartup = { edited: true, browse: true, scroll: 0 };
+  const document = { readyState: 'interactive', documentElement: { scrollHeight: 19317 }, activeElement: input,
+    querySelector: selector => ({ '[data-directory-search]': root, '[data-directory-query]': input, '[data-directory-categories]': root })[selector] || null,
+    getElementById: id => id === 'directory-results' ? anchor : null,
+    addEventListener: (type, listener, options) => { assert.equal(Boolean(options?.passive) || options === true, true); listeners.document.set(type, listener); } };
+  const globals = { Element, HTMLElement, document, location: { origin: 'https://rwn.test', href: 'https://rwn.test/directory#directory-results', hash: '#directory-results' },
+    history: { state: { rwnDirectory: { scroll: 0 } } }, performance: { now: () => ++time }, scrollY: 0,
+    scrollTo(...args) { calls.push({ method: 'scrollTo', receiver: this, args }); if (outcome.error) throw outcome.error; return outcome.value; },
+    addEventListener: (type, listener, options) => { assert.equal(options.passive, true); listeners.window.set(type, listener); },
+    requestAnimationFrame: callback => { frames.push(callback); }, fetch: async () => ({ json: async () => ({ records: [] }) }), URL, Request };
+  globals.window = globals;
+  vm.runInNewContext(`(${observeStartup.toString()})('https://rwn.test')`, globals);
+  return { globals, document, input, root, calls, outcome, frames, geometryReads: () => geometryReads, probe: globals.__rwnDirectoryStartupQA,
+    emit: (owner, type, detail = {}) => listeners[owner].get(type)({ type, isTrusted: true, target: input, ...detail }),
+    drain: () => { let count = 0; while (frames.length) { frames.shift()(); assert.ok(++count < 100); } return count; } };
+}
+
+test('startup scroll diagnostics call through once with original receiver, arguments, result and thrown exception', () => {
+  const f = observationFixture(), options = { top: 0, behavior: 'instant', preventScroll: true };
+  for (const [receiver, method] of [[f.globals, 'scrollTo'], [f.input, 'scrollIntoView'], [f.input, 'focus']]) {
+    assert.equal(receiver[method](options), f.outcome.value);
+    const call = f.calls.at(-1);
+    assert.equal(call.receiver, receiver); assert.equal(call.args[0], options);
+    const error = f.outcome.error = new Error('Original failure');
+    assert.throws(() => receiver[method](options), thrown => thrown === error);
+    f.outcome.error = null;
+  }
+  assert.equal(f.calls.length, 6);
+  assert.equal(f.probe.timeline.filter(entry => entry.type.endsWith(':call')).length, 6);
+  assert.equal(f.probe.timeline.filter(entry => entry.type.endsWith(':return')).length, 6);
+  let reads = 0;
+  f.globals.scrollTo({ get top() { reads++; return 0; } });
+  assert.equal(reads, 0, 'observation must not invoke an options getter');
+  assert.equal(f.probe.timeline.at(-2).args[0].top, '[accessor]');
+  f.document.querySelector = () => { throw new Error('Diagnostic geometry unavailable'); };
+  assert.equal(f.input.focus(options), f.outcome.value, 'diagnostic failure cannot block the real focus call');
+  assert.ok(f.probe.timelineErrors > 0);
+});
+
+test('startup diagnostics witness runtime restore before later native scroll and load without initiating controls', () => {
+  const f = observationFixture();
+  f.emit('document', 'rwn-directory-ready', { isTrusted: false });
+  f.globals.scrollTo({ top: 0, behavior: 'instant' });
+  f.globals.scrollY = 121;
+  f.emit('window', 'scroll');
+  f.document.readyState = 'complete';
+  f.document.documentElement.scrollHeight += 44;
+  f.emit('window', 'load');
+  f.emit('window', 'popstate', { state: null });
+  f.emit('window', 'hashchange');
+  f.emit('window', 'rwn-directory-restore', { isTrusted: false, detail: 'browse' });
+  f.drain();
+  const trace = f.probe.timeline, ready = trace.find(entry => entry.type === 'rwn-directory-ready');
+  const restored = trace.find(entry => entry.type === 'scrollTo:return'), shifted = trace.find(entry => entry.type === 'scroll');
+  assert.equal(ready.startup.browse, true); assert.equal(ready.startup.scroll, 0);
+  assert.ok(ready.sequence < restored.sequence && restored.sequence < shifted.sequence);
+  assert.equal(restored.scroll, 0); assert.equal(shifted.scroll, 121); assert.equal(shifted.trusted, true);
+  const measured = trace.find(entry => entry.type === 'load:checkpoint:raf1');
+  assert.equal(measured.inputBox.documentY, 349); assert.equal(measured.inputBox.y, 228);
+  assert.equal(measured.documentHeight, 19361);
+  assert.equal(trace.find(entry => entry.type === 'popstate').eventStateNull, true);
+  assert.equal(trace.find(entry => entry.type === 'rwn-directory-restore').detail, 'browse');
+  assert.equal(trace.filter(entry => /^rwn-directory-ready:checkpoint:raf/.test(entry.type)).length, 10);
+  assert.equal(f.calls.length, 1, 'the observer must not initiate any focus or scroll call');
+  assert.equal(f.probe.timelineErrors, 0);
+});
+
+test('startup observation trace is capped and retains ordered recent evidence without writing history or storage', () => {
+  const f = observationFixture(), original = JSON.stringify(f.globals.history);
+  for (let i = 0; i < 400; i++) { f.globals.scrollY = i; f.emit('window', 'scroll'); }
+  assert.equal(f.probe.timeline.length, 256); assert.equal(f.probe.timelineDropped, 145);
+  assert.equal(f.probe.timeline.at(-1).scroll, 399);
+  assert.ok(f.probe.timeline.every((entry, index, entries) => !index || entry.sequence > entries[index - 1].sequence));
+  assert.equal(f.calls.length, 0); assert.equal(f.frames.length, 0);
+  assert.equal(JSON.stringify(f.globals.history), original);
+  assert.doesNotMatch(observeStartup.toString(), /preventDefault|dispatchEvent|replaceState|pushState|setItem|\.hash\s*=/);
+});
+
+
+test('startup call and event markers never force layout before the original action', () => {
+  const f = observationFixture(); let heightReads = 0;
+  Object.defineProperty(f.document.documentElement, 'scrollHeight', { get() { heightReads++; return 19317; } });
+  for (const [receiver, method] of [[f.globals, 'scrollTo'], [f.input, 'scrollIntoView'], [f.input, 'focus']]) receiver[method]({ preventScroll: true });
+  for (const type of ['scroll', 'hashchange', 'popstate', 'load']) f.emit('window', type);
+  f.emit('document', 'rwn-directory-ready', { isTrusted: false });
+  assert.equal(f.geometryReads(), 0); assert.equal(heightReads, 0);
+  assert.ok(f.probe.timeline.every(entry => !('documentHeight' in entry) && !('inputBox' in entry)));
+  assert.equal(f.calls.length, 3);
+  f.drain();
+  assert.ok(f.geometryReads() > 0); assert.ok(heightReads > 0);
+  assert.ok(f.probe.timeline.filter(entry => 'inputBox' in entry).every(entry => /:raf\d+$/.test(entry.type)));
+  assert.equal(f.calls.length, 3);
 });

@@ -11,9 +11,73 @@ const assert = (condition, label, detail) => {
   if (!condition) throw new Error(`${label}: ${JSON.stringify(detail)}`);
 };
 
-function observeStartup(origin) {
+export function observeStartup(origin) {
   if (location.origin !== origin) return;
-  const probe = window.__rwnDirectoryStartupQA = { inputs: [], compositions: [], catalogReads: 0, catalogSettled: 0 };
+  const probe = window.__rwnDirectoryStartupQA = { inputs: [], compositions: [], catalogReads: 0, catalogSettled: 0,
+    timeline: [], timelineDropped: 0, timelineErrors: 0 };
+  // Diagnostic only: keep native scrolling, lifecycle ordering and method calls
+  // intact. Geometry is observed, never used to focus, scroll or retry an action.
+  let sequence = 0;
+  const identity = node => node ? { tag: node.tagName || '', id: node.id || '',
+    href: node.getAttribute?.('href') || null, query: Boolean(node.matches?.('[data-directory-query]')) } : null;
+  const box = node => {
+    const rect = node?.getBoundingClientRect();
+    return rect ? { x: rect.x, y: rect.y, documentY: rect.y + window.scrollY, width: rect.width, height: rect.height } : null;
+  };
+  const record = (type, detail = () => ({}), geometry = false) => {
+    try {
+      const root = document.querySelector('[data-directory-search]'), startup = root?.rwnDirectoryStartup;
+      const entry = { sequence: ++sequence, at: performance.now(), type, ...detail(), hash: location.hash,
+        scroll: window.scrollY, readyState: document.readyState,
+        runtime: Boolean(document.querySelector('.directory-global-results')), historyScroll: history.state?.rwnDirectory?.scroll ?? null,
+        startup: startup ? { edited: Boolean(startup.edited), composing: Boolean(startup.composing), scroll: startup.scroll ?? null, browse: Boolean(startup.browse) } : null,
+        focused: identity(document.activeElement) };
+      // Never force layout before a native method/event or catalog request.
+      // Rich geometry belongs only to the explicit animation-frame samples.
+      if (geometry) Object.assign(entry, { documentHeight: document.documentElement?.scrollHeight ?? null,
+        inputBox: box(document.querySelector('[data-directory-query]')), anchorBox: box(document.getElementById('directory-results')),
+        panelBox: box(document.querySelector('[data-saved-services]')), rootBox: box(root), chipsBox: box(document.querySelector('[data-directory-categories]')) });
+      if (probe.timeline.length === 256) { probe.timeline.shift(); probe.timelineDropped++; }
+      probe.timeline.push(entry);
+    } catch { probe.timelineErrors++; }
+  };
+  const checkpoint = (type, frames = 2) => {
+    record(type);
+    let frame = 0;
+    const next = () => requestAnimationFrame(() => {
+      record(`${type}:raf${++frame}`, () => ({}), true);
+      if (frame < frames) next();
+    });
+    next();
+  };
+  const argument = value => {
+    if (!value || typeof value !== 'object') return typeof value === 'function' ? '[function]' : value;
+    // Do not invoke an options getter a second time while observing a call.
+    const descriptors = Object.getOwnPropertyDescriptors(value), result = {};
+    for (const key of ['top', 'left', 'behavior', 'block', 'inline', 'preventScroll']) {
+      const descriptor = descriptors[key];
+      if (descriptor) result[key] = 'value' in descriptor ? descriptor.value : '[accessor]';
+    }
+    return result;
+  };
+  for (const [owner, name] of [[window, 'scrollTo'], [Element.prototype, 'scrollIntoView'], [HTMLElement.prototype, 'focus']]) {
+    const original = owner[name];
+    owner[name] = function (...args) {
+      record(`${name}:call`, () => ({ target: identity(this), args: args.map(argument),
+        caller: (new Error().stack || '').split('\n').slice(2, 6).join('\n').slice(0, 600) }));
+      try { return Reflect.apply(original, this, args); }
+      finally { record(`${name}:return`); }
+    };
+  }
+  for (const type of ['scroll', 'scrollend', 'hashchange', 'popstate', 'pageshow', 'load', 'rwn-directory-restore']) window.addEventListener(type, event => {
+    record(type, () => ({ trusted: event.isTrusted, detail: typeof event.detail === 'string' ? event.detail : null, eventStateNull: type === 'popstate' ? event.state === null : undefined }));
+    if (type !== 'scroll' && type !== 'scrollend') checkpoint(`${type}:checkpoint`);
+  }, { capture: true, passive: true });
+  for (const type of ['DOMContentLoaded', 'readystatechange', 'rwn-directory-ready', 'focusin']) document.addEventListener(type, event => {
+    record(type, () => ({ trusted: event.isTrusted, detail: typeof event.detail === 'string' ? event.detail : null, target: identity(event.target) }));
+    if (type !== 'focusin') checkpoint(`${type}:checkpoint`, type === 'rwn-directory-ready' ? 10 : 2);
+  }, { capture: true, passive: true });
+  record('observer-installed');
   document.addEventListener('input', event => {
     if (!event.target.matches?.('[data-directory-query]')) return;
     probe.inputs.push({ value: event.target.value, composing: event.isComposing, trusted: event.isTrusted, runtime: Boolean(document.querySelector('.directory-global-results')) });
@@ -28,11 +92,12 @@ function observeStartup(origin) {
     const url = new URL(args[0] instanceof Request ? args[0].url : args[0], location.href);
     if (url.origin !== origin || url.pathname !== '/data/search-index.json') return fetch(...args);
     probe.catalogReads++;
+    checkpoint('catalog-request');
     return fetch(...args).then(response => {
       const json = response.json.bind(response);
       response.json = async () => {
         try { return await json(); }
-        finally { probe.catalogSettled++; }
+        finally { probe.catalogSettled++; checkpoint('catalog-json-settled'); }
       };
       return response;
     });
