@@ -76,5 +76,5 @@ test("page choices retain native focus behavior, wrap on narrow screens, and sta
   assert.match(css, /\.directory-page-list\s*\{[^}]*display:flex;[^}]*flex-wrap:wrap/);
   assert.match(css, /\.directory-page-list \[aria-current="page"\]\s*\{[^}]*min-width:44px;[^}]*min-height:44px/);
   assert.match(searchCss, /\.directory-shell\.has-global-search nav\[aria-label="Directory pages"\]\{display:none\}/);
-  assert.match(savedCss, /\.has-saved-view > :not\(\.saved-services\)[^{]+\{ display: none !important; \}/);
+  assert.match(savedCss, /\.has-saved-view\s*>\s*:not\(\.saved-services\):not\(#offlineDirectoryNotice\):not\(\[aria-label="Breadcrumb"\]\)\s*\{\s*display:\s*none\s*!important;?\s*\}/);
 });

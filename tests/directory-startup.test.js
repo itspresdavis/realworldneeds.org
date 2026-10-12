@@ -93,7 +93,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     blur() { if (document.activeElement === this) document.activeElement = document.body; this.dispatch("blur"); }
     insertAdjacentElement(_where, node) { this.parentElement.append(node); }
   }
-  document = new Node("document"); document.body = new Node("body"); document.append(document.body); document.activeElement = document.body;
+  document = new Node("document"); document.title = "Services directory | Real World Needs"; document.body = new Node("body"); document.append(document.body); document.activeElement = document.body;
   const shell = new Node("main", [".directory-shell"]), root = new Node("form", ["[data-directory-search]"]);
   const input = new Node("input", ["[data-directory-query]"]), country = new Node("select", ["[data-directory-country]"]);
   const need = new Node("select", ["[data-directory-need]"]);
@@ -146,8 +146,9 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   const savedPanel = new Node("section", ["[data-saved-services]"]), savedHeading = new Node("h2"), savedLink = new Node("a", ['a[href$="#saved"]', "a[href]"]), browseLink = new Node("a", ["a[href]"]);
   savedLink.setAttribute("href", "/directory#saved"); browseLink.setAttribute("href", "#directory-results");
   savedPanel.append(savedHeading, browseLink); shell.append(savedPanel, savedLink);
-  Object.assign(context, { savedPanel, savedHeading });
+  Object.assign(context, { savedPanel, savedHeading, savedLink });
   vm.runInContext(`{ const panel = savedPanel, heading = savedHeading;
+    const directoryTitle = document.title, navigation = [{ link: savedLink, current: savedLink.getAttribute("aria-current") }];
     const active = () => location.hash === "#saved"; let generation = 0;
     const render = () => {}, cancelClear = () => {};
     ${savedSyncSource}

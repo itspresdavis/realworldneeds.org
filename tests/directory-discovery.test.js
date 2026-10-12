@@ -187,7 +187,7 @@ test("Saved navigation closes the narrow menu before moving focus into either vi
   const syncSource = saved.slice(saved.indexOf("  const syncView ="), saved.indexOf('  window.addEventListener("hashchange"'));
   for (const visible of [true, false]) {
     const effects = [];
-    const f = vm.createContext({ active: () => visible, generation: 0,
+    const f = vm.createContext({ active: () => visible, generation: 0, navigation: [], directoryTitle: "Directory | Real World Needs",
       document: { querySelector(selector) { assert.equal(selector, ".rwn-page-menu"); return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } }; } },
       panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }), scrollIntoView() {} },
       cancelClear() {}, render() {}, heading: { focus() { effects.push("focus"); } },

@@ -32,10 +32,10 @@ function rewriteNavigation() {
 
   const action = document.querySelector(".header-action");
   if (action) {
-    action.textContent = "Browse directory";
-    action.href = "/directory";
+    action.textContent = "Saved";
+    action.href = "/directory#saved";
     action.removeAttribute("data-section-link");
-    action.setAttribute("aria-label", "Browse the full Real World Needs directory");
+    action.setAttribute("aria-label", "Open saved services");
   }
 }
 
@@ -121,7 +121,7 @@ function simplifyStructure() {
   if (!footer) return;
 
   const explore = footer.querySelector('nav[aria-label="Footer explore"]');
-  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a>`;
+  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
   if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;

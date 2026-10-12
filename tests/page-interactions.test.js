@@ -117,7 +117,7 @@ test("no-JS content and control states have no hidden entrance prerequisite", as
   assert.match(css, /:where\(#finder, #results, #about, #standards\) \{ scroll-margin-top: 0;/);
   assert.match(css, /prefers-reduced-motion: no-preference/);
   const skipStack = Number(css.match(/\.rwn-professional \.skip-link \{ z-index: (\d+);/)?.[1]);
-  const headerStack = Number(css.match(/\.rwn-professional \.site-header \{[^}]*z-index: (\d+);/)?.[1]);
+  const headerStack = Number(css.match(/\.rwn-professional \.site-header\s*\{[^}]*z-index:\s*(\d+);/)?.[1]);
   assert.ok(skipStack > headerStack, "the focused skip link paints above the sticky header");
   assert.match(css, /#resourceSearch::-webkit-search-cancel-button \{ -webkit-appearance: none; display: none; \}/, "native search cancel does not duplicate the accessible Clear button");
   assert.match(css, /\.filter-heading button \{[^}]*color: var\(--rwn-green-dark\);[^}]*font-size: \.8125rem;/);

@@ -32,6 +32,7 @@ function domFixture() {
       if (name === "tabindex") this.tabIndex = Number(value);
     }
     getAttribute(name) { return this.attributes[name] ?? null; }
+    removeAttribute(name) { delete this.attributes[name]; }
     get isConnected() { return this === document.body || Boolean(this.parent?.isConnected); }
     getClientRects() { return this.isConnected && !this.hidden && (!this.parent || this.parent.getClientRects().length) ? [{}] : []; }
     contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
@@ -73,7 +74,7 @@ function domFixture() {
     click() { if (!this.disabled) return this.events.click?.({ currentTarget: this, target: this }); }
   }
   document.body = new Element("body"); document.activeElement = document.body;
-  document.getElementById = (id) => document.body.querySelector(`#${id}`);
+  document.getElementById = (id) => id ? document.body.querySelector(`#${id}`) : null;
   document.querySelector = (selector) => document.body.querySelector(selector);
   document.createElement = (tag) => new Element(tag);
   return { document, Element };
@@ -212,32 +213,59 @@ test("cancelling native Share does not copy or announce a failure", async () => 
   await f.control("shareResource").click(); assert.deepEqual(f.messages, []);
 });
 
-async function savedFixture(initialCount = 61) {
+async function savedFixture(initialCount = 61, { pendingCatalog = false, storageUnavailable = false, emptyNode = true, hash = "#saved", originalTitle = "Food services in New York | Real World Needs" } = {}) {
   const f = domFixture(), { document, Element } = f;
   const panel = new Element("section", { "data-saved-services": "" });
   const heading = new Element("h2", { tabindex: "-1" });
-  const controls = Object.fromEntries(["summary", "status", "list", "retry", "clear", "confirmation", "more", "cancel", "confirm"].map((key) => [key, new Element(["retry", "clear", "more", "cancel", "confirm"].includes(key) ? "button" : "div", { [`data-saved-${key}`]: "" })]));
-  const search = new Element("input");
+  const controls = Object.fromEntries(["summary", "status", "list", "retry", "clear", "confirmation", "more", "cancel", "confirm", ...(emptyNode ? ["empty"] : [])].map((key) => [key, new Element(["retry", "clear", "more", "cancel", "confirm"].includes(key) ? "button" : "div", { [`data-saved-${key}`]: "" })]));
+  if (controls.empty) controls.empty.hidden = true;
+  const search = new Element("input", { "data-directory-query": "" });
+  const results = new Element("section", { id: "directory-results", tabindex: "-1" });
+  const navigation = [
+    new Element("a", { href: "/directory", "aria-current": "page" }),
+    new Element("a", { href: "/directory#saved" }),
+    new Element("a", { href: "/directory/help/food", "aria-current": "location" }),
+    new Element("a", { href: "/sources", "aria-current": "false" }),
+    new Element("a", { href: "/directory#saved" }),
+  ];
+  const outsideNavigation = new Element("a", { href: "/directory#saved", "aria-current": "location" });
+  const initialNavigation = navigation.map((link) => link.getAttribute("aria-current"));
+  document.title = originalTitle;
+  document.querySelectorAll = (selector) => selector === ".legal-header nav a" ? navigation : document.body.querySelectorAll(selector);
+  const classes = new Set();
+  const shell = { classList: { contains: (value) => classes.has(value), toggle: (value, active) => active ? classes.add(value) : classes.delete(value) } };
+  panel.closest = (selector) => selector === ".directory-shell" ? shell : null;
   controls.confirmation.append(controls.cancel, controls.confirm);
   panel.append(heading, ...Object.entries(controls).filter(([key]) => !["cancel", "confirm"].includes(key)).map(([, element]) => element));
-  document.body.append(panel, search);
+  document.body.append(panel, search, results, ...navigation, outsideNavigation);
   const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
-  let currentIds = ids.slice(0, initialCount), storageError = false;
-  const events = {};
+  let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
+  const events = {}, effects = { reads: 0, writes: 0, fetches: 0 };
+  const location = { hash }, history = { state: null }, restores = [];
+  const response = { ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) };
+  let resolveCatalog, rejectCatalog;
+  const catalog = pendingCatalog ? new Promise((resolve, reject) => { resolveCatalog = resolve; rejectCatalog = reject; }) : Promise.resolve(response);
   const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
-    document, URL, location: { hash: "#saved" }, navigator: {}, SAVED_RESOURCES_KEY: "saved",
-    window: { addEventListener: (name, handler) => { events[name] = handler; } },
-    fetch: () => Promise.resolve({ ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) }),
-    readSavedResources: () => { if (storageError) throw new Error("denied"); return new Set(currentIds); },
-    setResourceSaved: (id) => { currentIds = currentIds.filter((candidate) => candidate !== id); },
-    clearSavedResources: () => { currentIds = []; },
+    document, URL, location, history, navigator: {}, SAVED_RESOURCES_KEY: "saved",
+    CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
+    window: {
+      addEventListener: (name, handler) => { events[name] = handler; },
+      dispatchEvent: (event) => { restores.push(event); return true; },
+    },
+    fetch: () => { effects.fetches += 1; return catalog; },
+    readSavedResources: () => { effects.reads += 1; if (storageError) throw new Error("denied"); return new Set(currentIds); },
+    setResourceSaved: (id) => { effects.writes += 1; currentIds = currentIds.filter((candidate) => candidate !== id); },
+    clearSavedResources: () => { effects.writes += 1; currentIds = []; },
     createResultRow: () => { const row = new Element(); row.append(new Element("a")); return row; },
   });
   vm.runInContext(saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
-  return { ...f, ...controls, heading, search, events,
+  return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle,
     setIds: (count) => { currentIds = ids.slice(0, count); },
     denyStorage: () => { storageError = true; },
+    allowStorage: () => { storageError = false; },
+    finishCatalog: async () => { resolveCatalog(response); await settle(); },
+    failCatalog: async () => { rejectCatalog(new Error("offline")); await settle(); },
     refresh: async () => { events.storage({ key: "saved" }); await settle(); },
   };
 }
@@ -281,4 +309,211 @@ test("saved row removal and an open clear confirmation keep their existing focus
   assert.equal(f.document.activeElement, f.list.children[0].querySelector("[data-saved-remove]"));
   f.clear.click(); assert.equal(f.document.activeElement, f.cancel);
   await f.refresh(); assert.equal(f.document.activeElement, f.cancel);
+});
+
+
+test("Saved empty guidance appears after a successful empty read without fetching or mutating storage", async () => {
+  const f = await savedFixture(0);
+  assert.equal(f.empty.hidden, false);
+  assert.match(f.summary.textContent, /No saved services yet/);
+  assert.equal(f.retry.hidden, true);
+  assert.equal(f.clear.hidden, true);
+  assert.equal(f.document.activeElement, f.heading);
+  assert.deepEqual(f.effects, { reads: 1, writes: 0, fetches: 0 });
+});
+
+test("Saved empty guidance stays hidden while populated details load and after they resolve", async () => {
+  const f = await savedFixture(2, { pendingCatalog: true });
+  assert.equal(f.empty.hidden, true);
+  assert.match(f.summary.textContent, /Loading/);
+  assert.equal(f.list.children.length, 0);
+  f.search.focus();
+  await f.finishCatalog();
+  assert.equal(f.empty.hidden, true);
+  assert.equal(f.list.children.length, 2);
+  assert.match(f.summary.textContent, /2 saved listings/);
+  assert.equal(f.document.activeElement, f.search, "finishing background work must not steal focus");
+  assert.equal(f.effects.writes, 0);
+});
+
+test("Saved empty guidance never misrepresents unavailable storage as an empty list", async () => {
+  const f = await savedFixture(0, { storageUnavailable: true });
+  assert.equal(f.empty.hidden, true);
+  assert.equal(f.retry.hidden, false);
+  assert.match(f.summary.textContent, /unavailable in this browser/);
+  assert.deepEqual(f.effects, { reads: 1, writes: 0, fetches: 0 });
+  f.retry.focus();
+  f.allowStorage();
+  await f.retry.click();
+  assert.equal(f.empty.hidden, false);
+  assert.equal(f.document.activeElement, f.heading, "a successful retry retains heading focus recovery");
+  f.denyStorage();
+  await f.refresh();
+  assert.equal(f.empty.hidden, true, "a later failed read removes stale empty guidance");
+  assert.equal(f.effects.writes, 0);
+});
+
+test("Saved catalog errors keep empty guidance hidden and the saved IDs untouched", async () => {
+  const f = await savedFixture(2, { pendingCatalog: true });
+  await f.failCatalog();
+  assert.equal(f.empty.hidden, true);
+  assert.equal(f.retry.hidden, false);
+  assert.match(f.summary.textContent, /saved list is still on this device.*could not load/);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("cross-tab empty, populated and empty transitions cancel stale details and preserve focus", async () => {
+  const f = await savedFixture(0, { pendingCatalog: true });
+  assert.equal(f.empty.hidden, false);
+  f.search.focus();
+  f.setIds(2);
+  await f.refresh();
+  assert.equal(f.empty.hidden, true);
+  assert.match(f.summary.textContent, /Loading/);
+  f.setIds(0);
+  await f.refresh();
+  assert.equal(f.empty.hidden, false);
+  await f.finishCatalog();
+  assert.equal(f.empty.hidden, false);
+  assert.equal(f.list.children.length, 0, "the obsolete populated request must not repopulate the list");
+  assert.match(f.summary.textContent, /No saved services yet/);
+  f.setIds(1);
+  await f.refresh();
+  assert.equal(f.empty.hidden, true);
+  assert.equal(f.list.children.length, 1);
+  const remove = f.list.children[0].querySelector("[data-saved-remove]");
+  remove.focus();
+  f.setIds(0);
+  f.events.storage({ key: null });
+  await settle();
+  assert.equal(f.empty.hidden, false);
+  assert.equal(f.document.activeElement, f.heading, "cross-tab clearing the focused last row still recovers to the heading");
+  assert.equal(f.effects.writes, 0);
+});
+
+test("inactive Saved and unrelated storage events never read private storage or fetch details", async () => {
+  const f = await savedFixture(0, { hash: "#directory-results" });
+  for (const name of ["pageshow", "online", "offline"]) f.events[name]();
+  f.events.storage({ key: "saved" });
+  f.events.storage({ key: "unrelated" });
+  await settle();
+  assert.equal(f.empty.hidden, true);
+  assert.deepEqual(f.effects, { reads: 0, writes: 0, fetches: 0 });
+  f.location.hash = "#saved";
+  f.events.hashchange();
+  await settle();
+  assert.equal(f.empty.hidden, false);
+  assert.equal(f.document.activeElement, f.heading);
+  f.events.storage({ key: "unrelated" });
+  await settle();
+  assert.deepEqual(f.effects, { reads: 1, writes: 0, fetches: 0 });
+});
+
+test("Saved renders safely with older cached markup lacking the optional empty guidance", async () => {
+  for (const count of [0, 2]) {
+    const f = await savedFixture(count, { emptyNode: false });
+    assert.equal(f.list.children.length, count);
+    assert.match(f.summary.textContent, count ? /2 saved listings/ : /No saved services yet/);
+    assert.equal(f.effects.writes, 0);
+  }
+});
+
+
+function assertSavedNavigation(f) {
+  assert.equal(f.document.title, "Saved services | Real World Needs");
+  assert.deepEqual(f.navigation.map((link) => link.getAttribute("aria-current")), [null, "page", null, null, "page"]);
+  assert.equal(f.outsideNavigation.getAttribute("aria-current"), "location", "only header navigation is changed");
+}
+
+function assertDirectoryNavigation(f) {
+  assert.equal(f.document.title, f.originalTitle);
+  assert.deepEqual(f.navigation.map((link) => link.getAttribute("aria-current")), f.initialNavigation);
+  assert.equal(f.outsideNavigation.getAttribute("aria-current"), "location");
+}
+
+test("direct Saved entry identifies both header Saved links and restores exact original semantics on Browse", async () => {
+  const f = await savedFixture(0);
+  assertSavedNavigation(f);
+  assert.equal(f.document.activeElement, f.heading);
+  f.location.hash = "#directory-results";
+  f.events.hashchange();
+  await settle();
+  assertDirectoryNavigation(f);
+  assert.equal(f.document.activeElement, f.results);
+  assert.equal(f.restores.length, 1);
+  assert.equal(f.restores[0].type, "rwn-directory-restore");
+  assert.equal(f.restores[0].detail, "browse");
+  assert.equal(f.restores[0].cancelable, true);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("Saved Back and Forward hash synchronization preserves the scoped title and initial aria-current values", async () => {
+  const f = await savedFixture(0, { hash: "#directory-results", originalTitle: "Local food support | Real World Needs" });
+  assertDirectoryNavigation(f);
+  assert.equal(f.effects.reads, 0);
+  for (const hash of ["#saved", "#directory-results", "#saved", "", "#saved", "#directory-results"]) {
+    f.location.hash = hash;
+    f.events.hashchange();
+    await settle();
+    if (hash === "#saved") {
+      assertSavedNavigation(f);
+      assert.equal(f.document.activeElement, f.heading);
+    } else {
+      assertDirectoryNavigation(f);
+      assert.equal(f.document.activeElement, hash ? f.results : f.search);
+    }
+  }
+  assert.deepEqual(f.restores.map((event) => event.detail), ["browse", "history", "browse"]);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("Saved cross-tab and connectivity refreshes preserve navigation, title and unrelated focus", async () => {
+  const f = await savedFixture(2);
+  f.search.focus();
+  for (const count of [0, 1, 2]) {
+    f.setIds(count);
+    await f.refresh();
+    for (const name of ["online", "offline", "pageshow"]) {
+      f.events[name]();
+      await settle();
+      assertSavedNavigation(f);
+      assert.equal(f.document.activeElement, f.search);
+    }
+  }
+  assert.equal(f.restores.length, 0);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("pageshow restores the current hash semantics without moving focus or dispatching history restoration", async () => {
+  const f = await savedFixture(0);
+  f.search.focus();
+  for (const hash of ["#directory-results", "#saved", ""]) {
+    f.location.hash = hash;
+    f.events.pageshow();
+    await settle();
+    if (hash === "#saved") assertSavedNavigation(f);
+    else assertDirectoryNavigation(f);
+    assert.equal(f.document.activeElement, f.search);
+  }
+  const reads = f.effects.reads;
+  f.events.storage({ key: "saved" });
+  f.events.online();
+  f.events.offline();
+  await settle();
+  assertDirectoryNavigation(f);
+  assert.equal(f.effects.reads, reads, "background activity must not read Saved after leaving its view");
+  assert.equal(f.effects.writes, 0);
+  assert.equal(f.restores.length, 0);
+});
+
+test("late Saved catalog resolution cannot overwrite Browse navigation, title or focus", async () => {
+  const f = await savedFixture(2, { pendingCatalog: true });
+  assertSavedNavigation(f);
+  f.location.hash = "#directory-results";
+  f.events.hashchange();
+  await f.finishCatalog();
+  assertDirectoryNavigation(f);
+  assert.equal(f.document.activeElement, f.results);
+  assert.equal(f.list.children.length, 0);
+  assert.equal(f.effects.writes, 0);
 });

@@ -192,5 +192,5 @@ test("copied listing facts retain the actual online access URL, not only its but
 
 test("Saved contact facts explicitly wrap unbroken access URLs", async () => {
   const css = await readFile(new URL("../public/saved-services.css", import.meta.url), "utf8");
-  assert.match(css, /\.directory-global-result > small[^{}]*\{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/);
+  assert.match(css, /\.directory-global-result\s+:is\([^)]*\bsmall\b[^)]*\)\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;?\s*\}/);
 });

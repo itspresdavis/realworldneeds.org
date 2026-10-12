@@ -22,8 +22,12 @@ export function initSavedServices() {
   };
   const panel = document.querySelector("[data-saved-services]");
   if (!panel) return;
+  const directoryTitle = document.title;
+  const navigation = [...(document.querySelectorAll?.(".legal-header nav a") || [])]
+    .map(link => ({ link, current: link.getAttribute("aria-current") }));
   const heading = panel.querySelector("h2");
   const summary = panel.querySelector("[data-saved-summary]");
+  const empty = panel.querySelector("[data-saved-empty]");
   const status = panel.querySelector("[data-saved-status]");
   const list = panel.querySelector("[data-saved-list]");
   const retry = panel.querySelector("[data-saved-retry]");
@@ -94,6 +98,7 @@ export function initSavedServices() {
       else if (confirmation.contains(focused) && confirmation.hidden) heading.focus();
     };
     retry.hidden = true;
+    if (empty) empty.hidden = true;
     let ids;
     try { ids = readSavedResources(); } catch {
       list.replaceChildren();
@@ -110,6 +115,7 @@ export function initSavedServices() {
       list.replaceChildren();
       more.hidden = true;
       summary.textContent = "No saved services yet. Open a listing and choose Save to keep it here.";
+      if (empty) empty.hidden = false;
       cancelClear();
       restoreFocus();
       return;
@@ -159,6 +165,12 @@ export function initSavedServices() {
   const syncView = (focus = false) => {
     if (focus) document.querySelector(".rwn-page-menu")?.removeAttribute("open");
     const visible = active();
+    document.title = visible ? "Saved services | Real World Needs" : directoryTitle;
+    for (const { link, current } of navigation) {
+      const value = visible ? (link.getAttribute("href") === "/directory#saved" ? "page" : null) : current;
+      if (value) link.setAttribute("aria-current", value);
+      else link.removeAttribute("aria-current");
+    }
     const shell = panel.closest(".directory-shell");
     const wasSaved = shell?.classList.contains("has-saved-view");
     shell?.classList.toggle("has-saved-view", visible);
