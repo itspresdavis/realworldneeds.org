@@ -438,7 +438,7 @@ function shell() {
             </div>
             <p class="location-status" id="locationStatus" aria-live="polite">Nearby service locations appear first. Regional resource finders appear after them.</p>
             <p class="location-recovery" id="locationRecovery" role="status" aria-live="polite" hidden></p>
-            <p class="live-source-status" id="liveSourceStatus">In the United States, location search also includes current USDA summer meal sites.</p>
+            <p class="live-source-status" id="liveSourceStatus" role="status" aria-live="polite" aria-atomic="true">In the United States, location search also includes current USDA summer meal sites.</p>
             <p class="location-privacy">Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">How location works</a></p>
             <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN does not provide emergency response. <a href="/terms#urgent-help">Safety notice</a></p>
 
@@ -505,7 +505,7 @@ function shell() {
         </div>
 
         <div class="directory-strip">
-          <p id="catalogReach"><strong>${resources.length}</strong> listings checked against original sources <span>${directCount()} service locations</span> <span>17,442 active USDA summer meal sites in the latest data review</span> <a href="/directory">Use the text directory</a></p>
+          <p id="catalogReach"><strong>${resources.length}</strong> listings checked against original sources <span>${directCount()} service locations</span> <span id="liveSourceReach">USDA meal-site counts checked with a U.S. location search</span> <a href="/directory">Use the text directory</a></p>
           <p role="note">${icon.info}<span>If someone is in immediate danger, contact local emergency services. RWN does not provide emergency response.</span></p>
         </div>
 
@@ -730,27 +730,40 @@ function renderLocationState() {
 
 function renderLiveSourceState() {
   const status = document.getElementById("liveSourceStatus");
-  const reach = document.getElementById("catalogReach");
-  if (!status) return;
+  const reach = document.getElementById("liveSourceReach");
+  const inUnitedStates = state.userLocation && state.userCountry === "United States";
+  const settled = state.liveSourceStatus === "loaded" || state.liveSourceStatus === "unavailable";
+  const hasNationalCount = inUnitedStates && settled && Number.isSafeInteger(state.liveNationalCount) && state.liveNationalCount >= 0;
+  const national = hasNationalCount ? ` · USDA lists ${state.liveNationalCount.toLocaleString()} meal ${state.liveNationalCount === 1 ? "site" : "sites"} as active nationally today` : " · National count unavailable";
+  let message;
   if (state.liveSourceStatus === "loading") {
-    status.textContent = "Checking USDA for current summer meal sites in an approximate 160 km search area…";
+    message = "Checking USDA for current summer meal sites in an approximate 160 km search area…";
   } else if (state.liveSourceStatus === "loaded") {
     const visible = state.liveResources.length;
     const available = state.liveNearbyAvailable;
-    const national = state.liveNationalCount ? ` · ${state.liveNationalCount.toLocaleString()} active nationally today` : "";
-    status.textContent = available > visible
-      ? `Showing the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
-      : `Showing ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
+    message = visible === 0
+      ? `No current USDA meal sites were returned for this search area${national}. Other services and resource finders remain available.`
+      : available > visible
+        ? `Loaded the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
+        : `Loaded ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
   } else if (state.liveSourceStatus === "unavailable") {
-    status.textContent = state.liveSourceError || "USDA meal-site information is temporarily unavailable. The rest of the directory is still available.";
+    message = `${state.liveSourceError || "Nearby USDA meal-site information is temporarily unavailable. The rest of the directory is still available."} ${national.slice(3)}.`;
   } else if (state.userLocation && state.userCountry !== "United States") {
-    status.textContent = "USDA meal-site information covers the United States. Other services and resource finders remain available.";
+    message = "USDA meal-site information covers the United States. Other services and resource finders remain available.";
   } else {
-    status.textContent = "In the United States, location search also includes current USDA summer meal sites, dates, and meal times.";
+    message = "In the United States, location search also includes current USDA summer meal sites, dates, and meal times.";
   }
-  if (reach && state.liveNationalCount) {
-    reach.innerHTML = `<strong>${resources.length.toLocaleString()}</strong> listings checked against original sources <span>${directCount().toLocaleString()} service locations</span> <span>${state.liveNationalCount.toLocaleString()} USDA meal sites active today</span> <a href="/directory">Use the text directory</a>`;
-  }
+  // Avoid repeating the live announcement during unrelated filter updates.
+  if (status && status.textContent !== message) status.textContent = message;
+  const reachMessage = hasNationalCount
+    ? `${state.liveNationalCount.toLocaleString()} USDA meal ${state.liveNationalCount === 1 ? "site" : "sites"} listed as active nationally today`
+    : inUnitedStates && state.liveSourceStatus === "loading"
+      ? "Checking current USDA meal-site counts…"
+      : inUnitedStates && settled
+        ? "Current national USDA meal-site count unavailable"
+        : "USDA meal-site counts checked with a U.S. location search";
+  // Update only the source count, preserving catalog totals and the directory link.
+  if (reach && reach.textContent !== reachMessage) reach.textContent = reachMessage;
 }
 
 function renderControls() {
@@ -1165,6 +1178,7 @@ async function loadLiveResourcesNearUser() {
   liveSourceController = controller;
   state.liveSourceStatus = "loading";
   state.liveSourceError = "";
+  state.liveNationalCount = null;
   renderLiveSourceState();
   const options = { signal: controller.signal };
   const [nearbyResult, countResult] = await Promise.allSettled([
@@ -1173,12 +1187,12 @@ async function loadLiveResourcesNearUser() {
   ]);
   if (controller.signal.aborted || liveSourceController !== controller) return;
 
-  if (countResult.status === "fulfilled") state.liveNationalCount = countResult.value;
+  state.liveNationalCount = countResult.status === "fulfilled" ? countResult.value : null;
   if (nearbyResult.status === "rejected") {
     state.liveResources = [];
     state.liveNearbyAvailable = 0;
     state.liveSourceStatus = "unavailable";
-    state.liveSourceError = "USDA meal-site information could not be loaded. The rest of the directory is still available.";
+    state.liveSourceError = "Nearby USDA meal-site information could not be loaded. The rest of the directory is still available.";
     updateFilters();
     return;
   }

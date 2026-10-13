@@ -1,3 +1,4 @@
+import { verifyLiveSourceCounts } from "./qa-live-source-counts.mjs";
 import { verifyServiceContact } from "./qa-service-contact.mjs";
 import { verifyDirectoryDiscovery } from "./qa-directory-discovery.mjs";
 import { verifyDirectoryStartup } from "./qa-directory-startup.mjs";
@@ -176,6 +177,7 @@ async function run() {
     await verifyContactOnly({ client, navigate, evaluate, capture, qaDir: QA_DIR });
     await verifyConnectivityRecovery({ client, navigate, evaluate, capture, qaDir: QA_DIR });
     await verifyCatalogRecovery({ client, navigate, evaluate, capture, qaDir: QA_DIR });
+    await verifyLiveSourceCounts({ client, host: HOST, navigate, evaluate, capture, qaDir: QA_DIR });
 
     const serviceUrl = `${HOST}/service/${encodeURIComponent(resource.id)}`;
     await client.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });
