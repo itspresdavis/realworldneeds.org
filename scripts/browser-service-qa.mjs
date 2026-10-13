@@ -10,6 +10,7 @@ import { verifyServiceFacts } from "./qa-service-facts.mjs";
 import { verifySourceConfidence } from "./qa-source-confidence.mjs";
 import { verifyDirectorySearchRelevance } from "./qa-search-relevance.mjs";
 import { verifyContactOnly } from "./qa-contact-only.mjs";
+import { verifyCatalogRecovery } from "./qa-catalog-recovery.mjs";
 import { verifyConnectivityRecovery } from "./qa-connectivity-recovery.mjs";
 import { verifyDirectoryPagination } from "./qa-directory-pagination.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -174,6 +175,7 @@ async function run() {
     await Promise.all([client.call("Page.enable"), client.call("Runtime.enable")]);
     await verifyContactOnly({ client, navigate, evaluate, capture, qaDir: QA_DIR });
     await verifyConnectivityRecovery({ client, navigate, evaluate, capture, qaDir: QA_DIR });
+    await verifyCatalogRecovery({ client, navigate, evaluate, capture, qaDir: QA_DIR });
 
     const serviceUrl = `${HOST}/service/${encodeURIComponent(resource.id)}`;
     await client.call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 1000 });

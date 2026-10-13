@@ -136,7 +136,7 @@ function directorySearchMarkup(scope) {
     <label class="directory-need-field"><span>Type of help</span><select data-directory-need disabled><option value="">All help</option>${needs.map(need => `<option value="${escapeHtml(need)}">${escapeHtml(need)}</option>`).join("")}</select></label>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
     <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
-    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
+    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><button class="directory-search-tools__clear" type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button><span><kbd>/</kbd><span> focuses search · Escape clears</span></span></div>
     <template data-directory-empty><div class="directory-global-empty"><h2>No matching listings.</h2><p>A missing result does not mean help is unavailable.</p><div class="directory-empty-actions"><button type="button" data-fewer-words>Try without search words</button><button type="button" data-clear-all>Clear all filters</button></div><p>Or ${scope !== "/directory/global" ? '<a href="/directory/global">browse global resource finders</a>' : ""}${scope !== "/directory" ? `${scope !== "/directory/global" ? " or " : ""}<a href="/directory">browse the full directory</a>` : ""}.</p></div></template>
   </section>`;
 }
@@ -200,7 +200,10 @@ function replaceUrlLastmod(sitemap, path, date) {
 const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"));
 // Keep the shipped entry self-contained: an older offline worker can refresh
 // directory.js before it successfully installs a new complete offline release.
+const catalogSource = (await readFile("public/catalog-request.js", "utf8")).replaceAll("export ", "");
+const catalogImport = 'import { createCatalogLoader } from "./catalog-request.js";';
 const directoryEntry = await readFile("dist/directory.js", "utf8");
+if (!directoryEntry.includes(catalogImport)) throw new Error("Directory catalog import was not found.");
 const resultRenderer = await readFile("dist/directory-results.js", "utf8");
 const stateSource = (await readFile("public/directory-state.js", "utf8")).replaceAll("export ", "");
 const stateImport = 'import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from "./directory-state.js";';
@@ -210,8 +213,8 @@ if (!directoryEntry.includes(rendererImport)) throw new Error("Directory rendere
 const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";';
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
-const directoryBundle = `${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
-// Keep the complete offline entry under its 15 KB ceiling, without
+const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
+// Keep the complete offline entry under its 16 KB ceiling, without
 // another runtime request. Terser uses its safe defaults (no unsafe transforms),
 // including declaration joining; rendered CI tests exercise the shipped bundle.
 const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow", "root"] } });
@@ -221,7 +224,7 @@ await writeFile("dist/directory.js", `${directoryCode}\n`);
 // self-contained during upgrades from older offline workers.
 const privacySource = (await readFile("src/utils/privacy.js", "utf8")).replaceAll("export ", "");
 const savedSource = (await readFile("public/saved-services.js", "utf8")).replace(/^import[^\n]+\n/gm, "");
-const savedBundle = `${privacySource}\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${savedSource}`;
+const savedBundle = `${catalogSource}\n${privacySource}\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${savedSource}`;
 // Apply the same safe compiler settings to the lazy feature rather than grow its budget.
 const { code: savedCode } = await minify(savedBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["initSavedServices", "createResultRow", "readSavedResources", "setResourceSaved"] } });
 await writeFile("dist/saved-services.js", `${savedCode}\n`);

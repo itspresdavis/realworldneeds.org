@@ -6,6 +6,7 @@ const inputs = [
   "scripts/version-offline-worker.mjs",
   "scripts/version-offline-assets.mjs",
   "public/directory.js",
+  "public/catalog-request.js",
   "public/directory-startup.js",
   "public/page-menu.js",
   "public/saved-services.js",

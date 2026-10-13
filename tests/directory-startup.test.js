@@ -5,12 +5,13 @@ import { readFile } from "node:fs/promises";
 import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";
 import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from "../public/directory-state.js";
 
+const catalogLoader = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replaceAll("export ", "");
 const source = await readFile(new URL("../public/directory.js", import.meta.url), "utf8");
 const savedSource = await readFile(new URL("../public/saved-services.js", import.meta.url), "utf8");
 const savedSyncSource = savedSource.slice(savedSource.indexOf("  const syncView ="), savedSource.indexOf('  window.addEventListener("hashchange"'));
 const startupSource = await readFile(new URL("../public/directory-startup.js", import.meta.url), "utf8");
 const catalog = JSON.parse(await readFile(new URL("../dist/data/search-index.json", import.meta.url), "utf8"));
-const runtime = source.replace(/^import .*;\n/gm, "").replaceAll("import.meta.url", '"https://example.org/directory.js?v=startup-fixture"');
+const runtime = catalogLoader + "\n" + source.replace(/^import .*;\n/gm, "").replaceAll("import.meta.url", '"https://example.org/directory.js?v=startup-fixture"');
 const london = "Drinking fountains for London";
 const stale = () => ({ rwnDirectory: { path: "/directory", query: "WIC", category: "food", country: "United States", shown: 120, scroll: 900, focus: "/service/stale-target" }, unrelated: { retained: true } });
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -126,7 +127,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     scrollTo({ top }) { this.scrollY = top; scrolls.push(top); } });
   const navigator = { onLine: online, serviceWorker: new Node("serviceworker") };
   const storage = new Proxy({}, { get() { assert.fail("Directory search must never read or write web storage"); } });
-  const context = vm.createContext({ document, window, history, location, navigator, URL, Intl,
+  const context = vm.createContext({ document, window, history, location, navigator, URL, Intl, AbortController,
     normalize, queryTokens, scoreRecord, readDirectoryState, writeDirectoryState,
     HTMLInputElement: Node, HTMLTextAreaElement: Node,
     Event: class { constructor(type, options) { this.type = type; Object.assign(this, options); } }, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
@@ -136,7 +137,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
       row.record = record; link.setAttribute("href", `/service/${record.id}`); row.append(link); return row;
     },
     fetch(url, options) { const pending = deferred(); requests.push({ url, options, ...pending }); return pending.promise; },
-    setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; },
+    setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
     clearTimeout(id) { timers.delete(id); }, requestAnimationFrame(callback) { frames.push(callback); }
   });
   vm.runInContext(`const restoreDirectoryView = ${restoreDirectoryView.toString()};`, context);
@@ -178,7 +179,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     start() { vm.runInContext(runtime, context); },
     type(value, data = {}) { input.value = value; input.dispatch("input", data); },
     get results() { return results; },
-    async flush() { for (const [id, callback] of [...timers]) { timers.delete(id); callback(); } await tick(); },
+    async flush() { for (const [id, timer] of [...timers]) { if (timer.delay > 80) continue; timers.delete(id); timer.callback(); } await tick(); },
     async resolve(index = requests.length - 1, payload = catalog) { assert.ok(requests[index], `Missing catalog request ${index}`); requests[index].resolve({ ok: true, json: async () => payload }); await tick(); },
     async reject(index = requests.length - 1) { assert.ok(requests[index], `Missing catalog request ${index}`); requests[index].reject(new Error("Offline")); await tick(); },
     frames() { for (const callback of frames.splice(0)) callback(); },
@@ -681,3 +682,20 @@ test("restored need and desktop chip changes keep the narrow selector in sync", 
   f.input.dispatch("keydown", { key: "Escape" }); await tick();
   assert.equal(f.need.value, ""); assertOrdinary(f);
 });
+
+
+for (const outcome of ["success", "failure"]) {
+  test(`controller replacement preserves filters and ignores superseded catalog ${outcome}`, async () => {
+    const f = fixture(); f.input.focus(); f.type(london); f.start(); await f.flush();
+    assert.equal(f.requests.length, 1);
+    f.navigator.serviceWorker.dispatch("controllerchange"); await tick();
+    assert.equal(f.requests.length, 2);
+    assert.equal(f.requests[0].options.signal.aborted, true);
+    assert.equal(f.requests[1].options.cache, "reload");
+    assert.equal(f.requests[1].url, "/data/search-index.json");
+    await f.resolve(1); assertLondon(f);
+    if (outcome === "success") await f.resolve(0, { records: [], scopes: {} });
+    else await f.reject(0);
+    assertLondon(f); assert.equal(f.document.activeElement, f.input);
+  });
+}

@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 
 const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+const catalogLoader = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replaceAll("export ", "");
 const saved = await readFile(new URL("../public/saved-services.js", import.meta.url), "utf8");
 const between = (start, end) => {
   const first = app.indexOf(start), last = app.indexOf(end, first);
@@ -213,7 +214,7 @@ test("cancelling native Share does not copy or announce a failure", async () => 
   await f.control("shareResource").click(); assert.deepEqual(f.messages, []);
 });
 
-async function savedFixture(initialCount = 61, { pendingCatalog = false, storageUnavailable = false, emptyNode = true, hash = "#saved", originalTitle = "Food services in New York | Real World Needs" } = {}) {
+async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = false, storageUnavailable = false, emptyNode = true, hash = "#saved", originalTitle = "Food services in New York | Real World Needs" } = {}) {
   const f = domFixture(), { document, Element } = f;
   const panel = new Element("section", { "data-saved-services": "" });
   const heading = new Element("h2", { tabindex: "-1" });
@@ -240,27 +241,32 @@ async function savedFixture(initialCount = 61, { pendingCatalog = false, storage
   document.body.append(panel, search, results, ...navigation, outsideNavigation);
   const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
   let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
-  const events = {}, effects = { reads: 0, writes: 0, fetches: 0 };
+  const timers = new Map(); let now = 0, nextTimer = 0;
+  const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 };
   const location = { hash }, history = { state: null }, restores = [];
   const response = { ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) };
   let resolveCatalog, rejectCatalog;
   const catalog = pendingCatalog ? new Promise((resolve, reject) => { resolveCatalog = resolve; rejectCatalog = reject; }) : Promise.resolve(response);
   const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
-    document, URL, location, history, navigator: {}, SAVED_RESOURCES_KEY: "saved",
+    document, URL, location, history, navigator: { serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } }, AbortController,
+    setTimeout(callback, delay) { timers.set(++nextTimer, { at: now + delay, callback }); return nextTimer; },
+    clearTimeout(id) { timers.delete(id); }, SAVED_RESOURCES_KEY: "saved",
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
       addEventListener: (name, handler) => { events[name] = handler; },
       dispatchEvent: (event) => { restores.push(event); return true; },
     },
-    fetch: () => { effects.fetches += 1; return catalog; },
+    fetch: (...args) => { effects.fetches += 1; return fetchCatalog ? fetchCatalog(...args) : catalog; },
     readSavedResources: () => { effects.reads += 1; if (storageError) throw new Error("denied"); return new Set(currentIds); },
     setResourceSaved: (id) => { effects.writes += 1; currentIds = currentIds.filter((candidate) => candidate !== id); },
     clearSavedResources: () => { effects.writes += 1; currentIds = []; },
     createResultRow: () => { const row = new Element(); row.append(new Element("a")); return row; },
   });
-  vm.runInContext(saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
+  vm.runInContext(catalogLoader + "\n" + saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
   return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle,
+    timers, workerEvents, savedIds: () => [...currentIds],
+    advance(ms) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.callback(); } },
     setIds: (count) => { currentIds = ids.slice(0, count); },
     denyStorage: () => { storageError = true; },
     allowStorage: () => { storageError = false; },
@@ -516,4 +522,48 @@ test("late Saved catalog resolution cannot overwrite Browse navigation, title or
   assert.equal(f.document.activeElement, f.results);
   assert.equal(f.list.children.length, 0);
   assert.equal(f.effects.writes, 0);
+});
+
+
+for (const stage of ["headers", "JSON"]) {
+  test(`Saved ${stage} timeout preserves IDs and focused Retry through coalesced recovery`, async () => {
+    let attempts = 0, finish;
+    const stalled = new Promise(() => {});
+    const healthy = new Promise(resolve => { finish = resolve; });
+    const f = await savedFixture(2, { fetchCatalog: () => ++attempts === 1 ? (stage === "headers" ? stalled : { ok: true, json: () => stalled }) : healthy });
+    f.advance(8000); await settle();
+    assert.equal(f.retry.hidden, false); assert.match(f.summary.textContent, /could not load/);
+    assert.deepEqual(f.savedIds(), ["service-0", "service-1"]); assert.equal(f.effects.writes, 0);
+    f.retry.focus(); f.retry.click(); await settle();
+    assert.equal(f.retry.hidden, false); assert.equal(f.document.activeElement, f.retry);
+    assert.equal(f.retry.getAttribute("aria-disabled"), "true");
+    for (let i = 0; i < 5; i++) f.retry.click();
+    await settle(); assert.equal(attempts, 2);
+    finish({ ok: true, json: async () => ({ records: [{ id: "service-0", name: "Current listing" }] }) });
+    await settle();
+    assert.equal(f.retry.hidden, true); assert.equal(f.document.activeElement, f.heading);
+    assert.equal(f.list.children.length, 2); assert.match(f.summary.textContent, /1 no longer/);
+    assert.deepEqual(f.savedIds(), ["service-0", "service-1"]); assert.equal(f.effects.writes, 0);
+  });
+}
+
+test("Saved online recovery replaces a stalled request and ignores its late success", async () => {
+  let attempts = 0, finishOld;
+  const old = new Promise(resolve => { finishOld = resolve; });
+  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : { ok: true, json: async () => ({ records: [] }) } });
+  f.events["rwn-connection-restored"](); await settle();
+  assert.equal(attempts, 2); assert.match(f.summary.textContent, /1 no longer/);
+  finishOld({ ok: true, json: async () => ({ records: [{ id: "service-0", name: "Withdrawn" }] }) });
+  await settle();
+  assert.match(f.summary.textContent, /1 no longer/); assert.equal(f.effects.writes, 0);
+  f.events.offline(); await settle(); assert.equal(attempts, 2, "finished offline snapshot remains cached");
+});
+
+test("Saved navigation away supersedes timeout without restoring the panel or stealing focus", async () => {
+  const f = await savedFixture(1, { fetchCatalog: () => new Promise(() => {}) });
+  f.location.hash = "#directory-results"; f.events.hashchange(); f.search.focus();
+  const summary = f.summary.textContent;
+  f.advance(8000); await settle();
+  assert.equal(f.summary.textContent, summary); assert.equal(f.document.activeElement, f.search);
+  assert.equal(f.retry.hidden, true); assert.equal(f.effects.writes, 0);
 });

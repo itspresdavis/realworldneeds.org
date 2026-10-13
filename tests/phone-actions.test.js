@@ -157,7 +157,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     }
   }
   assert.doesNotMatch(shipped, /\bimport\s/);
-  assert.ok(Buffer.byteLength(shipped) <= 15_000);
+  assert.ok(Buffer.byteLength(shipped) <= 16_000);
 });
 
 test("built service pages, directory records and search index agree on every phone target", async () => {

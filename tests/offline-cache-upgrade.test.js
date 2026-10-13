@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = await readFile("public/sw.js", "utf8");
+const catalogText = id => JSON.stringify({ records: [{ id }], scopes: {} });
 const origin = "https://rwn.test";
 const indexUrl = `${origin}/data/search-index.json`;
 const deferred = () => {
@@ -33,7 +34,7 @@ function worker(release, caches, fetch) {
   const handlers = new Map();
   const effects = { skipped: false, claimed: false };
   vm.runInNewContext(source.replaceAll("__RWN_OFFLINE_RELEASE__", release), {
-    URL, Request, Response, caches, fetch,
+    URL, Request, Response, caches, fetch, AbortController, TextDecoder, Uint8Array, setTimeout, clearTimeout,
     self: {
       location: { origin }, addEventListener(type, handler) { handlers.set(type, handler); },
       async skipWaiting() { effects.skipped = true; },
@@ -58,7 +59,7 @@ test("failed worker installation preserves the old release until a complete retr
   const old = worker("old", caches, async () => new Response("old core"));
   await old.lifecycle("install"); await old.lifecycle("activate");
   const oldCache = await caches.open("rwn-offline-old");
-  await oldCache.put(new Request(indexUrl), new Response("synthetic-removed"));
+  await oldCache.put(new Request(indexUrl), new Response(catalogText("synthetic-removed")));
   const unrelated = await caches.open("another-app");
   await unrelated.put(new Request(`${origin}/other`), new Response("keep"));
   const failed = worker("next", caches, async (path) => new Response("core", { status: path === "/directory.js" ? 503 : 200 }));
@@ -80,10 +81,10 @@ test("failed worker installation preserves the old release until a complete retr
 test("reload bypasses both the old offline copy and force-cache HTTP requests", async () => {
   const caches = storage(), requests = [];
   const cache = await caches.open("rwn-offline-new");
-  await cache.put(new Request(indexUrl), new Response("synthetic-removed"));
-  const next = worker("new", caches, async (request, options) => { requests.push({ request, options }); return new Response("current-only"); });
-  assert.equal(await (await next.request("reload")).text(), "current-only");
-  assert.equal(await (await cache.match(new Request(indexUrl))).text(), "current-only");
+  await cache.put(new Request(indexUrl), new Response(catalogText("synthetic-removed")));
+  const next = worker("new", caches, async (request, options) => { requests.push({ request, options }); return new Response(catalogText("current-only")); });
+  assert.equal(await (await next.request("reload")).text(), catalogText("current-only"));
+  assert.equal(await (await cache.match(new Request(indexUrl))).text(), catalogText("current-only"));
   assert.equal(requests[0].options.cache, "reload");
   await next.request("force-cache", "?v=older-client");
   assert.equal(requests[1].options.cache, "reload", "old-client HTTP caches cannot repopulate the new offline cache");
@@ -97,19 +98,19 @@ for (const failure of ["network", "http"]) {
   test(`explicit reload ${failure} failure never returns stale data, normal offline search still works`, async () => {
     const caches = storage();
     const cache = await caches.open("rwn-offline-new");
-    await cache.put(new Request(indexUrl), new Response("saved offline catalog"));
+    await cache.put(new Request(indexUrl), new Response(catalogText("saved offline catalog")));
     let failing = true;
     const next = worker("new", caches, async () => {
-      if (!failing) return new Response("current catalog");
+      if (!failing) return new Response(catalogText("current catalog"));
       if (failure === "network") throw new Error("Offline");
       return new Response("Unavailable", { status: 503 });
     });
     if (failure === "network") await assert.rejects(next.request("reload"), /Offline/);
     else assert.equal((await next.request("reload")).status, 503);
-    assert.equal(await (await next.request()).text(), "saved offline catalog");
+    assert.equal(await (await next.request()).text(), catalogText("saved offline catalog"));
     failing = false;
-    assert.equal(await (await next.request("reload")).text(), "current catalog");
-    assert.equal(await (await cache.match(new Request(indexUrl))).text(), "current catalog");
+    assert.equal(await (await next.request("reload")).text(), catalogText("current catalog"));
+    assert.equal(await (await cache.match(new Request(indexUrl))).text(), catalogText("current catalog"));
   });
 }
 
@@ -119,12 +120,12 @@ test("late older in-flight responses cannot replace a newer catalog cache", asyn
   const next = worker("new", caches, () => (++requests === 1 ? older : newer).promise);
   const first = next.request("force-cache", "?v=old");
   const second = next.request("reload");
-  newer.resolve(new Response("current-only"));
-  assert.equal(await (await second).text(), "current-only");
-  older.resolve(new Response("synthetic-removed"));
+  newer.resolve(new Response(catalogText("current-only")));
+  assert.equal(await (await second).text(), catalogText("current-only"));
+  older.resolve(new Response(catalogText("synthetic-removed")));
   await first;
   const cache = await caches.open("rwn-offline-new");
-  assert.equal(await (await cache.match(new Request(indexUrl))).text(), "current-only");
+  assert.equal(await (await cache.match(new Request(indexUrl))).text(), catalogText("current-only"));
 });
 
 test("cache quota or access failures do not hide a current network catalog", async () => {
@@ -132,8 +133,8 @@ test("cache quota or access failures do not hide a current network catalog", asy
     const caches = storage();
     caches.failWrites(true);
     if (unavailable) caches.open = async () => { throw new Error("Storage denied"); };
-    const next = worker("new", caches, async () => new Response("current-only"));
-    assert.equal(await (await next.request("reload")).text(), "current-only");
+    const next = worker("new", caches, async () => new Response(catalogText("current-only")));
+    assert.equal(await (await next.request("reload")).text(), catalogText("current-only"));
   }
 });
 
@@ -143,16 +144,16 @@ test("a cache write already in flight cannot finish after and overwrite the newe
   caches.open = async (name) => {
     const cache = await open(name), put = cache.put;
     cache.put = async (request, response) => {
-      if (await response.clone().text() === "older") { writing.resolve(); await releaseWrite.promise; }
+      if (await response.clone().text() === catalogText("older")) { writing.resolve(); await releaseWrite.promise; }
       return put(request, response);
     };
     return cache;
   };
   let requests = 0;
   const next = worker("new", caches, async () => {
-    if (++requests === 1) return new Response("older");
+    if (++requests === 1) return new Response(catalogText("older"));
     fetchedNew.resolve();
-    return new Response("current-only");
+    return new Response(catalogText("current-only"));
   });
   const first = next.request();
   await writing.promise;
@@ -162,5 +163,5 @@ test("a cache write already in flight cannot finish after and overwrite the newe
   releaseWrite.resolve();
   await Promise.all([first, second]);
   const cache = await caches.open("rwn-offline-new");
-  assert.equal(await (await cache.match(new Request(indexUrl))).text(), "current-only");
+  assert.equal(await (await cache.match(new Request(indexUrl))).text(), catalogText("current-only"));
 });

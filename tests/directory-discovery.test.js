@@ -68,9 +68,9 @@ test("the real restore handler reads history.state and restores the filter contr
 
 test("reconnection retries a country-only search after its results were hidden by a failed request", () => {
   let searches = 0;
-  const f = vm.createContext({ showConnectivityState() {}, results: { hidden: true },
+  const f = vm.createContext({ showConnectivityState() {}, loadCatalog: { retry() {} }, results: { hidden: true },
     input: { value: "" }, activeCategory: "", country: { value: "France" }, apply: () => searches++ });
-  const changeSource = source.slice(source.indexOf("const connectivityChanged="), source.indexOf('for(const type of ["online","offline"])'));
+  const changeSource = source.slice(source.indexOf("const connectivityChanged="), source.indexOf('for(const type of ["online","offline","rwn-connection-restored"])'));
   vm.runInContext(`${changeSource}\nconnectivityChanged();`, f);
   assert.equal(searches, 1);
 });
@@ -98,7 +98,7 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
   ];
   const frames = [], effects = { remembers: 0, focus: 0, scroll: null, cleared: 0 };
   const f = vm.createContext({
-    format: value => value.toLocaleString(), browse: false, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
+    format: value => value.toLocaleString(), browse: false, document: {}, retry: {}, showRetry() {}, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
     queryTokens: value => value.trim().split(/\s+/).filter(Boolean), normalize: value => value.toLowerCase(),
     clear: {}, root: { classList: { toggle() {} } }, count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: async () => ({ records }),
     syncCategoryLabels() {}, scopedRecords: payload => payload.records, scoreRecord: () => 1,

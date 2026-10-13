@@ -53,7 +53,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.ok(searchIndex.scopes && typeof searchIndex.scopes === "object");
   assert.match(client, /new URL\(import\.meta\.url\)\.searchParams\.get\("v"\)/);
   assert.match(client, /searchIndexUrl\s*=\s*`\/data\/search-index\.json\$\{releaseVersion/);
-  assert.match(client, /fetch\(freshCatalog\?"\/data\/search-index\.json":searchIndexUrl,/);
+  assert.match(client, /createCatalogLoader\(searchIndexUrl,true\)/);
   assert.match(client, /payload\.scopes\[currentScope\]/);
   assert.doesNotMatch(client, /XMLHttpRequest|sendBeacon|localStorage|sessionStorage|geolocation|location\.search/);
   assert.doesNotMatch(client, /input\?\.value.*searchIndexUrl|searchIndexUrl.*input\?\.value/);
