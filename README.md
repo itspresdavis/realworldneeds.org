@@ -79,7 +79,7 @@ Homepage search fields are prepared in bounded idle slices; typing prioritizes t
 
 Supported browsers register a same-origin service worker after page load. The offline cache is deliberately narrow: lightweight public directory assets, the static search index, the manifest, the RWN mark, and visited directory pages. Service-detail pages and RWN API requests are not intentionally cached.
 
-Connectivity is checked with an uncached same-origin release probe rather than trusting only `navigator.onLine`. When offline, the directory clearly identifies cached results and blocks stale service-detail navigation until connectivity returns.
+Connectivity is checked with an uncached same-origin release probe rather than trusting only `navigator.onLine`. When offline, the directory clearly identifies cached results and blocks stale service-detail navigation until connectivity returns. A controlled directory navigation also recovers a compatible saved page after HTTP 503/504 or a six-second header/body deadline. That response starts with an offline warning and checks the actual directory route, including its complete body, before allowing online links again. Genuine 404/410 responses remain visible and invalidate the exact saved page; individual service pages remain network-only.
 
 ## Privacy and security
 

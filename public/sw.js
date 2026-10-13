@@ -119,21 +119,124 @@ self.addEventListener("activate", (event) => {
   })());
 });
 
-async function networkFirstNavigation(request) {
+// Bound directory recovery across both headers and the complete HTML body.
+// A timed-out response is never allowed to enter the cache write queue.
+async function completeNavigationResponse(request) {
+  const controller = new AbortController();
+  let reader, timer, interrupted = false;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      interrupted = true;
+      reject(new Error("Navigation deadline exceeded"));
+      controller.abort();
+      reader?.cancel().catch(() => {});
+    }, 6000);
+  });
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(request, { signal: controller.signal });
+        if (interrupted) {
+          response.body?.cancel().catch(() => {});
+          throw new Error("Navigation superseded by deadline");
+        }
+        // Preserve real denials, missing pages, redirects and other documents.
+        if (!response.ok || response.redirected || response.type === "opaque" || !response.body) return response;
+        reader = response.body.getReader();
+        const chunks = [];
+        let size = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          size += value.byteLength;
+        }
+        if (interrupted) throw new Error("Navigation superseded by deadline");
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        return new Response(bytes, { status: response.status, statusText: response.statusText, headers: response.headers });
+      })(),
+      deadline
+    ]);
+  } finally {
+    clearTimeout(timer);
+    reader?.releaseLock();
+  }
+}
+
+async function cachedNavigation(cache, request) {
+  for (const key of [cacheKeyFor(request), cacheKeyFor("/directory")]) {
+    try {
+      if (navigationWithdrawals.has(new URL(key.url).pathname)) continue;
+      const saved = await cache?.match(key);
+      if (!saved?.ok || !await compatibleNavigation(saved)) continue;
+      // Fixed trusted marker, response-only: stored HTML and release IDs stay
+      // unchanged. No URL, search text or provider content is interpolated.
+      const html = await saved.text();
+      const marked = html.replace(/<head(?:\s[^>]*)?>/i, '$&<meta name="rwn-offline-navigation" content="cached">');
+      const response = new Response(marked, { status: saved.status, statusText: saved.statusText, headers: saved.headers });
+      response.headers.delete("Content-Length");
+      response.headers.delete("Content-Encoding");
+      return response;
+    } catch { /* Try the compatible root if this copy is unavailable. */ }
+  }
+  return null;
+}
+
+const navigationRequests = new Map();
+const navigationWithdrawals = new Map();
+let navigationWrite = Promise.resolve();
+
+async function networkFirstNavigation(request, event) {
   const url = new URL(request.url);
+  const directory = url.pathname === "/directory" || url.pathname.startsWith("/directory/");
+  const key = url.pathname;
+  const generation = {};
+  let pendingWrite;
+  if (directory) navigationRequests.set(key, generation);
+  // Retain this handle across awaits: a retired worker must not recreate its
+  // deleted release cache when a delayed request finally completes.
   const cache = await caches.open(CACHE_NAME).catch(() => null);
   try {
-    const response = await fetch(request);
-    if (cache && (url.pathname === "/directory" || url.pathname.startsWith("/directory/"))
-      && await compatibleNavigation(response)) await putIfUsable(cache, request, response).catch(() => {});
+    const response = directory ? await completeNavigationResponse(request) : await fetch(request);
+    if (directory && !response.redirected && [503, 504].includes(response.status)) return await cachedNavigation(cache, request) || response;
+    if (directory && cache) {
+      const usable = !response.redirected && await compatibleNavigation(response);
+      const replaced = response.ok && !response.redirected && !usable
+        && !/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(await response.clone().text());
+      const removed = response.status === 404 || response.status === 410 || replaced;
+      const current = navigationRequests.get(key) === generation;
+      if (current && (removed || usable)) {
+        if (removed) navigationWithdrawals.set(key, generation);
+        const candidate = usable ? response.clone() : null;
+        pendingWrite = navigationWrite = navigationWrite.catch(() => {}).then(async () => {
+          // An observed withdrawal stays ordered even if the next request
+          // fails. Only a newer successfully stored page can restore this key.
+          if (removed) {
+            await cache.delete(cacheKeyFor(request));
+            if (navigationWithdrawals.get(key) === generation) navigationWithdrawals.delete(key);
+          }
+          else if (navigationRequests.get(key) === generation) {
+            await putIfUsable(cache, request, candidate);
+            if (navigationRequests.get(key) === generation) navigationWithdrawals.delete(key);
+          }
+        });
+        // Persistence is best-effort and ordered, but never holds up a usable
+        // network document. A later withdrawal follows already-started puts.
+        event?.waitUntil?.(navigationWrite.catch(() => {}));
+      }
+    }
     return response;
   } catch {
-    return await cache?.match(cacheKeyFor(request)).catch(() => null)
-      || await cache?.match(cacheKeyFor("/directory")).catch(() => null)
-      || new Response(
-        "Real World Needs is offline. Reconnect to refresh the directory.",
-        { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
-      );
+    return await cachedNavigation(cache, request) || new Response(
+      "Real World Needs is offline. Reconnect to refresh the directory.",
+      { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+    );
+  } finally {
+    const release = () => { if (navigationRequests.get(key) === generation) navigationRequests.delete(key); };
+    if (pendingWrite) pendingWrite.finally(release).catch(() => {});
+    else release();
   }
 }
 
@@ -263,7 +366,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname === "/workspace" || url.pathname === "/join") return;
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirstNavigation(request));
+    event.respondWith(networkFirstNavigation(request, event));
     return;
   }
 
