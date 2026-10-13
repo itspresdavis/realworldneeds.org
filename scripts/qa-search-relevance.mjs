@@ -167,6 +167,26 @@ function assertWic(result, records, label) {
   assert(result.rows.some((row) => /Norwich WIC/.test(row.text)), `${label}: legitimate Norwich WIC must remain`, result.count);
 }
 
+async function verifySpecificNeeds(context, surface, label) {
+  for (const query of ["dental London", "mental health London"]) {
+    const result = await typeQuery(context, surface, query);
+    assert(result.rows.length === 0 && !result.more, `${label}: specific health searches must not return broad health or healthy-water matches`, result);
+  }
+  for (const [query, ids] of [
+    ["showers London", ["passage-resource-centre", "whitechapel-mission"]],
+    ["laundry London", ["passage-resource-centre"]],
+    ["dentist Dublin", ["capuchin-day-centre"]]
+  ]) {
+    const result = await typeQuery(context, surface, query);
+    assert(!result.more && JSON.stringify(result.rows.map(row => row.id).sort()) === JSON.stringify(ids), `${label}: completed needs must retain their reviewed specific matches`, result);
+  }
+  const broad = await typeQuery(context, surface, "hygiene London");
+  assert(broad.rows.some(row => row.id === "felix-project-multibank"), `${label}: broad category exploration must remain available`, broad);
+  const health = await typeQuery(context, surface, "health London");
+  assert(["passage-resource-centre", "whitechapel-mission"].every(id => health.rows.some(row => row.id === id)), `${label}: broad health evidence must remain searchable`, health);
+  assert(!health.rows.some(row => row.id === "london-drinking-fountains"), `${label}: completed health must not match healthy water`, health);
+}
+
 async function verifySurface(context, kind, records, width) {
   const surface = surfaces[kind];
   await context.client.call("Emulation.setDeviceMetricsOverride", { width, height: width < 600 ? 844 : 1000, deviceScaleFactor: 1, mobile: width < 600, screenWidth: width, screenHeight: width < 600 ? 844 : 1000 });
@@ -233,6 +253,8 @@ async function verifySurface(context, kind, records, width) {
     const postcode = await typeQuery(context, surface, query);
     assert(postcode.rows.length === 1 && postcode.rows[0].id === expectedId && postcode.rows[0].rendered, `${kind} ${width}px: a complete postcode must find the published address without prefix distractors`, postcode);
   }
+
+  await verifySpecificNeeds(context, surface, `${kind} ${width}px`);
 
   const provider = await typeQuery(context, surface, "Whitechapel Mission");
   assert(provider.rows[0]?.id === "whitechapel-mission" && provider.rows[0].rendered, `${kind} ${width}px: exact provider lookup failed`, provider);
@@ -419,6 +441,7 @@ export async function verifyDirectorySearchRelevance(context) {
     await typeQuery(context, surfaces.directory, "London Road");
     const street = await allResults(context, surfaces.directory, records.length);
     assert(street.rows.some((row) => records.some((record) => record.id === row.id && record.city !== "London" && /\blondon road\b/i.test(record.address))), "Offline street-address lookup failed", street);
+    await verifySpecificNeeds(context, surfaces.directory, "offline directory");
     console.log("Offline search relevance QA passed: WIC excludes Norwich Foodbanks, legitimate WIC and street matches remain, and reconnect cautions are visible.");
   } finally {
     await context.client.call("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1, connectionType: "wifi" });
