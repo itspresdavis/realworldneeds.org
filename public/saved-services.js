@@ -64,26 +64,32 @@ export function initSavedServices() {
     return list.children[first];
   };
 
-  const render = async () => {
-    const current = ++generation;
-    if (!active()) return;
+  const captureFocus = () => {
     const focused = document.activeElement;
-    const focusedRow = focused?.closest?.("[data-saved-id]");
+    const focusedRow = list.contains(focused) ? focused?.closest?.("[data-saved-id]") : null;
     const focusedIndex = focusedRow ? [...list.children].indexOf(focusedRow) : -1;
-    const controlIndex = focusedRow ? [...focusedRow.querySelectorAll("a, button")].indexOf(focused) : -1;
-    const previousShown = Math.max(60, shown);
-    const restoreFocus = () => {
+    return () => {
       if (!active() || (document.activeElement !== focused && ((focused !== retry && focused?.isConnected && focused.getClientRects().length > 0) || document.activeElement !== document.body))) return;
       if (focusedRow) {
         const rows = [...list.children];
         const row = rows.find((candidate) => candidate.dataset.savedId === focusedRow.dataset.savedId);
         const next = rows[Math.min(focusedIndex, rows.length - 1)];
-        const target = row?.querySelectorAll("a, button")[controlIndex] || next?.querySelector("[data-saved-remove]") || heading;
-        target.focus();
+        // Actions may change with current listing details. Preserve the same
+        // link or Remove control, rather than a now-different numeric slot.
+        const control = focused.matches("[data-saved-remove]") ? row?.querySelector("[data-saved-remove]")
+          : [...(row?.querySelectorAll("a") || [])].find(link => link.getAttribute("href") === focused.getAttribute("href") && link.getAttribute("class") === focused.getAttribute("class"));
+        (control || row?.querySelector("[data-saved-remove]") || next?.querySelector("[data-saved-remove]") || heading).focus();
       } else if (focused === retry) (retry.hidden ? heading : retry).focus();
       else if ((focused === clear && clear.hidden) || (focused === more && more.hidden)) heading.focus();
       else if (confirmation.contains(focused) && confirmation.hidden) heading.focus();
     };
+  };
+
+  const render = async () => {
+    const current = ++generation;
+    if (!active()) return;
+    const focused = document.activeElement;
+    let restoreFocus = captureFocus();
     retry.hidden = focused !== retry;
     retry.setAttribute("aria-disabled", "true");
     if (empty) empty.hidden = true;
@@ -114,6 +120,10 @@ export function initSavedServices() {
     try {
       const payload = await loadCatalog();
       if (current !== generation || !active()) return;
+      // Snapshot at the replacement boundary: the visitor may have expanded
+      // the still-visible list or moved focus while this request was pending.
+      restoreFocus = captureFocus();
+      const previousShown = Math.max(60, shown);
       retry.hidden = true;
       const byId = new Map(payload.records.map((record) => [record.id, record]));
       // Never remove saved IDs merely because a catalog request or release changed.
@@ -126,6 +136,7 @@ export function initSavedServices() {
       restoreFocus();
     } catch {
       if (current !== generation || !active()) return;
+      restoreFocus = captureFocus();
       list.replaceChildren();
       more.hidden = true;
       summary.textContent = "Your saved list is still on this device, but listing details could not load. Reconnect and try again.";

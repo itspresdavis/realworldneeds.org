@@ -254,7 +254,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   controls.confirmation.append(controls.cancel, controls.confirm);
   panel.append(heading, ...Object.entries(controls).filter(([key]) => !["cancel", "confirm"].includes(key)).map(([, element]) => element));
   document.body.append(panel, search, results, ...navigation, outsideNavigation);
-  const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
+  const ids = Array.from({ length: Math.max(61, initialCount) }, (_, index) => `service-${index}`);
   let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
   const timers = new Map(); let now = 0, nextTimer = 0;
   const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 };
@@ -275,7 +275,12 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     readSavedResources: () => { effects.reads += 1; if (storageError) throw new Error("denied"); return new Set(currentIds); },
     setResourceSaved: (id) => { effects.writes += 1; currentIds = currentIds.filter((candidate) => candidate !== id); },
     clearSavedResources: () => { effects.writes += 1; currentIds = []; },
-    createResultRow: () => { const row = new Element(); row.append(new Element("a")); return row; },
+    createResultRow: (record) => {
+      const row = new Element();
+      row.append(new Element("a", { href: `/service/${record.id}` }));
+      for (const link of record.links || []) row.append(new Element("a", typeof link === "string" ? { href: link } : link));
+      return row;
+    },
   });
   vm.runInContext(catalogLoader + "\n" + saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
@@ -581,4 +586,148 @@ test("Saved navigation away supersedes timeout without restoring the panel or st
   f.advance(8000); await settle();
   assert.equal(f.summary.textContent, summary); assert.equal(f.document.activeElement, f.search);
   assert.equal(f.retry.hidden, true); assert.equal(f.effects.writes, 0);
+});
+
+
+async function refreshingSavedFixture(count = 61, extra = {}) {
+  let attempts = 0, finish, fail;
+  const payload = { records: Array.from({ length: count }, (_, i) => ({ id: `service-${i}`, name: `service-${i}`, ...extra })) };
+  const pending = new Promise((resolve, reject) => { finish = resolve; fail = reject; });
+  const f = await savedFixture(count, { fetchCatalog: () => ++attempts === 1 ? { ok: true, json: async () => payload } : pending });
+  return { ...f, payload,
+    async start() { f.workerEvents.controllerchange(); await settle(); assert.equal(attempts, 2); assert.match(f.summary.textContent, /Loading/); },
+    async finish(records = payload.records) { finish({ ok: true, json: async () => ({ records }) }); await settle(); },
+    async fail() { fail(new Error("offline")); await settle(); }
+  };
+}
+
+for (const count of [61, 121, 181]) {
+  test(`a delayed reset refresh preserves newer Show more expansion to ${count} rows and its latest focus`, async () => {
+    const f = await refreshingSavedFixture(count);
+    f.more.focus(); await f.start();
+    let focusedId;
+    while (!f.more.hidden) {
+      f.more.focus(); f.more.click();
+      focusedId = f.document.activeElement.closest("[data-saved-id]").dataset.savedId;
+    }
+    assert.equal(f.list.children.length, count);
+    await f.finish();
+    assert.equal(f.list.children.length, count);
+    assert.equal(f.more.hidden, true);
+    assert.equal(f.document.activeElement.closest("[data-saved-id]")?.dataset.savedId, focusedId);
+    assert.equal(f.document.activeElement.getAttribute("href"), `/service/${focusedId}`);
+    assert.equal(f.effects.writes, 0);
+    assert.equal(f.savedIds().length, count);
+  });
+}
+
+for (const selector of ["a", "[data-saved-remove]"]) {
+  test(`a delayed reset refresh preserves the latest deliberate row ${selector} focus`, async () => {
+    const f = await refreshingSavedFixture(2);
+    f.list.children[0].querySelector(selector).focus(); await f.start();
+    f.list.children[1].querySelector(selector).focus();
+    await f.finish();
+    assert.equal(f.document.activeElement, f.list.children[1].querySelector(selector));
+    assert.equal(f.effects.writes, 0);
+  });
+}
+
+test("a refreshed row preserves a focused link by identity when earlier actions disappear", async () => {
+  const f = await refreshingSavedFixture(2, { links: ["https://example.org/old", "https://example.org/current"] });
+  f.list.children[0].querySelector("a").focus(); await f.start();
+  f.list.children[1].querySelectorAll("a")[2].focus();
+  await f.finish(f.payload.records.map(record => ({ ...record, links: ["https://example.org/current"] })));
+  assert.equal(f.document.activeElement, f.list.children[1].querySelectorAll("a")[1]);
+  assert.equal(f.document.activeElement.getAttribute("href"), "https://example.org/current");
+  assert.equal(f.effects.writes, 0);
+});
+
+test("a delayed refresh uses the latest row's remove fallback when its listing is withdrawn", async () => {
+  const f = await refreshingSavedFixture(61);
+  f.list.children[0].querySelector("a").focus(); await f.start();
+  f.more.focus(); f.more.click();
+  await f.finish(f.payload.records.slice(0, 60));
+  assert.equal(f.list.children.length, 61);
+  assert.equal(f.list.children[60].querySelector("a"), null);
+  assert.equal(f.document.activeElement, f.list.children[60].querySelector("[data-saved-remove]"));
+  assert.match(f.summary.textContent, /1 no longer/);
+  assert.equal(f.savedIds().at(-1), "service-60");
+  assert.equal(f.effects.writes, 0);
+});
+
+for (const outcome of ["finish", "fail"]) {
+  test(`a delayed refresh ${outcome} preserves newer focus outside the replaced rows`, async () => {
+    const f = await refreshingSavedFixture(2);
+    f.list.children[0].querySelector("a").focus(); await f.start();
+    f.search.focus(); await f[outcome]();
+    assert.equal(f.document.activeElement, f.search);
+    assert.equal(f.effects.writes, 0);
+  });
+}
+
+test("a failed delayed refresh recovers the latest row focus to the heading and preserves IDs", async () => {
+  const f = await refreshingSavedFixture(61);
+  f.more.focus(); await f.start(); f.more.click();
+  await f.fail();
+  assert.equal(f.document.activeElement, f.heading);
+  assert.equal(f.retry.hidden, false);
+  assert.equal(f.savedIds().length, 61);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("a newer remove during a delayed refresh supersedes its membership and recovers nearby focus", async () => {
+  const f = await refreshingSavedFixture(2);
+  f.list.children[0].querySelector("a").focus(); await f.start();
+  const remove = f.list.children[1].querySelector("[data-saved-remove]");
+  remove.focus(); remove.click(); await settle(); await f.finish();
+  assert.deepEqual(f.savedIds(), ["service-0"]);
+  assert.equal(f.list.children.length, 1);
+  assert.equal(f.document.activeElement, f.list.children[0].querySelector("[data-saved-remove]"));
+  assert.equal(f.effects.writes, 1);
+});
+
+test("a newer Clear confirmation survives delayed refresh and Cancel retains its control", async () => {
+  const f = await refreshingSavedFixture(2);
+  f.list.children[0].querySelector("a").focus(); await f.start();
+  f.clear.click(); await f.finish();
+  assert.equal(f.confirmation.hidden, false);
+  assert.equal(f.document.activeElement, f.cancel);
+  f.cancel.click();
+  assert.equal(f.confirmation.hidden, true);
+  assert.equal(f.document.activeElement, f.clear);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("a delayed refresh cannot undo newer Clear or Browse actions", async () => {
+  for (const action of ["clear", "browse"]) {
+    const f = await refreshingSavedFixture(61);
+    f.more.focus(); await f.start(); f.more.click();
+    if (action === "clear") { f.clear.click(); f.confirm.click(); await settle(); }
+    else { f.location.hash = "#directory-results"; f.events.hashchange(); }
+    const before = f.list.children.length;
+    await f.finish();
+    assert.equal(f.list.children.length, before);
+    assert.equal(f.document.activeElement, action === "clear" ? f.heading : f.results);
+    assert.equal(f.effects.writes, action === "clear" ? 1 : 0);
+    if (action === "clear") { assert.equal(before, 0); assert.deepEqual(f.savedIds(), []); }
+    else assert.equal(f.location.hash, "#directory-results");
+  }
+});
+
+test("ordinary Saved Show more still expands and focuses the first newly appended row", async () => {
+  const f = await savedFixture(61);
+  f.more.focus(); f.more.click(); await settle();
+  assert.equal(f.list.children.length, 61);
+  assert.equal(f.document.activeElement, f.list.children[60].querySelector("a"));
+  assert.equal(f.effects.writes, 0);
+});
+
+
+test("a refresh distinguishes View details from the row link with the same destination", async () => {
+  const f = await refreshingSavedFixture(1, { links: [{ href: "/service/service-0", class: "is-details" }] });
+  f.list.children[0].querySelector("a").focus(); await f.start();
+  f.list.children[0].querySelectorAll("a")[1].focus();
+  await f.finish();
+  assert.equal(f.document.activeElement, f.list.children[0].querySelectorAll("a")[1]);
+  assert.equal(f.document.activeElement.getAttribute("class"), "is-details");
 });
