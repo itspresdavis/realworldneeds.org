@@ -52,6 +52,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
 
   const saveButton = utility.querySelector("[data-service-save]");
   const serviceId = document.querySelector("#service")?.dataset.serviceId;
+  const storageUnavailableMessage = "Saving is unavailable in this browser. You can still copy or print this listing.";
   const syncSaved = () => {
     try {
       const saved = readSavedResources().has(serviceId);
@@ -59,9 +60,10 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       saveButton.textContent = saved ? "Remove from saved" : "Save";
       saveButton.disabled = !serviceId;
       if (!serviceId) status.textContent = "Saving is unavailable for this listing. You can still copy or print it.";
+      else if (status.textContent === storageUnavailableMessage) status.textContent = "";
     } catch {
       saveButton.disabled = true;
-      status.textContent = "Saving is unavailable in this browser. You can still copy or print this listing.";
+      status.textContent = storageUnavailableMessage;
     }
   };
   saveButton.addEventListener("click", () => {
