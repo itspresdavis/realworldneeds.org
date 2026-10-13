@@ -10,6 +10,14 @@ The initial 2K NASA surface remains small enough for a fast first view. Existing
 
 The cream/green public interface and pale map surround share existing navigation and page structure. There is no custom page-scroll engine. Ordinary wheel scrolling and vertical mobile swipes belong to the document; explicit map gestures control the globe.
 
+## Country lookup
+
+Country picking and user-location routing test the original longitude/latitude edges of the bundled Natural Earth GeoJSON. These polygons are already cut at the antimeridian; Antarctica also includes its explicit pole closure. Only the query longitude is normalized. Wrapping individual vertices around a query would introduce artificial edges across the opposite hemisphere and could select a different country when detailed geometry changes feature order.
+
+Containment retains the existing half-open ray convention, without a new boundary epsilon or geopolitical tie-break: for an axis-aligned rectangle, its west/south edges are included and east/north edges excluded. Hole membership uses the same convention and is subtracted. Exact shared borders or genuinely overlapping features may still depend on source feature order; this is an approximate country lookup, not surveyed border resolution. Coarse and detailed coastlines can legitimately differ. Tests cover unambiguous interiors with both complete datasets, synthetic holes/islands, reversed winding, seam/pole closures, equivalent longitudes and repeated location routing across the detail transition. Dataset checks guard the antimeridian-cut assumption.
+
+The CI-only live-source verifier uses both complete, unchanged map responses with synthetic locations and provider responses. It holds detail delivery until the coarse U.S. result is checked, then observes the real detail-ready state before repeating the location action. A temporary read-only observer is appended to the generated app module for this verifier and removed by restoring the exact original bytes on success or failure; it is absent from ordinary source/build output. A U.K. control must cause no USDA request. This fixture does not request a device location or contact a live provider.
+
 ## Verification
 
 Run `npm run check` and the existing `npm run test:browser:qa`. The render-policy tests cover fractional framebuffer sizes, idle/moving states, and perspective occlusion. Browser checks cover filtering, selection, gesture ownership, off-screen behavior, desktop/mobile layout, recovery, and source links.

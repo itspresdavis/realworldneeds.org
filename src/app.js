@@ -2188,8 +2188,10 @@ function extractRings(geometry) {
 function ringContainsCoordinate(ring, lat, lng) {
   let inside = false;
   for (let current = 0, previous = ring.length - 1; current < ring.length; previous = current, current += 1) {
-    const currentLng = lng + normalizeLongitude(ring[current][0] - lng);
-    const previousLng = lng + normalizeLongitude(ring[previous][0] - lng);
+    // Bundled GeoJSON already splits polygons at the antimeridian. Wrapping
+    // vertices around the query invents edges on the opposite side of Earth.
+    const currentLng = ring[current][0];
+    const previousLng = ring[previous][0];
     const currentLat = ring[current][1];
     const previousLat = ring[previous][1];
     const crossesLatitude = (currentLat > lat) !== (previousLat > lat);
@@ -2200,6 +2202,8 @@ function ringContainsCoordinate(ring, lat, lng) {
 }
 
 function geometryContainsCoordinate(geometry, lat, lng) {
+  // Normalize only the query; preserve the source edges and half-open ray rule.
+  lng = normalizeLongitude(lng);
   const polygons = geometry?.type === "Polygon" ? [geometry.coordinates] : geometry?.coordinates || [];
   return polygons.some((polygon) => {
     if (!polygon.length || !ringContainsCoordinate(polygon[0], lat, lng)) return false;
