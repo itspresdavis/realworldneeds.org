@@ -46,6 +46,18 @@ const queries = new Map(),
 const words = (value) => normalizeSearch(value).split(" ").filter(Boolean);
 const prefix = (text, token) => ` ${text}`.includes(` ${token}`);
 const whole = (text, token) => ` ${text} `.includes(` ${token} `);
+// A completed specific need must not expand to every health/hygiene listing.
+// Keep broad aliases above for category exploration and unfinished prefixes.
+const specificNeeds = new Map();
+for (const group of [
+  "dental dentist dentists dentistry",
+  "mental",
+  "shower showers ducha duchas douche douches",
+  "laundry lavanderia",
+]) {
+  const terms = group.split(" ");
+  for (const term of terms) specificNeeds.set(term, terms);
+}
 
 export function querySearchTokens(query) {
   const key = String(query || "");
@@ -97,7 +109,14 @@ export function resourceSearchText(resource) {
   // The newline is a compact field boundary, compatible with older clients.
   const address = normalizeSearch(resource.address),
     used = new Set(words(address));
-  return `${address}\n${[...new Set(tokens.flatMap((token) => [token, aliases.get(token) || token]))].filter((token) => !used.has(token)).join(" ")}\n${phrases}`;
+  // A compact, derived ranking hint, never a provider claim. Keep contextual
+  // mentions searchable; no/not/without contexts do not receive a service boost.
+  // This is lexical evidence, not availability or general negation inference.
+  const evidence = words([resource.summary, ...(resource.services || [])]
+    .filter((text) => !/\b(no(?![- ]cost\b)|not|without)\b/i.test(text))
+    .join(" "));
+  const needs = [...new Set(evidence.flatMap((term) => specificNeeds.get(term)?.[0] || []))].join(" ");
+  return `${address}\n${[...new Set(tokens.flatMap((token) => [token, aliases.get(token) || token]))].filter((token) => !used.has(token)).join(" ")}\n${phrases}\n${needs}`;
 }
 
 export function prepareResourceSearch(resource) {
@@ -116,6 +135,7 @@ export function prepareResourceSearch(resource) {
     entry = {
       address: parts.length > 1 ? parts[0] : "",
       phrases: parts[2] ?? null,
+      needs: parts[3] || "",
       name: normalizeSearch(resource.name),
       city: normalizeSearch(resource.city ?? legacyCity),
       country: normalizeSearch(country),
@@ -124,7 +144,7 @@ export function prepareResourceSearch(resource) {
         resource.category,
         ...(resource.secondaryCategories || []),
       ],
-      text: parts.join(" "),
+      text: parts.slice(0, 3).join(" "),
     };
     fields.set(resource, entry);
   }
@@ -136,23 +156,28 @@ export function resourceSearchScore(resource, query) {
   if (!tokens.length) return 0;
   const entry = prepareResourceSearch(resource);
   if (entry.query === tokens) return entry.score;
+  entry.query = tokens;
   let score = 0;
   for (const [literal, alias] of tokens) {
+    const specific = specificNeeds.get(literal);
+    const match = /^(wic|health|hygiene)$/.test(alias) ? whole : prefix;
     if (
       literal.includes(" ")
         ? !whole(entry.address || entry.text, literal)
-        : literal === "wic"
-        ? !whole(entry.text, literal)
-        : !prefix(entry.text, literal) &&
+        : specific
+        ? !specific.some((term) => whole(entry.text, term))
+        : !match(entry.text, literal) &&
           !(alias.includes(" ")
             ? whole(entry.phrases ?? entry.text, alias)
-            : prefix(entry.text, alias))
+            : match(entry.text, alias))
     ) {
-      score = -1;
-      break;
+      entry.score = -1;
+      return -1;
     }
     score +=
-      entry.primary === alias
+      specific
+        ? whole(entry.needs, specific[0]) ? 40 : whole(entry.name, literal) ? 16 : 10
+        : entry.primary === alias
         ? 40
         : entry.types.includes(alias)
           ? 30
@@ -166,14 +191,9 @@ export function resourceSearchScore(resource, query) {
                   ? 8
                   : 2;
   }
-  if (score < 0) {
-    entry.query = tokens;
-    entry.score = score;
-    return score;
-  }
   const phrase = tokens.map(([literal]) => literal).join(" ");
   // Whole multiword names and places beat coincidental combinations of words.
-  if (entry.name === phrase) score += 80;
+  score += entry.name === phrase ? 88 : whole(entry.name, phrase) ? 8 : 0;
   if (
     [entry.city, entry.country].some(
       (place) =>
@@ -182,21 +202,20 @@ export function resourceSearchScore(resource, query) {
           ([literal, alias]) =>
             prefix(place, literal) ||
             whole(place, alias) ||
+            specificNeeds.has(literal) ||
             entry.types.includes(alias),
         ) &&
         words(place).every((token) =>
           tokens.some(
             ([literal, alias]) =>
-              literal === token || alias.split(" ").includes(token),
+              literal === token || whole(alias, token),
           ),
         ),
     )
   )
     score += 40;
-  if (whole(entry.name, phrase)) score += 8;
   if ((tokens.length > 1 || /\d/.test(phrase)) && prefix(entry.address, phrase))
     score += 32;
-  entry.query = tokens;
   entry.score = score;
   return score;
 }

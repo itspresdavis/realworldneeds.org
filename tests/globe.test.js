@@ -86,7 +86,8 @@ test("search tolerates diacritics and common help-language synonyms", () => {
     category: "hygiene", secondaryCategories: [], summary: "Personal care", services: ["Laundry"], accessType: "Walk-in", costNote: "Free"
   };
   assert.ok(resourceSearchScore(hygiene, "Bogota") >= 0);
-  assert.ok(resourceSearchScore(hygiene, "showers") >= 0);
+  assert.ok(resourceSearchScore(hygiene, "lavandería") >= 0);
+  assert.equal(resourceSearchScore(hygiene, "showers"), -1, "laundry alone does not advertise showers");
   assert.equal(resourceSearchScore(hygiene, "veterinary"), -1);
 });
 
