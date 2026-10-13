@@ -7,6 +7,7 @@ import { createInitialTypeSet, matchesResource } from "../src/utils/geo.js";
 import {
   normalizeSearch,
   prepareResourceSearch,
+  querySearchTokens,
   resourceSearchScore as score,
   resourceSearchText,
 } from "../src/utils/search.js";
@@ -34,6 +35,87 @@ const indexRecord = (resource) => ({
   category: resource.category,
   categories: [resource.category, ...(resource.secondaryCategories || [])],
   search: resourceSearchText(resource),
+});
+
+test("Unicode search terms stay meaningful without inventing translations or dropping mixed-query constraints", () => {
+  for (const query of ["東京", "مساعدة", "Київ", "food 東京", "مساعدة food", "東京 E16LT", "E16LT 東京"]) {
+    assert.ok(querySearchTokens(query).length > 0, query);
+    assert.equal(find(query).length, 0, `${query}: the current catalog has no literal match`);
+    for (const convert of [(resource) => resource, indexRecord]) {
+      assert.equal(score(convert(fixture({ name: "Community food pantry" })), query), -1, query);
+    }
+  }
+  for (const name of ["東京", "مساعدة", "Київ", "हिन्दी", "বাংলা", "ภาษาไทย", "서울"]) {
+    const service = fixture({ name });
+    for (const convert of [(resource) => resource, indexRecord]) {
+      assert.ok(score(convert(service), name) >= 0, `${name}: literal catalog text`);
+      assert.ok(score(convert(service), `${name} food`) >= 0, `${name}: mixed catalog text`);
+    }
+    assert.equal(normalizeSearch(name.normalize("NFC")), normalizeSearch(name.normalize("NFD")), name);
+  }
+  assert.equal(normalizeSearch("ї"), "і\u0308", "Cyrillic marks are not Latin accents");
+  assert.equal(normalizeSearch("हिन्दी"), "हिन्दी", "Indic vowel and joining marks remain meaningful");
+  for (const [accented, plain] of [["Bogotá", "Bogota"], ["vêtements", "vetements"], ["WÍÇ", "WIC"]])
+    assert.equal(normalizeSearch(accented), normalizeSearch(plain));
+  for (const query of ["", "   ", "please find help near me", "---"]) {
+    assert.deepEqual(querySearchTokens(query), [], `${query}: existing empty/noise-only semantics`);
+    assert.equal(score(fixture({}), query), 0);
+  }
+});
+
+test("complete UK postcode spacing variants retain the same exact lookup on both search surfaces", () => {
+  // All six regular outward-code shapes; these fixtures test formatting, not
+  // delivery validity. ONS separates the final three-character inward code:
+  // https://www.ons.gov.uk/methodology/geography/ukgeographies/postalgeography
+  for (const postcode of ["M1 1AA", "M60 1NW", "CR2 6XH", "DN55 1PT", "W1P 1HQ", "EC1A 1BB"]) {
+    const compact = postcode.replace(" ", "");
+    const service = fixture({ address: `1 Main Street, ${postcode}` });
+    for (const convert of [(resource) => resource, indexRecord]) {
+      const record = convert(service), expected = score(record, postcode);
+      assert.ok(expected >= 0, postcode);
+      for (const query of [compact, compact.toLowerCase(), postcode.toLowerCase(), postcode.replace(" ", "-"), postcode.replace(" ", "   ")])
+        assert.equal(score(record, query), expected, query);
+      assert.equal(score(record, `food ${compact}`), score(record, `food ${postcode}`));
+      assert.ok(score(record, postcode.split(" ")[0]) >= 0, `${postcode}: partial outward code`);
+      assert.equal(score(record, `${compact}x`), -1, "do not split inside longer words");
+      assert.equal(score(record, `x${compact}x`), -1, "do not match word interiors");
+    }
+  }
+  assert.deepEqual(find("E16LT").map((record) => record.id), ["crisis-skylight-london"]);
+  assert.deepEqual(find("E16LT").map((record) => record.id), find("E1 6LT").map((record) => record.id));
+  const exact = fixture({ address: "1 Example Road, NR2 1RF" });
+  for (const convert of [(resource) => resource, indexRecord]) {
+    for (const query of ["NR2 1RF", "NR21RF", "food NR21RF"]) {
+      assert.ok(score(convert(exact), query) >= 0, query);
+      for (const address of ["1 Example Road, NR23 1RF", "1 Example Road, NR2 1RFA"]) {
+        assert.equal(score(convert(fixture({ address })), query), -1, `${query}: ${address}`);
+      }
+    }
+    assert.ok(score(convert(fixture({ address: "1 Example Road, NR23 1RF" })), "NR2") >= 0,
+      "incomplete outward codes retain prefix recall");
+  }
+  const expectedNorwich = resources.filter((record) => /\bNR2 1RF\b/i.test(record.address)).map((record) => record.id).sort();
+  assert.ok(expectedNorwich.length > 0, "the exact-postcode oracle uses a published address");
+  for (const query of ["NR2 1RF", "NR21RF"])
+    assert.deepEqual(find(query).map((record) => record.id).sort(), expectedNorwich, query);
+  for (const value of ["E1", "E16L", "12345", "12345-6789", "WIC", "ABC123", "E16CI", "xe16ltx"]) {
+    assert.equal(normalizeSearch(value), value.toLowerCase().replace("-", " "), `${value}: not a complete UK postcode`);
+  }
+});
+
+test("published UK addresses remain searchable with or without their postcode space", () => {
+  let reviewed = 0;
+  for (const resource of resources.filter((record) => record.country === "United Kingdom")) {
+    const postcode = resource.address.match(/\b([A-Z]{1,2}\d[A-Z\d]?)\s+(\d[ABD-HJLNP-UW-Z]{2})\b/i);
+    if (!postcode) continue;
+    reviewed += 1;
+    const spaced = `${postcode[1]} ${postcode[2]}`, compact = `${postcode[1]}${postcode[2]}`;
+    for (const record of [resource, indexRecord(resource)]) {
+      assert.ok(score(record, spaced) >= 0, resource.id);
+      assert.equal(score(record, compact), score(record, spaced), `${resource.id}: ${compact}`);
+    }
+  }
+  assert.ok(reviewed > 1_300, `expected broad live-catalog coverage, found ${reviewed}`);
 });
 
 test("sparse legacy directory records derive a city only from a known country suffix", () => {
@@ -241,6 +323,15 @@ test("the generated directory and homepage have identical scores for every recor
     "St Mary’s",
     "temporary",
     "closed",
+    "東京",
+    "مساعدة",
+    "Київ",
+    "food 東京",
+    "E16LT",
+    "W37QE",
+    "NR2 1RF",
+    "NR21RF",
+    "food NR21RF",
   ];
   for (const resource of resources) {
     const record = indexed.get(resource.id);

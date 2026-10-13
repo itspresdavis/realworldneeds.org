@@ -4,13 +4,18 @@
 export const normalizeSearch = (value) =>
   String(value || "")
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+    // Keep accent-insensitive Latin searches without erasing meaningful marks
+    // in other scripts (for example Ukrainian ї or Indic vowel signs).
+    .replace(/(\p{Script=Latin})[\u0300-\u036f]+/gu, "$1")
     .toLowerCase()
     .replace(/\b(?:[a-z]\.){2,}/g, (value) => value.replaceAll(".", ""))
     .replace(/['’]/g, "")
     .replace(/wi[\s-]?fi\b/g, "wifi")
-    .replace(/[^a-z0-9+]+/g, " ")
-    .trim();
+    .replace(/[^\p{L}\p{N}\p{M}+]+/gu, " ")
+    .trim()
+    // Split only a complete, bounded UK postcode-shaped token. Partial codes,
+    // ZIPs and ordinary word prefixes retain their existing search behavior.
+    .replace(/(^| )([a-z]{1,2}\d[a-z\d]?)(\d[abd-hjlnp-uw-z]{2})(?= |$)/g, "$1$2 $3");
 
 const aliases = new Map();
 for (const group of [
@@ -49,7 +54,9 @@ export function querySearchTokens(query) {
     // Keep the literal term too: “Bed Road” must remain a valid address query.
     queries.set(
       key,
-      words(key)
+      // Keep complete postcodes together so NR2 1RF cannot match NR23 1RF.
+      // Every other term retains ordinary word-prefix behavior.
+      (normalizeSearch(key).match(/[a-z]{1,2}\d[a-z\d]? \d[abd-hjlnp-uw-z]{2}(?= |$)|\S+/g) || [])
         .filter((token) => !noise.has(token))
         .map((token) => [token, aliases.get(token) || token]),
     );
@@ -132,7 +139,9 @@ export function resourceSearchScore(resource, query) {
   let score = 0;
   for (const [literal, alias] of tokens) {
     if (
-      literal === "wic"
+      literal.includes(" ")
+        ? !whole(entry.address || entry.text, literal)
+        : literal === "wic"
         ? !whole(entry.text, literal)
         : !prefix(entry.text, literal) &&
           !(alias.includes(" ")

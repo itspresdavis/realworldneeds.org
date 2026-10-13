@@ -218,6 +218,22 @@ async function verifySurface(context, kind, records, width) {
   const nyc = await allResults(context, surface, records.length);
   assert(nyc.rows.some(row => row.id === "new-york-public-library-access") && !nyc.rows.some(row => row.id === "ny-wic-221-09"), `${kind} ${width}px: NYC must retain NYPL without combining Johnson City with its New York source`, nyc);
 
+  for (const query of ["東京", "مساعدة", "Київ", "food 東京"]) {
+    const unmatched = await typeQuery(context, surface, query);
+    assert(unmatched.rows.length === 0 && !unmatched.more && /no matching|\b0 of 0 listings\b/i.test(unmatched.count || ""), `${kind} ${width}px: unmatched Unicode text must not become an empty or broader query`, unmatched);
+  }
+  for (const [query, expectedId] of [
+    ["E1 6LT", "crisis-skylight-london"],
+    ["E16LT", "crisis-skylight-london"],
+    ["e16lt", "crisis-skylight-london"],
+    ["NR2 1RF", "trussell-642a29fc-962e-44ad-b955-089525fd6f79"],
+    ["NR21RF", "trussell-642a29fc-962e-44ad-b955-089525fd6f79"],
+    ["food NR21RF", "trussell-642a29fc-962e-44ad-b955-089525fd6f79"]
+  ]) {
+    const postcode = await typeQuery(context, surface, query);
+    assert(postcode.rows.length === 1 && postcode.rows[0].id === expectedId && postcode.rows[0].rendered, `${kind} ${width}px: a complete postcode must find the published address without prefix distractors`, postcode);
+  }
+
   const provider = await typeQuery(context, surface, "Whitechapel Mission");
   assert(provider.rows[0]?.id === "whitechapel-mission" && provider.rows[0].rendered, `${kind} ${width}px: exact provider lookup failed`, provider);
   const filtered = await activateCategory(context, surface);
@@ -233,7 +249,7 @@ async function verifySurface(context, kind, records, width) {
   await waitForUI(context, `document.querySelector(${JSON.stringify(surface.input)}).value === ''`);
   await sleep(800);
   assert((await view(context, surface)).query === "", `${kind} ${width}px: deferred input returned after Escape`, await view(context, surface));
-  console.log(`Search relevance QA passed for ${kind} at ${width}px: London city first, ${wic.rows.length} WIC results, legitimate street/provider searches, keyboard/category/clear${kind === "finder" ? ", and real browser Back" : ""}.`);
+  console.log(`Search relevance QA passed for ${kind} at ${width}px: London city first, ${wic.rows.length} WIC results, honest Unicode no-results, compact/spaced postcodes, legitimate street/provider searches, keyboard/category/clear${kind === "finder" ? ", and real browser Back" : ""}.`);
 }
 
 
