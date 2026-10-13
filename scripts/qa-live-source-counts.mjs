@@ -35,7 +35,7 @@ export async function withCountryStateProbe(run, appPath = new URL("../dist/src/
 export function installLiveSourceCountFixture(origin) {
   if (location.origin !== origin) return;
   const nativeFetch = window.fetch.bind(window);
-  const pending = [];
+  const pending = [], pendingBodies = [];
   let finishDetail;
   const probe = window.__rwnLiveCountQA = { requests: [], clicks: [], geometryLoads: [], detailReleased: false, locationCalls: 0, position: { latitude: 40, longitude: -75 }, scenario: { count: 0, nearby: 0 } };
   probe.releaseDetail = () => { probe.detailReleased = true; finishDetail?.(); };
@@ -46,7 +46,7 @@ export function installLiveSourceCountFixture(origin) {
       queueMicrotask(() => success({ coords: position }));
     },
   } });
-  const features = () => Array.from({ length: probe.scenario.nearby || 0 }, (_, index) => ({
+  const features = scenario => Array.from({ length: scenario.nearby || 0 }, (_, index) => ({
     attributes: { FID: `qa-${index}`, Site_Name: `Synthetic QA meal site ${index + 1}`, Site_City: "Synthetic QA", Site_State: "PA", Site_Address1: "Fictional example only" },
     geometry: { x: -75, y: 40 },
   }));
@@ -69,19 +69,73 @@ export function installLiveSourceCountFixture(origin) {
       return nativeFetch(input, options);
     }
     const kind = url.searchParams.get("returnCountOnly") === "true" ? "count" : "nearby";
-    probe.requests.push({ kind, geometry: url.searchParams.get("geometry") });
+    // Pin scenario data to the request, so replacement searches cannot rewrite
+    // old responses waiting for headers or body completion.
+    const scenario = { ...probe.scenario };
+    const request = { id: probe.requests.length, kind, geometry: url.searchParams.get("geometry"), headersReleased: false, bodyPending: false, bodyReleased: false, aborted: false, bodyCanceled: false, bodyReleaseAttempts: 0 };
+    probe.requests.push(request);
     return new Promise((resolve, reject) => {
-      const abort = () => reject(new DOMException("Aborted", "AbortError"));
+      let finished = false, bodyController;
+      const cleanup = () => options.signal?.removeEventListener("abort", abort);
+      const abort = () => {
+        if (finished) return;
+        finished = true;
+        request.aborted = true;
+        request.bodyPending = false;
+        cleanup();
+        const error = new DOMException("Aborted", "AbortError");
+        if (bodyController) bodyController.error(error);
+        else reject(error);
+      };
       if (options.signal?.aborted) return abort();
       options.signal?.addEventListener("abort", abort, { once: true });
-      pending.push(() => {
-        options.signal?.removeEventListener("abort", abort);
-        const failed = probe.scenario[`${kind}Failed`];
-        resolve(new Response(JSON.stringify(failed ? { error: { code: 400 } } : kind === "count" ? { count: probe.scenario.count } : { features: features() }), { status: failed ? 400 : 200, headers: { "Content-Type": "application/json" } }));
-      });
+      const releaseHeaders = () => {
+        if (finished || request.headersReleased) return;
+        request.headersReleased = true;
+        const failed = scenario[`${kind}Failed`];
+        const payload = failed ? { error: { code: 400 } } : kind === "count" ? { count: scenario.count } : { features: features(scenario), ...(scenario.nearbyTruncated ? { exceededTransferLimit: true } : {}) };
+        const json = JSON.stringify(payload), split = Math.max(1, Math.floor(json.length / 2));
+        const encoder = new TextEncoder();
+        const releaseBody = () => {
+          request.bodyReleaseAttempts += 1;
+          if (finished) return;
+          finished = true;
+          request.bodyPending = false;
+          request.bodyReleased = true;
+          cleanup();
+          bodyController.enqueue(encoder.encode(json.slice(split)));
+          bodyController.close();
+        };
+        const body = new ReadableStream({
+          start(controller) {
+            bodyController = controller;
+            controller.enqueue(encoder.encode(json.slice(0, split)));
+            if (scenario[`${kind}BodyPending`]) {
+              request.bodyPending = true;
+              pendingBodies.push({ request, finish: releaseBody });
+            } else releaseBody();
+          },
+          cancel() {
+            finished = true;
+            request.bodyPending = false;
+            request.bodyCanceled = true;
+            cleanup();
+          },
+        });
+        resolve(new Response(body, { status: failed ? 400 : 200, headers: { "Content-Type": "application/json" } }));
+      };
+      if (scenario.autoHeaders) queueMicrotask(releaseHeaders);
+      else pending.push({ request, finish: releaseHeaders });
     });
   };
-  probe.release = () => { for (const finish of pending.splice(0)) finish(); };
+  const release = (queue, ids) => {
+    for (const entry of queue.splice(0)) {
+      if (!ids || ids.includes(entry.request.id)) entry.finish();
+      else queue.push(entry);
+    }
+  };
+  probe.release = ids => release(pending, ids);
+  probe.releaseBodies = ids => release(pendingBodies, ids);
   document.addEventListener("click", event => {
     const control = event.target.closest?.("button, summary");
     const id = control?.matches(".finder-location-notes summary") ? "about" : control?.id;
@@ -109,6 +163,17 @@ export function liveSourceCountSnapshot() {
     overflow: document.documentElement.scrollWidth - innerWidth,
     external: performance.getEntriesByType("resource").map(entry => entry.name).filter(url => /^https?:/.test(url) && new URL(url).origin !== location.origin),
     locationStatus: document.getElementById("locationStatus")?.textContent,
+    finder: {
+      query: document.getElementById("resourceSearch")?.value,
+      filterSummary: document.getElementById("filterSummary")?.textContent,
+      resultCount: document.getElementById("resultCount")?.textContent,
+      filters: [...document.querySelectorAll("[data-type], [data-access], #toggleSaved")].map(control => ({ key: control.dataset.type || control.dataset.access || control.id, pressed: control.getAttribute("aria-pressed") })),
+      selection: document.querySelector(".resource-card.is-selected [data-resource-id]")?.dataset.resourceId || null,
+      inspector: document.getElementById("resourcePanelHeading")?.textContent,
+      historySelection: history.state?.rwnFinder?.selectedId || null,
+      activeControl: document.activeElement?.id || document.activeElement?.tagName,
+      notification: document.getElementById("statusToast")?.textContent,
+    },
     probe: window.__rwnLiveCountQA && { requests: window.__rwnLiveCountQA.requests, clicks: window.__rwnLiveCountQA.clicks, locationCalls: window.__rwnLiveCountQA.locationCalls, geometryLoads: window.__rwnLiveCountQA.geometryLoads, detailReleased: window.__rwnLiveCountQA.detailReleased, countryState: window.__rwnLiveCountQA.countryState },
   };
 }
@@ -159,6 +224,8 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
         { label: "positive", count: 100, nearby: 1 },
         { label: "national-unavailable", countFailed: true, nearby: 0 },
         { label: "nearby-unavailable", count: 200, nearbyFailed: true },
+        { label: "malformed-national", count: null, nearby: 1 },
+        { label: "truncated-nearby", count: 201, nearby: 1, nearbyTruncated: true },
       ]) {
         currentCase = `${scenario.label}-${width}`;
         await evaluate(client, `window.__rwnLiveCountQA.scenario=${JSON.stringify(scenario)}`);
@@ -184,6 +251,8 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
         if (scenario.label === "positive") check(/Loaded 1 current USDA meal site nearby/.test(settled.status) && /USDA lists 100 meal sites as active nationally today/.test(settled.status), "Loaded nearby and national counts were conflated", settled);
         if (scenario.label === "national-unavailable") check(/No current USDA meal sites were returned/.test(settled.status) && /National count unavailable/.test(settled.status), "Unknown national count became a zero or old count", settled);
         if (scenario.label === "nearby-unavailable") check(/could not be loaded/.test(settled.status) && /USDA lists 200 meal sites as active nationally today/.test(settled.status), "Nearby failure hid an independent national success", settled);
+        if (scenario.label === "malformed-national") check(/Loaded 1 current USDA meal site nearby/.test(settled.status) && /National count unavailable/.test(settled.status) && !/USDA lists 0/.test(settled.status), "Malformed count must remain unavailable while valid nearby records survive", settled);
+        if (scenario.label === "truncated-nearby") check(/could not be loaded/.test(settled.status) && /USDA lists 201 meal sites as active nationally today/.test(settled.status) && !/Loaded 1 current/.test(settled.status), "Truncated nearby response must not claim completeness or hide the independent count", settled);
         evidence.push({ label: `${scenario.label}-${width}`, loading, settled });
         await evaluate(client, "document.getElementById('liveSourceStatus').scrollIntoView({block:'center'})");
         await capture(client, `live-counts-${scenario.label}-${width}.png`);
@@ -199,6 +268,84 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
           evidence.push({ label: `detail-applied-${width}`, ...detailed });
         }
       }
+      // Use only the same trusted Use/Clear controls. Use is intentionally inert
+      // while busy, so a replacement search is Clear followed by Use.
+      const unchangedAfterLateResponse = (before, after, label) => {
+        for (const key of ["status", "locationStatus", "locateBusy", "href", "finder"]) {
+          check(JSON.stringify(before[key]) === JSON.stringify(after[key]), `${label}: late response changed ${key}`, { before: before[key], after: after[key] });
+        }
+        check(before.probe.countryState.userCountry === after.probe.countryState.userCountry, `${label}: late response changed country`, after);
+      };
+      for (const phase of ["headers", "body"]) {
+        for (const replace of [false, true]) {
+          currentCase = `${replace ? "replace" : "clear"}-pending-${phase}-${width}`;
+          await evaluate(client, `window.__rwnLiveCountQA.scenario=${JSON.stringify({ count: 31337, nearby: 2, countBodyPending: true, nearbyBodyPending: true })}`);
+          const before = await snapshot(), firstId = before.probe.requests.length;
+          const oldIds = [firstId, firstId + 1];
+          await activate("locateMe");
+          await wait(`window.__rwnLiveCountQA.requests.length === ${firstId + 2}`, "interrupted request pair started");
+          if (phase === "body") {
+            await evaluate(client, `window.__rwnLiveCountQA.release(${JSON.stringify(oldIds)})`);
+            await wait(`window.__rwnLiveCountQA.requests.slice(${firstId}).every(request => request.headersReleased && request.bodyPending)`, "both real response bodies are pending");
+          }
+          const pending = await snapshot();
+          check(pending.locateBusy && /Checking USDA/.test(pending.status) && !/active nationally today/.test(pending.status), "Pending response must still render loading", pending);
+          await activate("clearLocation");
+          await wait(`window.__rwnLiveCountQA.requests.slice(${firstId}, ${firstId + 2}).every(request => request.aborted)`, "Clear aborted both transports");
+          const cleared = await snapshot();
+          check(!cleared.locateBusy && /In the United States, location search/.test(cleared.status) && !/active nationally today/.test(cleared.status) && cleared.probe.countryState.userCountry === null, "Clear did not immediately restore idle", cleared);
+          let expected = cleared;
+          if (replace) {
+            await evaluate(client, 'window.__rwnLiveCountQA.scenario={count:202,nearby:1}');
+            await activate("locateMe");
+            await wait(`window.__rwnLiveCountQA.requests.length === ${firstId + 4}`, "replacement request pair started");
+            await evaluate(client, `window.__rwnLiveCountQA.release(${JSON.stringify([firstId + 2, firstId + 3])})`);
+            await wait("!document.getElementById('locateMe').classList.contains('is-loading')", "replacement source settled");
+            expected = await snapshot();
+            check(/Loaded 1 current USDA meal site nearby/.test(expected.status) && /USDA lists 202 meal sites as active nationally today/.test(expected.status), "Replacement did not settle with its own payload", expected);
+          }
+          await evaluate(client, `window.__rwnLiveCountQA.release(${JSON.stringify(oldIds)}); window.__rwnLiveCountQA.releaseBodies(${JSON.stringify(oldIds)})`);
+          await pause(100);
+          const late = await snapshot();
+          unchangedAfterLateResponse(expected, late, currentCase);
+          check(!/31337|31,337/.test(late.status) && !late.external.length, "An old response claimed success or reached the network", late);
+          evidence.push({ label: currentCase, pending, cleared, ...(replace ? { replacement: expected } : {}), late });
+          if (replace) await activate("clearLocation");
+        }
+      }
+      if (width === 1440) {
+        // One complete 3 × 7 s body-timeout path plus 250/750 ms backoff.
+        // Retry headers auto-release; each real body remains open until aborted.
+        currentCase = `body-timeout-${width}`;
+        const before = await snapshot(), firstId = before.probe.requests.length;
+        await evaluate(client, 'window.__rwnLiveCountQA.scenario={count:999,nearby:1,countBodyPending:true,autoHeaders:true}');
+        const started = Date.now();
+        await activate("locateMe");
+        await wait(`window.__rwnLiveCountQA.requests.slice(${firstId}).some(request => request.kind === 'count' && request.headersReleased && request.bodyPending)`, "count headers arrived with real body pending");
+        const loading = await snapshot();
+        check(loading.locateBusy && /Checking USDA/.test(loading.status), "A pending count body stopped loading too early", loading);
+        await wait("!document.getElementById('locateMe').classList.contains('is-loading')", "bounded three-attempt body timeout", 540);
+        const settled = await snapshot(), elapsedMs = Date.now() - started;
+        const countAttempts = settled.probe.requests.slice(firstId).filter(request => request.kind === "count");
+        check(countAttempts.length === 3 && countAttempts.every(request => request.headersReleased && request.aborted && !request.bodyReleased && !request.bodyPending), "Timeout did not abort all three real body attempts", countAttempts);
+        check(elapsedMs >= 21500 && elapsedMs <= 28000, "Body timeout exceeded the 22-second logical budget plus CI scheduling allowance", { elapsedMs });
+        check(/Loaded 1 current USDA meal site nearby/.test(settled.status) && /National count unavailable/.test(settled.status) && !settled.external.length, "Count body timeout discarded an independent nearby success", settled);
+        evidence.push({ label: currentCase, elapsedMs, loading, settled });
+        await evaluate(client, "document.getElementById('liveSourceStatus').scrollIntoView({block:'center'})");
+        await capture(client, `live-counts-body-timeout-${width}.png`);
+        await activate("clearLocation");
+        await evaluate(client, 'window.__rwnLiveCountQA.scenario={count:203,nearby:1,autoHeaders:true}');
+        await activate("locateMe");
+        await wait("!document.getElementById('locateMe').classList.contains('is-loading')", "valid request recovered after body timeout");
+        const recovered = await snapshot();
+        check(/Loaded 1 current USDA meal site nearby/.test(recovered.status) && /USDA lists 203 meal sites as active nationally today/.test(recovered.status), "A valid search did not recover after timeout", recovered);
+        await evaluate(client, `window.__rwnLiveCountQA.releaseBodies(${JSON.stringify(countAttempts.map(request => request.id))})`);
+        await pause(100);
+        const late = await snapshot();
+        unchangedAfterLateResponse(recovered, late, "timed-out body after recovery");
+        evidence.push({ label: `body-timeout-recovery-${width}`, recovered, late });
+        await activate("clearLocation");
+      }
       const beforeNonUs = await snapshot();
       await evaluate(client, "window.__rwnLiveCountQA.position = { latitude: 51.5, longitude: -0.12 }");
       await activate("locateMe");
@@ -213,7 +360,7 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
       const final = await snapshot();
       check(final.probe.geometryLoads.length >= 2 && final.probe.geometryLoads.every(entry => entry.features > 1), "The complete coarse and detailed world maps must be used", final);
       evidence.push({ label: `full-world-geometry-${width}`, geometryLoads: final.probe.geometryLoads, countryState: final.probe.countryState });
-      console.log(`USDA count presentation and country routing passed at ${width}px: full-world coarse/detail U.S. lookup, non-U.S. no-query control, zero, positive, national/nearby failure, loading, Clear, trusted keyboard, open/closed disclosure and no external source requests.`);
+      console.log(`USDA count presentation and country routing passed at ${width}px: full-world coarse/detail U.S. lookup, non-U.S. no-query control, zero, positive, independent failures, malformed count, truncated nearby, interrupted headers/bodies, timeout/recovery (desktop), loading, Clear, trusted keyboard, open/closed disclosure and no external source requests.`);
     }
   } catch (error) {
     const failed = { label: `failed-${currentCase}`, error: error.message, ...await snapshot() };
