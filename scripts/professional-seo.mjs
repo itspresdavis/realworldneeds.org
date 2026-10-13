@@ -1,9 +1,10 @@
-import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
+import { serviceContactMarkup } from "./service-contact.mjs";
+import { isContactOnly, hasMapCoordinates } from "../src/utils/resource-location.js";
 import { phoneLinks } from "../src/utils/phone.js";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resources } from "../src/data/resources.js";
-import { sourceClosureMarkup, sourceClosureNotice } from "../src/utils/source-status.js";
+import { sourceClosureMarkup } from "../src/utils/source-status.js";
 
 const HOME_TITLE = "Find Essential Services Near You | Real World Needs";
 const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing.";
@@ -176,39 +177,6 @@ function directoryQuickActions(resource) {
   return `<nav class="directory-quick-actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Quick actions for ${escapeHtml(resource.name)}"><span>${resource.kind === "direct" ? (phones.length ? "Call or get directions" : "Get directions") : "Open this listing"}</span>${links.join("")}</nav>`;
 }
 
-function serviceActions(resource) {
-  const links = [];
-  const phones = phoneLinks(resource.phone);
-  const isDirectLocation = resource.kind === "direct" && hasMapCoordinates(resource);
-  const isFinder = resource.kind === "locator" || resource.kind === "network";
-  const contactOnly = isContactOnly(resource);
-  const nextStep = contactOnly
-    ? `Check coverage, then ${resource.phone ? (resource.accessUrl ? "call or get help online" : "call for help") : "get help online"}`
-    : sourceClosureNotice(resource) ? "Confirm availability before travel" : isDirectLocation
-    ? (phones.length ? "Call, get directions, or verify current details" : "Get directions or verify current details")
-    : (phones.length ? "Call or verify current details" : "Verify current details");
-  const context = contactOnly
-    ? `<span class="service-next-steps__context">${escapeHtml(contactOnlyNotice(resource))}</span>${resource.phone ? `<span class="service-next-steps__context">Phone dialing scope: ${escapeHtml(resource.phoneAccess)}</span>` : ""}`
-    : isFinder
-    ? `<span class="service-next-steps__context">Official ${resource.kind === "locator" ? "resource finder" : "service network"} — not a walk-in location.</span>`
-    : "";
-  const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
-    ? `<span class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`
-    : "";
-  for (const { label, href } of phones) {
-    links.push(`<a class="is-call" href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
-  }
-  if (isDirectLocation) {
-    const maps = mapsFor(resource);
-    links.push(`<a class="is-map is-directions" href="${escapeHtml(maps.google)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open a route in your maps app</span></a>`);
-  }
-  if (contactOnly && resource.accessUrl) {
-    links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer"><strong>Get help online</strong><span>Use the reviewed access link</span></a>`);
-  }
-  links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`);
-  if (hasMapCoordinates(resource)) links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  return `<nav class="service-next-steps" aria-label="${isDirectLocation ? "Contact or get directions" : "Contact or verify current details"} for this service"><div><span>Next step</span><strong>${nextStep}</strong>${context}${phoneContext}</div><div>${links.join("")}</div></nav>`;
-}
 
 function enhanceActionOrientation(html) {
   html = html.replace(/<article class="directory-record"([^>]*)>[\s\S]*?<\/article>/g, (article) => {
@@ -224,7 +192,7 @@ function enhanceActionOrientation(html) {
   const serviceId = canonicalPathFrom(html).match(/^\/service\/([^/]+)\/?$/)?.[1];
   if (serviceId) {
     const resource = resourcesById.get(decodeURIComponent(serviceId));
-    if (resource) html = html.replace(/<nav class="service-next-steps"[\s\S]*?<\/nav>/, serviceActions(resource));
+    if (resource) html = html.replace(/<nav class="service-next-steps"[\s\S]*?<\/nav>/, serviceContactMarkup(resource));
   }
 
   html = html.replace(
