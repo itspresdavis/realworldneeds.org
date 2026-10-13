@@ -78,7 +78,7 @@ async function staticServer(root, catalogControl, navigationControl) {
       if (pathname === "/api" || pathname.startsWith("/api/") || pathname === "/workspace") return end(404, "No API in this fixture");
       if (navigationControl?.paths?.includes(pathname)) {
         const mode = navigationControl.mode || "healthy";
-        const record = { path: pathname, mode, navigation: request.headers["sec-fetch-mode"] === "navigate", probe: request.headers["x-rwn-connectivity-probe"] === "1", closed: false };
+        const record = { path: pathname, mode, fetchMode: request.headers["sec-fetch-mode"] || null, cacheControl: request.headers["cache-control"] || null, method: request.method, hasQuery: Boolean(new URL(request.url, "http://127.0.0.1").search), probe: request.headers["x-rwn-connectivity-probe"] === "1", closed: false };
         navigationControl.requests.push(record);
         response.once("close", () => { record.closed = true; });
         if (["503", "504", "404", "410"].includes(mode)) return end(Number(mode), `Synthetic navigation ${mode}`);

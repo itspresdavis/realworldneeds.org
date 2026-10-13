@@ -6,12 +6,25 @@ import { directoryStartupClickPoint, directoryStartupClickWasDelivered } from '.
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const check = (condition, message, value) => { if (!condition) throw new Error(`${message}: ${JSON.stringify(value)}`); };
 
+export function assertNavigationRecoveryTransport({ navigationResponses, faultRequests, host, path, mode }) {
+  // A worker's outgoing fetch can use a different Sec-Fetch-Mode. Observe the
+  // actual browser Document and correlate separate failed navigation/probe
+  // requests on the controlled server; neither signal alone is sufficient.
+  check(navigationResponses.some(r => r.url === host + path && r.status === 200 && r.fromServiceWorker)
+    && faultRequests.some(r => r.path === path && !r.probe && r.mode === mode)
+    && faultRequests.some(r => r.path === path && r.probe && r.mode === mode && r.method === 'GET' && !r.hasQuery),
+  'Fixture did not exercise an active-worker document and an uncached route probe', { navigationResponses, faultRequests });
+}
+
 // Real controlled-worker navigations against an isolated synthetic HTTP server.
 // Faults are server responses, never replaced fetch functions or UI state.
 export async function verifyNavigationRecovery({ client, navigate, evaluate, capture, qaDir }) {
   const control = { mode: 'healthy', paths: ['/directory', '/directory/help/food', '/directory/united-states'], requests: [] };
   const app = await createContactFixtureApp({ navigationControl: control });
-  const cases = [];
+  const cases = [], documents = [];
+  const stopDocuments = client.on('Network.responseReceived', ({ type, response }) => {
+    if (type === 'Document' && response?.url?.startsWith(`${app.host}/`)) documents.push({ url: response.url, status: response.status, fromServiceWorker: response.fromServiceWorker === true });
+  });
   const poll = async (expression, condition, description) => {
     let state;
     for (let attempt = 0; attempt < 180; attempt++) {
@@ -47,12 +60,12 @@ export async function verifyNavigationRecovery({ client, navigate, evaluate, cap
 
     for (const [mode, path, copy] of [['503', '/directory/help/food', 'exact'], ['504', '/directory/united-states', 'root'], ['hung-headers', '/directory/help/food', 'exact'], ['hung-body', '/directory/united-states', 'root']]) {
       control.mode = mode;
-      const firstRequest = control.requests.length;
+      const firstRequest = control.requests.length, firstDocument = documents.length;
       const started = Date.now();
       await navigate(client, app.host + path, 100);
       const recovered = await poll(stateExpression, state => state.marker && state.warning && state.state === 'offline', 'Failed navigation did not recover with an immediate honest warning');
       const elapsedMs = Date.now() - started;
-      check(recovered.controlled && recovered.online && elapsedMs < 12_000, 'Recovery requires an active worker while browser remains online and is bounded', { recovered, elapsedMs });
+      check(recovered.href === app.host + path && recovered.controlled && recovered.online && elapsedMs < 12_000, 'Recovery requires an active worker while browser remains online and is bounded', { recovered, elapsedMs });
       await evaluate(client, `(() => {
         const input = document.querySelector('[data-directory-query]');
         input.value = 'Synthetic'; input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -67,19 +80,24 @@ export async function verifyNavigationRecovery({ client, navigate, evaluate, cap
       await capture(client, `directory-navigation-${mode}.png`);
       await poll(stateExpression, state => !state.checking, 'Initial bounded retry did not settle');
       const faultRequests = control.requests.slice(firstRequest);
-      check(faultRequests.some(r => r.navigation && r.mode === mode) && faultRequests.some(r => r.probe && r.mode === mode), 'Fixture did not exercise both the real navigation and uncached route probe', faultRequests);
+      const navigationResponses = documents.slice(firstDocument);
+      assertNavigationRecoveryTransport({ navigationResponses, faultRequests, host: app.host, path, mode });
       if (mode.startsWith('hung')) {
         for (let n = 0; n < 20 && !faultRequests.every(r => r.closed); n++) await sleep(50);
         check(faultRequests.every(r => r.closed), 'Deadline did not close hung HTTP connections', faultRequests);
       }
       control.mode = 'healthy';
+      const firstRecoveryRequest = control.requests.length;
       const retryPoint = await evaluate(client, `(${directoryStartupClickPoint})('[data-directory-reconnect]')`);
       for (const type of ['mousePressed', 'mouseReleased']) await client.call('Input.dispatchMouseEvent', { type, ...retryPoint, button: 'left', clickCount: 1 });
       const click = await evaluate(client, `(() => { const proof = globalThis.__rwnDirectoryClickQA; proof.stop(); return { events: proof.events, frames: proof.frames }; })()`);
       check(directoryStartupClickWasDelivered(click), 'Retry did not receive the intended native click', click);
       const online = await poll(stateExpression, state => state.state === 'online' && !state.marker && !state.checking, 'Native Retry did not recover the directory endpoint');
-      check(online.query === 'Synthetic' && online.results > 0, 'Reconnection lost the current search', online);
-      cases.push({ mode, path, copy, elapsedMs, recovered, searching, online, click, requests: faultRequests });
+      check(online.href === app.host + path && online.query === 'Synthetic' && online.results > 0, 'Reconnection lost the current search', online);
+      const recoveryRequests = control.requests.slice(firstRecoveryRequest);
+      check(recoveryRequests.some(r => r.path === path && r.mode === 'healthy' && r.probe && r.method === 'GET' && !r.hasQuery),
+        'Retry did not make a fresh queryless directory request to the recovered server', recoveryRequests);
+      cases.push({ mode, path, copy, elapsedMs, recovered, searching, online, click, navigationResponses, recoveryRequests, requests: faultRequests });
     }
 
     // These are genuine endpoint decisions, not transient failures. The active
@@ -117,9 +135,10 @@ export async function verifyNavigationRecovery({ client, navigate, evaluate, cap
   } catch (error) {
     const current = await evaluate(client, stateExpression).catch(() => null);
     await capture(client, 'directory-navigation-failure.png').catch(() => {});
-    await writeFile(join(qaDir, 'directory-navigation-recovery-failure.json'), JSON.stringify({ synthetic: true, error: error.message, mode: control.mode, current, cases, requests: control.requests }, null, 2));
+    await writeFile(join(qaDir, 'directory-navigation-recovery-failure.json'), JSON.stringify({ synthetic: true, error: error.message, mode: control.mode, current, cases, documents, requests: control.requests }, null, 2));
     throw error;
   } finally {
+    stopDocuments();
     control.mode = 'healthy';
     await navigate(client, 'about:blank', 0).catch(() => {});
     await app.cleanup();
