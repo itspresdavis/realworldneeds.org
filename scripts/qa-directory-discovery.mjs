@@ -49,6 +49,62 @@ export async function verifySavedEntryViewport({ initial, sample, wait = sleep, 
   }
 }
 
+// Observe one prepared native Clear action. A failed delivery is evidence, never
+// a reason to click again or to relax the existing reset outcome.
+export function directoryClearClickEvidence() {
+  const probe = globalThis.__rwnDirectoryClickQA;
+  if (!probe) return null;
+  const { selector, point, rect, scroll, frames, events } = probe;
+  return { selector, point, rect, scroll, frames, events };
+}
+
+export async function verifyDirectoryClear({ client, evaluate, state, wait, capture, width, qaDir = 'qa-screenshots' }) {
+  const evidence = { width, phase: 'before', delivered: false };
+  let cleared, failure;
+  try {
+    evidence.before = await state();
+    await capture(client, `directory-clear-before-${width}.png`);
+    evidence.phase = 'prepare';
+    const point = await evaluate(client, `(${directoryStartupClickPoint.toString()})('[data-directory-clear]')`);
+    evidence.target = await evaluate(client, `(${directoryClearClickEvidence.toString()})()`);
+    evidence.phase = 'press';
+    await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+    evidence.phase = 'release';
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+    evidence.phase = 'delivery';
+    evidence.input = await evaluate(client, `(${directoryClearClickEvidence.toString()})()`);
+    evidence.delivered = directoryStartupClickWasDelivered(evidence.input);
+    if (!evidence.delivered) throw new Error(`Clear filters native click was not delivered to the settled target: ${JSON.stringify(evidence.input)}`);
+    evidence.phase = 'reset';
+    cleared = await wait(s => s.query === '' && s.country === '' && s.category === 'All help' && s.rows.length === 0, 'Clear filters did not restore ordinary browsing');
+    evidence.phase = 'complete';
+  } catch (error) {
+    failure = error;
+    evidence.error = error.message;
+  }
+  // Preserve both successful and failed attempts, including geometry or native
+  // delivery failures. Secondary observation errors must not hide the cause.
+  for (const [key, read] of [
+    ['after', () => state()],
+    ['input', () => evaluate(client, `(${directoryClearClickEvidence.toString()})()`)],
+    ['screenshot', () => capture(client, `directory-clear-after-${width}.png`)],
+    ['cleanup', () => evaluate(client, 'globalThis.__rwnDirectoryClickQA?.stop()')],
+  ]) {
+    try { const value = await read(); if (key === 'after' || key === 'input') evidence[key] = value; }
+    catch (error) { evidence[`${key}Error`] = error.message; failure ||= error; }
+  }
+  try {
+    await mkdir(qaDir, { recursive: true });
+    await writeFile(`${qaDir}/directory-clear-${width}.json`, JSON.stringify(evidence, null, 2));
+  } catch (error) {
+    if (!failure) throw error;
+    failure.artifactError = error;
+    console.error(`Clear diagnostic artifact could not be saved: ${error.message}`);
+  }
+  if (failure) throw failure;
+  return cleared;
+}
+
 export async function verifyDirectoryDiscovery({ client, host, navigate, evaluate, capture }) {
   const state = () => evaluate(client, `(${directoryDiscoverySnapshot.toString()})()`);
   const wait = async (condition, label) => {
@@ -146,8 +202,7 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     await capture(client, `directory-discovery-empty-${width}.png`);
     await click('[data-fewer-words]');
     await wait(s => s.query === '' && s.country === 'United States' && s.category === 'Food' && s.rows.length === 60, 'Fewer words erased country or need');
-    await click('[data-directory-clear]');
-    const cleared = await wait(s => s.query === '' && s.country === '' && s.category === 'All help' && s.rows.length === 0, 'Clear filters did not restore ordinary browsing');
+    const cleared = await verifyDirectoryClear({ client, evaluate, state, wait, capture, width });
     await client.call('Page.reload', { ignoreCache: true });
     await wait(s => s.timeOrigin !== cleared.timeOrigin && s.query === '' && s.country === '' && s.rows.length === 0, 'Cleared filters reappeared on reload');
     evidence.push({ width, back: true, refresh: true, forward: true, secondBatch: true, recovery: true });
