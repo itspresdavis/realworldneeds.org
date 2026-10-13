@@ -11,7 +11,7 @@ export function installLiveSourceCountFixture(origin) {
   if (location.origin !== origin) return;
   const nativeFetch = window.fetch.bind(window);
   const pending = [];
-  const probe = window.__rwnLiveCountQA = { requests: [], clicks: [], locationCalls: 0, scenario: { count: 0, nearby: 0 } };
+  const probe = window.__rwnLiveCountQA = { requests: [], clicks: [], geometryFilters: [], locationCalls: 0, scenario: { count: 0, nearby: 0 } };
   Object.defineProperty(navigator, "geolocation", { configurable: true, value: {
     getCurrentPosition(success) {
       probe.locationCalls += 1;
@@ -26,6 +26,19 @@ export function installLiveSourceCountFixture(origin) {
     const url = new URL(input instanceof Request ? input.url : input, location.href);
     const isUsda = url.origin === "https://services1.arcgis.com" && url.pathname.includes("Summer_Meals_Site_Finder_2026_") && url.pathname.endsWith("/FeatureServer/0/query");
     if (!isUsda) {
+      // Isolate count lifecycle from the separately tracked world-ring containment
+      // defect. Keep the exact real U.S. feature in both geometry datasets; do not
+      // change its coordinates, country lookup, or any production map code.
+      if (url.origin === origin && ["/data/countries.geojson", "/data/countries-detail.geojson"].includes(url.pathname)) {
+        return nativeFetch(input, options).then(async response => {
+          if (!response.ok) return response;
+          const data = await response.json();
+          const features = data.features.filter(feature => feature.properties?.NAME === "United States of America");
+          if (features.length !== 1) throw new Error("Count fixture requires exactly one unchanged U.S. geometry feature");
+          probe.geometryFilters.push({ path: url.pathname, originalFeatures: data.features.length, retainedFeatures: features.length });
+          return new Response(JSON.stringify({ ...data, features }), { headers: { "Content-Type": "application/geo+json" } });
+        });
+      }
       if (url.origin !== origin) return Promise.reject(new Error("External request blocked in synthetic USDA QA"));
       return nativeFetch(input, options);
     }
@@ -50,7 +63,7 @@ export function installLiveSourceCountFixture(origin) {
   }, true);
   document.addEventListener("DOMContentLoaded", () => {
     const banner = document.createElement("aside");
-    banner.textContent = "SYNTHETIC QA: USDA responses and location are test data. Do not contact examples.";
+    banner.textContent = "SYNTHETIC QA: test USDA responses/location and a U.S.-only map fixture. World country detection is not tested. Do not contact examples.";
     banner.style.cssText = "padding:12px;background:#fff1b8;color:#241a00;font:600 14px/1.4 system-ui";
     document.body.prepend(banner);
   }, { once: true });
@@ -69,13 +82,14 @@ export function liveSourceCountSnapshot() {
     locateBusy: document.getElementById("locateMe")?.classList.contains("is-loading"),
     overflow: document.documentElement.scrollWidth - innerWidth,
     external: performance.getEntriesByType("resource").map(entry => entry.name).filter(url => /^https?:/.test(url) && new URL(url).origin !== location.origin),
-    probe: window.__rwnLiveCountQA && { requests: window.__rwnLiveCountQA.requests, clicks: window.__rwnLiveCountQA.clicks, locationCalls: window.__rwnLiveCountQA.locationCalls },
+    probe: window.__rwnLiveCountQA && { requests: window.__rwnLiveCountQA.requests, clicks: window.__rwnLiveCountQA.clicks, locationCalls: window.__rwnLiveCountQA.locationCalls, geometryFilters: window.__rwnLiveCountQA.geometryFilters },
   };
 }
 
 // Runs in the existing GitHub browser suite. No browser is launched here.
 export async function verifyLiveSourceCounts({ client, host, navigate, evaluate, capture, qaDir = "qa-screenshots" }) {
   const evidence = [];
+  let currentCase = "setup";
   const wait = async (expression, label) => {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       if (await evaluate(client, expression)) return;
@@ -100,6 +114,7 @@ export async function verifyLiveSourceCounts({ client, host, navigate, evaluate,
   try {
     await client.call("Network.setBypassServiceWorker", { bypass: true });
     for (const width of [1440, 390]) {
+      currentCase = `initial-${width}`;
       await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
       await navigate(client, `${host}/`);
       await wait("document.querySelector('.finder-location-notes') && !document.getElementById('locateMe')?.disabled", "finder ready");
@@ -112,6 +127,7 @@ export async function verifyLiveSourceCounts({ client, host, navigate, evaluate,
         { label: "national-unavailable", countFailed: true, nearby: 0 },
         { label: "nearby-unavailable", count: 200, nearbyFailed: true },
       ]) {
+        currentCase = `${scenario.label}-${width}`;
         await evaluate(client, `window.__rwnLiveCountQA.scenario=${JSON.stringify(scenario)}`);
         const before = await snapshot();
         await activate("locateMe");
@@ -141,8 +157,17 @@ export async function verifyLiveSourceCounts({ client, host, navigate, evaluate,
         check(/In the United States, location search/.test(cleared.status) && !/active nationally today/.test(cleared.status), "Clear retained a current-count claim", cleared);
         evidence.push({ label: `clear-${scenario.label}-${width}`, ...cleared });
       }
-      console.log(`USDA count presentation passed at ${width}px: zero, positive, national/nearby failure, loading, Clear, trusted keyboard, open/closed disclosure and no external source requests.`);
+      const final = await snapshot();
+      check(final.probe.geometryFilters.length >= 1 && final.probe.geometryFilters.every(entry => entry.originalFeatures > 1 && entry.retainedFeatures === 1), "Count fixture must retain only the original U.S. feature", final);
+      evidence.push({ label: `isolated-geometry-${width}`, geometryFilters: final.probe.geometryFilters, limitation: "Original U.S. geometry only. Full-world country correctness is a separate regression." });
+      console.log(`USDA count presentation passed at ${width}px: zero, positive, national/nearby failure, loading, Clear, trusted keyboard, open/closed disclosure and no external source requests. Single-country U.S. geometry fixture; world country accuracy is not asserted.`);
     }
+  } catch (error) {
+    const failed = { label: `failed-${currentCase}`, error: error.message, ...await snapshot() };
+    evidence.push(failed);
+    console.error("USDA count fixture failure:", JSON.stringify(failed));
+    await capture(client, "live-counts-failure.png");
+    throw error;
   } finally {
     await client.call("Page.removeScriptToEvaluateOnNewDocument", { identifier: installed.identifier });
     await client.call("Network.setBypassServiceWorker", { bypass: false });

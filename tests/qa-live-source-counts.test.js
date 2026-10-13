@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { installLiveSourceCountFixture } from "../scripts/qa-live-source-counts.mjs";
 
@@ -7,12 +8,12 @@ const host = "http://127.0.0.1:4175";
 const endpoint = "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/Summer_Meals_Site_Finder_2026_(Testing)/FeatureServer/0/query";
 const nearbyUrl = `${endpoint}?geometry=-75,40`;
 const countUrl = `${endpoint}?returnCountOnly=true`;
-function fixture(origin = host) {
+function fixture(origin = host, mapData = {}) {
   const native = [], listeners = [];
   const context = vm.createContext({
     location: { origin, href: `${origin}/` }, navigator: {}, URL, Request, Response, DOMException, queueMicrotask,
     document: { addEventListener: (type, callback) => listeners.push({ type, callback }) },
-    fetch: async (...args) => { native.push(args); return new Response("local"); },
+    fetch: async (...args) => { native.push(args); const data = mapData[new URL(args[0], origin).pathname]; return new Response(data ? JSON.stringify(data) : "local"); },
   });
   context.window = context;
   vm.runInContext(`(${installLiveSourceCountFixture})(${JSON.stringify(host)})`, context);
@@ -99,4 +100,26 @@ test("the fixture records trusted About location, Use and Clear activations", ()
     click({ isTrusted: true, target: { closest: () => ({ id: id === "about" ? "" : id, matches: () => id === "about" }) } });
   }
   assert.deepEqual(JSON.parse(JSON.stringify(f.probe.clicks)), ["about", "locateMe", "clearLocation"].map(id => ({ id, trusted: true })));
+});
+
+for (const name of ["countries.geojson", "countries-detail.geojson"]) {
+  test(`the isolated ${name} fixture retains the original U.S. feature byte-for-byte in JSON`, async () => {
+    const data = JSON.parse(await readFile(new URL(`../public/data/${name}`, import.meta.url), "utf8"));
+    const path = `/data/${name}`;
+    const f = fixture(host, { [path]: data });
+    const result = await (await f.context.fetch(path)).json();
+    assert.equal(result.features.length, 1);
+    assert.equal(JSON.stringify(result.features), JSON.stringify(data.features.filter(feature => feature.properties?.NAME === "United States of America")));
+    assert.deepEqual({ ...result, features: [] }, { ...data, features: [] }, "all other GeoJSON fields remain unchanged");
+    assert.deepEqual(JSON.parse(JSON.stringify(f.probe.geometryFilters)), [{ path, originalFeatures: data.features.length, retainedFeatures: 1 }]);
+    assert.equal(f.native.length, 1, "the original local geometry response is the only data source");
+  });
+}
+
+test("the map fixture fails closed rather than inventing or combining U.S. geometry", async () => {
+  const path = "/data/countries.geojson";
+  for (const features of [[], [{ properties: { NAME: "China" } }], Array(2).fill({ properties: { NAME: "United States of America" } })]) {
+    const f = fixture(host, { [path]: { type: "FeatureCollection", features } });
+    await assert.rejects(f.context.fetch(path), /exactly one unchanged U.S. geometry feature/);
+  }
 });
