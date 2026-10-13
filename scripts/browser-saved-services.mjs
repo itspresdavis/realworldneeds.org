@@ -1,4 +1,5 @@
 import { verifySavedReturnBrand } from './qa-saved-return-brand.mjs';
+import { verifySavedStorage } from './qa-saved-storage.mjs';
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -179,7 +180,7 @@ async function run() {
       const denied = button.disabled && /unavailable/.test(document.querySelector('[data-service-action-status]').textContent);
       Storage.prototype.getItem = read;
       window.dispatchEvent(new PageTransitionEvent('pageshow'));
-      return { untouched, saved, repeated, quota, denied, recovered: !button.disabled && button.getAttribute('aria-pressed') === 'true', focus: document.activeElement === button, height: button.getBoundingClientRect().height, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+      return { untouched, saved, repeated, quota, denied, recovered: !button.disabled && button.getAttribute('aria-pressed') === 'true' && document.querySelector('[data-service-action-status]').textContent === '', focus: document.activeElement === button, height: button.getBoundingClientRect().height, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
     })()`);
     check(result.untouched && result.saved && result.repeated && result.quota && result.denied && result.recovered && result.height >= 44 && !result.overflow, "Explicit service saving or storage feedback failed", result);
     await evaluate(client, `document.querySelector('[data-service-utility]').scrollIntoView({block:'center'})`);
@@ -293,6 +294,7 @@ async function run() {
       await capture(client, `saved-list-${width}.png`);
     }
     await verifySavedReturnBrand({ client, host: HOST, navigate, evaluate, capture, waitForUI, record: records[0], qaDir: QA_DIR });
+    await verifySavedStorage({ client, host: HOST, record: records[0], navigate, evaluate, capture, waitForUI, qaDir: QA_DIR });
     check(exceptions.length === 0, "Unexpected browser exceptions", exceptions);
     console.log("Saved-services browser QA passed: explicit local saving, denied/quota storage, lazy loading, history, unavailable IDs, pagination/focus, cross-tab refresh, confirmation, retry, hard-offline safeguards, and 320/390/1440px layouts.");
   } finally {

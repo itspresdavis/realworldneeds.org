@@ -105,7 +105,8 @@ function inspectorFixture({ clipboard, execCommand = () => true, share } = {}) {
     googleMapsUrl: () => "https://example.org", privateResourceUrl: (_, id) => new URL(`https://www.realworldneeds.org/#resource=${id}`),
     renderControls() {}, renderResults() {}, renderClusterTray() {}, focusGlobeOn() {}, writeFinderHistory() {},
     readSavedResources: () => new Set(stored), loadSavedResources: () => new Set(stored),
-    setResourceSaved: (id, value) => { if (value) stored.add(id); else stored.delete(id); },
+    resources: records,
+    setResourceSaved: (id, value) => { if (value) stored.add(id); else stored.delete(id); return new Set(stored); },
     notify: (message) => messages.push(message),
     updateFilters: () => {
       state.filtered = records.filter((record) => state.savedIds.has(record.id));
@@ -127,6 +128,20 @@ test("inspector Save retains focus on the replacement button through repeated sa
     assert.equal(f.document.activeElement, f.control("saveResource"));
     assert.equal(f.control("saveResource").getAttribute("aria-pressed"), String(expected));
   }
+});
+
+test("inspector marks unreadable Saved membership unavailable without a false unpressed state", () => {
+  const f = inspectorFixture();
+  f.state.savedStorageUnavailable = true;
+  f.context.renderResourcePanel();
+  assert.equal(f.control("saveResource").disabled, true);
+  assert.equal(f.control("saveResource").getAttribute("aria-pressed"), null);
+  assert.equal(f.control("saveResource").getAttribute("aria-label"), "Saving unavailable");
+  assert.equal(f.control("saveResource").getAttribute("aria-describedby"), "savedStorageStatus");
+  f.state.savedStorageUnavailable = false;
+  f.context.renderResourcePanel();
+  assert.equal(f.control("saveResource").disabled, false);
+  assert.equal(f.control("saveResource").getAttribute("aria-pressed"), "false");
 });
 
 for (const [direction, initial, final] of [["nextResource", "first", "third"], ["previousResource", "third", "first"]]) {

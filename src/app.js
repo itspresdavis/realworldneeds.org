@@ -123,9 +123,14 @@ function initialResultCount() {
 
 function loadSavedResources() {
   try {
-    return new Set([...readSavedResources()].filter((id) => resources.some((resource) => resource.id === id)));
+    const ids = new Set([...readSavedResources()].filter((id) => resources.some((resource) => resource.id === id)));
+    state.savedStorageUnavailable = false;
+    return ids;
   } catch {
-    return new Set();
+    state.savedStorageUnavailable = true;
+    // Keep only the last successfully read in-memory list. Never rewrite a
+    // failed read as an empty persisted list or claim this snapshot is current.
+    return new Set(state.savedIds);
   }
 }
 
@@ -204,11 +209,13 @@ const state = {
   visibleResults: initialResultCount(),
   globeVisible: true,
   ambientZoom: 1,
-  savedIds: loadSavedResources(),
+  savedIds: new Set(),
+  savedStorageUnavailable: false,
   savedOnly: Boolean(initialFinderHistory?.savedOnly),
   inspectorOpen: Boolean(initialResource || initialFinderHistory?.selectedId),
   clusterIds: []
 };
+state.savedIds = loadSavedResources();
 
 const activeGlobePointers = new Map();
 
@@ -514,9 +521,11 @@ function shell() {
             <div><span class="section-kicker">Search results</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
             <div class="results-tools">
               <button class="directory-tool" type="button" id="toggleSaved" aria-pressed="false">${icon.bookmark}<span>Saved</span><b id="savedCount">0</b></button>
+              <button class="directory-tool" type="button" id="retrySavedServices" aria-describedby="savedStorageStatus" hidden>Retry saved services</button>
               <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
             </div>
           </div>
+          <p id="savedStorageStatus" role="status" hidden></p>
           <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Help offered</span><span>Access</span><span>Checked</span><span></span></div>
           <div class="resource-grid resource-list" id="resourceGrid" aria-label="Available aid directory"></div>
           <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
@@ -798,12 +807,27 @@ function renderControls() {
     ? `All ${resourceTypes.length} types of help`
     : `${typeCount} of ${resourceTypes.length} types of help`;
   const mappedCount = state.filtered.filter(hasMapCoordinates).length;
-  document.getElementById("globeCount").textContent = aidMode ? (mappedCount === state.filtered.length ? `${mappedCount} listings` : `${mappedCount} mapped · ${state.filtered.length - mappedCount} phone/online`) : "0 listings";
-  document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching services` : "No public requests are listed";
+  document.getElementById("globeCount").textContent = aidMode && state.savedOnly && state.savedStorageUnavailable ? "Saved unavailable" : aidMode ? (mappedCount === state.filtered.length ? `${mappedCount} listings` : `${mappedCount} mapped · ${state.filtered.length - mappedCount} phone/online`) : "0 listings";
+  document.getElementById("searchStatus").textContent = aidMode && state.savedOnly && state.savedStorageUnavailable ? "Saved list unavailable" : aidMode ? `${state.filtered.length} matching services` : "No public requests are listed";
   const savedToggle = document.getElementById("toggleSaved");
   savedToggle.classList.toggle("is-active", state.savedOnly);
   savedToggle.setAttribute("aria-pressed", String(state.savedOnly));
-  document.getElementById("savedCount").textContent = String(state.savedIds.size);
+  document.getElementById("savedCount").textContent = state.savedStorageUnavailable ? "Unavailable" : String(state.savedIds.size);
+  const savedResultCount = document.getElementById("matchingResultCount");
+  if (savedResultCount && state.savedOnly && state.savedStorageUnavailable) savedResultCount.textContent = "Saved unavailable";
+  const savedStatus = document.getElementById("savedStorageStatus");
+  const savedRetry = document.getElementById("retrySavedServices");
+  if (savedStatus) {
+    savedStatus.hidden = !state.savedStorageUnavailable;
+    savedStatus.textContent = state.savedStorageUnavailable
+      ? "Your saved list could not be read. Check this browser’s storage settings, then retry. Previously loaded saved listings may be out of date."
+      : "";
+  }
+  if (savedRetry) {
+    const focusedRetry = document.activeElement === savedRetry;
+    savedRetry.hidden = !state.savedStorageUnavailable;
+    if (focusedRetry && savedRetry.hidden) savedToggle.focus({ preventScroll: true });
+  }
   renderLiveSourceState();
 
   document.getElementById("globeLegend").innerHTML = aidMode
@@ -816,6 +840,8 @@ function renderControls() {
     ? `<strong>No public requests are listed</strong><p>RWN does not guess where help is needed or publish requests that have not been reviewed.</p>`
     : state.filtered.length
       ? `<strong>Phone or online help</strong><p>Matching listings have no map location. Read their coverage and contact details in the results below.</p>`
+    : state.savedOnly && state.savedStorageUnavailable
+      ? `<strong>Saved services are unavailable</strong><p>Check this browser’s storage settings, then use Retry saved services below. You can turn off Saved to browse all services.</p>`
     : state.savedOnly
       ? `<strong>No saved services match</strong><p>Turn off Saved or adjust the current filters.</p>`
       : `<strong>No matching services</strong><p>Adjust the search, layers, or resource type.</p>`;
@@ -897,7 +923,7 @@ function renderResourcePanel() {
     </div>
     ${exact ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
-      ${live ? "" : `<button type="button" id="saveResource" aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>`}
+      ${live ? "" : `<button type="button" id="saveResource" ${state.savedStorageUnavailable ? 'disabled aria-label="Saving unavailable" aria-describedby="savedStorageStatus"' : `aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}"`}>${icon.bookmark}<span>${state.savedStorageUnavailable ? "Save unavailable" : saved ? "Saved" : "Save"}</span></button>`}
       <button type="button" id="shareResource" aria-label="Share service">${icon.share}<span>Share</span></button>
       <button type="button" id="copyAddress" aria-label="${exact ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
     </div>
@@ -953,8 +979,9 @@ function resourceCard(resource) {
   `;
 }
 
-function emptyResultsCopy({ viewMode, savedOnly, savedCount }) {
+function emptyResultsCopy({ viewMode, savedOnly, savedCount, savedStorageUnavailable }) {
   if (viewMode === "needs") return { title: "No public requests are listed.", detail: "RWN does not accept or publish personal requests through this website.", action: "" };
+  if (savedOnly && savedStorageUnavailable) return { title: "Saved services are unavailable.", detail: "This browser’s saved list could not be read. Check its storage settings and use Retry saved services, or turn off Saved to browse all services.", action: "" };
   if (savedOnly && !savedCount) return { title: "No saved services yet.", detail: "Open a service listing and choose Save to keep it in this browser.", action: "Browse all services" };
   if (savedOnly) return { title: "No saved services match these filters.", detail: "Change your search or browse all services. Your saved list stays on this browser.", action: "Browse all services" };
   return { title: "No services match these filters.", detail: "Try another place, service, or listing type. RWN may not have every service.", action: "Clear search and filters" };
@@ -970,11 +997,12 @@ function renderResults() {
   count.textContent = state.viewMode === "aid"
     ? `${state.userLocation ? `${nearbyExactCount()} service locations within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} listings`
     : "No public requests are listed";
-  const empty = emptyResultsCopy({ viewMode: state.viewMode, savedOnly: state.savedOnly, savedCount: state.savedIds.size });
+  const empty = emptyResultsCopy({ viewMode: state.viewMode, savedOnly: state.savedOnly, savedCount: state.savedIds.size, savedStorageUnavailable: state.savedStorageUnavailable });
+  if (state.savedOnly && state.savedStorageUnavailable) count.textContent = state.filtered.length ? "Showing previously loaded saved listings. Your current saved list is unavailable." : "Your saved list is unavailable.";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
     : `<div class="results-empty"><strong>${empty.title}</strong><p>${empty.detail}</p>${empty.action ? `<button class="results-empty__reset" id="clearFinderFilters" type="button">${empty.action}</button>` : ""}</div>`;
-  if (matchingResultCount) matchingResultCount.textContent = `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
+  if (matchingResultCount) matchingResultCount.textContent = state.savedOnly && state.savedStorageUnavailable ? "Saved unavailable" : `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
   refreshSearchPreparation();
 }
@@ -1008,9 +1036,11 @@ function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
 function toggleSavedResource(id) {
   try {
     const saved = readSavedResources().has(id);
-    setResourceSaved(id, !saved);
-    state.savedIds = loadSavedResources();
+    const ids = setResourceSaved(id, !saved);
+    state.savedIds = new Set([...ids].filter((savedId) => resources.some((resource) => resource.id === savedId)));
+    state.savedStorageUnavailable = false;
   } catch {
+    refreshSavedResources({ preserveView: true });
     notify("Your saved list could not be changed. Check this browser’s storage settings and try again.");
     return;
   }
@@ -1021,6 +1051,21 @@ function toggleSavedResource(id) {
     renderResults();
   }
   notify(state.savedIds.has(id) ? "Service saved only in this browser" : "Service removed from saved");
+}
+
+function refreshSavedResources({ preserveView = false } = {}) {
+  const previousIds = state.savedIds;
+  state.savedIds = loadSavedResources();
+  const unchanged = previousIds.size === state.savedIds.size && [...previousIds].every(id => state.savedIds.has(id));
+  if (state.savedOnly && !state.savedStorageUnavailable && !(preserveView && unchanged)) updateFilters();
+  else {
+    renderControls();
+    renderResourcePanel();
+    // A failed read leaves the last loaded rows and current selection intact.
+    // Only replace empty guidance, where unavailable must not look like empty.
+    if (state.savedOnly && !state.filtered.length) renderResults();
+    else if (state.savedOnly && state.savedStorageUnavailable) document.getElementById("resultCount").textContent = "Showing previously loaded saved listings. Your current saved list is unavailable.";
+  }
 }
 
 async function copyText(value) {
@@ -2561,20 +2606,17 @@ function bindEvents() {
     renderResults();
   });
 
-  const refreshSavedResources = () => {
-    state.savedIds = loadSavedResources();
-    if (state.savedOnly) updateFilters();
-    else { renderControls(); renderResourcePanel(); }
-  };
   window.addEventListener("pageshow", refreshSavedResources);
   window.addEventListener("storage", (event) => {
     if (event.key === SAVED_RESOURCES_KEY || event.key === null) refreshSavedResources();
   });
   document.getElementById("toggleSaved").addEventListener("click", () => {
     state.savedOnly = !state.savedOnly;
+    if (state.savedOnly) state.savedIds = loadSavedResources();
     updateFilters();
     writeFinderHistory("push");
   });
+  document.getElementById("retrySavedServices").addEventListener("click", refreshSavedResources);
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
   document.getElementById("clearBrowserData").addEventListener("click", () => {
     try { clearSavedResources(); } catch {
@@ -2582,6 +2624,7 @@ function bindEvents() {
       return;
     }
     state.savedIds.clear();
+    state.savedIds = loadSavedResources();
     state.savedOnly = false;
     clearUserLocation();
     notify("Saved services and location sorting cleared");
