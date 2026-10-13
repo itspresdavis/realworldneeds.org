@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import vm from "node:vm";
-import { installLiveSourceCountFixture } from "../scripts/qa-live-source-counts.mjs";
+import { countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
 
 const host = "http://127.0.0.1:4175";
 const endpoint = "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/Summer_Meals_Site_Finder_2026_(Testing)/FeatureServer/0/query";
@@ -13,7 +15,7 @@ function fixture(origin = host, mapData = {}) {
   const context = vm.createContext({
     location: { origin, href: `${origin}/` }, navigator: {}, URL, Request, Response, DOMException, queueMicrotask,
     document: { addEventListener: (type, callback) => listeners.push({ type, callback }) },
-    fetch: async (...args) => { native.push(args); const data = mapData[new URL(args[0], origin).pathname]; return new Response(data ? JSON.stringify(data) : "local"); },
+    fetch: async (...args) => { native.push(args); const data = mapData[new URL(args[0], origin).pathname]; return new Response(typeof data === "string" ? data : data ? JSON.stringify(data) : "local"); },
   });
   context.window = context;
   vm.runInContext(`(${installLiveSourceCountFixture})(${JSON.stringify(host)})`, context);
@@ -27,7 +29,7 @@ test("count browser fixture does not alter other origins", () => {
   assert.equal(f.listeners.length, 0);
 });
 
-test("synthetic location uses fixed coordinates without asking a device", async () => {
+test("synthetic locations use explicit fixed coordinates without asking a device", async () => {
   const f = fixture();
   let value;
   f.context.navigator.geolocation.getCurrentPosition(position => { value = position; });
@@ -35,6 +37,11 @@ test("synthetic location uses fixed coordinates without asking a device", async 
   await new Promise(resolve => queueMicrotask(resolve));
   assert.deepEqual(JSON.parse(JSON.stringify(value.coords)), { latitude: 40, longitude: -75, accuracy: 1000 });
   assert.equal(f.probe.locationCalls, 1);
+  f.probe.position = { latitude: 51.5, longitude: -0.12 };
+  f.context.navigator.geolocation.getCurrentPosition(position => { value = position; });
+  f.probe.position = { latitude: 0, longitude: 0 };
+  await new Promise(resolve => queueMicrotask(resolve));
+  assert.deepEqual(JSON.parse(JSON.stringify(value.coords)), { latitude: 51.5, longitude: -0.12, accuracy: 1000 }, "an outstanding fixture request retains its original synthetic position");
 });
 
 test("synthetic zero and nearby data are held until release and never reach the network", async () => {
@@ -103,23 +110,76 @@ test("the fixture records trusted About location, Use and Clear activations", ()
 });
 
 for (const name of ["countries.geojson", "countries-detail.geojson"]) {
-  test(`the isolated ${name} fixture retains the original U.S. feature byte-for-byte in JSON`, async () => {
-    const data = JSON.parse(await readFile(new URL(`../public/data/${name}`, import.meta.url), "utf8"));
+  test(`the complete ${name} fixture preserves original map bytes and country order`, async () => {
+    const bytes = await readFile(new URL(`../public/data/${name}`, import.meta.url), "utf8");
+    const data = JSON.parse(bytes);
     const path = `/data/${name}`;
-    const f = fixture(host, { [path]: data });
-    const result = await (await f.context.fetch(path)).json();
-    assert.equal(result.features.length, 1);
-    assert.equal(JSON.stringify(result.features), JSON.stringify(data.features.filter(feature => feature.properties?.NAME === "United States of America")));
-    assert.deepEqual({ ...result, features: [] }, { ...data, features: [] }, "all other GeoJSON fields remain unchanged");
-    assert.deepEqual(JSON.parse(JSON.stringify(f.probe.geometryFilters)), [{ path, originalFeatures: data.features.length, retainedFeatures: 1 }]);
+    const f = fixture(host, { [path]: bytes });
+    f.probe.releaseDetail();
+    const result = await (await f.context.fetch(path)).text();
+    assert.equal(result, bytes);
+    assert.ok(data.features.length > 1);
+    assert.ok(data.features.some(feature => feature.properties.NAME === "China"));
+    assert.ok(data.features.some(feature => feature.properties.NAME === "United States of America"));
+    assert.deepEqual(JSON.parse(JSON.stringify(f.probe.geometryLoads)), [{ path, features: data.features.length }]);
     assert.equal(f.native.length, 1, "the original local geometry response is the only data source");
   });
 }
 
-test("the map fixture fails closed rather than inventing or combining U.S. geometry", async () => {
-  const path = "/data/countries.geojson";
-  for (const features of [[], [{ properties: { NAME: "China" } }], Array(2).fill({ properties: { NAME: "United States of America" } })]) {
-    const f = fixture(host, { [path]: { type: "FeatureCollection", features } });
-    await assert.rejects(f.context.fetch(path), /exactly one unchanged U.S. geometry feature/);
+test("the fixture holds detailed geometry until coarse-country evidence is captured", async () => {
+  const path = "/data/countries-detail.geojson";
+  const bytes = await readFile(new URL(`../public${path}`, import.meta.url), "utf8");
+  const f = fixture(host, { [path]: bytes });
+  let settled = false;
+  const pending = f.context.fetch(path).then(response => { settled = true; return response.text(); });
+  for (let attempt = 0; attempt < 1000 && !f.probe.geometryLoads.length; attempt++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.probe.geometryLoads.length, 1, "the real detailed response arrived");
+  assert.equal(settled, false);
+  f.probe.releaseDetail();
+  assert.equal(await pending, bytes, "release does not edit the response");
+  assert.equal(f.probe.detailReleased, true);
+});
+
+test("the CI country observer exposes frozen primitive snapshots without a setter", () => {
+  const context = vm.createContext({ window: { __rwnLiveCountQA: {} } });
+  vm.runInContext(`const state = { countryFeatures: [{}, {}], detailCountryFeatures: [], detailGeometryReady: false, userCountry: null }; ${countryStateProbeSource}`, context);
+  const first = context.window.__rwnLiveCountQA.countryState;
+  assert.deepEqual(JSON.parse(JSON.stringify(first)), { coarseFeatures: 2, detailFeatures: 0, detailGeometryReady: false, userCountry: null });
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.getOwnPropertyDescriptor(context.window.__rwnLiveCountQA, "countryState").set, undefined);
+  assert.throws(() => vm.runInContext('"use strict"; window.__rwnLiveCountQA.countryState = {};', context), /getter|read only/);
+  assert.throws(() => vm.runInContext('"use strict"; window.__rwnLiveCountQA.countryState.userCountry = "China";', context), /read only/);
+  vm.runInContext('state.detailCountryFeatures = [{}, {}, {}]; state.detailGeometryReady = true; state.userCountry = "United States";', context);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.window.__rwnLiveCountQA.countryState)), { coarseFeatures: 2, detailFeatures: 3, detailGeometryReady: true, userCountry: "United States" });
+  assert.equal(first.userCountry, null, "an old snapshot cannot become a live mutable state reference");
+  assert.doesNotThrow(() => vm.runInNewContext(countryStateProbeSource, { window: {} }), "the observer stays inert without the explicit fixture");
+});
+
+for (const fails of [false, true]) {
+  test(`temporary CI instrumentation restores exact original bytes after ${fails ? "failure" : "success"}`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "rwn-country-probe-test-"));
+    const path = join(directory, "app.js");
+    const original = Buffer.from("// Untouched generated-module fixture.\nconst state = {};\n");
+    await writeFile(path, original);
+    try {
+      const run = () => withCountryStateProbe(async () => {
+        const temporary = await readFile(path, "utf8");
+        assert.equal(temporary, original.toString() + countryStateProbeSource);
+        if (fails) throw new Error("Synthetic verifier failure");
+        return "complete";
+      }, path);
+      if (fails) await assert.rejects(run, /Synthetic verifier failure/);
+      else assert.equal(await run(), "complete");
+      assert.deepEqual(await readFile(path), original);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+test("ordinary production source and build output contain no CI country observer", async () => {
+  for (const path of ["../src/app.js", "../dist/src/app.js"]) {
+    const source = await readFile(new URL(path, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /__rwnLiveCountQA|countryStateProbeSource/);
   }
 });
