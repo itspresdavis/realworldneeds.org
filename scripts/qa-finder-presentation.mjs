@@ -1,5 +1,27 @@
 import { writeFile } from "node:fs/promises";
 
+// Serialized into the CI browser and exercised directly with color fixtures.
+// Transparent controls inherit their painted background; rgba(0,0,0,0) is not black.
+export function renderedTextContrast(element) {
+  const parse = color => {
+    const values = color.match(/[\d.]+/g)?.map(Number);
+    if (!values || values.length < 3) throw new Error(`Unsupported computed color: ${color}`);
+    return [...values.slice(0, 3), values[3] ?? 1];
+  };
+  const composite = (front, back) => front.slice(0, 3).map((value, index) => value * front[3] + back[index] * (1 - front[3]));
+  const layers = [];
+  for (let current = element; current; current = current.parentElement) {
+    layers.unshift(parse(getComputedStyle(current).backgroundColor));
+  }
+  const background = layers.reduce((under, layer) => composite(layer, under), [255, 255, 255]);
+  const foreground = composite(parse(getComputedStyle(element).color), background);
+  const luminance = rgb => rgb.map(value => value / 255)
+    .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+    .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+  const levels = [luminance(foreground), luminance(background)].sort((a, b) => a - b);
+  return (levels[1] + .05) / (levels[0] + .05);
+}
+
 /** Rendered contracts for the complete finder, not only the mobile breakpoint. */
 export async function verifyFinderPresentation({ client, host, navigate, evaluate, capture }) {
   const close = (a, b) => Math.abs(a - b) <= 1;
@@ -126,19 +148,22 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
             const restored = state();
             const note = document.querySelector('.service-next-steps + .policy-note');
             const tools = document.querySelector('[data-service-utility]');
+            const contrastFor = ${renderedTextContrast.toString()};
             const nextActions = [...document.querySelectorAll('.service-next-steps a')].map((link) => {
-              const subtitle = link.querySelector('span');
-              const foreground = getComputedStyle(subtitle || link).color;
-              const background = getComputedStyle(link).backgroundColor;
-              const levels = [luminance(foreground),luminance(background)].sort((a,b) => a-b);
-              return {top:link.getBoundingClientRect().top,contrast:(levels[1]+.05)/(levels[0]+.05)};
+              const text = [link, ...link.querySelectorAll('strong, span')];
+              const box = link.getBoundingClientRect();
+              return {top:box.top,bottom:box.bottom,contact:link.parentElement.matches('.service-contact-buttons'),map:!!link.closest('.service-location-actions'),contrast:Math.min(...text.map(contrastFor))};
             });
             return {before,toggled,restored,nextActions,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
           })()`);
           if ([service.before, service.toggled, service.restored].some((state) => !state.label || !Number.isFinite(state.contrast) || state.contrast < 4.5) || service.before.pressed === service.toggled.pressed || service.before.pressed !== service.restored.pressed || !service.warningBeforeTools) {
             throw new Error(`Service action contrast/state/order failed at ${width}px: ${JSON.stringify(service)}`);
           }
-          if (service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || (width >= 901 && service.nextActions.length === 4 && service.nextActions.some((action) => !close(action.top,service.nextActions[0].top)))) {
+          const contacts = service.nextActions.filter(action => action.contact);
+          const maps = service.nextActions.filter(action => action.map);
+          const contactsAligned = width < 901 || contacts.every(action => close(action.top, contacts[0].top));
+          const mapsBelow = maps.every(map => contacts.every(contact => map.top >= contact.bottom));
+          if (contacts.length !== 2 || maps.length !== 2 || service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || !contactsAligned || !mapsBelow) {
             throw new Error(`Service next-step labels or row alignment failed at ${width}px: ${JSON.stringify(service.nextActions)}`);
           }
         }
