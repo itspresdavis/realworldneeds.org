@@ -14,7 +14,7 @@ const deferred = () => {
 };
 const ok = { ok: true, status: 200 };
 
-function fixture(responses, { saved = false, noticePresent = true, online = true } = {}) {
+function fixture(responses, { saved = false, noticePresent = true, online = true, cachedNavigation = false } = {}) {
   const listeners = new Map(), windowListeners = new Map(), timers = new Map(), calls = [], focusCalls = [];
   let observer, time = 0, nextTimer = 0;
   const match = (node, selector) => selector === node.tagName.toLowerCase()
@@ -48,6 +48,7 @@ function fixture(responses, { saved = false, noticePresent = true, online = true
     getElementById: () => noticePresent ? notice : null,
     createElement: tag => new Element(tag),
     querySelector(selector) {
+      if (selector === 'meta[name="rwn-offline-navigation"]' && cachedNavigation) return { remove() { cachedNavigation = false; } };
       if (selector === "[data-directory-count]") return count;
       if (selector === (saved ? "[data-saved-list]" : ".directory-global-results")) return {};
       return null;
@@ -61,7 +62,7 @@ function fixture(responses, { saved = false, noticePresent = true, online = true
   };
   const navigator = { onLine: online };
   const recovered = [];
-  const window = { dispatchEvent(event) { recovered.push(event.type); }, addEventListener(type, handler) { windowListeners.set(type, handler); } };
+  const window = { location: { pathname: "/directory/help/food", search: "?query=private" }, dispatchEvent(event) { recovered.push(event.type); }, addEventListener(type, handler) { windowListeners.set(type, handler); } };
   Object.defineProperty(window, "localStorage", { get() { throw new Error("Connectivity must not read or mutate Saved state"); } });
   vm.runInNewContext(source, {
     document, navigator, window, URL, AbortController, Event, queueMicrotask,
@@ -304,4 +305,62 @@ test("an online event already retries catalogs and its probe must not restart th
   await f.online();
   assert.deepEqual(f.recovered, []);
   assert.equal(f.notice.dataset.networkState, "online");
+});
+
+
+const recoveredDirectory = () => ({ ok: true, async text() { return '<html><head><meta name="rwn-offline-assets" content="0123456789ab"></head><body><section data-directory-search></section></body></html>'; } });
+for (const status of [503, 504, 404, 410]) test(`cached navigation stays warned on directory HTTP ${status} even when navigator reports online`, async () => {
+  const f = fixture([{ ok: false, status }, recoveredDirectory(), ok], { cachedNavigation: true });
+  assert.equal(f.notice.hidden, false);
+  await flush();
+  assert.equal(f.calls[0].url, '/directory/help/food');
+  assert.equal(f.calls[0].options.cache, 'no-store');
+  assert.equal(f.notice.dataset.networkState, 'offline');
+  assert.equal(f.detailClick(), true);
+  f.retry.click(); await flush();
+  assert.equal(f.notice.dataset.networkState, 'online');
+  assert.equal(f.detailClick(), false);
+  assert.equal(f.document.querySelector('meta[name="rwn-offline-navigation"]'), null);
+  assert.deepEqual(f.recovered, ['rwn-connection-restored']);
+  f.retry.click(); await flush();
+  assert.equal(f.calls[2].url, '/data/release.json', 'successful navigation recovery resumes ordinary probes');
+});
+
+test('cached navigation probe bounds complete HTML and ignores late body success', async () => {
+  const held = deferred();
+  const f = fixture([{ ok: true, text: () => held.promise }, recoveredDirectory()], { cachedNavigation: true });
+  await flush();
+  assert.equal(f.notice.dataset.networkState, 'offline');
+  f.advance(8000); await flush();
+  assert.equal(f.calls[0].options.signal.aborted, true);
+  assert.equal(f.notice.dataset.networkState, 'offline');
+  f.retry.click(); await flush();
+  assert.equal(f.notice.dataset.networkState, 'online');
+  held.resolve('<html>not a directory</html>'); await flush();
+  assert.equal(f.notice.dataset.networkState, 'online');
+  assert.deepEqual(f.recovered, ['rwn-connection-restored']);
+});
+
+test('cached navigation cannot treat a non-directory success as recovery', async () => {
+  const f = fixture([{ ok: true, async text() { return '<html>Source-hidden notice</html>'; } }], { cachedNavigation: true });
+  await flush(); assert.equal(f.notice.dataset.networkState, 'offline');
+  assert.equal(f.detailClick(), true);
+});
+
+test('restoring an unrecovered cached page rechecks its route without altering another tab', async () => {
+  const first = fixture([{ ok: false, status: 503 }, recoveredDirectory()], { cachedNavigation: true });
+  const second = fixture([{ ok: false, status: 504 }], { cachedNavigation: true });
+  await flush();
+  first.windowListeners.get('pageshow')({ persisted: true }); await flush();
+  assert.equal(first.notice.dataset.networkState, 'online');
+  assert.equal(second.notice.dataset.networkState, 'offline');
+  assert.equal(first.calls[1].url, '/directory/help/food');
+  first.windowListeners.get('pageshow')({ persisted: true }); await flush();
+  assert.equal(first.calls.length, 2, 'removed marker does not impose extra ordinary-page work');
+});
+
+for (const redirected of [false, true]) test(`a ${redirected ? 'redirected directory' : 'non-directory page with release metadata'} cannot clear cached-navigation warnings`, async () => {
+  const body = redirected ? await recoveredDirectory().text() : '<html><head><meta name="rwn-offline-assets" content="0123456789ab"></head><body>Source hidden</body></html>';
+  const f = fixture([{ ok: true, redirected, async text() { return body; } }], { cachedNavigation: true });
+  await flush(); assert.equal(f.notice.dataset.networkState, 'offline'); assert.equal(f.detailClick(), true);
 });

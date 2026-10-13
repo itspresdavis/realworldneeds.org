@@ -2,6 +2,10 @@ const PROBE_URL = "/data/release.json";
 const notice = document.getElementById("offlineDirectoryNotice");
 
 if (notice) {
+  // A saved navigation is not proof that this directory endpoint is reachable.
+  // The worker adds only this fixed marker to the response, never the cache.
+  const cachedNavigation = document.querySelector('meta[name="rwn-offline-navigation"]');
+  let navigationRecovery = Boolean(cachedNavigation);
   let offline = false;
   let probeGeneration = 0;
   let pendingProbe;
@@ -158,17 +162,27 @@ if (notice) {
     checking(true);
     setText(status, "Checking connection…");
     request.promise = Promise.race([
-      fetch(PROBE_URL, {
+      fetch(navigationRecovery ? window.location.pathname : PROBE_URL, {
         method: "GET",
         cache: "no-store",
         credentials: "same-origin",
         headers: { "X-RWN-Connectivity-Probe": "1" },
         signal: controller.signal
+      }).then(async (response) => {
+        if (navigationRecovery && response.ok) {
+          // Keep the deadline alive through the body. This fetch is not a
+          // navigation, so it cannot be satisfied by the worker's saved shell.
+          const html = await response.text();
+          if (response.redirected || !/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(html)
+            || !/<section\b[^>]*\bdata-directory-search(?:[\s=>])/.test(html)) throw new Error("Directory is unavailable");
+        }
+        return response;
       }),
       interrupted
     ]).then((response) => {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
+      if (response.ok) { navigationRecovery = false; cachedNavigation?.remove(); }
       if (response.ok && recoverCatalog) window.dispatchEvent(new Event("rwn-connection-restored"));
       setText(status, response.ok ? "Connection restored. Listing details and online links are available." : "Could not reach RWN. Check your connection and try again.");
     }).catch(() => {
@@ -223,8 +237,12 @@ if (notice) {
     setText(status, "Check your connection, then try again.");
     setOffline(true);
   });
+  // Recheck a restored cached document; another tab must not clear its warning.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted && navigationRecovery) probe(event);
+  });
   // Own visibility immediately, including while an initially offline probe hangs.
-  setOffline(!navigator.onLine);
+  setOffline(navigationRecovery || !navigator.onLine);
   probe();
   enhanceSearchActions();
 }
