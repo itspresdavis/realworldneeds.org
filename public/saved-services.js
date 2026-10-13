@@ -1,3 +1,4 @@
+import { createCatalogLoader } from "./catalog-request.js";
 import { SAVED_RESOURCES_KEY, readSavedResources, setResourceSaved, clearSavedResources } from "../src/utils/privacy.js";
 
 import { createResultRow } from "./directory-results.js";
@@ -5,21 +6,7 @@ import { createResultRow } from "./directory-results.js";
 export function initSavedServices() {
   const connectivityNotice = document.getElementById("offlineDirectoryNotice");
   const release = new URL(import.meta.url).searchParams.get("v") || "";
-  let catalogPromise;
-  let freshCatalog = false;
-  const loadCatalog = () => {
-    if (catalogPromise) return catalogPromise;
-    const request = fetch(`/data/search-index.json${!freshCatalog && release ? `?v=${encodeURIComponent(release)}` : ""}`, {
-      credentials: "same-origin", cache: freshCatalog ? "reload" : "force-cache"
-    }).then((response) => {
-      if (!response.ok) throw new Error("Directory unavailable");
-      return response.json();
-    }).then((payload) => {
-      if (!Array.isArray(payload.records)) throw new Error("Invalid directory");
-      return payload;
-    }).catch((error) => { if (catalogPromise === request) catalogPromise = undefined; throw error; });
-    return catalogPromise = request;
-  };
+  const loadCatalog = createCatalogLoader(`/data/search-index.json${release ? `?v=${encodeURIComponent(release)}` : ""}`);
   const panel = document.querySelector("[data-saved-services]");
   if (!panel) return;
   const directoryTitle = document.title;
@@ -97,7 +84,8 @@ export function initSavedServices() {
       else if ((focused === clear && clear.hidden) || (focused === more && more.hidden)) heading.focus();
       else if (confirmation.contains(focused) && confirmation.hidden) heading.focus();
     };
-    retry.hidden = true;
+    retry.hidden = focused !== retry;
+    retry.setAttribute("aria-disabled", "true");
     if (empty) empty.hidden = true;
     let ids;
     try { ids = readSavedResources(); } catch {
@@ -106,12 +94,14 @@ export function initSavedServices() {
       clear.hidden = true;
       summary.textContent = "Saved services are unavailable in this browser. Check your browser’s storage settings.";
       retry.hidden = false;
+      retry.setAttribute("aria-disabled", "false");
       cancelClear();
       restoreFocus();
       return;
     }
     clear.hidden = ids.size === 0;
     if (!ids.size) {
+      retry.hidden = true;
       list.replaceChildren();
       more.hidden = true;
       summary.textContent = "No saved services yet. Open a listing and choose Save to keep it here.";
@@ -124,6 +114,7 @@ export function initSavedServices() {
     try {
       const payload = await loadCatalog();
       if (current !== generation || !active()) return;
+      retry.hidden = true;
       const byId = new Map(payload.records.map((record) => [record.id, record]));
       // Never remove saved IDs merely because a catalog request or release changed.
       entries = [...ids].map((id) => ({ id, record: byId.get(id) }));
@@ -139,12 +130,13 @@ export function initSavedServices() {
       more.hidden = true;
       summary.textContent = "Your saved list is still on this device, but listing details could not load. Reconnect and try again.";
       retry.hidden = false;
+      retry.setAttribute("aria-disabled", "false");
       restoreFocus();
     }
   };
 
   more.addEventListener("click", () => renderMore()?.querySelector("a, button")?.focus());
-  retry.addEventListener("click", () => render());
+  retry.addEventListener("click", () => { if (retry.getAttribute("aria-disabled") !== "true") render(); });
   clear.addEventListener("click", () => {
     confirmation.hidden = false;
     clear.setAttribute("aria-expanded", "true");
@@ -195,8 +187,8 @@ export function initSavedServices() {
   window.addEventListener("storage", (event) => {
     if (event.key === SAVED_RESOURCES_KEY || event.key === null) render();
   });
-  window.addEventListener("online", () => render());
-  window.addEventListener("offline", () => render());
-  navigator.serviceWorker?.addEventListener("controllerchange", () => { catalogPromise = undefined; freshCatalog = true; render(); });
+  const reconnect = () => { loadCatalog.retry(); render(); };
+  for (const type of ["online", "offline", "rwn-connection-restored"]) window.addEventListener(type, reconnect);
+  navigator.serviceWorker?.addEventListener("controllerchange", () => { loadCatalog.reset(); render(); });
   syncView(active());
 }

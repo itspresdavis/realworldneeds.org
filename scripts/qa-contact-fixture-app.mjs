@@ -67,7 +67,7 @@ async function labelHtml(directory) {
 
 // This server deliberately has no imports from api/ or server/ and accepts only
 // static GET/HEAD requests. It cannot read source files outside its temporary dist.
-async function staticServer(root) {
+async function staticServer(root, catalogControl) {
   const inside = path => path === root || path.startsWith(`${root}${sep}`);
   const server = createServer(async (request, response) => {
     const end = (status, text) => { response.writeHead(status, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); response.end(request.method === "HEAD" ? undefined : text); };
@@ -76,6 +76,25 @@ async function staticServer(root) {
       const pathname = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
       if (pathname.includes("\0") || pathname.includes("\\") || pathname.split("/").includes("..")) return end(400, "Bad path");
       if (pathname === "/api" || pathname.startsWith("/api/") || pathname === "/workspace") return end(404, "No API in this fixture");
+      if (pathname === "/data/search-index.json" && catalogControl) {
+        const mode = catalogControl.mode || "healthy";
+        const record = { mode, closed: false };
+        catalogControl.requests.push(record);
+        response.once("close", () => { record.closed = true; });
+        if (["hung-headers", "hung-body", "held-success"].includes(mode)) {
+          if (mode === "hung-body") {
+            response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            response.write('{"records":[');
+          }
+          if (mode === "held-success") catalogControl.release = async () => {
+            if (response.destroyed) throw new Error("Held catalog response was unexpectedly canceled");
+            const body = await readFile(join(root, "data/search-index.json"));
+            response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+            response.end(body);
+          };
+          return;
+        }
+      }
       const relative = pathname.replace(/^\/+/, "");
       const paths = !relative ? [join(root, "index.html")] : extname(relative)
         ? [resolve(root, relative)] : [resolve(root, `${relative}.html`), resolve(root, relative, "index.html")];
@@ -105,7 +124,7 @@ async function staticServer(root) {
 }
 
 /** Full normal build in an automatically cleaned, isolated local/CI workspace. */
-export async function createContactFixtureApp({ serve = true, sourceDir = sourceRoot } = {}) {
+export async function createContactFixtureApp({ serve = true, sourceDir = sourceRoot, catalogControl } = {}) {
   sourceDir = resolve(sourceDir);
   const directory = await mkdtemp(join(tmpdir(), "rwn-contact-fixture-"));
   const dist = join(directory, "dist");
@@ -141,7 +160,7 @@ export async function createContactFixtureApp({ serve = true, sourceDir = source
     }
     await labelHtml(dist);
     await writeFile(join(dist, "robots.txt"), "User-agent: *\nDisallow: /\n");
-    if (serve) server = await staticServer(dist);
+    if (serve) server = await staticServer(dist, catalogControl);
     return { directory, dist, host: server ? `http://127.0.0.1:${server.address().port}` : null, resources: contactFixtureResources, cleanup };
   } catch (error) {
     await cleanup();

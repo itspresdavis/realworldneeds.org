@@ -104,10 +104,10 @@ test("Saved uses local filtering, safe text, and refreshed history and cross-tab
   const source = await readFile("public/saved-services.js", "utf8");
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML|sendBeacon|XMLHttpRequest|history\.(?:pushState|replaceState)/);
   assert.match(source, /location\.hash === "#saved"/);
-  assert.match(source, /fetch\(`\/data\/search-index\.json/);
+  assert.match(source, /createCatalogLoader\(`\/data\/search-index\.json/);
   assert.match(source, /readSavedResources\(\)/);
   assert.match(source, /current !== generation \|\| !active\(\)/);
-  for (const event of ["hashchange", "pageshow", "storage", "online", "offline"]) assert.ok(source.includes(`addEventListener("${event}"`));
+  for (const event of ["hashchange", "pageshow", "storage"]) assert.ok(source.includes(`addEventListener("${event}"`));
   assert.match(source, /no longer in the current directory/);
   assert.match(source, /could not load\. Reconnect and try again/);
   const app = await readFile("src/app.js", "utf8");

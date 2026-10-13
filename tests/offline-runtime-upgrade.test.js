@@ -50,7 +50,7 @@ function worker(release, caches, assets, fetch) {
     return new Response(assets.find(item => item.path === path)?.body || `core ${release}${path === "/directory" ? `<meta name="rwn-offline-assets" content="${manifestId}" />` : ""}`);
   });
   vm.runInNewContext(source.replaceAll("__RWN_OFFLINE_RELEASE__", release).replace("/* __RWN_RUNTIME_ASSETS__ */ {}", JSON.stringify(manifest)).replace('/* __RWN_RUNTIME_ID__ */ ""', JSON.stringify(manifestId)), {
-    URL, Request, Response, Uint8Array, crypto: webcrypto, caches, fetch: network,
+    URL, Request, Response, AbortController, TextDecoder, setTimeout, clearTimeout, Uint8Array, crypto: webcrypto, caches, fetch: network,
     self: { location: { origin }, addEventListener(name, fn) { handlers.set(name, fn); },
       async skipWaiting() { effects.skipped = true; }, clients: { async claim() { effects.claimed = true; } } }
   });

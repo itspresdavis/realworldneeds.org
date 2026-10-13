@@ -141,9 +141,12 @@ if (notice) {
     }
   };
 
-  const probe = () => {
+  const probe = (event) => {
     if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
+    // Online events already retry both catalogs; only explicit recovery needs
+    // an extra notification. A healthy initial probe must not restart a fetch.
+    const recoverCatalog = offline && event?.type !== "online";
     const controller = new AbortController();
     let timer;
     const request = {};
@@ -166,6 +169,7 @@ if (notice) {
     ]).then((response) => {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
+      if (response.ok && recoverCatalog) window.dispatchEvent(new Event("rwn-connection-restored"));
       setText(status, response.ok ? "Connection restored. Listing details and online links are available." : "Could not reach RWN. Check your connection and try again.");
     }).catch(() => {
       if (generation !== probeGeneration) return;

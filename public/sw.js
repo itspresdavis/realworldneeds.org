@@ -142,13 +142,64 @@ async function networkFirstNavigation(request) {
 // Explicit reloads from a replaced controller must never fall back to old data.
 let directoryRequest = 0;
 let directoryWrite = Promise.resolve();
+
+async function completeDirectoryResponse(request) {
+  const controller = new AbortController();
+  let reader, timer, interrupted = false;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      interrupted = true;
+      reject(new Error("Directory body deadline exceeded"));
+      controller.abort();
+      reader?.cancel().catch(() => {});
+    }, 6000);
+  });
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch(cacheKeyFor(request), {
+          cache: "reload", credentials: "same-origin", signal: controller.signal
+        });
+        if (interrupted) {
+          response.body?.cancel().catch(() => {});
+          throw new Error("Directory request superseded by deadline");
+        }
+        if (!response.ok) return response;
+        if (!response.body) throw new Error("Directory body missing");
+        reader = response.body.getReader();
+        const chunks = [];
+        let size = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          size += value.byteLength;
+        }
+        if (interrupted) throw new Error("Directory request superseded by deadline");
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        const payload = JSON.parse(new TextDecoder().decode(bytes));
+        if (!Array.isArray(payload?.records) || !payload.scopes || typeof payload.scopes !== "object" || Array.isArray(payload.scopes)) {
+          throw new Error("Invalid directory");
+        }
+        return new Response(bytes, { status: response.status, statusText: response.statusText, headers: response.headers });
+      })(),
+      deadline
+    ]);
+  } finally {
+    clearTimeout(timer);
+    reader?.releaseLock();
+  }
+}
+
 async function directoryIndex(request) {
   const generation = ++directoryRequest;
   const cache = await caches.open(CACHE_NAME).catch(() => null);
   try {
-    const response = await fetch(cacheKeyFor(request), { cache: "reload", credentials: "same-origin" });
+    const response = await completeDirectoryResponse(request);
     if (response.ok) {
-      if (cache) {
+      if (cache && generation === directoryRequest) {
         directoryWrite = directoryWrite.catch(() => {}).then(async () => {
           if (generation === directoryRequest) await putIfUsable(cache, request, response);
         });

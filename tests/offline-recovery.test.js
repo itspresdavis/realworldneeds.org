@@ -60,22 +60,23 @@ function fixture(responses, { saved = false, noticePresent = true, online = true
     addEventListener(type, handler) { listeners.set(type, handler); }
   };
   const navigator = { onLine: online };
-  const window = { addEventListener(type, handler) { windowListeners.set(type, handler); } };
+  const recovered = [];
+  const window = { dispatchEvent(event) { recovered.push(event.type); }, addEventListener(type, handler) { windowListeners.set(type, handler); } };
   Object.defineProperty(window, "localStorage", { get() { throw new Error("Connectivity must not read or mutate Saved state"); } });
   vm.runInNewContext(source, {
-    document, navigator, window, URL, AbortController, queueMicrotask,
+    document, navigator, window, URL, AbortController, Event, queueMicrotask,
     MutationObserver: class { constructor(handler) { observer = handler; } observe() {} },
     setTimeout(callback, delay) { const id = ++nextTimer; timers.set(id, { at: time + delay, callback }); return id; },
     clearTimeout(id) { timers.delete(id); },
     fetch(url, options) { calls.push({ url, options }); const response = responses.shift(); return response instanceof Error ? Promise.reject(response) : Promise.resolve(response); }
   });
   return {
-    notice, explanation, document, navigator, links, row, query, count, calls, focusCalls, timers, windowListeners,
+    notice, explanation, document, navigator, links, row, query, count, calls, focusCalls, timers, windowListeners, recovered,
     get retry() { return notice.querySelector("[data-directory-reconnect]"); },
     get status() { return notice.querySelector("[data-directory-connection-status]"); },
     mutate() { observer?.(); },
     offline() { navigator.onLine = false; windowListeners.get("offline")?.(); },
-    online() { navigator.onLine = true; return windowListeners.get("online")?.(); },
+    online() { navigator.onLine = true; return windowListeners.get("online")?.({ type: "online" }); },
     advance(ms) { time += ms; for (const [id, timer] of [...timers]) if (timer.at <= time) { timers.delete(id); timer.callback(); } },
     detailClick() {
       let blocked = false;
@@ -277,4 +278,30 @@ test("pages without a directory notice do not create controls or requests", () =
   assert.equal(f.calls.length, 0);
   assert.equal(f.retry, null);
   assert.equal(f.windowListeners.size, 0);
+});
+
+
+test("a successful coalesced connection retry notifies catalog consumers once", async () => {
+  const pending = deferred();
+  const f = fixture([new Error("offline"), pending.promise]);
+  await flush();
+  assert.deepEqual(f.recovered, []);
+  const first = f.retry.click();
+  assert.equal(f.retry.click(), first);
+  pending.resolve(ok);
+  await first;
+  assert.deepEqual(f.recovered, ["rwn-connection-restored"]);
+});
+
+
+test("a healthy startup probe does not restart the catalog request", async () => {
+  const f = fixture([ok]); await flush();
+  assert.deepEqual(f.recovered, []);
+});
+
+test("an online event already retries catalogs and its probe must not restart them again", async () => {
+  const f = fixture([new Error("offline"), ok]); await flush();
+  await f.online();
+  assert.deepEqual(f.recovered, []);
+  assert.equal(f.notice.dataset.networkState, "online");
 });
