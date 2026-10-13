@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resources } from "../src/data/resources.js";
 import { waitForScrollStability } from "./qa-scroll-stability.mjs";
+import { installSkipLinkWitness, withSkipLinkEvidence } from "./qa-skip-link-evidence.mjs";
 
 export function hasIntermediateScrollSample(start, end, samples) {
   if (!Number.isFinite(start) || !Number.isFinite(end) || Math.abs(end-start)<=2) return false;
@@ -167,14 +168,27 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       await click('.site-header .brand'); await click('.site-header .brand');
       const top = await arrive(state=>state.hash==='#top'&&state.y<=1, `Repeated brand return at ${width}px`);
       assert(top.hash === '#top' && top.y <= 1, 'Brand home link stayed pinned to the sticky header', top);
-      await evaluate(client, `scrollTo({top:300,behavior:'instant'}); document.querySelector('.skip-link').focus({preventScroll:true})`);
-      await client.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
-      await client.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
-      const skipImmediate = await inspect();
-      assert(skipImmediate.y<=1 && skipImmediate.active==='finder', 'Keyboard skip link did not arrive immediately', skipImmediate);
-      await settle();
-      const skipped = await inspect();
-      assert(skipped.hash === '#finder' && skipped.active === 'finder' && skipped.smooth === 'auto', 'Keyboard skip link lost native focus or immediate scrolling', skipped);
+      const readSkipWitness = () => evaluate(client, 'window.__rwnSkipLinkWitness.snapshot()');
+      await withSkipLinkEvidence({
+        record: {label: `Keyboard skip at ${width}px`}, evidence,
+        install: () => evaluate(client, `(${installSkipLinkWitness.toString()})()`),
+        read: readSkipWitness,
+        observeFrames: () => evaluate(client, 'window.__rwnSkipLinkWitness.observeFrames()'),
+        capture: () => capture(client, `page-interactions-skip-failure-${width}.png`),
+        dispose: () => evaluate(client, 'window.__rwnSkipLinkWitness?.dispose()'),
+        run: async record => {
+          record.prepared = await evaluate(client, `scrollTo({top:300,behavior:'instant'}); document.querySelector('.skip-link').focus({preventScroll:true}); window.__rwnSkipLinkWitness.snapshot()`);
+          await client.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+          await client.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+          const skipImmediate = await inspect();
+          record.immediate = skipImmediate;
+          assert(skipImmediate.y<=1 && skipImmediate.active==='finder', 'Keyboard skip link did not arrive immediately', skipImmediate);
+          await settle();
+          const skipped = await inspect();
+          record.settled = skipped;
+          assert(skipped.hash === '#finder' && skipped.active === 'finder' && skipped.smooth === 'auto', 'Keyboard skip link lost native focus or immediate scrolling', skipped);
+        },
+      });
     }
 
     await loadHome();
