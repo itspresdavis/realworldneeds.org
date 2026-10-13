@@ -5,7 +5,7 @@ import test from "node:test";
 const [app, index, seo, pagesCss, refinement, professional] = await Promise.all([
   readFile(new URL("../src/app.js", import.meta.url), "utf8"),
   readFile(new URL("../index.html", import.meta.url), "utf8"),
-  readFile(new URL("../scripts/professional-seo.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../scripts/service-contact.mjs", import.meta.url), "utf8"),
   readFile(new URL("../public/professional-pages.css", import.meta.url), "utf8"),
   readFile(new URL("../src/refinement.js", import.meta.url), "utf8"),
   readFile(new URL("../src/professional.js", import.meta.url), "utf8")
@@ -28,8 +28,8 @@ test("static preboot needs wrap on narrow screens and explain the short initiali
 });
 
 test("resource-finder actions stay capability-aware instead of promising a route", () => {
-  assert.match(seo, /const isDirectLocation = resource\.kind === "direct"/);
+  assert.match(seo, /const directLocation = resource\.kind === "direct"/);
   assert.match(seo, /not a walk-in location/);
-  assert.match(seo, /Contact or verify current details/);
+  assert.match(seo, /Contact the provider/);
   assert.match(pagesCss, /\.service-next-steps__context/);
 });

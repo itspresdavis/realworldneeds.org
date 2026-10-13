@@ -1,3 +1,4 @@
+import { verifyServiceContact } from "./qa-service-contact.mjs";
 import { verifyDirectoryDiscovery } from "./qa-directory-discovery.mjs";
 import { verifyDirectoryStartup } from "./qa-directory-startup.mjs";
 import { verifyLocalDirectorySearch } from "./qa-local-search.mjs";
@@ -226,6 +227,7 @@ async function run() {
       throw new Error(`Mobile service landing page failed: ${JSON.stringify(mobile)}`);
     }
 
+    await verifyServiceContact({ client, host: HOST, payload, navigate, evaluate, capture });
     await verifyServiceFacts({ client, host: HOST, payload, navigate, evaluate, capture });
     await verifySourceConfidence({ client, host: HOST, navigate, evaluate, capture });
 

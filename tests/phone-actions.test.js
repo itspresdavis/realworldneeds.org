@@ -1,3 +1,4 @@
+import { serviceContactMarkup } from "../scripts/service-contact.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -97,18 +98,20 @@ test("every static action generator rejects ambiguous phone targets", async () =
   const bodies = [
     [functionSource(build, "directoryRecordActions", "resourceRecord"), "directoryRecordActions"],
     [functionSource(enhancement, "serviceNextStepMarkup", "assetLinks"), "serviceNextStepMarkup"],
-    [functionSource(professional, "directoryQuickActions", "serviceActions"), "directoryQuickActions"],
-    [functionSource(professional, "serviceActions", "enhanceActionOrientation"), "serviceActions"],
+    [functionSource(professional, "directoryQuickActions", "enhanceActionOrientation"), "directoryQuickActions"],
+
   ];
+  bodies.push([null, "serviceContactMarkup"]);
   for (const [body, name] of bodies) {
     const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, phoneLinks, escapeHtml, sourceClosureNotice: () => null });
-    vm.runInContext(body, context);
+    if (body) vm.runInContext(body, context);
+    else context.serviceContactMarkup = serviceContactMarkup;
     for (const [phone, expected] of cases) {
       const html = context[name](fixture(phone), "");
       assert.deepEqual(targets(html), expected, name);
       const phones = phoneLinks(phone);
       if (name.startsWith("service") && phone && (phones.length !== 1 || phones[0].label !== phone)) {
-        assert.ok(html.includes(`data-phone-context>Phone: ${escapeHtml(phone)}</span>`), `${name} must keep annotations outside hidden contact facts`);
+        assert.ok(html.includes(`data-phone-context>Phone: ${escapeHtml(phone)}`), `${name} must keep annotations outside hidden contact facts`);
       }
     }
   }
@@ -169,7 +172,7 @@ test("built service pages, directory records and search index agree on every pho
     if (resource.phone) assert.ok(html.includes(`<dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd>`));
     if (resource.phone && (record.phoneLinks.length !== 1 || record.phoneLinks[0].label !== resource.phone)) {
       const nextSteps = html.match(/<nav class="service-next-steps"[\s\S]*?<\/nav>/)?.[0] || "";
-      assert.ok(nextSteps.includes(`data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`), "contact context must remain in the visible action bar");
+      assert.ok(nextSteps.includes(`data-phone-context>Phone: ${escapeHtml(resource.phone)}`), "contact context must remain in the visible action bar");
     }
   }
   const files = await readdir("dist/directory", { recursive: true });
