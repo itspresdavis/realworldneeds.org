@@ -25,7 +25,7 @@ export async function verifyServiceContact({ client, host, payload, navigate, ev
         const warning = document.querySelector('#service > .directory-shell > .source-status-notice');
         const heading = next?.querySelector('h2');
         const links = [...(next?.querySelectorAll('a') || [])];
-        const primary = [...(contact?.querySelectorAll(':scope > a') || [])];
+        const primary = [...(contact?.querySelectorAll('.service-contact-buttons > a') || [])];
         const rect = node => node?.getBoundingClientRect();
         return {
           id: document.querySelector('#service')?.dataset.serviceId,
@@ -50,7 +50,7 @@ export async function verifyServiceContact({ client, host, payload, navigate, ev
       await evaluate(client, `document.querySelector('.service-next-steps').scrollIntoView({block:'center',behavior:'instant'})`);
       if (index < 3) await capture(client, `service-contact-${index}-${width}.png`);
       // Follow the actual Tab sequence through primary contact and quieter maps.
-      await evaluate(client, `document.querySelector('.service-contact-actions > a').focus()`);
+      await evaluate(client, `document.querySelector('.service-contact-buttons > a').focus()`);
       for (let position = 0; position < state.links.length; position++) {
         const focus = await evaluate(client, `(async () => {
           const deadline=performance.now()+2000; let state;

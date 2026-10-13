@@ -56,5 +56,5 @@ export function serviceContactMarkup(resource) {
   }
   if (hasMapCoordinates(resource)) locations.push(`<a href="/#resource=${encodeURIComponent(resource.id)}">Interactive map<span class="service-contact-link-note">View on RWN</span></a>`);
   const priority = phones.length ? "phone" : contactOnly && resource.accessUrl ? "online" : providerUrl ? "provider" : "source";
-  return `<nav class="service-next-steps" aria-labelledby="service-contact-heading" data-contact-priority="${priority}"><div class="service-contact-intro"><span>Your next step</span><h2 id="service-contact-heading">${heading}</h2>${context}${phoneContext}</div><div class="service-contact-actions">${links.join("")}${locations.length ? `<div class="service-location-actions">${locations.join("")}</div>` : ""}</div></nav>`;
+  return `<nav class="service-next-steps" aria-labelledby="service-contact-heading" data-contact-priority="${priority}"><div class="service-contact-intro"><span>Your next step</span><h2 id="service-contact-heading">${heading}</h2>${context}${phoneContext}</div><div class="service-contact-actions"><div class="service-contact-buttons">${links.join("")}</div>${locations.length ? `<div class="service-location-actions">${locations.join("")}</div>` : ""}</div></nav>`;
 }
