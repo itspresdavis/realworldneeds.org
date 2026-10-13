@@ -13,7 +13,7 @@ const countUrl = `${endpoint}?returnCountOnly=true`;
 function fixture(origin = host, mapData = {}) {
   const native = [], listeners = [];
   const context = vm.createContext({
-    location: { origin, href: `${origin}/` }, navigator: {}, URL, Request, Response, DOMException, queueMicrotask,
+    location: { origin, href: `${origin}/` }, navigator: {}, URL, Request, Response, ReadableStream, TextEncoder, DOMException, queueMicrotask,
     document: { addEventListener: (type, callback) => listeners.push({ type, callback }) },
     fetch: async (...args) => { native.push(args); const data = mapData[new URL(args[0], origin).pathname]; return new Response(typeof data === "string" ? data : data ? JSON.stringify(data) : "local"); },
   });
@@ -55,7 +55,7 @@ test("synthetic zero and nearby data are held until release and never reach the 
   f.probe.release();
   assert.deepEqual(await count, { count: 0 });
   assert.deepEqual(await nearby, { features: [] });
-  assert.deepEqual(JSON.parse(JSON.stringify(f.probe.requests)), [{ kind: "count", geometry: null }, { kind: "nearby", geometry: "-75,40" }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.probe.requests.map(({ kind, geometry }) => ({ kind, geometry })))), [{ kind: "count", geometry: null }, { kind: "nearby", geometry: "-75,40" }]);
 });
 
 test("browser fixture keeps positive national and nearby counts independent", async () => {
@@ -91,6 +91,135 @@ test("aborting synthetic requests prevents a late release from settling success"
   controller.abort(); f.probe.release();
   await assert.rejects(pending, error => error.name === "AbortError");
   await assert.rejects(f.context.fetch(nearbyUrl, { signal: controller.signal }), error => error.name === "AbortError");
+});
+
+test("malformed national counts and truncated nearby envelopes retain their source meaning", async () => {
+  const f = fixture();
+  f.probe.scenario = { count: null, nearby: 1, nearbyTruncated: true };
+  const count = f.context.fetch(countUrl), nearby = f.context.fetch(nearbyUrl);
+  f.probe.release();
+  assert.deepEqual(await (await count).json(), { count: null }, "the fixture must not coerce malformed counts into zero");
+  const payload = await (await nearby).json();
+  assert.equal(payload.exceededTransferLimit, true);
+  assert.equal(payload.features.length, 1);
+  assert.equal(payload.features[0].attributes.Start_date, undefined, "unknown source dates stay omitted, not fabricated");
+  assert.equal(payload.features[0].attributes.End_date, undefined);
+  assert.equal(f.native.length, 0);
+});
+
+test("each response retains its own scenario across delayed headers and replacement requests", async () => {
+  const f = fixture();
+  f.probe.scenario = { count: 100, nearby: 2 };
+  const oldCount = f.context.fetch(countUrl), oldNearby = f.context.fetch(nearbyUrl);
+  f.probe.scenario = { count: 202, nearby: 1 };
+  let oldSettled = false;
+  oldCount.then(() => { oldSettled = true; });
+  const replacementCount = f.context.fetch(countUrl), replacementNearby = f.context.fetch(nearbyUrl);
+  f.probe.release([2, 3]);
+  assert.deepEqual(await (await replacementCount).json(), { count: 202 });
+  assert.equal((await (await replacementNearby).json()).features.length, 1);
+  assert.equal(oldSettled, false, "releasing new request IDs must leave old headers pending");
+  f.probe.release([0, 1]);
+  assert.deepEqual(await (await oldCount).json(), { count: 100 });
+  assert.equal((await (await oldNearby).json()).features.length, 2);
+});
+
+test("real streamed response headers can arrive while JSON remains pending until body release", async () => {
+  const f = fixture();
+  f.probe.scenario = { count: 100, nearby: 1, countBodyPending: true };
+  const countHeaders = f.context.fetch(countUrl), nearbyHeaders = f.context.fetch(nearbyUrl);
+  f.probe.release();
+  const response = await countHeaders;
+  assert.ok(response instanceof Response);
+  assert.ok(response.body instanceof ReadableStream);
+  assert.equal(response.status, 200);
+  assert.equal(f.probe.requests[0].headersReleased, true);
+  assert.equal(f.probe.requests[0].bodyPending, true);
+  let settled = false;
+  const body = response.json().then(value => { settled = true; return value; });
+  assert.equal((await (await nearbyHeaders).json()).features.length, 1);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, "nearby success must not finish the pending count stream");
+  f.probe.releaseBodies([0]);
+  assert.deepEqual(await body, { count: 100 });
+  assert.equal(f.probe.requests[0].bodyPending, false);
+  assert.equal(f.probe.requests[0].bodyReleased, true);
+});
+
+test("aborting after real headers errors the pending body and late release cannot restore success", async () => {
+  const f = fixture();
+  f.probe.scenario = { count: 31337, countBodyPending: true };
+  const controller = new AbortController();
+  const headers = f.context.fetch(countUrl, { signal: controller.signal });
+  f.probe.release();
+  const body = (await headers).json();
+  controller.abort();
+  await assert.rejects(body, error => error.name === "AbortError");
+  assert.equal(f.probe.requests[0].aborted, true);
+  assert.equal(f.probe.requests[0].bodyPending, false);
+  assert.equal(f.probe.requests[0].bodyReleased, false);
+  f.probe.scenario = { count: 202 };
+  const replacement = f.context.fetch(countUrl);
+  f.probe.release([1]);
+  assert.deepEqual(await (await replacement).json(), { count: 202 });
+  f.probe.releaseBodies([0]);
+  assert.equal(f.probe.requests[0].bodyReleaseAttempts, 1);
+  assert.equal(f.probe.requests[0].bodyReleased, false, "late release remains an inert attempt after abort");
+  assert.equal(f.native.length, 0);
+});
+
+test("auto-release retries expose a fresh pending real body and retain independent success", async () => {
+  const f = fixture();
+  f.probe.scenario = { count: 999, nearby: 1, countBodyPending: true, autoHeaders: true };
+  assert.equal((await (await f.context.fetch(nearbyUrl)).json()).features.length, 1);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const response = await f.context.fetch(countUrl, { signal: controller.signal });
+    const body = response.json();
+    assert.equal(f.probe.requests.at(-1).headersReleased, true);
+    assert.equal(f.probe.requests.at(-1).bodyPending, true);
+    controller.abort();
+    await assert.rejects(body, error => error.name === "AbortError");
+  }
+  f.probe.releaseBodies();
+  const attempts = f.probe.requests.filter(request => request.kind === "count");
+  assert.equal(attempts.length, 3);
+  assert.ok(attempts.every(request => request.aborted && !request.bodyReleased && !request.bodyPending));
+  f.probe.scenario = { count: 203, autoHeaders: true };
+  assert.deepEqual(await (await f.context.fetch(countUrl)).json(), { count: 203 });
+  assert.equal(f.native.length, 0);
+});
+
+test("success, abort and stream cancellation clean up fixture transport listeners", async () => {
+  for (const finish of ["success", "abort", "cancel"]) {
+    const f = fixture();
+    f.probe.scenario = { count: 100, countBodyPending: true };
+    const controller = new AbortController(), signal = controller.signal;
+    const add = signal.addEventListener.bind(signal), remove = signal.removeEventListener.bind(signal);
+    let listeners = 0;
+    signal.addEventListener = (...args) => { listeners += 1; return add(...args); };
+    signal.removeEventListener = (...args) => { listeners -= 1; return remove(...args); };
+    const pending = f.context.fetch(countUrl, { signal });
+    f.probe.release();
+    const response = await pending;
+    assert.equal(listeners, 1, "headers must not remove the body abort listener");
+    if (finish === "cancel") {
+      await response.body.cancel();
+      assert.equal(f.probe.requests[0].bodyCanceled, true);
+    } else {
+      const body = response.json();
+      if (finish === "success") {
+        f.probe.releaseBodies();
+        assert.deepEqual(await body, { count: 100 });
+      } else {
+        controller.abort();
+        await assert.rejects(body, error => error.name === "AbortError");
+      }
+    }
+    assert.equal(listeners, 0);
+    f.probe.releaseBodies();
+    assert.equal(listeners, 0, "a late release cannot clean up twice");
+  }
 });
 
 test("the fixture passes through local assets while blocking unexpected external requests", async () => {
