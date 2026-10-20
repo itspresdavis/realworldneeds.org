@@ -24,7 +24,7 @@ test("homepage Saved entry points open the private fragment without reading any 
     getElementById: () => null,
   };
   const context = vm.createContext({ document });
-  vm.runInContext(presentation.replace("export function", "function"), context);
+  vm.runInContext(presentation.replace(/^import .*$/gm, "").replace("export function", "function"), context);
   context.rewriteNavigation();
   context.simplifyStructure();
   assert.equal(action.href, "/directory#saved");

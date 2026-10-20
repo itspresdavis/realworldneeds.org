@@ -5,6 +5,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resources } from "../src/data/resources.js";
 import { sourceClosureMarkup } from "../src/utils/source-status.js";
+import { CORRECTIONS_EMAIL } from "../src/data/corrections.js";
 
 const HOME_TITLE = "Find Essential Services Near You | Real World Needs";
 const HOME_DESCRIPTION = "Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing.";
@@ -143,7 +144,7 @@ function unifiedHeader(path) {
 
 function unifiedFooter() {
   return `<footer class="legal-footer rwn-unified-footer">
-    <p><strong>Real World Needs</strong><br />Essential services directory<br />Listing corrections (inbox not live yet): PLACEHOLDER-corrections@realworldneeds.org</p>
+    <p><strong>Real World Needs</strong><br />Essential services directory<br />Listing corrections (inbox not live yet): ${escapeHtml(CORRECTIONS_EMAIL)}</p>
     <nav aria-label="Footer find help"><strong>Find help</strong><a href="/">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a></nav>
     <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a></nav>
     <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><a href="/donate">Donations</a></nav>

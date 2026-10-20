@@ -247,8 +247,13 @@ async function run() {
     const ready = await evaluate(client, `new Promise((resolve) => {
       const started = performance.now();
       const check = () => {
-        if (document.getElementById('globeCanvas') && document.getElementById('globeReadout') && document.getElementById('zoomIn')) return resolve(true);
-        if (performance.now() - started > 12000) return resolve(false);
+        const showMap = document.getElementById('showGlobe');
+        if (showMap && !showMap.hidden) showMap.click();
+        const canvas = document.getElementById('globeCanvas');
+        const stage = document.querySelector('.globe-stage');
+        const shown = canvas && stage && !stage.classList.contains('is-globe-deferred') && getComputedStyle(canvas).visibility !== 'hidden';
+        if (shown && document.getElementById('globeReadout') && document.getElementById('zoomIn')) return resolve(true);
+        if (performance.now() - started > 20000) return resolve(false);
         setTimeout(check, 50);
       };
       check();

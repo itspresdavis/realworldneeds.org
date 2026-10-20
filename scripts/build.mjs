@@ -8,6 +8,7 @@ import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
+import { CORRECTIONS_EMAIL } from "../src/data/corrections.js";
 import { resourceDescription } from "./resource-description.mjs";
 
 // A page of 80 expanded records created a 34,000px scroll. Sixty compact
@@ -15,8 +16,6 @@ import { resourceDescription } from "./resource-description.mjs";
 // available for every listing.
 const DIRECTORY_PAGE_SIZE = 60;
 const SITE_ORIGIN = "https://www.realworldneeds.org";
-// PLACEHOLDER: not a monitored inbox. Replace when a corrections address is chosen.
-const CORRECTIONS_EMAIL = "PLACEHOLDER-corrections@realworldneeds.org";
 const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
 const escapeHtml = (value) => String(value ?? "")
@@ -387,6 +386,13 @@ await mkdir("dist", { recursive: true });
 await cp("index.html", "dist/index.html");
 await cp("src", "dist/src", { recursive: true });
 await cp("public", "dist", { recursive: true });
+const correctionsAddress = escapeHtml(CORRECTIONS_EMAIL);
+for (const path of await walkFiles("dist")) {
+  if (extname(path) !== ".html") continue;
+  const html = await readFile(path, "utf8");
+  if (!html.includes("{{CORRECTIONS_EMAIL}}")) continue;
+  await writeFile(path, html.replaceAll("{{CORRECTIONS_EMAIL}}", correctionsAddress));
+}
 
 let builtIndex = await readFile("dist/index.html", "utf8");
 builtIndex = versionIndexAssets(builtIndex, release);

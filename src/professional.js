@@ -1,3 +1,5 @@
+import { CORRECTIONS_EMAIL } from "./data/corrections.js";
+
 const setText = (selector, value) => {
   const node = document.querySelector(selector);
   if (node) node.textContent = value;
@@ -141,7 +143,7 @@ function simplifyStructure() {
   const note = footer.querySelector(":scope > p");
   if (map) map.remove();
   if (note) {
-    note.innerHTML = `<span>Map boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Earth imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span><span>Listing corrections (inbox not live yet): PLACEHOLDER-corrections@realworldneeds.org</span>`;
+    note.innerHTML = `<span>Map boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Earth imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span><span>Listing corrections (inbox not live yet): ${CORRECTIONS_EMAIL}</span>`;
   }
 }
 
