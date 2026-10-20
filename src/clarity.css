@@ -488,7 +488,7 @@ border-color: var(--rwn-green); background: var(--rwn-green); color: #fff; box-s
 .rwn-professional .results-empty strong { font-size: .9375rem; }
 .rwn-professional .results-empty p { color: var(--rwn-muted); font-size: .875rem; line-height: 1.6; }
 
-.page-start { display: block; height: 0; scroll-margin: 0; }
+.page-start{display:block;height:0;overflow:hidden;scroll-margin:0}
 .rwn-professional :is(.jump-results, .location-button, .location-clear, .directory-tool, .outline-button--dark, .quick-need, .result-direct-action) {
 touch-action: manipulation; transition: transform 120ms ease, border-color 140ms ease;
 }

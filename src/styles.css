@@ -5215,3 +5215,9 @@ aside.source-status-notice > p { margin: .25rem 0; color: #50340d; font-size: .8
 aside.source-status-notice > a { display: inline-flex; align-items: center; min-height: 44px; color: #50340d; text-decoration: underline; }
 aside.source-status-notice > a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 @media (forced-colors: active) { aside.source-status-notice { border: 2px solid CanvasText; } }
+
+@media (max-width:760px){
+  .rwn-professional :is(.brand small,.filter-heading,.atlas-key,.atlas-key small,.globe-pin>strong,.globe-pin>strong small,.globe-cluster>strong,.globe-cluster>strong small,.section-kicker,.site-footer :is(nav strong,nav a,button,small),.site-menu nav a,.location-recovery,.location-status,.jump-results small,.resource-row__aid,.directory-tool,.directory-tool b,.results-heading p,.footer-brand small,.globe-meta,.globe-meta :is(strong,span,small),.layer-toggle>strong,.globe-readout,.globe-readout strong){
+    font-size:.75rem !important;
+  }
+}

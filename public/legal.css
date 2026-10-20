@@ -197,3 +197,9 @@ aside.source-status-notice > a:focus-visible { outline: 3px solid currentColor; 
 
 .directory-global-result-wrap.has-source-status { grid-template-columns: minmax(0, 1fr); }
 .directory-global-result-wrap.has-source-status .directory-global-result-actions { justify-content: flex-start; }
+
+@media (max-width:760px){
+  :is(.legal-brand small,.legal-brand small::after,.eyebrow,.legal-toc strong,.legal-table th,.legal-footer>p,.legal-footer a,.legal-footer nav strong,.professional-need-links strong,.legal-header nav,.legal-meta,.transparency-metrics span,.directory-downloads>strong,.directory-downloads a,.directory-links a,.open-data-actions a,.directory-search-tools__clear,.directory-search-tools__meta,.directory-category-chips button,.directory-record header p,.directory-caution,.directory-local-links>div:first-child span,.directory-local-links a,.directory-local-links a span,.service-next-steps>div:first-child span,.related-services__heading a,.related-services__grid :is(span,small),.directory-record__facts>div,.directory-record__facts span,.directory-record__actions a,.directory-record__more>summary,.directory-record__more dt,.directory-record__more dd,.directory-record__links a,.directory-advanced>summary,.directory-browse-more>summary,.directory-quick-actions a,.directory-results-jump small,.service-accessibility strong,.service-utility-actions__intro>span){
+    font-size:.75rem !important;
+  }
+}

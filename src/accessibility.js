@@ -61,9 +61,6 @@ function installResultLandmark() {
   results.setAttribute("role", "region");
   results.setAttribute("aria-labelledby", "resultTitle");
   grid.setAttribute("tabindex", "-1");
-
-  const jump = document.getElementById("jumpResults");
-  if (jump) jump.setAttribute("aria-label", "Skip the interactive map and see matching services");
 }
 
 function installAccessibleResourcePanel() {
