@@ -1,15 +1,74 @@
+const SAVED_RESOURCES_KEY = "rwn-saved-resources";
+
+function resourceHash(url) {
+  const value = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  return new URLSearchParams(value).get("resource");
+}
+
+function resourceIdFromUrl(value) {
+  const url = new URL(value);
+  return resourceHash(url) || url.searchParams.get("resource");
+}
+
+function privateResourceUrl(value, resourceId) {
+  const url = new URL(value);
+  url.searchParams.delete("resource");
+  url.hash = new URLSearchParams({ resource: resourceId }).toString();
+  return url;
+}
+
+function clearResourceFromUrl(value) {
+  const url = new URL(value);
+  url.searchParams.delete("resource");
+  if (resourceHash(url)) url.hash = "";
+  return url;
+}
+
+// Read-only until an explicit Save, Remove, or Clear action. Keep the original
+// array-of-IDs format so saved listings survive upgrades without migration.
+function readSavedResources(storage = window.localStorage) {
+  const value = storage.getItem(SAVED_RESOURCES_KEY);
+  let parsed;
+  try { parsed = JSON.parse(value || "[]"); } catch { return new Set(); }
+  return new Set(Array.isArray(parsed)
+    ? parsed.filter((id) => typeof id === "string" && /^[a-z0-9][a-z0-9-]{0,199}$/.test(id))
+    : []);
+}
+
+function setResourceSaved(id, saved, storage = window.localStorage) {
+  if (typeof id !== "string" || !/^[a-z0-9][a-z0-9-]{0,199}$/.test(id)) throw new Error("Invalid service identifier");
+  const ids = readSavedResources(storage);
+  if (saved) ids.add(id);
+  else ids.delete(id);
+  if (ids.size) storage.setItem(SAVED_RESOURCES_KEY, JSON.stringify([...ids]));
+  else storage.removeItem(SAVED_RESOURCES_KEY);
+  return ids;
+}
+
+function clearSavedResources(storage = window.localStorage) {
+  storage.removeItem(SAVED_RESOURCES_KEY);
+}
+
+
 const nextSteps = document.querySelector(".service-next-steps");
 
 if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const utility = document.createElement("section");
   utility.className = "service-utility-actions";
+  utility.id = "service-listing-tools";
+  utility.tabIndex = -1;
   utility.dataset.serviceUtility = "";
-  utility.setAttribute("aria-label", "Share, copy, or print this service listing");
+  utility.setAttribute("aria-label", "Save, share, copy, or print this service listing");
   utility.innerHTML = `
     <div class="service-utility-actions__intro">
       <span>Listing tools</span>
-      <strong>Share, copy, or print this listing.</strong>
+      <strong>Keep this listing handy.</strong>
       <small>These actions happen on your device. RWN does not receive who you share with or the text you copy.</small>
+    </div>
+    <div class="service-save-actions">
+      <button type="button" data-service-save aria-pressed="false" aria-describedby="service-save-privacy">Save</button>
+      <a href="/directory#saved">View saved services</a>
+      <small id="service-save-privacy">Saved only in this browser on this device. Anyone using this browser can see your list. You can remove it anytime.</small>
     </div>
     <div class="service-utility-actions__buttons">
       <button type="button" data-service-share>Share</button>
@@ -18,42 +77,99 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     </div>
     <p class="service-utility-actions__status" data-service-action-status role="status" aria-live="polite"></p>
   `;
-  nextSteps.insertAdjacentElement("afterend", utility);
+  // Provider facts and requirements come before optional browser-only tools.
+  const details = document.querySelector("#service .directory-record");
+  if (details) {
+    details.insertAdjacentElement("afterend", utility);
+    const jump = document.createElement("a");
+    jump.className = "service-tools-jump";
+    jump.href = "#service-listing-tools";
+    jump.textContent = "Save, share or print";
+    details.querySelector("header")?.insertAdjacentElement("afterend", jump);
+  } else {
+    const providerNote = nextSteps.nextElementSibling;
+    const utilityAnchor = providerNote?.matches(".policy-note") ? providerNote : nextSteps;
+    utilityAnchor.insertAdjacentElement("afterend", utility);
+  }
 
   const status = utility.querySelector("[data-service-action-status]");
   const title = document.querySelector("#service h1")?.textContent?.trim() || document.title;
   const place = document.querySelector("#service .legal-meta span")?.textContent?.trim() || "";
   const officialSource = nextSteps.querySelector("a.is-primary")?.href || "";
+  // The tools shortcut is local navigation. Recipients should begin at the
+  // listing title and dated warnings, not at the sharing controls below them.
+  const listingUrl = new URL(location.pathname, location.origin).href;
+
+  const saveButton = utility.querySelector("[data-service-save]");
+  const serviceId = document.querySelector("#service")?.dataset.serviceId;
+  const storageUnavailableMessage = "Saving is unavailable in this browser. You can still copy or print this listing.";
+  const syncSaved = () => {
+    try {
+      const saved = readSavedResources().has(serviceId);
+      saveButton.setAttribute("aria-pressed", String(saved));
+      saveButton.textContent = saved ? "Remove from saved" : "Save";
+      saveButton.disabled = !serviceId;
+      if (!serviceId) status.textContent = "Saving is unavailable for this listing. You can still copy or print it.";
+      else if (status.textContent === storageUnavailableMessage) status.textContent = "";
+    } catch {
+      saveButton.disabled = true;
+      status.textContent = storageUnavailableMessage;
+    }
+  };
+  saveButton.addEventListener("click", () => {
+    try {
+      const saved = readSavedResources().has(serviceId);
+      setResourceSaved(serviceId, !saved);
+      syncSaved();
+      status.textContent = saved ? "Removed from your saved services." : "Saved only in this browser. Use View saved services to return to your list.";
+    } catch {
+      status.textContent = "Your saved list could not be changed. Check this browser’s storage settings and try again.";
+    }
+  });
+  window.addEventListener("pageshow", syncSaved);
+  window.addEventListener("storage", (event) => {
+    if (event.key === SAVED_RESOURCES_KEY || event.key === null) syncSaved();
+  });
+  syncSaved();
 
   const publicDetails = () => {
     const rows = [...document.querySelectorAll("#service .directory-record dl > div")]
       .map((row) => {
         const label = row.querySelector("dt")?.textContent?.trim();
         const value = row.querySelector("dd")?.textContent?.replace(/\s+/g, " ")?.trim();
-        return label && value ? `${label}: ${value}` : "";
+        const href = row.querySelector('dd a[href^="https://"]')?.href;
+        return label && value ? `${label}: ${value}${href && !value.includes(href) ? ` (${href})` : ""}` : "";
       })
       .filter(Boolean);
+    const sourceStatus = document.querySelector("#service > .directory-shell > .source-status-notice");
+    const statusLines = sourceStatus ? [...sourceStatus.querySelectorAll("strong, p")].map((node) => node.textContent.trim()) : [];
     return [
       title,
       place,
+      ...statusLines,
       ...rows,
-      `RWN listing: ${location.href}`,
+      `RWN listing: ${listingUrl}`,
       officialSource ? `Official source: ${officialSource}` : "",
-      "Confirm current details before you go."
+      document.querySelector("#service")?.dataset?.locationPrecision === "contact-only" ? "Check coverage, eligibility and current contact details." : "Confirm current details before you go."
     ].filter(Boolean).join("\n");
   };
 
   const fallbackCopy = (text) => {
+    const focused = document.activeElement;
     const area = document.createElement("textarea");
     area.value = text;
     area.setAttribute("readonly", "");
     area.style.position = "fixed";
     area.style.opacity = "0";
     document.body.append(area);
-    area.select();
-    const copied = document.execCommand("copy");
-    area.remove();
-    if (!copied) throw new Error("copy unavailable");
+    try {
+      area.select();
+      if (!document.execCommand("copy")) throw new Error("copy unavailable");
+    } finally {
+      const restoreFocus = document.activeElement === area;
+      area.remove();
+      if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+    }
   };
 
   const copyText = async (text) => {
@@ -68,14 +184,14 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     const shareData = {
       title,
       text: place ? `${title} — ${place}` : title,
-      url: location.href
+      url: listingUrl
     };
     try {
       if (navigator.share) {
         await navigator.share(shareData);
         status.textContent = "Share sheet opened.";
       } else {
-        await copyText(location.href);
+        await copyText(listingUrl);
         status.textContent = "Link copied. You can paste it into a message.";
       }
     } catch (error) {

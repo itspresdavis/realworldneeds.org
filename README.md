@@ -28,7 +28,7 @@ The interactive homepage uses a single deterministic bootstrap sequence. The app
 
 ## Data and provenance
 
-The current catalog contains **2,019 source-backed records** plus a bounded live adapter for the official USDA Summer Meals source.
+The current catalog contains **515 source-backed records** plus a bounded live adapter for the official USDA Summer Meals source. Trussell food-bank centres and UNHCR country HELP pages are not copied into that catalog. Those sources are represented by links to Trussell's official food-bank locator and UNHCR's official HELP country directory while reuse licensing is unresolved.
 
 Every record is also stored in Supabase `public.rwn_locations`. Database changes are audited and released through `npm run catalog:export`; `npm run catalog:verify` checks every field against the public snapshot. Core source records live in `src/data/resources.js` and reviewed generated modules under `src/data/generated/`. Published records must include stable identity, public place or coverage information, coordinates where appropriate, service type, practical access information, original HTTPS source, source name, and review date.
 

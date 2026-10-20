@@ -31,7 +31,7 @@ test("every generated directory exposes exactly its full scoped needs before sea
     assert.match(html, /class="directory-search-tools__meta">[\s\S]*?data-directory-clear/, path);
     checked++;
   }
-  assert.ok(checked > 600, "Pagination, need, country, region and local pages must all be covered");
+  assert.equal(checked, 142, "Pagination, need, country, region and local pages must all be covered");
 });
 
 test("country local navigation is collapsed, alphabetical and preserves every published place link", async () => {

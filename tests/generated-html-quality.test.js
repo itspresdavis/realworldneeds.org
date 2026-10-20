@@ -20,7 +20,7 @@ function captures(html, regex) {
 
 test("every generated HTML document keeps a clean crawl/index structure", async () => {
   const files = await walk("dist");
-  assert.ok(files.length > 2_000, `expected more than 2,000 generated HTML pages, found ${files.length}`);
+  assert.equal(files.length, 668, `expected the generated pages for the withheld catalog, found ${files.length}`);
 
   const canonicalOwners = new Map();
   const failures = [];

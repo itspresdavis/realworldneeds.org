@@ -39,7 +39,7 @@ test("every sitemap page remains indexable and within four static link hops of h
   const sitemap = await readFile("dist/sitemap.xml", "utf8");
   const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
   assert.equal(new Set(urls).size, urls.length, "no duplicate sitemap entries");
-  assert.ok(urls.length > 2_000, "exercise the complete generated directory");
+  assert.equal(urls.length, 664, "exercise the generated directory after withheld centre and country rows");
   const depths = new Map([[`${ORIGIN}/`, 0]]);
   const queue = [`${ORIGIN}/`];
   for (let cursor = 0; cursor < queue.length; cursor += 1) {

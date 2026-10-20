@@ -334,9 +334,10 @@ button {
   cursor: pointer;
 }
 
-:where(a, button, input, select):focus-visible {
-  outline: 2px solid var(--green-bright);
-  outline-offset: 3px;
+:where(a, button, input, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--navy-950) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 5px rgba(66, 209, 132, 0.9) !important;
 }
 
 button:disabled {
@@ -2337,7 +2338,7 @@ svg {
 }
 
 .resource-list-head,
-.resource-row button {
+.resource-row :is(button, .result-row-link) {
   display: grid;
   grid-template-columns: minmax(14rem, 1.6fr) minmax(8rem, 1fr) minmax(7rem, 0.75fr) minmax(5rem, 0.6fr) minmax(8rem, 0.9fr) 6.6rem 1.5rem;
   gap: 0.7rem;
@@ -2383,7 +2384,7 @@ svg {
   box-shadow: inset 3px 0 var(--accent);
 }
 
-.resource-row button {
+.resource-row :is(button, .result-row-link) {
   width: 100%;
   min-height: 5.25rem;
   padding: 0.7rem 0;
@@ -2393,7 +2394,7 @@ svg {
   text-align: left;
 }
 
-.resource-row button:focus-visible {
+.resource-row :is(button, .result-row-link):focus-visible {
   outline: 2px solid var(--green-soft);
   outline-offset: -2px;
 }
@@ -2847,7 +2848,7 @@ svg {
   }
 
   .resource-list-head,
-  .resource-row button {
+  .resource-row :is(button, .result-row-link) {
     grid-template-columns: minmax(14rem, 1.6fr) minmax(8rem, 1fr) 5rem minmax(8rem, 0.85fr) 6.5rem 1.5rem;
   }
 
@@ -2965,7 +2966,7 @@ svg {
   }
 
   .resource-list-head,
-  .resource-row button {
+  .resource-row :is(button, .result-row-link) {
     grid-template-columns: minmax(14rem, 1.5fr) minmax(8rem, 1fr) 5rem 1.5rem;
   }
 
@@ -3204,7 +3205,7 @@ svg {
     display: none;
   }
 
-  .resource-row button {
+  .resource-row :is(button, .result-row-link) {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.35rem 0.75rem;
     padding: 0.75rem 0.25rem;
@@ -3502,7 +3503,7 @@ svg {
   background: #f4f8f6;
 }
 
-.results-section .resource-row button {
+.results-section .resource-row :is(button, .result-row-link) {
   color: var(--ink);
 }
 
@@ -3539,11 +3540,11 @@ svg {
 }
 
 .resource-list-head,
-.resource-row button {
+.resource-row :is(button, .result-row-link) {
   grid-template-columns: minmax(14rem, 1.7fr) minmax(9rem, 1fr) 6rem minmax(8rem, 0.9fr) 6.6rem 1.5rem;
 }
 
-.resource-row button {
+.resource-row :is(button, .result-row-link) {
   min-height: 4.75rem;
 }
 
@@ -3846,7 +3847,7 @@ svg {
   }
 
   .resource-list-head,
-  .resource-row button {
+  .resource-row :is(button, .result-row-link) {
     grid-template-columns: minmax(14rem, 1.6fr) minmax(8rem, 1fr) 5rem minmax(8rem, 0.85fr) 6.5rem 1.5rem;
   }
 
@@ -3891,7 +3892,7 @@ svg {
   }
 
   .resource-list-head,
-  .resource-row button {
+  .resource-row :is(button, .result-row-link) {
     grid-template-columns: minmax(14rem, 1.5fr) minmax(8rem, 1fr) 5rem 1.5rem;
   }
 
@@ -5114,6 +5115,11 @@ svg {
   z-index: 6;
 }
 .globe-fallback p { margin: 0; }
+.globe-fallback__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .globe-fallback__action {
   display: inline-flex;
   align-items: center;
@@ -5126,8 +5132,81 @@ svg {
   text-decoration: none;
 }
 .globe-fallback__action:hover { background: #59e3d8; }
+.globe-fallback__retry {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(220, 236, 232, 0.46);
+  border-radius: 999px;
+  background: transparent;
+  color: #dcece8;
+  font: inherit;
+  font-weight: 650;
+}
+.globe-fallback__retry:hover,
+.globe-fallback__retry:focus-visible {
+  border-color: #dcece8;
+  background: rgba(220, 236, 232, 0.1);
+}
 .globe-stage.is-globe-unavailable .globe-canvas,
 .globe-stage.is-globe-unavailable .globe-pin-layer,
 .globe-stage.is-globe-unavailable .globe-controls,
 .globe-stage.is-globe-unavailable .globe-legend,
 .globe-stage.is-globe-unavailable .globe-gesture-hint { display: none; }
+
+/* Editorial invitation uses a small original line illustration with fixed dimensions. */
+.mission-drawing{display:block;width:min(100%,300px);height:auto;margin:20px 0 2px}.contributor-invitation{display:inline-flex;align-items:center;min-height:44px;color:#205944;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:4px}.contributor-invitation:focus-visible{outline:3px solid #9b6b28;outline-offset:4px}
+.result-direct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .45rem 0 .9rem;
+}
+
+.result-direct-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: .55rem .85rem;
+  border: 1px solid #cbd6ce;
+  border-radius: 6px;
+  color: #284d37;
+  background: #fff;
+  font-size: .8rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.result-direct-action.is-primary { background: #edf5ef; }
+.result-direct-action:hover { background: #e2eee5; }
+.result-direct-action:focus-visible { outline: 3px solid #376b47; outline-offset: 3px; }
+
+/* Permanent result links use the same grid as their original button controls. */
+.result-row-link { font: inherit; text-decoration: none; }
+.resource-row__aid { color: #405a50; font-size: .72rem; line-height: 1.45; }
+@media (max-width: 600px) {
+  .resource-row :is(button, .result-row-link) {
+    grid-template-columns: minmax(0, 1fr) 1.5rem;
+  }
+  .resource-row__aid {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    padding-left: 1.2rem;
+    text-align: left;
+  }
+}
+
+/* Source-reported closures remain visible before actions at every viewport size. */
+aside.source-status-notice {
+  display: block; grid-column: 1 / -1; min-width: 0;
+  margin: .65rem 0; padding: .85rem 1rem;
+  border: 1px solid #9b6827; border-left-width: 4px; border-radius: 4px;
+  background: #fff4df; color: #50340d; font-size: .875rem; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+aside.source-status-notice > strong { display: block; color: #50340d; font-size: 1rem; }
+aside.source-status-notice > p { margin: .25rem 0; color: #50340d; font-size: .875rem; line-height: 1.5; }
+aside.source-status-notice > a { display: inline-flex; align-items: center; min-height: 44px; color: #50340d; text-decoration: underline; }
+aside.source-status-notice > a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+@media (forced-colors: active) { aside.source-status-notice { border: 2px solid CanvasText; } }

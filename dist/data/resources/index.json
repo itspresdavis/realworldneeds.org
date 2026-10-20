@@ -1,276 +1,48 @@
 {
   "schemaVersion": "1.1",
-  "resourceCount": 2019,
+  "resourceCount": 515,
   "countries": [
-    {
-      "country": "Afghanistan",
-      "slug": "afghanistan",
-      "count": 1,
-      "path": "/data/resources/by-country/afghanistan.json"
-    },
-    {
-      "country": "Albania",
-      "slug": "albania",
-      "count": 1,
-      "path": "/data/resources/by-country/albania.json"
-    },
-    {
-      "country": "Algeria",
-      "slug": "algeria",
-      "count": 1,
-      "path": "/data/resources/by-country/algeria.json"
-    },
-    {
-      "country": "Argentina",
-      "slug": "argentina",
-      "count": 1,
-      "path": "/data/resources/by-country/argentina.json"
-    },
-    {
-      "country": "Armenia",
-      "slug": "armenia",
-      "count": 1,
-      "path": "/data/resources/by-country/armenia.json"
-    },
     {
       "country": "Australia",
       "slug": "australia",
-      "count": 9,
+      "count": 8,
       "path": "/data/resources/by-country/australia.json"
-    },
-    {
-      "country": "Austria",
-      "slug": "austria",
-      "count": 1,
-      "path": "/data/resources/by-country/austria.json"
-    },
-    {
-      "country": "Azerbaijan",
-      "slug": "azerbaijan",
-      "count": 1,
-      "path": "/data/resources/by-country/azerbaijan.json"
-    },
-    {
-      "country": "Bangladesh",
-      "slug": "bangladesh",
-      "count": 1,
-      "path": "/data/resources/by-country/bangladesh.json"
-    },
-    {
-      "country": "Belarus",
-      "slug": "belarus",
-      "count": 1,
-      "path": "/data/resources/by-country/belarus.json"
     },
     {
       "country": "Belgium",
       "slug": "belgium",
-      "count": 2,
+      "count": 1,
       "path": "/data/resources/by-country/belgium.json"
-    },
-    {
-      "country": "Belize",
-      "slug": "belize",
-      "count": 1,
-      "path": "/data/resources/by-country/belize.json"
-    },
-    {
-      "country": "Bolivia",
-      "slug": "bolivia",
-      "count": 1,
-      "path": "/data/resources/by-country/bolivia.json"
-    },
-    {
-      "country": "Bosnia and Herzegovina",
-      "slug": "bosnia-and-herzegovina",
-      "count": 1,
-      "path": "/data/resources/by-country/bosnia-and-herzegovina.json"
-    },
-    {
-      "country": "Botswana",
-      "slug": "botswana",
-      "count": 1,
-      "path": "/data/resources/by-country/botswana.json"
     },
     {
       "country": "Brazil",
       "slug": "brazil",
-      "count": 5,
+      "count": 4,
       "path": "/data/resources/by-country/brazil.json"
-    },
-    {
-      "country": "Bulgaria",
-      "slug": "bulgaria",
-      "count": 1,
-      "path": "/data/resources/by-country/bulgaria.json"
-    },
-    {
-      "country": "Burkina Faso",
-      "slug": "burkina-faso",
-      "count": 1,
-      "path": "/data/resources/by-country/burkina-faso.json"
-    },
-    {
-      "country": "Burundi",
-      "slug": "burundi",
-      "count": 1,
-      "path": "/data/resources/by-country/burundi.json"
     },
     {
       "country": "Canada",
       "slug": "canada",
-      "count": 10,
+      "count": 9,
       "path": "/data/resources/by-country/canada.json"
-    },
-    {
-      "country": "Chile",
-      "slug": "chile",
-      "count": 1,
-      "path": "/data/resources/by-country/chile.json"
-    },
-    {
-      "country": "China",
-      "slug": "china",
-      "count": 1,
-      "path": "/data/resources/by-country/china.json"
-    },
-    {
-      "country": "Colombia",
-      "slug": "colombia",
-      "count": 1,
-      "path": "/data/resources/by-country/colombia.json"
-    },
-    {
-      "country": "Costa Rica",
-      "slug": "costa-rica",
-      "count": 1,
-      "path": "/data/resources/by-country/costa-rica.json"
-    },
-    {
-      "country": "Croatia",
-      "slug": "croatia",
-      "count": 1,
-      "path": "/data/resources/by-country/croatia.json"
-    },
-    {
-      "country": "Cuba",
-      "slug": "cuba",
-      "count": 1,
-      "path": "/data/resources/by-country/cuba.json"
-    },
-    {
-      "country": "Cyprus",
-      "slug": "cyprus",
-      "count": 1,
-      "path": "/data/resources/by-country/cyprus.json"
-    },
-    {
-      "country": "Czechia",
-      "slug": "czechia",
-      "count": 1,
-      "path": "/data/resources/by-country/czechia.json"
-    },
-    {
-      "country": "Democratic Republic of the Congo",
-      "slug": "democratic-republic-of-the-congo",
-      "count": 1,
-      "path": "/data/resources/by-country/democratic-republic-of-the-congo.json"
-    },
-    {
-      "country": "Denmark",
-      "slug": "denmark",
-      "count": 1,
-      "path": "/data/resources/by-country/denmark.json"
-    },
-    {
-      "country": "Djibouti",
-      "slug": "djibouti",
-      "count": 1,
-      "path": "/data/resources/by-country/djibouti.json"
-    },
-    {
-      "country": "Dominican Republic",
-      "slug": "dominican-republic",
-      "count": 1,
-      "path": "/data/resources/by-country/dominican-republic.json"
-    },
-    {
-      "country": "Ecuador",
-      "slug": "ecuador",
-      "count": 1,
-      "path": "/data/resources/by-country/ecuador.json"
-    },
-    {
-      "country": "Egypt",
-      "slug": "egypt",
-      "count": 1,
-      "path": "/data/resources/by-country/egypt.json"
-    },
-    {
-      "country": "El Salvador",
-      "slug": "el-salvador",
-      "count": 1,
-      "path": "/data/resources/by-country/el-salvador.json"
-    },
-    {
-      "country": "Estonia",
-      "slug": "estonia",
-      "count": 1,
-      "path": "/data/resources/by-country/estonia.json"
-    },
-    {
-      "country": "Ethiopia",
-      "slug": "ethiopia",
-      "count": 1,
-      "path": "/data/resources/by-country/ethiopia.json"
-    },
-    {
-      "country": "Finland",
-      "slug": "finland",
-      "count": 1,
-      "path": "/data/resources/by-country/finland.json"
     },
     {
       "country": "France",
       "slug": "france",
-      "count": 4,
+      "count": 3,
       "path": "/data/resources/by-country/france.json"
-    },
-    {
-      "country": "Georgia",
-      "slug": "georgia",
-      "count": 1,
-      "path": "/data/resources/by-country/georgia.json"
     },
     {
       "country": "Germany",
       "slug": "germany",
-      "count": 4,
+      "count": 3,
       "path": "/data/resources/by-country/germany.json"
     },
     {
       "country": "Global",
       "slug": "global",
-      "count": 6,
+      "count": 7,
       "path": "/data/resources/by-country/global.json"
-    },
-    {
-      "country": "Greece",
-      "slug": "greece",
-      "count": 1,
-      "path": "/data/resources/by-country/greece.json"
-    },
-    {
-      "country": "Guatemala",
-      "slug": "guatemala",
-      "count": 1,
-      "path": "/data/resources/by-country/guatemala.json"
-    },
-    {
-      "country": "Honduras",
-      "slug": "honduras",
-      "count": 1,
-      "path": "/data/resources/by-country/honduras.json"
     },
     {
       "country": "Hong Kong",
@@ -279,250 +51,40 @@
       "path": "/data/resources/by-country/hong-kong.json"
     },
     {
-      "country": "Hungary",
-      "slug": "hungary",
-      "count": 1,
-      "path": "/data/resources/by-country/hungary.json"
-    },
-    {
       "country": "India",
       "slug": "india",
-      "count": 3,
+      "count": 2,
       "path": "/data/resources/by-country/india.json"
-    },
-    {
-      "country": "Indonesia",
-      "slug": "indonesia",
-      "count": 1,
-      "path": "/data/resources/by-country/indonesia.json"
-    },
-    {
-      "country": "Iran",
-      "slug": "iran",
-      "count": 1,
-      "path": "/data/resources/by-country/iran.json"
-    },
-    {
-      "country": "Iraq",
-      "slug": "iraq",
-      "count": 1,
-      "path": "/data/resources/by-country/iraq.json"
     },
     {
       "country": "Ireland",
       "slug": "ireland",
-      "count": 2,
+      "count": 1,
       "path": "/data/resources/by-country/ireland.json"
-    },
-    {
-      "country": "Israel",
-      "slug": "israel",
-      "count": 1,
-      "path": "/data/resources/by-country/israel.json"
-    },
-    {
-      "country": "Italy",
-      "slug": "italy",
-      "count": 1,
-      "path": "/data/resources/by-country/italy.json"
-    },
-    {
-      "country": "Japan",
-      "slug": "japan",
-      "count": 1,
-      "path": "/data/resources/by-country/japan.json"
-    },
-    {
-      "country": "Jordan",
-      "slug": "jordan",
-      "count": 1,
-      "path": "/data/resources/by-country/jordan.json"
     },
     {
       "country": "Kenya",
       "slug": "kenya",
-      "count": 2,
+      "count": 1,
       "path": "/data/resources/by-country/kenya.json"
-    },
-    {
-      "country": "Latvia",
-      "slug": "latvia",
-      "count": 1,
-      "path": "/data/resources/by-country/latvia.json"
-    },
-    {
-      "country": "Lebanon",
-      "slug": "lebanon",
-      "count": 1,
-      "path": "/data/resources/by-country/lebanon.json"
-    },
-    {
-      "country": "Libya",
-      "slug": "libya",
-      "count": 1,
-      "path": "/data/resources/by-country/libya.json"
-    },
-    {
-      "country": "Lithuania",
-      "slug": "lithuania",
-      "count": 1,
-      "path": "/data/resources/by-country/lithuania.json"
-    },
-    {
-      "country": "Luxembourg",
-      "slug": "luxembourg",
-      "count": 1,
-      "path": "/data/resources/by-country/luxembourg.json"
     },
     {
       "country": "Malaysia",
       "slug": "malaysia",
-      "count": 2,
+      "count": 1,
       "path": "/data/resources/by-country/malaysia.json"
-    },
-    {
-      "country": "Mauritania",
-      "slug": "mauritania",
-      "count": 1,
-      "path": "/data/resources/by-country/mauritania.json"
-    },
-    {
-      "country": "Mexico",
-      "slug": "mexico",
-      "count": 1,
-      "path": "/data/resources/by-country/mexico.json"
-    },
-    {
-      "country": "Moldova",
-      "slug": "moldova",
-      "count": 1,
-      "path": "/data/resources/by-country/moldova.json"
-    },
-    {
-      "country": "Mongolia",
-      "slug": "mongolia",
-      "count": 1,
-      "path": "/data/resources/by-country/mongolia.json"
-    },
-    {
-      "country": "Montenegro",
-      "slug": "montenegro",
-      "count": 1,
-      "path": "/data/resources/by-country/montenegro.json"
-    },
-    {
-      "country": "Morocco",
-      "slug": "morocco",
-      "count": 1,
-      "path": "/data/resources/by-country/morocco.json"
-    },
-    {
-      "country": "Myanmar",
-      "slug": "myanmar",
-      "count": 1,
-      "path": "/data/resources/by-country/myanmar.json"
-    },
-    {
-      "country": "Netherlands",
-      "slug": "netherlands",
-      "count": 1,
-      "path": "/data/resources/by-country/netherlands.json"
     },
     {
       "country": "New Zealand",
       "slug": "new-zealand",
-      "count": 7,
+      "count": 6,
       "path": "/data/resources/by-country/new-zealand.json"
-    },
-    {
-      "country": "Niger",
-      "slug": "niger",
-      "count": 1,
-      "path": "/data/resources/by-country/niger.json"
     },
     {
       "country": "Nigeria",
       "slug": "nigeria",
-      "count": 2,
+      "count": 1,
       "path": "/data/resources/by-country/nigeria.json"
-    },
-    {
-      "country": "North Macedonia",
-      "slug": "north-macedonia",
-      "count": 1,
-      "path": "/data/resources/by-country/north-macedonia.json"
-    },
-    {
-      "country": "Norway",
-      "slug": "norway",
-      "count": 1,
-      "path": "/data/resources/by-country/norway.json"
-    },
-    {
-      "country": "Pakistan",
-      "slug": "pakistan",
-      "count": 1,
-      "path": "/data/resources/by-country/pakistan.json"
-    },
-    {
-      "country": "Panama",
-      "slug": "panama",
-      "count": 1,
-      "path": "/data/resources/by-country/panama.json"
-    },
-    {
-      "country": "Paraguay",
-      "slug": "paraguay",
-      "count": 1,
-      "path": "/data/resources/by-country/paraguay.json"
-    },
-    {
-      "country": "Peru",
-      "slug": "peru",
-      "count": 1,
-      "path": "/data/resources/by-country/peru.json"
-    },
-    {
-      "country": "Poland",
-      "slug": "poland",
-      "count": 1,
-      "path": "/data/resources/by-country/poland.json"
-    },
-    {
-      "country": "Portugal",
-      "slug": "portugal",
-      "count": 1,
-      "path": "/data/resources/by-country/portugal.json"
-    },
-    {
-      "country": "Romania",
-      "slug": "romania",
-      "count": 1,
-      "path": "/data/resources/by-country/romania.json"
-    },
-    {
-      "country": "Russia",
-      "slug": "russia",
-      "count": 1,
-      "path": "/data/resources/by-country/russia.json"
-    },
-    {
-      "country": "Rwanda",
-      "slug": "rwanda",
-      "count": 1,
-      "path": "/data/resources/by-country/rwanda.json"
-    },
-    {
-      "country": "Senegal",
-      "slug": "senegal",
-      "count": 1,
-      "path": "/data/resources/by-country/senegal.json"
-    },
-    {
-      "country": "Serbia",
-      "slug": "serbia",
-      "count": 1,
-      "path": "/data/resources/by-country/serbia.json"
     },
     {
       "country": "Singapore",
@@ -531,137 +93,35 @@
       "path": "/data/resources/by-country/singapore.json"
     },
     {
-      "country": "Slovakia",
-      "slug": "slovakia",
-      "count": 1,
-      "path": "/data/resources/by-country/slovakia.json"
-    },
-    {
-      "country": "Slovenia",
-      "slug": "slovenia",
-      "count": 1,
-      "path": "/data/resources/by-country/slovenia.json"
-    },
-    {
-      "country": "Somalia",
-      "slug": "somalia",
-      "count": 1,
-      "path": "/data/resources/by-country/somalia.json"
-    },
-    {
       "country": "South Africa",
       "slug": "south-africa",
-      "count": 2,
-      "path": "/data/resources/by-country/south-africa.json"
-    },
-    {
-      "country": "South Sudan",
-      "slug": "south-sudan",
       "count": 1,
-      "path": "/data/resources/by-country/south-sudan.json"
+      "path": "/data/resources/by-country/south-africa.json"
     },
     {
       "country": "Spain",
       "slug": "spain",
-      "count": 2,
+      "count": 1,
       "path": "/data/resources/by-country/spain.json"
-    },
-    {
-      "country": "Sri Lanka",
-      "slug": "sri-lanka",
-      "count": 1,
-      "path": "/data/resources/by-country/sri-lanka.json"
-    },
-    {
-      "country": "Sudan",
-      "slug": "sudan",
-      "count": 1,
-      "path": "/data/resources/by-country/sudan.json"
-    },
-    {
-      "country": "Sweden",
-      "slug": "sweden",
-      "count": 1,
-      "path": "/data/resources/by-country/sweden.json"
-    },
-    {
-      "country": "Switzerland",
-      "slug": "switzerland",
-      "count": 1,
-      "path": "/data/resources/by-country/switzerland.json"
-    },
-    {
-      "country": "Syria",
-      "slug": "syria",
-      "count": 1,
-      "path": "/data/resources/by-country/syria.json"
-    },
-    {
-      "country": "Thailand",
-      "slug": "thailand",
-      "count": 1,
-      "path": "/data/resources/by-country/thailand.json"
-    },
-    {
-      "country": "Tunisia",
-      "slug": "tunisia",
-      "count": 1,
-      "path": "/data/resources/by-country/tunisia.json"
-    },
-    {
-      "country": "Türkiye",
-      "slug": "turkiye",
-      "count": 1,
-      "path": "/data/resources/by-country/turkiye.json"
-    },
-    {
-      "country": "Uganda",
-      "slug": "uganda",
-      "count": 1,
-      "path": "/data/resources/by-country/uganda.json"
-    },
-    {
-      "country": "Ukraine",
-      "slug": "ukraine",
-      "count": 1,
-      "path": "/data/resources/by-country/ukraine.json"
     },
     {
       "country": "United Kingdom",
       "slug": "united-kingdom",
-      "count": 1424,
+      "count": 26,
       "path": "/data/resources/by-country/united-kingdom.json"
     },
     {
       "country": "United States",
       "slug": "united-states",
-      "count": 439,
+      "count": 436,
       "path": "/data/resources/by-country/united-states.json"
-    },
-    {
-      "country": "Uruguay",
-      "slug": "uruguay",
-      "count": 1,
-      "path": "/data/resources/by-country/uruguay.json"
-    },
-    {
-      "country": "Venezuela",
-      "slug": "venezuela",
-      "count": 1,
-      "path": "/data/resources/by-country/venezuela.json"
-    },
-    {
-      "country": "Zambia",
-      "slug": "zambia",
-      "count": 1,
-      "path": "/data/resources/by-country/zambia.json"
     }
   ],
   "categories": [
     {
       "type": "food",
       "label": "Food",
-      "count": 1861,
+      "count": 461,
       "path": "/data/resources/by-category/food.json"
     },
     {
@@ -673,31 +133,31 @@
     {
       "type": "shelter",
       "label": "Shelter",
-      "count": 153,
+      "count": 48,
       "path": "/data/resources/by-category/shelter.json"
     },
     {
       "type": "hygiene",
       "label": "Hygiene",
-      "count": 49,
+      "count": 47,
       "path": "/data/resources/by-category/hygiene.json"
     },
     {
       "type": "clothing",
       "label": "Clothing",
-      "count": 36,
+      "count": 35,
       "path": "/data/resources/by-category/clothing.json"
     },
     {
       "type": "health",
       "label": "Health",
-      "count": 143,
+      "count": 39,
       "path": "/data/resources/by-category/health.json"
     },
     {
       "type": "referral",
       "label": "Navigation",
-      "count": 1991,
+      "count": 487,
       "path": "/data/resources/by-category/referral.json"
     }
   ]

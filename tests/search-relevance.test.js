@@ -94,10 +94,10 @@ test("complete UK postcode spacing variants retain the same exact lookup on both
     assert.ok(score(convert(fixture({ address: "1 Example Road, NR23 1RF" })), "NR2") >= 0,
       "incomplete outward codes retain prefix recall");
   }
-  const expectedNorwich = resources.filter((record) => /\bNR2 1RF\b/i.test(record.address)).map((record) => record.id).sort();
-  assert.ok(expectedNorwich.length > 0, "the exact-postcode oracle uses a published address");
-  for (const query of ["NR2 1RF", "NR21RF"])
-    assert.deepEqual(find(query).map((record) => record.id).sort(), expectedNorwich, query);
+  const expectedLondon = resources.filter((record) => /\bE1 6LT\b/i.test(record.address)).map((record) => record.id).sort();
+  assert.ok(expectedLondon.length > 0, "the exact-postcode oracle uses a published address");
+  for (const query of ["E1 6LT", "E16LT"])
+    assert.deepEqual(find(query).map((record) => record.id).sort(), expectedLondon, query);
   for (const value of ["E1", "E16L", "12345", "12345-6789", "WIC", "ABC123", "E16CI", "xe16ltx"]) {
     assert.equal(normalizeSearch(value), value.toLowerCase().replace("-", " "), `${value}: not a complete UK postcode`);
   }
@@ -115,7 +115,7 @@ test("published UK addresses remain searchable with or without their postcode sp
       assert.equal(score(record, compact), score(record, spaced), `${resource.id}: ${compact}`);
     }
   }
-  assert.ok(reviewed > 1_300, `expected broad live-catalog coverage, found ${reviewed}`);
+  assert.equal(reviewed, 13, `published UK postcodes no longer include the withheld Trussell centre snapshot, found ${reviewed}`);
 });
 
 test("sparse legacy directory records derive a city only from a known country suffix", () => {
@@ -166,8 +166,8 @@ test("completed WIC requires program evidence while Wi and Wick retain prefix re
   assert.equal(ranked.length, 395);
   assert.ok(ranked.every((resource) => /(?:^|\s)wic(?:\s|$)/.test(resourceSearchText(resource))));
   assert.ok(ranked.some((resource) => /Norwich WIC/.test(resource.name)));
-  assert.ok(find("wi").some((resource) => resource.city === "Wick"));
-  assert.ok(find("wick").some((resource) => resource.city === "Wick"));
+  assert.ok(find("wi").some((resource) => resource.city === "Winchendon"));
+  assert.ok(find("winchendon").some((resource) => resource.city === "Winchendon"));
 });
 
 test("exact London place outranks London Colney and a London Road in Bedford", () => {
@@ -187,15 +187,15 @@ test("exact London place outranks London Colney and a London Road in Bedford", (
   }
   assert.ok(
     find("London")
-      .slice(0, 10)
+      .slice(0, 5)
       .every((resource) => resource.city === "London"),
   );
-  assert.equal(find("London Road")[0].city, "Bedford");
-  assert.equal(find("London Colney")[0].city, "London Colney");
+  assert.equal(find("Whitechapel Road")[0].id, "whitechapel-mission");
+  assert.equal(find("Commercial Street")[0].id, "crisis-skylight-london");
 });
 
 test("exact street phrases beat scattered or merely prefixed words without hiding other matches", () => {
-  for (const street of ["King Street", "High Street", "Bedford Road"]) {
+  for (const street of ["High Street", "Commercial Street", "Whitechapel Road"]) {
     assert.ok(
       normalizeSearch(find(street)[0].address).includes(
         normalizeSearch(street),

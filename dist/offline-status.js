@@ -2,9 +2,30 @@ const PROBE_URL = "/data/release.json";
 const notice = document.getElementById("offlineDirectoryNotice");
 
 if (notice) {
+  // A saved navigation is not proof that this directory endpoint is reachable.
+  // The worker adds only this fixed marker to the response, never the cache.
+  const cachedNavigation = document.querySelector('meta[name="rwn-offline-navigation"]');
+  let navigationRecovery = Boolean(cachedNavigation);
   let offline = false;
   let probeGeneration = 0;
+  let pendingProbe;
   let catalogPromise;
+  const explanation = notice.querySelector("p");
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "directory-search-tools__clear directory-connection-retry";
+  retry.setAttribute("data-directory-reconnect", "");
+  retry.setAttribute("aria-disabled", "false");
+  retry.textContent = "Retry connection";
+  const status = document.createElement("p");
+  status.setAttribute("data-directory-connection-status", "");
+  notice.append(retry, status);
+
+  const checking = (value) => {
+    // Native disabled can drop keyboard focus while the request is pending.
+    retry.setAttribute("aria-disabled", String(value));
+    retry.textContent = value ? "Checking connection…" : "Retry connection";
+  };
 
   const setText = (element, value) => {
     if (element && element.textContent !== value) element.textContent = value;
@@ -63,18 +84,32 @@ if (notice) {
       actions.className = "directory-global-result-actions";
       actions.setAttribute("aria-label", `Quick actions for ${record.name}`);
 
-      if (record.phone) {
-        actions.append(actionLink(`Call ${record.phone}`, `tel:${record.phone.replace(/[^+\d]/g, "")}`, "is-call"));
+      for (const { label, href } of record.phoneLinks || []) {
+        actions.append(actionLink(`Call ${label}`, href, "is-call"));
       }
-      if (record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
+      if (record.locationPrecision !== "contact-only" && record.kind === "direct" && Number.isFinite(record.lat) && Number.isFinite(record.lng)) {
         const maps = mapUrls(record);
         actions.append(actionLink("Apple Maps", maps.apple));
         actions.append(actionLink("Google Maps", maps.google));
       }
+      if (record.locationPrecision === "contact-only" && record.accessUrl?.startsWith("https://")) {
+        actions.append(actionLink("Contact website", record.accessUrl, "is-contact"));
+      }
       actions.append(actionLink("View details", link.href, "is-details"));
 
       link.before(wrapper);
-      wrapper.append(link, actions);
+      wrapper.append(link);
+      if (record.phone && (record.phoneLinks?.length !== 1 || record.phoneLinks[0].label !== record.phone)) {
+        const phone = document.createElement("small");
+        phone.textContent = `Phone: ${record.phone}`;
+        link.append(phone);
+      }
+      if (record.locationPrecision === "contact-only") {
+        const scope = document.createElement("small");
+        scope.textContent = ["Phone or online help; check coverage.", record.coverageNote, record.eligibility ? `Eligibility: ${record.eligibility}` : "", record.phoneAccess ? `Dialing scope: ${record.phoneAccess}` : "", record.accessUrl ? `Website (connection required): ${record.accessUrl}` : ""].filter(Boolean).join(" ");
+        link.append(scope);
+      }
+      wrapper.append(actions);
     }
     setOffline(offline);
   };
@@ -82,7 +117,9 @@ if (notice) {
   const setOffline = (value) => {
     offline = Boolean(value);
     document.documentElement.classList.toggle("rwn-directory-offline", offline);
-    notice.hidden = !offline;
+    // Let someone using Retry keep their focus and read the recovery message.
+    notice.hidden = !offline && !notice.contains(document.activeElement);
+    if (explanation) explanation.hidden = !offline;
     notice.dataset.networkState = offline ? "offline" : "online";
 
     for (const link of document.querySelectorAll(".directory-global-result")) {
@@ -108,26 +145,71 @@ if (notice) {
     }
   };
 
-  const probe = async () => {
+  const probe = (event) => {
+    if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
-    try {
-      const response = await fetch(PROBE_URL, {
+    // Online events already retry both catalogs; only explicit recovery needs
+    // an extra notification. A healthy initial probe must not restart a fetch.
+    const recoverCatalog = offline && event?.type !== "online";
+    const controller = new AbortController();
+    let timer;
+    const request = {};
+    const interrupted = new Promise((_, reject) => {
+      request.cancel = () => { controller.abort(); reject(new Error("Connection check interrupted")); };
+      timer = setTimeout(request.cancel, 8000);
+    });
+    pendingProbe = request;
+    checking(true);
+    setText(status, "Checking connection…");
+    request.promise = Promise.race([
+      fetch(navigationRecovery ? window.location.pathname : PROBE_URL, {
         method: "GET",
         cache: "no-store",
         credentials: "same-origin",
-        headers: { "X-RWN-Connectivity-Probe": "1" }
-      });
+        headers: { "X-RWN-Connectivity-Probe": "1" },
+        signal: controller.signal
+      }).then(async (response) => {
+        if (navigationRecovery && response.ok) {
+          // Keep the deadline alive through the body. This fetch is not a
+          // navigation, so it cannot be satisfied by the worker's saved shell.
+          const html = await response.text();
+          if (response.redirected || !/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(html)
+            || !/<section\b[^>]*\bdata-directory-search(?:[\s=>])/.test(html)) throw new Error("Directory is unavailable");
+        }
+        return response;
+      }),
+      interrupted
+    ]).then((response) => {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
-    } catch {
+      if (response.ok) { navigationRecovery = false; cachedNavigation?.remove(); }
+      if (response.ok && recoverCatalog) window.dispatchEvent(new Event("rwn-connection-restored"));
+      setText(status, response.ok ? "Connection restored. Listing details and online links are available." : "Could not reach RWN. Check your connection and try again.");
+    }).catch(() => {
       if (generation !== probeGeneration) return;
       setOffline(true);
-    }
+      setText(status, "Could not reach RWN. Check your connection and try again.");
+    }).finally(() => {
+      clearTimeout(timer);
+      if (pendingProbe !== request) return;
+      pendingProbe = undefined;
+      checking(false);
+    });
+    return request.promise;
   };
+
+  retry.addEventListener("click", probe);
+  const hideRecoveredNotice = () => {
+    if (!offline && !notice.contains(document.activeElement)) notice.hidden = true;
+  };
+  document.addEventListener("focusin", hideRecoveredNotice);
+  notice.addEventListener("focusout", (event) => {
+    if (!notice.contains(event.relatedTarget)) queueMicrotask(hideRecoveredNotice);
+  });
 
   document.addEventListener("click", (event) => {
     if (!offline) return;
-    const link = event.target.closest?.(".directory-global-result");
+    const link = event.target.closest?.(".directory-global-result, .directory-global-result-actions .is-details");
     if (!link) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -142,9 +224,25 @@ if (notice) {
   });
   const results = document.querySelector(".directory-global-results");
   if (results) observer.observe(results, { childList: true, subtree: true });
+  const savedList = document.querySelector("[data-saved-list]");
+  if (savedList) observer.observe(savedList, { childList: true, subtree: true });
 
   window.addEventListener("online", probe);
-  window.addEventListener("offline", () => setOffline(true));
+  window.addEventListener("offline", () => {
+    // A late success from the old connection must not override this event.
+    probeGeneration += 1;
+    pendingProbe?.cancel();
+    pendingProbe = undefined;
+    checking(false);
+    setText(status, "Check your connection, then try again.");
+    setOffline(true);
+  });
+  // Recheck a restored cached document; another tab must not clear its warning.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted && navigationRecovery) probe(event);
+  });
+  // Own visibility immediately, including while an initially offline probe hangs.
+  setOffline(navigationRecovery || !navigator.onLine);
   probe();
   enhanceSearchActions();
 }

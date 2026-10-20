@@ -4,6 +4,7 @@ import { readFile, access } from "node:fs/promises";
 import { makeResource } from "../scripts/refresh-trussell-foodbanks.mjs";
 import { trussellFoodbankMetadata, trussellFoodbankResources } from "../src/data/generated/trussell-foodbanks.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
+import { resources } from "../src/data/resources.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
 
 const sourceHiddenIds = [
@@ -39,35 +40,38 @@ test("town and postcode alone cannot become an exact public service location", a
   assert.ok(make({ ...publicRecord, address01: null, address02: "Test community hall" }, 1, "2026-10-10"));
 });
 
-test("the reviewed full snapshot and source ledger agree on completeness and date", () => {
+test("the local snapshot stays complete while the public registry publishes only the official locator", () => {
   assert.deepEqual(trussellFoodbankMetadata, {
     reportedSourceRecords: 1390, parsedSourceRecords: 1388, publishedRecords: 1373,
     totalPages: 139, checkedOn: "2026-10-10", excludedRecords: 15
   });
+  assert.equal(trussellFoodbankResources.length, 1373);
   const source = sourceRegistry.find(source => source.id === "trussell-food-bank-centres");
-  assert.equal(source.recordCount, trussellFoodbankResources.length);
-  assert.equal(source.sourceReportedRecordsAtAudit, trussellFoodbankMetadata.reportedSourceRecords);
-  assert.equal(source.sourceParsedRecordsAtAudit, trussellFoodbankMetadata.parsedSourceRecords);
-  assert.equal(source.excludedForPublicationAtAudit, trussellFoodbankMetadata.excludedRecords);
-  assert.equal(source.auditedAt, trussellFoodbankMetadata.checkedOn);
+  assert.equal(source.mode, "official-public-locator");
+  assert.equal(source.recordCount, 1);
+  assert.equal(source.sourceUrl, "https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank");
+  assert.equal(source.sourceReportedRecordsAtAudit, undefined);
+  assert.equal(resources.filter(resource => resource.datasetId === "trussell-food-bank-centres").length, 1);
   assert.equal(trussellFoodbankResources.filter(r => r.collectionStatus === "Closed").length, 41);
   assert.equal(trussellFoodbankResources.filter(r => r.collectionStatus === "Temporarily closed").length, 8);
 });
 
-test("reviewed source corrections do not retain superseded closure warnings or claim open now", async () => {
+test("withheld Trussell centre rows stay out of the public directory", async () => {
+  const publicText = await Promise.all(["dist/data/resources.json", "dist/data/search-index.json", "dist/directory.csv"].map(path => readFile(path, "utf8")));
   for (const uuid of ["95195fcb-a875-4503-826c-c22af33ec1f6", "d338df19-a195-4568-93a3-ab81c14c83dc", "3cbd1412-0af4-4865-8470-21e20025a345"]) {
     const row = trussellFoodbankResources.find(r => r.sourceRecordId === uuid);
     assert.equal(row.collectionStatus, "Collection only");
     assert.equal(row.collectionStatusCheckedOn, "2026-10-10");
     assert.equal(sourceClosureNotice(row), null);
-    assert.match(row.availabilityNote, /Check the provider page or call before travel/);
-    const html = await readFile(`dist/service/${row.id}/index.html`, "utf8");
-    assert.doesNotMatch(html, /Source reported: (?:Temporarily closed|Closed)|open now|verified open/i);
+    assert.equal(resources.some(resource => resource.id === row.id), false);
+    for (const text of publicText) assert.equal(text.includes(uuid), false);
+    await assert.rejects(access(`dist/service/${row.id}/index.html`));
   }
 });
 
-test("source-hidden UUIDs are absent from records, exports, runtime data and generated service pages", async () => {
-  const files = ["src/data/generated/trussell-foodbanks.js", "dist/src/data/generated/trussell-foodbanks.js", "dist/data/resources.json", "dist/data/search-index.json", "dist/directory.csv"];
+test("source-hidden UUIDs are absent from the local snapshot and are not deployed", async () => {
+  const files = ["src/data/generated/trussell-foodbanks.js", "dist/data/resources.json", "dist/data/search-index.json", "dist/directory.csv"];
+  await assert.rejects(access("dist/src/data/generated/trussell-foodbanks.js"));
   for (const id of sourceHiddenIds) {
     assert.equal(trussellFoodbankResources.some(r => r.id === id), false);
     for (const path of files) assert.equal((await readFile(path, "utf8")).includes(id.replace("trussell-", "")), false, path);

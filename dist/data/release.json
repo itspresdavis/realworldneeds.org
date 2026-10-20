@@ -1,17 +1,32 @@
 {
-  "release": "93bf6b9efaa9",
-  "resourceCount": 2019,
+  "release": "32eafdd55a02",
+  "resourceCount": 515,
   "directoryPageSize": 60,
-  "generatedAt": "2026-08-15T04:47:14.766Z",
-  "directoryRelease": "f1c7abb15f9a",
+  "generatedAt": "2026-10-20T16:52:59.283Z",
+  "savedServicesRelease": "eebb6c1d559e",
+  "directoryRelease": "da0a2320b5b9",
   "sourceLedger": {
     "structuredSourceFamilies": 4,
-    "originalSourceGroups": 107,
-    "totalSourceGroups": 111,
-    "lastmod": "2026-08-14"
+    "originalSourceGroups": 104,
+    "totalSourceGroups": 108,
+    "lastmod": "2026-10-20"
   },
-  "serviceActionRelease": "8bbcabad459a",
-  "directoryResilienceRelease": "45c675d92dc8",
-  "presentationRelease": "93bf6b9efaa9",
-  "offlineRelease": "768951aae83b"
+  "serviceActionRelease": "966f51218cb0",
+  "directoryResilienceRelease": "ab80b921000e",
+  "presentationRelease": "32eafdd55a02",
+  "runtimeAssetRelease": "32eafdd55a02",
+  "offlineAssets": {
+    "/legal.css": "/legal.3bebea0b2a8a.css",
+    "/page-menu.js": "/page-menu.6d6faf5fed89.js",
+    "/directory-enhancements.css": "/directory-enhancements.6c78998a8372.css",
+    "/professional-pages.css": "/professional-pages.7c6ec93aa02c.css",
+    "/directory.js": "/directory.b304f66a8fa6.js",
+    "/directory-startup.js": "/directory-startup.304f4643d7a3.js",
+    "/saved-services.js": "/saved-services.aecabb62cfae.js",
+    "/saved-services.css": "/saved-services.00b86be01834.css",
+    "/offline-status.js": "/offline-status.ab80b921000e.js",
+    "/saved-loader.js": "/saved-loader.c4013edc384b.js"
+  },
+  "offlineAssetRelease": "575f16af3a90",
+  "offlineRelease": "f8b541b70911"
 }

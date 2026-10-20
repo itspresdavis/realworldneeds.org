@@ -31,10 +31,10 @@ test("rejected research candidates stay documented instead of silently dropped",
 test("the catalog serves the core needs, not only food", () => {
   const counts = {};
   for (const resource of resources) counts[resource.category] = (counts[resource.category] || 0) + 1;
-  // Food dominates because food-bank networks publish bulk open data. The other
-  // core needs must still be genuinely represented rather than token entries.
+  // Bulk food-bank and country-directory rows are withheld. The other core needs
+  // must still be genuinely represented rather than token entries.
   for (const category of ["water", "shelter", "clothing", "hygiene"]) {
     assert.ok(counts[category] >= 6, `${category} has only ${counts[category] || 0} records`);
   }
-  assert.ok(counts.referral >= 100, "resource finders must stay well covered");
+  assert.ok(counts.referral >= 26, "resource finders must stay represented");
 });

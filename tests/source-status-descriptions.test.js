@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { resourceDescription } from "../scripts/resource-description.mjs";
 import { categories, resources } from "../src/data/resources.js";
+import { trussellFoodbankResources } from "../src/data/generated/trussell-foodbanks.js";
 import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
@@ -11,7 +12,7 @@ import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/util
 import { sourceClosureNotice, sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
 
 const flagged = resources.filter(sourceClosureNotice);
-const closed = flagged[0];
+const closed = trussellFoodbankResources.find((resource) => resource.collectionStatus === "Closed");
 const decode = (value) => value.replaceAll("&quot;", '"').replaceAll("&#39;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 const metadata = (html, attribute, name) => {
   const tags = [...html.matchAll(new RegExp(`<meta ${attribute}="${name}" content="([^"]*)"[^>]*>`, "g"))];
@@ -85,9 +86,10 @@ test("the actual service template escapes source/name text in metadata and JSON-
   }
 });
 
-test("every source-flagged final page carries the full warning in search, share and schema descriptions", async () => {
-  assert.ok(flagged.some((resource) => resource.collectionStatus === "Closed"));
-  assert.ok(flagged.some((resource) => resource.collectionStatus === "Temporarily closed"));
+test("the public catalog does not publish source-flagged centre pages", async () => {
+  assert.equal(flagged.length, 0);
+  assert.ok(trussellFoodbankResources.some((resource) => resource.collectionStatus === "Closed"));
+  assert.ok(trussellFoodbankResources.some((resource) => resource.collectionStatus === "Temporarily closed"));
   for (const resource of flagged) {
     const html = await readFile(`dist/service/${resource.id}/index.html`, "utf8");
     const expected = resourceDescription(resource);

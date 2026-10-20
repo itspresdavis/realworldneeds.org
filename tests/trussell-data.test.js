@@ -9,7 +9,7 @@ test("Trussell snapshot stays materially complete", () => {
   assert.equal(trussellFoodbankMetadata.publishedRecords, trussellFoodbankResources.length);
 });
 
-test("every published Trussell centre is an exact, source-backed free-with-referral location", () => {
+test("every local Trussell snapshot centre is an exact, source-backed free-with-referral location", () => {
   const ids = new Set();
   for (const resource of trussellFoodbankResources) {
     assert.match(resource.id, /^trussell-[0-9a-f-]{36}$/i);
@@ -31,6 +31,6 @@ test("every published Trussell centre is an exact, source-backed free-with-refer
   }
 });
 
-test("published Trussell snapshot never contains source-hidden address flags", () => {
+test("local Trussell snapshot never contains source-hidden address flags", () => {
   assert.equal(trussellFoodbankResources.some((resource) => Object.hasOwn(resource, "hideAddressLink")), false);
 });

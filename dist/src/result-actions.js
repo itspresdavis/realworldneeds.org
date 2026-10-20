@@ -1,10 +1,8 @@
-import { resources } from "./data/resources.js?v=93bf6b9efaa9";
+import { isContactOnly, hasMapCoordinates } from "./utils/resource-location.js?v=32eafdd55a02";
+import { resources } from "./data/resources.js?v=32eafdd55a02";
+import { phoneLinks } from "./utils/phone.js?v=32eafdd55a02";
 
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
-
-function cleanPhone(value) {
-  return String(value || "").replace(/[^+\d]/g, "");
-}
 
 function directionsUrl(resource) {
   const coordinate = `${resource.lat},${resource.lng}`;
@@ -32,7 +30,7 @@ function replaceResultTrigger(trigger, resource) {
   link.className = `${trigger.className || ""} result-row-link`.trim();
   link.href = `/service/${encodeURIComponent(resource.id)}`;
   link.innerHTML = trigger.innerHTML;
-  link.setAttribute("aria-label", `View details for ${resource.name}`);
+  // Let the visible name, location, help types and review text name the link.
   trigger.replaceWith(link);
   return link;
 }
@@ -51,13 +49,16 @@ function enhanceCard(article) {
   actions.className = "result-direct-actions";
   actions.setAttribute("aria-label", `Actions for ${resource.name}`);
 
-  if (resource.kind === "direct") {
-    if (resource.phone) {
-      const phone = cleanPhone(resource.phone);
-      if (phone) actions.append(createAction("Call", `tel:${phone}`, `Call ${resource.name}`, { primary: true }));
+  if (resource.kind === "direct" || isContactOnly(resource)) {
+    const phones = phoneLinks(resource.phone);
+    for (const { label, href } of phones) {
+      actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
-    if (Number.isFinite(resource.lat) && Number.isFinite(resource.lng)) {
+    if (resource.kind === "direct" && hasMapCoordinates(resource)) {
       actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));
+    }
+    if (isContactOnly(resource) && resource.accessUrl) {
+      actions.append(createAction("Contact website", resource.accessUrl, `Open the contact website for ${resource.name}`, { newTab: true }));
     }
     if (!actions.childElementCount) {
       const providerUrl = resource.providerUrl || resource.sourceUrl;
@@ -70,6 +71,11 @@ function enhanceCard(article) {
     }
   }
 
+  if (isContactOnly(resource) && resource.phoneAccess) {
+    const scope = document.createElement("small");
+    scope.textContent = `Dialing scope: ${resource.phoneAccess}`;
+    article.append(scope);
+  }
   if (actions.childElementCount) article.append(actions);
 }
 

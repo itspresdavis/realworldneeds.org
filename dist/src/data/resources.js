@@ -1,9 +1,9 @@
-import { expansionResources } from "./resource-expansion.js?v=93bf6b9efaa9";
-import { verifiedExpansionResources } from "./verified-expansion.js?v=93bf6b9efaa9";
-import { massachusettsWicResources } from "./generated/massachusetts-wic.js?v=93bf6b9efaa9";
-import { newYorkWicResources } from "./generated/new-york-wic.js?v=93bf6b9efaa9";
-import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js?v=93bf6b9efaa9";
-import { withFreeAccess } from "./free-access.js?v=93bf6b9efaa9";
+import { editorialOverrides, withheldLocationIds } from "./generated/editorial-overrides.js?v=32eafdd55a02";
+import { expansionResources } from "./resource-expansion.js?v=32eafdd55a02";
+import { verifiedExpansionResources } from "./verified-expansion.js?v=32eafdd55a02";
+import { massachusettsWicResources } from "./generated/massachusetts-wic.js?v=32eafdd55a02";
+import { newYorkWicResources } from "./generated/new-york-wic.js?v=32eafdd55a02";
+import { withFreeAccess } from "./free-access.js?v=32eafdd55a02";
 
 export const categories = {
   food: {
@@ -54,74 +54,6 @@ export const resourceTypes = Object.keys(categories);
 
 const REVIEW_DATE = "2026-08-04";
 const verified = (record) => ({ lastChecked: REVIEW_DATE, ...record });
-
-const unhcrCountryHelp = ({ slug, country, city, region, lat, lng }) => verified({
-  id: `unhcr-help-${slug}`,
-  name: `UNHCR HELP — ${country}`,
-  city,
-  country,
-  region,
-  lat,
-  lng,
-  category: "referral",
-  secondaryCategories: ["shelter", "health"],
-  kind: "locator",
-  accessType: "Online country guidance",
-  costNote: "Free official information",
-  address: `Countrywide online guidance — marker shown at ${city} for geographic context`,
-  summary: `Official, locally applicable information for refugees and asylum-seekers in ${country}, including protection, services, rights, and ways to contact help.`,
-  services: ["Local help contacts", "Asylum and protection information", "Health and education guidance", "Shelter and support referrals"],
-  availabilityNote: "Available online. Eligibility, office hours, and service availability vary by place and situation; use the country page for current local contacts.",
-  sourceName: "UNHCR HELP",
-  sourceKind: "United Nations country help portal",
-  sourceUrl: `https://help.unhcr.org/${slug}/`,
-  sourceDetail: "UNHCR's official country HELP page publishes locally applicable asylum, protection, contact, and service information."
-});
-
-const countryHelpDirectories = [
-  ["france", "France", "Paris", "Europe", 48.8566, 2.3522],
-  ["germany", "Germany", "Berlin", "Europe", 52.52, 13.405],
-  ["belgium", "Belgium", "Brussels", "Europe", 50.8503, 4.3517],
-  ["austria", "Austria", "Vienna", "Europe", 48.2082, 16.3738],
-  ["hungary", "Hungary", "Budapest", "Europe", 47.4979, 19.0402],
-  ["greece", "Greece", "Athens", "Europe", 37.9838, 23.7275],
-  ["cyprus", "Cyprus", "Nicosia", "Europe", 35.1856, 33.3823],
-  ["italy", "Italy", "Rome", "Europe", 41.9028, 12.4964],
-  ["spain", "Spain", "Madrid", "Europe", 40.4168, -3.7038],
-  ["portugal", "Portugal", "Lisbon", "Europe", 38.7223, -9.1393],
-  ["poland", "Poland", "Warsaw", "Europe", 52.2297, 21.0122],
-  ["romania", "Romania", "Bucharest", "Europe", 44.4268, 26.1025],
-  ["bulgaria", "Bulgaria", "Sofia", "Europe", 42.6977, 23.3219],
-  ["moldova", "Moldova", "Chisinau", "Europe", 47.0105, 28.8638],
-  ["georgia", "Georgia", "Tbilisi", "Asia", 41.7151, 44.8271],
-  ["ukraine", "Ukraine", "Kyiv", "Europe", 50.4501, 30.5234],
-  ["switzerland", "Switzerland", "Bern", "Europe", 46.948, 7.4474],
-  ["turkiye", "Türkiye", "Ankara", "Asia", 39.9334, 32.8597],
-  ["jordan", "Jordan", "Amman", "Asia", 31.9539, 35.9106],
-  ["lebanon", "Lebanon", "Beirut", "Asia", 33.8938, 35.5018],
-  ["pakistan", "Pakistan", "Islamabad", "Asia", 33.6844, 73.0479],
-  ["afghanistan", "Afghanistan", "Kabul", "Asia", 34.5553, 69.2075],
-  ["thailand", "Thailand", "Bangkok", "Asia", 13.7563, 100.5018],
-  ["indonesia", "Indonesia", "Jakarta", "Asia", -6.2088, 106.8456],
-  ["japan", "Japan", "Tokyo", "Asia", 35.6762, 139.6503],
-  ["kenya", "Kenya", "Nairobi", "Africa", -1.2921, 36.8219],
-  ["uganda", "Uganda", "Kampala", "Africa", 0.3476, 32.5825],
-  ["nigeria", "Nigeria", "Abuja", "Africa", 9.0765, 7.3986],
-  ["egypt", "Egypt", "Cairo", "Africa", 30.0444, 31.2357],
-  ["ethiopia", "Ethiopia", "Addis Ababa", "Africa", 8.9806, 38.7578],
-  ["rwanda", "Rwanda", "Kigali", "Africa", -1.9441, 30.0619],
-  ["southsudan", "South Sudan", "Juba", "Africa", 4.8594, 31.5713],
-  ["mexico", "Mexico", "Mexico City", "North America", 19.4326, -99.1332],
-  ["brazil", "Brazil", "Brasilia", "South America", -15.7939, -47.8828],
-  ["argentina", "Argentina", "Buenos Aires", "South America", -34.6037, -58.3816],
-  ["chile", "Chile", "Santiago", "South America", -33.4489, -70.6693],
-  ["peru", "Peru", "Lima", "South America", -12.0464, -77.0428],
-  ["ecuador", "Ecuador", "Quito", "South America", -0.1807, -78.4678],
-  ["costarica", "Costa Rica", "San Jose", "North America", 9.9281, -84.0907],
-  ["panama", "Panama", "Panama City", "North America", 8.9824, -79.5199],
-  ["guatemala", "Guatemala", "Guatemala City", "North America", 14.6349, -90.5069],
-  ["elsalvador", "El Salvador", "San Salvador", "North America", 13.6929, -89.2182]
-].map(([slug, country, city, region, lat, lng]) => unhcrCountryHelp({ slug, country, city, region, lat, lng }));
 
 const expandedResources = [
   verified({
@@ -752,16 +684,22 @@ const reviewedResources = [
     category: "referral",
     secondaryCategories: ["food"],
     kind: "locator",
-    accessType: "Online food-bank finder",
-    costNote: "Free search; referral may apply",
+    locationPrecision: "coverage",
+    accessType: "Official food-bank locator",
+    costNote: "Free search; a food bank may require a referral",
     address: "Nationwide online locator for the United Kingdom",
-    summary: "A UK food-bank finder with local access, referral, and emergency-food guidance.",
-    services: ["Food-bank locator", "Emergency food guidance", "Local referral information"],
-    availabilityNote: "Many food banks use vouchers or referrals. Open the local record and confirm its process before travel.",
+    summary: "Trussell's official public locator for food banks in its UK network, including referral and emergency-food guidance.",
+    services: ["Official food-bank locator", "Emergency food guidance", "Local referral information"],
+    availabilityNote: "Use Trussell's locator for the current centre list. Many food banks use vouchers or referrals. Confirm the local process on the official page before travel.",
     sourceName: "Trussell",
-    sourceKind: "Official network",
-    sourceUrl: "https://www.trussell.org.uk/emergency-food/find-a-foodbank",
-    sourceDetail: "Trussell's official finder searches its UK food-bank network and explains next steps."
+    sourceKind: "Official network locator",
+    sourceUrl: "https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank",
+    sourceDetail: "Trussell's public locator lists its food-bank network and explains how to get a voucher. Checked 20 October 2026. RWN links to that locator and does not republish individual centre records.",
+    coverageNote: "United Kingdom coverage. The map marker is not a food-bank address.",
+    datasetId: "trussell-food-bank-centres",
+    sourceRecordId: "official-food-bank-locator",
+    verificationMethod: "official-public-locator",
+    lastChecked: "2026-10-20"
   }),
   verified({
     id: "whitechapel-mission",
@@ -1287,13 +1225,11 @@ const reviewedResources = [
     sourceUrl: "https://www.bancodealimentos.org.co/",
     sourceDetail: "The official site lists the Bogotá location and describes food recovery and distribution through social organizations."
   }),
-  ...countryHelpDirectories,
   ...expandedResources,
   ...expansionResources,
   ...verifiedExpansionResources,
   ...massachusettsWicResources,
   ...newYorkWicResources,
-  ...trussellFoodbankResources
 ];
 
 const FREE_ACCESS_EXCLUSIONS = new Set([
@@ -1390,9 +1326,19 @@ function auditedResource(resource) {
   return withFreeAccess(next);
 }
 
-export const resources = reviewedResources
+export const curatedResources = reviewedResources
   .filter((resource) => !FREE_ACCESS_EXCLUSIONS.has(resource.id))
   .map(auditedResource);
+
+// The database export records only editorial differences from the source catalog.
+// Both the globe and every generated page consume this same release snapshot.
+const editorialById = new Map(editorialOverrides.map(record => [record.id, record]));
+const withheld = new Set(withheldLocationIds);
+const curatedIds = new Set(curatedResources.map(record => record.id));
+export const resources = [
+  ...curatedResources.map(record => editorialById.get(record.id) || record),
+  ...editorialOverrides.filter(record => !curatedIds.has(record.id))
+].filter(record => !withheld.has(record.id));
 
 export const trustPrinciples = [
   {
@@ -1413,6 +1359,6 @@ export const trustPrinciples = [
   },
   {
     title: "Privacy comes first",
-    text: "You do not need an account. Your exact location stays on your device, and we do not use advertising trackers or marketing cookies."
+    text: "You do not need an account. If you choose location, RWN uses it in your browser to sort nearby listings; for U.S. meal searches, the USDA receives only an approximate area. RWN does not use advertising trackers or marketing cookies."
   }
 ];

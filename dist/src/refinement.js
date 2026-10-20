@@ -1,3 +1,5 @@
+import { installPageInteractions } from "./page-interactions.js?v=32eafdd55a02";
+
 const QUICK_TYPES = [
   ["food", "Food"],
   ["water", "Water"],
@@ -12,11 +14,7 @@ function layerButtons() {
 }
 
 function setLayerSelection(type) {
-  for (const button of layerButtons()) {
-    const desired = type === "all" || button.dataset.type === type;
-    const active = button.getAttribute("aria-pressed") === "true";
-    if (active !== desired) button.click();
-  }
+  document.getElementById("layerList").dispatchEvent(new CustomEvent("rwn:select-need", { detail: { type } }));
 }
 
 function syncQuickNeeds(container) {
@@ -35,8 +33,8 @@ function syncQuickNeeds(container) {
 function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
-  input.placeholder = "Search a service or place";
-  input.setAttribute("aria-label", "Search by service, place, ZIP or postcode, or organization");
+  input.placeholder = "Search by service or place";
+  input.setAttribute("aria-label", "What do you need? Search by need, service, place, ZIP or postcode, or organization");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");
 
@@ -44,7 +42,7 @@ function improveSearch() {
   if (search && !search.querySelector(".search-helper")) {
     const helper = document.createElement("p");
     helper.className = "search-helper";
-    helper.textContent = "Service, city, ZIP or postcode, or organization name.";
+    helper.textContent = "Need, service, city, ZIP or postcode, or organization name.";
     search.append(helper);
   }
 }
@@ -61,8 +59,8 @@ function installQuickNeeds() {
   container.setAttribute("aria-label", "Common service filters");
   container.innerHTML = `
     <p class="quick-needs__label">Core needs</p>
-    ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
     <button class="quick-need quick-need--all" type="button" data-quick-type="all" aria-pressed="true">All</button>
+    ${QUICK_TYPES.map(([type, label]) => `<button class="quick-need" type="button" data-quick-type="${type}" aria-pressed="false">${label}</button>`).join("")}
   `;
   search.insertAdjacentElement("afterend", container);
 
@@ -70,10 +68,9 @@ function installQuickNeeds() {
     const button = event.target.closest(".quick-need");
     if (!button) return;
     setLayerSelection(button.dataset.quickType);
-    syncQuickNeeds(container);
   });
 
-  layerList.addEventListener("click", () => queueMicrotask(() => syncQuickNeeds(container)));
+  document.addEventListener("rwn:filters-updated", () => syncQuickNeeds(container));
   syncQuickNeeds(container);
 }
 
@@ -89,6 +86,43 @@ function compactLocationNotes() {
   const body = details.querySelector(".finder-location-notes__body");
   locationStatus.insertAdjacentElement("afterend", details);
   body.append(liveSourceStatus, privacy);
+}
+
+function groupFinderDisclosures() {
+  const location = document.querySelector(".finder-location-notes");
+  const filters = document.querySelector(".filter-disclosure");
+  if (!location || !filters || document.querySelector(".finder-disclosures")) return;
+  // Move existing nodes, preserving their event listeners and disclosure state.
+  const group = document.createElement("div");
+  group.className = "finder-disclosures";
+  location.before(group);
+  group.append(location, filters);
+}
+
+function composeFinderSurface() {
+  const search = document.querySelector(".finder-search");
+  const sidebar = document.querySelector(".finder-sidebar");
+  if (!search || !sidebar || sidebar.querySelector(".finder-surface")) return;
+  const focused = document.activeElement;
+  const selection = typeof focused?.selectionStart === "number"
+    ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
+  const surface = document.createElement("div");
+  surface.className = "finder-surface";
+  const label = document.createElement("label");
+  label.className = "finder-search-label";
+  label.htmlFor = "resourceSearch";
+  label.textContent = "What do you need?";
+  search.before(surface);
+  surface.append(label);
+  // Reuse the live controls. Moving a focused node can blur it in older browsers.
+  for (const selector of [".finder-search", ".quick-needs", ".jump-results", ".location-actions", "#locationStatus", "#locationRecovery", ".finder-disclosures"]) {
+    const node = sidebar.querySelector(selector);
+    if (node) surface.append(node);
+  }
+  if (focused && surface.contains(focused) && document.activeElement !== focused) {
+    focused.focus({ preventScroll: true });
+    if (selection) focused.setSelectionRange(...selection);
+  }
 }
 
 function improveFilterSummary() {
@@ -113,7 +147,10 @@ export function installRefinements() {
   improveSearch();
   installQuickNeeds();
   compactLocationNotes();
+  groupFinderDisclosures();
+  composeFinderSurface();
   improveFilterSummary();
   refineGlobeInstructions();
   document.documentElement.classList.add("rwn-refined");
+  installPageInteractions();
 }

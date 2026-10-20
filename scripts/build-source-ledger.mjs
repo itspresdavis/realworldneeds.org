@@ -22,7 +22,8 @@ const modeLabel = (mode) => ({
   "live-nearby-query": "Live official query",
   "reviewed-snapshot": "Reviewed official snapshot",
   "reviewed-open-data-snapshot": "Reviewed open-data snapshot",
-  "reviewed-official-network-snapshot": "Reviewed official-network snapshot"
+  "reviewed-official-network-snapshot": "Reviewed official-network snapshot",
+  "official-public-locator": "Official public locator"
 }[mode] || String(mode || "Reviewed source").replaceAll("-", " "));
 
 const sourceRecordCount = (source) => resources.filter((resource) => resource.datasetId === source.id).length;

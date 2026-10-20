@@ -30,7 +30,11 @@ function installSearchAccessibility() {
     input.setAttribute("aria-describedby", [...describedBy].join(" "));
   }
 
+  let composingSearch = false;
+  input.addEventListener("compositionstart", () => { composingSearch = true; });
+  input.addEventListener("compositionend", () => { composingSearch = false; });
   input.addEventListener("keydown", (event) => {
+    if (composingSearch || event.isComposing || event.keyCode === 229) return;
     if (event.key !== "Escape" || !input.value) return;
     event.preventDefault();
     input.value = "";
@@ -51,7 +55,6 @@ function installSearchAccessibility() {
 function installResultLandmark() {
   const results = document.querySelector(".results-section");
   const grid = document.getElementById("resourceGrid");
-  const quickNeeds = document.querySelector(".quick-needs");
   if (!results || !grid) return;
 
   results.id ||= "results";
@@ -59,14 +62,8 @@ function installResultLandmark() {
   results.setAttribute("aria-labelledby", "resultTitle");
   grid.setAttribute("tabindex", "-1");
 
-  if (quickNeeds && !document.querySelector(".jump-results")) {
-    const link = document.createElement("a");
-    link.className = "jump-results";
-    link.href = "#results";
-    link.textContent = "See matching services";
-    link.setAttribute("aria-label", "Skip the map and see matching services");
-    quickNeeds.insertAdjacentElement("afterend", link);
-  }
+  const jump = document.getElementById("jumpResults");
+  if (jump) jump.setAttribute("aria-label", "Skip the interactive map and see matching services");
 }
 
 function installAccessibleResourcePanel() {
