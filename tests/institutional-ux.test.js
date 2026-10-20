@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
@@ -92,10 +93,19 @@ test("sitemap freshness follows the resource data instead of one fake global dat
   assert.ok(service, "sample service should exist in sitemap");
   assert.equal(service[1], sample.lastChecked);
 
-  for (const path of ["/privacy", "/terms", "/accessibility", "/editorial-policy"]) {
+  for (const [path, file] of [
+    ["/privacy", "public/privacy.html"],
+    ["/terms", "public/terms.html"],
+    ["/accessibility", "public/accessibility.html"],
+    ["/editorial-policy", "public/editorial-policy.html"],
+    ["/donate", "public/donate.html"]
+  ]) {
     const entry = sitemapEntry(sitemap, path);
     assert.ok(entry, `${path} should exist in sitemap`);
-    assert.equal(entry[1], undefined, `${path} should not claim a resource-review lastmod`);
+    const gitDate = execFileSync("git", ["log", "-1", "--format=%cs", "--", file], { encoding: "utf8" }).trim();
+    const expected = /^\d{4}-\d{2}-\d{2}$/.test(gitDate) ? gitDate : "2026-10-20";
+    assert.match(expected, /^\d{4}-\d{2}-\d{2}$/, `${path} lastmod must come from that page's last commit`);
+    assert.equal(entry[1], expected, `${path} should publish its own page date, not a resource-review date`);
   }
 });
 

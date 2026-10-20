@@ -52,22 +52,23 @@ function enhanceCard(article) {
   if (resource.kind === "direct" || isContactOnly(resource)) {
     const phones = phoneLinks(resource.phone);
     for (const { label, href } of phones) {
-      actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
+      const visible = phones.length > 1 ? `Call ${label}` : "Call";
+      actions.append(createAction(visible, href, `${visible} ${resource.name} at ${label}`, { primary: true }));
     }
     if (resource.kind === "direct" && hasMapCoordinates(resource)) {
-      actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));
+      actions.append(createAction("Directions", directionsUrl(resource), `Directions to ${resource.name}`, { newTab: true }));
     }
     if (isContactOnly(resource) && resource.accessUrl) {
-      actions.append(createAction("Contact website", resource.accessUrl, `Open the contact website for ${resource.name}`, { newTab: true }));
+      actions.append(createAction("Contact website", resource.accessUrl, `Contact website for ${resource.name}`, { newTab: true }));
     }
     if (!actions.childElementCount) {
       const providerUrl = resource.providerUrl || resource.sourceUrl;
-      if (providerUrl) actions.append(createAction("Provider website", providerUrl, `Visit ${resource.name} website`, { newTab: true }));
+      if (providerUrl) actions.append(createAction("Provider website", providerUrl, `Provider website for ${resource.name}`, { newTab: true }));
     }
   } else {
     const providerUrl = resource.providerUrl || resource.sourceUrl;
     if (providerUrl) {
-      actions.append(createAction("Official finder", providerUrl, `Open the official resource finder for ${resource.name}`, { primary: true, newTab: true }));
+      actions.append(createAction("Official finder", providerUrl, `Official finder for ${resource.name}`, { primary: true, newTab: true }));
     }
   }
 

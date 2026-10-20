@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { relatedResources } from "./related-resources.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { minify } from "terser";
@@ -10,7 +12,34 @@ import { formatResourcePlace, isExactServiceSite } from "../src/utils/geo.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
 
 const SITE_ORIGIN = "https://www.realworldneeds.org";
-const STATIC_WITHOUT_DATA_LASTMOD = ["/privacy", "/terms", "/accessibility", "/editorial-policy"];
+const execFileAsync = promisify(execFile);
+const POLICY_LASTMOD_FILES = [
+  ["/editorial-policy", "public/editorial-policy.html"],
+  ["/privacy", "public/privacy.html"],
+  ["/terms", "public/terms.html"],
+  ["/accessibility", "public/accessibility.html"],
+  ["/donate", "public/donate.html"]
+];
+const MONTHS = { January: "01", February: "02", March: "03", April: "04", May: "05", June: "06", July: "07", August: "08", September: "09", October: "10", November: "11", December: "12" };
+
+async function sourceLastmod(file) {
+  try {
+    const { stdout } = await execFileAsync("git", ["log", "-1", "--format=%cs", "--", file]);
+    const date = stdout.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  } catch {
+    // A new page has no commit yet. Fall through to the date written on the page.
+  }
+  try {
+    const html = await readFile(file, "utf8");
+    const match = html.match(/Last (?:reviewed|updated)\s+([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/);
+    const month = match ? MONTHS[match[1]] : "";
+    if (!month) return null;
+    return `${match[3]}-${month}-${String(match[2]).padStart(2, "0")}`;
+  } catch {
+    return null;
+  }
+}
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -282,7 +311,10 @@ sitemap = replaceUrlLastmod(sitemap, "/", newest);
 sitemap = replaceUrlLastmod(sitemap, "/directory", newest);
 sitemap = replaceUrlLastmod(sitemap, "/transparency", newest);
 
-for (const path of STATIC_WITHOUT_DATA_LASTMOD) sitemap = replaceUrlLastmod(sitemap, path, null);
+for (const [path, file] of POLICY_LASTMOD_FILES) {
+  const date = await sourceLastmod(file);
+  if (date) sitemap = replaceUrlLastmod(sitemap, path, date);
+}
 for (const resource of resources) sitemap = replaceUrlLastmod(sitemap, `/service/${resource.id}`, resource.lastChecked);
 
 for (const [type] of Object.entries(categories)) {

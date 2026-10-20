@@ -129,7 +129,7 @@ function simplifyStructure() {
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {
     const clearButton = legal.querySelector("#clearBrowserData");
-    legal.innerHTML = `<strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a>`;
+    legal.innerHTML = `<strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><a href="/donate">Donations</a>`;
     if (clearButton) {
       clearButton.className = "footer-data-button";
       clearButton.textContent = "Clear browser data";
@@ -141,7 +141,7 @@ function simplifyStructure() {
   const note = footer.querySelector(":scope > p");
   if (map) map.remove();
   if (note) {
-    note.innerHTML = `<span>Map boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Earth imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span>`;
+    note.innerHTML = `<span>Map boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Earth imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span><span>Listing corrections (inbox not live yet): PLACEHOLDER-corrections@realworldneeds.org</span>`;
   }
 }
 

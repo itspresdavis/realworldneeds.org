@@ -122,5 +122,13 @@
       "source": "/workspace",
       "destination": "/api/workspace"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "realworldneeds.org" }],
+      "destination": "https://www.realworldneeds.org/:path*",
+      "permanent": true
+    }
   ]
 }

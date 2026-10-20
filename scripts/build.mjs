@@ -15,6 +15,8 @@ import { resourceDescription } from "./resource-description.mjs";
 // available for every listing.
 const DIRECTORY_PAGE_SIZE = 60;
 const SITE_ORIGIN = "https://www.realworldneeds.org";
+// PLACEHOLDER: not a monitored inbox. Replace when a corrections address is chosen.
+const CORRECTIONS_EMAIL = "PLACEHOLDER-corrections@realworldneeds.org";
 const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
 const escapeHtml = (value) => String(value ?? "")
@@ -89,6 +91,16 @@ function breadcrumbs(items) {
   return `<nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a>${items.map((item) => item.href ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>` : `<span aria-current="page">${escapeHtml(item.label)}</span>`).join("")}</nav>`;
 }
 
+function correctionMailto(resource, pageUrl) {
+  const subject = `Listing correction: ${resource.id}`;
+  const body = `Listing: ${resource.name}\r\nURL: ${pageUrl}\r\n\r\nWhat is wrong:\r\n\r\nCorrect information and source (link):\r\n\r\nPlease do not include personal health or case details.`;
+  return `mailto:${CORRECTIONS_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function correctionLink(resource, pageUrl) {
+  return `<a href="${escapeHtml(correctionMailto(resource, pageUrl))}">Report a correction<span class="visually-hidden"> for ${escapeHtml(resource.name)}</span></a>`;
+}
+
 function directoryRecordActions(resource, coordinate) {
   const links = [];
   for (const { label, href } of phoneLinks(resource.phone)) {
@@ -125,7 +137,7 @@ function resourceRecord(resource) {
     <div class="directory-record__facts" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
     ${contactOnly ? `<p class="directory-caution">${escapeHtml(contactOnlyNotice(resource))}</p><p class="directory-caution"><strong>Coverage:</strong> ${escapeHtml(resource.coverageNote)} <strong>Eligibility:</strong> ${escapeHtml(resource.eligibility)}${resource.phone ? ` <strong>Phone dialing scope:</strong> ${escapeHtml(resource.phoneAccess)}` : ""}</p>` : ""}
     ${directoryRecordActions(resource, coordinate)}
-    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
+    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}${correctionLink(resource, `${SITE_ORIGIN}/directory#${resource.id}`)}</nav></div></details>
   </article>`;
 }
 
@@ -358,7 +370,7 @@ function resourcePage(resource) {
         <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
         <p>${escapeHtml(resource.sourceDetail)}</p>
         ${!contactOnly && resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
-        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}</div>
+        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}${correctionLink(resource, `${SITE_ORIGIN}/service/${resource.id}`)}</div>
       </article>
       <div class="directory-downloads"><strong>Browse related help</strong>${categoryLinks}<a href="/directory/${slugify(resource.country)}">More in ${escapeHtml(resource.country)}</a></div>
     </div>
@@ -413,7 +425,7 @@ const categoryLinks = categoryTypes.map((type) => {
 }).join("");
 const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
-const sitemapPaths = ["/", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
+const sitemapPaths = ["/", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility", "/donate"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
   title: "Free Essential Services Directory",
   heading: "Find free essential services without using the globe.",

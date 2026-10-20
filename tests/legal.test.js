@@ -7,7 +7,8 @@ test("public policy pages are indexable, titled, and canonical", async () => {
     ["public/privacy.html", "Privacy | Real World Needs"],
     ["public/terms.html", "Terms | Real World Needs"],
     ["public/accessibility.html", "Accessibility | Real World Needs"],
-    ["public/editorial-policy.html", "How Listings Are Checked | Real World Needs"]
+    ["public/editorial-policy.html", "How Listings Are Checked | Real World Needs"],
+    ["public/donate.html", "Donations | Real World Needs"]
   ]) {
     const html = await readFile(path, "utf8");
     assert.match(html, new RegExp(`<title>${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
@@ -20,7 +21,7 @@ test("public policy pages are indexable, titled, and canonical", async () => {
 
 test("sitemap publishes every policy route", async () => {
   const sitemap = await readFile("public/sitemap.xml", "utf8");
-  for (const route of ["/privacy", "/terms", "/accessibility", "/editorial-policy", "/transparency"]) {
+  for (const route of ["/privacy", "/terms", "/accessibility", "/editorial-policy", "/transparency", "/donate"]) {
     assert.match(sitemap, new RegExp(`<loc>https://www\\.realworldneeds\\.org${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>`));
   }
 });

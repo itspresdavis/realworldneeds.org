@@ -5098,6 +5098,11 @@ svg {
   }
 }
 
+.globe-stage.is-globe-deferred .globe-canvas,
+.globe-stage.is-globe-deferred .globe-controls,
+.globe-stage.is-globe-deferred .globe-gesture-hint,
+.globe-stage.is-globe-deferred .globe-pin-layer { visibility: hidden; }
+
 /* WebGL-unavailable state: route people straight to the text directory. */
 .globe-fallback {
   position: absolute;
