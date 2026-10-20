@@ -25,6 +25,7 @@ export function installPageInteractions() {
     start.id = "top";
     start.className = "page-start";
     start.tabIndex = -1;
+    start.textContent = "Start of page";
     header.removeAttribute("id");
     header.before(start);
   }

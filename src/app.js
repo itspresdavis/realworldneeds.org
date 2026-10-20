@@ -441,7 +441,7 @@ function shell() {
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
             </div>
-            <a class="jump-results" id="jumpResults" href="#results"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
+            <a class="jump-results" id="jumpResults" href="#results"><span class="sr-only">Skip the interactive map and </span><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
 
             <div class="location-actions">
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>

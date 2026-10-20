@@ -35,7 +35,7 @@
 
 .service-utility-actions__intro > small {
   max-width: 36rem;
-  color: #697a80;
+  color: #68797e;
   font-size: .67rem;
   line-height: 1.45;
 }
@@ -79,7 +79,7 @@
   grid-column: 1 / -1;
   min-height: 1rem;
   margin: -.15rem 0 0;
-  color: #697a80;
+  color: #68797e;
   font-size: .67rem;
   line-height: 1.4;
 }
