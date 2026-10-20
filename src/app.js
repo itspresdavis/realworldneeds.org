@@ -1,8 +1,6 @@
 import { isContactOnly, hasMapCoordinates, contactOnlyLabel, contactOnlyNotice } from "./utils/resource-location.js";
 import { warmSearchIndex } from "./utils/search-warmup.js";
 import { phoneMarkup } from "./utils/phone.js";
-import * as THREE from "/vendor/three.module.js";
-import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
 import { globeHasMotion, globePointVisible, frameBufferMatches } from "./utils/globe-rendering.js";
 import { clusterProjectedEntries } from "./utils/globe-clustering.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
@@ -263,10 +261,16 @@ let globeContextLost = false;
 let globeContextRecoveryExtension = null;
 let globeFrameHandle = null;
 let globeResizeObserver = null;
-const globeRaycaster = new THREE.Raycaster();
-const globePointerNdc = new THREE.Vector2();
-const globeProjectionVector = new THREE.Vector3();
-const globeInverseWorldMatrix = new THREE.Matrix4();
+let THREE = null;
+let createGlobePointLayer = () => null;
+let replaceGlobePointResources = () => {};
+let updateGlobePointLayer = () => {};
+let globeRaycaster = null;
+let globePointerNdc = null;
+let globeProjectionVector = null;
+let globeInverseWorldMatrix = null;
+let globeRuntimePromise = null;
+let globeStartPromise = null;
 const globeResourceVectorCache = new WeakMap();
 
 const icon = {
@@ -397,7 +401,7 @@ function shell() {
   root.innerHTML = `
     <a class="skip-link" href="#finder">Skip to find help</a>
     <header class="site-header" id="top">
-      <a class="brand" href="#top" aria-label="Real World Needs home">
+      <a class="brand" href="#top">
         <span class="brand__mark">${icon.globe}</span>
         <span class="brand__name"><strong>RWN</strong><small>Real World Needs</small></span>
       </a>
@@ -437,7 +441,7 @@ function shell() {
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
             </div>
-            <a class="jump-results" id="jumpResults" href="#results" aria-label="Skip the map and see matching services"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
+            <a class="jump-results" id="jumpResults" href="#results"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
 
             <div class="location-actions">
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
@@ -494,7 +498,7 @@ function shell() {
             <div class="globe-fallback" id="globeFallback" hidden>
               <p id="globeFallbackMessage"><strong>The interactive map needs WebGL,</strong> which this browser or device has turned off.</p>
               <p>Every listing is still available as text, with the same contact details, sources and review dates.</p>
-              <div class="globe-fallback__actions"><a class="globe-fallback__action" href="/directory">Open the text directory</a><button class="globe-fallback__retry" id="retryGlobe" type="button" hidden>Try the interactive map again</button></div>
+              <div class="globe-fallback__actions"><a class="globe-fallback__action" href="/directory">Open the text directory</a><button class="globe-fallback__retry" id="showGlobe" type="button" hidden>Show map</button><button class="globe-fallback__retry" id="retryGlobe" type="button" hidden>Try the interactive map again</button></div>
             </div>
             <div class="globe-controls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
@@ -1352,6 +1356,7 @@ function createGlobeTexture() {
 function loadEarthImagery() {
   const image = new Image();
   image.decoding = "async";
+  image.fetchPriority = "low";
   image.onload = () => {
     earthTextureImage = image;
     if (globeSurface) {
@@ -1374,6 +1379,7 @@ function loadDetailEarthImagery() {
   if (status && state.detailGeometryReady) status.textContent = "detailed · loading HD surface…";
   const image = new Image();
   image.decoding = "async";
+  image.fetchPriority = "low";
   image.onload = () => {
     pendingDetailImage = image;
     wakeGlobe();
@@ -1569,6 +1575,88 @@ function refreshGlobeSurface() {
   if (!globeSurface) return;
   updateGlobeTexture();
   wakeGlobe();
+}
+
+function loadGlobeRuntime() {
+  if (!globeRuntimePromise) {
+    globeRuntimePromise = import("./globe-points.js").then((points) => {
+      THREE = points.THREE;
+      createGlobePointLayer = points.createGlobePointLayer;
+      replaceGlobePointResources = points.replaceGlobePointResources;
+      updateGlobePointLayer = points.updateGlobePointLayer;
+      globeRaycaster = new THREE.Raycaster();
+      globePointerNdc = new THREE.Vector2();
+      globeProjectionVector = new THREE.Vector3();
+      globeInverseWorldMatrix = new THREE.Matrix4();
+    });
+  }
+  return globeRuntimePromise;
+}
+
+function globeAutoStartBlocked() {
+  return window.matchMedia("(max-width: 760px)").matches
+    || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    || navigator.connection?.saveData === true;
+}
+
+function startInteractiveGlobe() {
+  if (globeStartPromise) return globeStartPromise;
+  globeStartPromise = loadGlobeRuntime().then(() => {
+    document.querySelector(".globe-stage")?.classList.remove("is-globe-deferred");
+    const showMap = document.getElementById("showGlobe");
+    if (showMap) showMap.hidden = true;
+    const fallback = document.getElementById("globeFallback");
+    if (fallback?.dataset.deferred === "true") {
+      fallback.hidden = true;
+      delete fallback.dataset.deferred;
+    }
+    initThreeGlobe();
+    loadEarthImagery();
+    loadLandGeometry();
+    if (requestedResource && requestedResource === initialResource) {
+      const resource = resources.find((item) => item.id === requestedResource);
+      if (resource) focusGlobeOn(resource);
+    }
+    wakeGlobe();
+  }).catch((error) => {
+    console.error("Interactive map could not be loaded.", error);
+    globeStartPromise = null;
+    reportGlobeUnavailable("The interactive map could not be loaded. You can keep using the text results.", true);
+  });
+  return globeStartPromise;
+}
+
+function scheduleInteractiveGlobe() {
+  if (globeAutoStartBlocked()) {
+    const stage = document.querySelector(".globe-stage");
+    stage?.classList.add("is-globe-deferred");
+    const fallback = document.getElementById("globeFallback");
+    const message = document.getElementById("globeFallbackMessage");
+    const showMap = document.getElementById("showGlobe");
+    if (fallback && message && showMap) {
+      fallback.hidden = false;
+      fallback.dataset.deferred = "true";
+      message.textContent = "The map stays off until you ask for it. Search results are ready.";
+      showMap.hidden = false;
+      showMap.addEventListener("click", () => startInteractiveGlobe(), { once: true });
+    } else {
+      startInteractiveGlobe();
+    }
+    return;
+  }
+  // Wider screens still get the map, but only after the finder markup is in
+  // place. The WebGL modules are not part of the initial import graph.
+  const stage = document.querySelector(".globe-stage");
+  if (stage && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      startInteractiveGlobe();
+    });
+    observer.observe(stage);
+    return;
+  }
+  startInteractiveGlobe();
 }
 
 function initThreeGlobe() {
@@ -2078,7 +2166,7 @@ function pauseGlobe() {
 }
 
 function wakeGlobe(resetClock = true) {
-  if (globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
+  if (!globeRenderer || globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
   // Reset only when waking from rest; moving frames include rendering time.
   if (resetClock) lastFrame = performance.now();
   globeFrameHandle = window.requestAnimationFrame((now) => {
@@ -3080,11 +3168,4 @@ updateFilters();
 const searchPreparation = warmSearchIndex(resources);
 bindEvents();
 writeFinderHistory();
-initThreeGlobe();
-loadEarthImagery();
-loadLandGeometry();
-if (requestedResource && requestedResource === initialResource) {
-  const resource = resources.find((item) => item.id === requestedResource);
-  if (resource) focusGlobeOn(resource);
-}
-wakeGlobe();
+scheduleInteractiveGlobe();

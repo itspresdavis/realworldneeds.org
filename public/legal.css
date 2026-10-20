@@ -111,6 +111,7 @@ a:hover { color: #055f34; }
 .not-found .open-data-actions a:not(:first-child) { border-color: #647d87; background: transparent; color: #ddf4e7; }
 
 /* Directory is intentionally flatter and faster than a wall of floating cards. */
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .directory-shell { width: min(calc(100% - 2rem), 1080px); margin: 0 auto; padding: clamp(3rem, 6vw, 5.3rem) 0; }
 .directory-downloads { align-items: center; margin: 0 0 2rem; }
 .directory-downloads > strong { margin-right: .3rem; color: var(--ink); font-size: .83rem; }

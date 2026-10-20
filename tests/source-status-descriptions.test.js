@@ -9,6 +9,7 @@ import { formatResourcePlace } from "../src/utils/geo.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { sourceClosureNotice, sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
+import { CORRECTIONS_EMAIL } from "../src/data/corrections.js";
 
 const flagged = resources.filter(sourceClosureNotice);
 const closed = flagged[0];
@@ -70,7 +71,7 @@ test("the actual service template escapes source/name text in metadata and JSON-
     fixture, resources: [fixture], categories, sourceRegistry: [],
     freeAccessLabel, freeAccessModels, formatResourcePlace, phoneLinks, phoneMarkup,
     isContactOnly, hasMapCoordinates, contactOnlyNotice,
-    sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription
+    sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription, CORRECTIONS_EMAIL
   });
   const expected = resourceDescription(fixture);
   assert.equal(metadata(html, "name", "description"), expected);

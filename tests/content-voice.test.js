@@ -11,7 +11,8 @@ const publicCopyFiles = [
   "public/editorial-policy.html",
   "public/privacy.html",
   "public/terms.html",
-  "public/transparency.html"
+  "public/transparency.html",
+  "public/donate.html"
 ];
 
 test("public copy avoids internal audit and product-language jargon", async () => {

@@ -25,7 +25,6 @@ export function installPageInteractions() {
     start.id = "top";
     start.className = "page-start";
     start.tabIndex = -1;
-    start.setAttribute("aria-label", "Start of page");
     header.removeAttribute("id");
     header.before(start);
   }

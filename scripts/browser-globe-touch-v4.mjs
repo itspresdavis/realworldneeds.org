@@ -247,8 +247,13 @@ async function run() {
     const ready = await evaluate(client, `new Promise((resolve) => {
       const started = performance.now();
       const check = () => {
-        if (document.getElementById('globeCanvas') && document.getElementById('globeReadout') && document.getElementById('zoomIn')) return resolve(true);
-        if (performance.now() - started > 12000) return resolve(false);
+        const showMap = document.getElementById('showGlobe');
+        if (showMap && !showMap.hidden) showMap.click();
+        const canvas = document.getElementById('globeCanvas');
+        const stage = document.querySelector('.globe-stage');
+        const shown = canvas && stage && !stage.classList.contains('is-globe-deferred') && getComputedStyle(canvas).visibility !== 'hidden';
+        if (shown && document.getElementById('globeReadout') && document.getElementById('zoomIn')) return resolve(true);
+        if (performance.now() - started > 20000) return resolve(false);
         setTimeout(check, 50);
       };
       check();
@@ -446,6 +451,8 @@ async function run() {
     await evaluate(client, "history.back()");
     await waitForExpression(client, "document.getElementById('resourceSearch')?.value === 'London'", "Back did not restore the search after leaving the map.");
     await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
+    await evaluate(client, `(() => { const showMap = document.getElementById('showGlobe'); if (showMap && !showMap.hidden) showMap.click(); })()`);
+    await waitForExpression(client, "Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) > 0", "Returning from a service left the globe unavailable.");
     await sleep(350);
     const returnedMap = await evaluate(client, `(() => {
       const canvas=document.getElementById('globeCanvas');

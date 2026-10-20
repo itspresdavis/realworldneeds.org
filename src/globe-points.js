@@ -1,6 +1,8 @@
 import { hasMapCoordinates } from "./utils/resource-location.js";
 import * as THREE from "/vendor/three.module.js";
 
+export { THREE };
+
 const RWN_POINT_COLORS = {
   direct: "#45b64a",
   locator: "#0b5f9e",
