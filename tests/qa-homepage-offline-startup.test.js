@@ -56,7 +56,7 @@ test("CI adds the home case before the unchanged directory journey and preserves
   const runner = await readFile(new URL("../scripts/browser-offline.mjs", import.meta.url), "utf8");
   assert.ok(runner.indexOf("await verifyHomepageOfflineStartup(") < runner.indexOf('await navigate(client, `${HOST}/directory`, 800)'));
   assert.match(helper, /Fetch\.enable/);
-  assert.match(helper, /\/src\/result-actions\.js/);
+  assert.match(helper, /\/src\/professional\.js/);
   assert.match(helper, /loadEventEnd > 0/);
   assert.match(helper, /await navigateWithin\(`\$\{origin\}\/directory`\)/);
   assert.match(helper, /assert\.deepEqual\(documents, \[\{ url: `\$\{origin\}\/`, offline: false \}\]/);
@@ -98,7 +98,7 @@ async function runnerFixture({ dirty = false, cleanupFailure = false } = {}) {
     listeners.get("Network.requestWillBeSent")?.({ type: "Document", request: { url } });
     if (url === `${origin}/`) {
       snapshot = { ...delayed(), ...(dirty ? { registrations: [{ scope: "unexpected prior worker" }] } : {}) };
-      listeners.get("Fetch.requestPaused")({ requestId: "real-import", request: { url: `${origin}/src/result-actions.js?v=123456789abc` } });
+      listeners.get("Fetch.requestPaused")({ requestId: "real-import", request: { url: `${origin}/src/professional.js?v=123456789abc` } });
     } else {
       assert.equal(url, `${origin}/directory`);
       assert.equal(networkOffline, true, "the first directory visit must be offline");

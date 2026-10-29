@@ -86,9 +86,11 @@ export async function verifyHomepageOfflineStartup({ client, host, navigate, eva
   const call = (method, params) => withHomepageDeadline(client.call(method, params), 8000, `Homepage QA timed out at ${method}`);
   const navigateWithin = url => withHomepageDeadline(navigate(client, url, 0), 10000, `Homepage QA navigation timed out: ${url}`);
   const continueRequest = requestId => call("Fetch.continueRequest", { requestId });
+  // Hold the first awaited installer: presentation must remain pending until
+  // after the real load event, before bootstrap can register the worker.
   const offPaused = client.on("Fetch.requestPaused", ({ requestId, request }) => {
     const url = new URL(request.url);
-    if (holding && url.origin === origin && url.pathname === "/src/result-actions.js") held.push(requestId);
+    if (holding && url.origin === origin && url.pathname === "/src/professional.js") held.push(requestId);
     else continueRequest(requestId).catch(error => { interceptionError = error; });
   });
   const offRequests = client.on("Network.requestWillBeSent", ({ request, type }) => {
@@ -109,7 +111,7 @@ export async function verifyHomepageOfflineStartup({ client, host, navigate, eva
     throw new Error(`${message}: ${JSON.stringify({ latest, held: held.length, exceptions })}`);
   };
   try {
-    await call("Fetch.enable", { patterns: [{ urlPattern: `${origin}/src/result-actions.js*`, requestStage: "Request" }] });
+    await call("Fetch.enable", { patterns: [{ urlPattern: `${origin}/src/professional.js*`, requestStage: "Request" }] });
     await navigateWithin(`${origin}/`);
     evidence.delayed = await wait(s => s.origin === origin && s.path === "/" && s.loadEventEnd > 0 && s.globe && held.length > 0, "Homepage never finished loading with its import held");
     evidence.heldImports = held.length;

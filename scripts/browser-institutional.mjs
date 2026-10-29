@@ -401,17 +401,25 @@ async function run() {
       throw new Error(`Quick filter state drifted: ${JSON.stringify(quickFilter)}`);
     }
 
-    const mobileMenu = await evaluate(client, `(async () => {
-      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-      const menu = document.querySelector(".site-menu");
-      const summary = menu?.querySelector("summary");
-      summary?.click();
-      await wait(30);
-      const opened = Boolean(menu?.open);
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-      await wait(30);
-      return { opened, closed: !menu?.open, focusReturned: document.activeElement === summary };
+    const menuSummaryPoint = await evaluate(client, `(() => {
+      const summary = document.querySelector(".site-menu summary");
+      const rect = summary?.getBoundingClientRect();
+      if (!rect?.width || !rect.height) throw new Error("Mobile menu summary is not visible");
+      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      if (!summary.contains(document.elementFromPoint(point.x, point.y))) throw new Error("Mobile menu summary is not reachable");
+      return point;
     })()`);
+    for (const type of ["mousePressed", "mouseReleased"]) await client.call("Input.dispatchMouseEvent", { type, button: "left", clickCount: 1, ...menuSummaryPoint });
+    const mobileMenu = { opened: await evaluate(client, `(() => {
+      const menu = document.querySelector(".site-menu");
+      if (document.activeElement !== menu.querySelector("summary")) throw new Error("Native menu click did not focus its summary");
+      return menu.open;
+    })()`) };
+    for (const type of ["rawKeyDown", "keyUp"]) await client.call("Input.dispatchKeyEvent", { type, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+    Object.assign(mobileMenu, await evaluate(client, `(() => {
+      const menu = document.querySelector(".site-menu");
+      return { closed: !menu.open, focusReturned: document.activeElement === menu.querySelector("summary") };
+    })()`));
     if (!mobileMenu.opened || !mobileMenu.closed || !mobileMenu.focusReturned) {
       throw new Error(`Mobile menu dismissal failed: ${JSON.stringify(mobileMenu)}`);
     }

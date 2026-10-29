@@ -417,6 +417,7 @@ grid-column: 1 / -1;grid-row: auto;min-width: 0;}
 .rwn-professional .quick-need[data-quick-type="health"] { grid-column:span 2;}
 }
 @media (max-width:360px) {
+.rwn-professional .search-box { gap:.35rem;padding-inline:.5rem;}
 .rwn-professional .quick-need { padding-inline:.25rem;}
 .rwn-professional .site-header { gap:.35rem;}
 .rwn-professional .brand small { display:none;}
