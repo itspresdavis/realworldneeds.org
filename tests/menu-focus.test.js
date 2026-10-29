@@ -10,18 +10,35 @@ assert.ok(start >= 0 && end > start);
 const source = app.slice(start, end);
 
 function fixture() {
-  const events = {}, summary = {}, link = {}, input = {}, outside = {};
+  const events = {}, windowEvents = {}, menuEvents = {}, body = {}, input = {}, outside = {};
+  const window = { innerWidth: 800, innerHeight: 700, addEventListener: (type, handler) => { windowEvents[type] = handler; } };
+  const document = { body, activeElement: body, hasFocus: () => true,
+    querySelector: () => menu, addEventListener: (type, handler) => { events[type] = handler; } };
+  function control(kind, inMenu = true) {
+    const node = { inMenu,
+      closest: selector => selector === "summary, a[href]" ? node
+        : selector === "a[href]" && kind === "link" ? node : null,
+      focus: () => { document.activeElement = node; },
+      getBoundingClientRect: () => ({ width: inMenu && window.innerWidth > 900 ? 0 : 80,
+        height: inMenu && window.innerWidth > 900 ? 0 : 32, top: 10, bottom: 42 }) };
+    return node;
+  }
+  const summary = control("summary"), link = control("link"), brand = control("link", false);
   const menu = {
-    open: true,
-    contains: (element) => [menu, summary, link].includes(element),
+    open: true, contains: node => node === menu || Boolean(node?.inMenu),
     querySelector: () => summary,
-    querySelectorAll: () => [],
+    closest: () => ({ querySelectorAll: () => [brand, link] }),
+    addEventListener: (type, handler) => { menuEvents[type] = handler; },
     removeAttribute: () => { menu.open = false; },
   };
-  const document = { activeElement: summary, querySelector: () => menu, addEventListener: (event, handler) => { events[event] = handler; } };
-  summary.focus = () => { document.activeElement = summary; };
-  vm.runInNewContext(source, { document, window: { addEventListener() {} } });
-  return { events, menu, document, summary, link, input, outside };
+  document.activeElement = summary;
+  vm.runInNewContext(source, { document, window,
+    getComputedStyle: node => ({ visibility: "visible", display: node === menu && window.innerWidth > 900 ? "none" : "block" }) });
+  return { events, windowEvents, menuEvents, menu, document, window, summary, link, brand, input, outside, control };
+}
+
+function escape(target, updates = {}) {
+  return { key: "Escape", target, preventDefault() { this.defaultPrevented = true; }, ...updates };
 }
 
 test("outside click preserves focus deliberately moved to the search input", () => {
@@ -40,11 +57,74 @@ test("outside dismissal restores focus if it remained inside the closing menu", 
   assert.equal(f.document.activeElement, f.summary);
 });
 
-test("Escape still closes navigation and returns focus to the summary", () => {
-  const f = fixture(); let prevented = false;
+test("Escape inside navigation closes it and returns focus to the summary", () => {
+  const f = fixture(), event = escape(f.link);
   f.document.activeElement = f.link;
-  f.events.keydown({ key: "Escape", preventDefault: () => { prevented = true; } });
+  f.events.keydown(event);
   assert.equal(f.menu.open, false);
   assert.equal(f.document.activeElement, f.summary);
-  assert.equal(prevented, true);
+  assert.equal(event.defaultPrevented, true);
+});
+
+test("Escape does not steal focus from search or override another interaction", () => {
+  for (const variant of ["outside", "handled", "composition"]) {
+    const f = fixture();
+    f.document.activeElement = variant === "outside" ? f.input : f.link;
+    const event = escape(f.document.activeElement, variant === "handled" ? { defaultPrevented: true }
+      : variant === "composition" ? { isComposing: true } : {});
+    f.events.keydown(event);
+    assert.equal(f.menu.open, true, variant);
+    assert.equal(f.document.activeElement, variant === "outside" ? f.input : f.link, variant);
+  }
+});
+
+test("desktop reflow moves focus from hidden mobile navigation to visible header", () => {
+  const f = fixture();
+  f.document.activeElement = f.link;
+  f.window.innerWidth = 1200;
+  f.windowEvents.resize();
+  assert.equal(f.menu.open, false);
+  assert.equal(f.document.activeElement, f.brand);
+});
+
+test("native focus loss during desktop reflow is repaired without stealing deliberate focus", () => {
+  const f = fixture();
+  f.window.innerWidth = 1200;
+  f.document.activeElement = f.document.body;
+  f.menuEvents.focusout({ target: f.link, relatedTarget: null });
+  assert.equal(f.document.activeElement, f.brand);
+  f.document.activeElement = f.input;
+  f.menuEvents.focusout({ target: f.link, relatedTarget: null });
+  f.windowEvents.resize();
+  assert.equal(f.document.activeElement, f.input);
+});
+
+test("links replaced by the presentation layer still close mobile navigation", () => {
+  const f = fixture(), replacement = f.control("link");
+  f.menuEvents.click({ target: replacement });
+  assert.equal(f.menu.open, false);
+});
+
+test("section tracking updates newly replaced navigation anchors", () => {
+  const trackingStart = app.indexOf('  const sections = ["finder", "about", "standards"]');
+  const trackingEnd = app.indexOf('  if ("IntersectionObserver" in window)', trackingStart);
+  const events = {}, sections = [{ id: "finder", offsetTop: 0 }, { id: "about", offsetTop: 1000 }, { id: "standards", offsetTop: 2000 }];
+  const link = id => ({ dataset: { sectionLink: id }, attributes: {},
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; } });
+  const old = link("finder");
+  let links = [old];
+  const window = { scrollY: 0, innerHeight: 600,
+    addEventListener: (type, callback) => { events[type] = callback; },
+    requestAnimationFrame: callback => { callback(); return 0; } };
+  vm.runInNewContext(app.slice(trackingStart, trackingEnd), { window,
+    document: { getElementById: id => sections.find(section => section.id === id), querySelectorAll: () => links } });
+  assert.equal(old.attributes["aria-current"], "location");
+  const finder = link("finder"), about = link("about");
+  finder.attributes["aria-current"] = "location";
+  links = [finder, about];
+  window.scrollY = 1000;
+  events.scroll();
+  assert.equal(finder.attributes["aria-current"], undefined);
+  assert.equal(about.attributes["aria-current"], "location");
 });

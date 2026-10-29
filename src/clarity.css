@@ -187,7 +187,8 @@ position: absolute; top: .9rem; right: 1rem; left: 1rem; z-index: 8; display: fl
 .rwn-professional .globe-meta strong { color: #eef4ec; font-size: 1rem; font-weight: 650; }
 .rwn-professional .globe-meta__tools { display: flex; align-items: center; gap: .6rem; color: var(--rwn-muted); font-size: .75rem; }
 .rwn-professional .region-menu select {
-min-height: 44px; padding: .45rem 2rem .45rem .7rem; border: 1px solid #b8ccbe; border-radius: 7px; background: #fffefb; color: var(--rwn-ink-strong); font-size: .8125rem; backdrop-filter: none;
+-webkit-appearance: none; appearance: none; height: 44px; min-height: 44px; padding: .45rem 2rem .45rem .7rem; border: 1px solid #b8ccbe; border-radius: 7px; background-color: #fffefb; color: var(--rwn-ink-strong); font-size: .8125rem; backdrop-filter: none;
+background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2324583e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-position: right .65rem center; background-size: 1rem; background-repeat: no-repeat;
 }
 
 .rwn-professional .globe-controls {
@@ -503,7 +504,12 @@ touch-action: manipulation; transition: transform 120ms ease, border-color 140ms
   .rwn-professional { --rwn-press-offset: 0px; }
 }
 
+/* Reset child placement as well as the tracks: the collapsed-map layout
+   otherwise creates an implicit second column and squeezes the search form. */
 .rwn-professional .finder__grid:has(.is-globe-unavailable) { grid-template-columns: minmax(0,1fr); max-width: 52rem; }
+.rwn-professional .finder__grid:has(.is-globe-unavailable) > :is(.finder-sidebar, .globe-stage, .resource-panel) {
+grid-column: 1 / -1; grid-row: auto; min-width: 0;
+}
 .rwn-professional .finder__grid:has(.is-globe-unavailable) .finder-intro { max-width: 42rem; }
 .rwn-professional .resource-row__service > i { box-shadow: none; }
 .rwn-professional .resource-row__arrow { color: var(--rwn-green-dark); }
@@ -563,3 +569,7 @@ background: #e0eee4;
 outline: 3px solid #24583e; outline-offset: 3px;
 }
 
+
+@media (forced-colors: active) {
+  .rwn-professional .region-menu select { -webkit-appearance: auto; appearance: auto; background-image: none; }
+}

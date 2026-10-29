@@ -17,7 +17,7 @@ const handlers = source.slice(
 );
 const popstate = source.slice(
   source.indexOf('  window.addEventListener("popstate", (event) => {'),
-  source.indexOf("  const sectionLinks ="),
+  source.indexOf("  const sections ="),
 );
 const controlSync = source.slice(
   source.indexOf('  const search = document.getElementById("resourceSearch");', source.indexOf("function renderControls")),

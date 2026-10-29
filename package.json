@@ -21,7 +21,8 @@
     "qa:abuse": "node scripts/browser-chaos.mjs",
     "catalog:seed": "node scripts/catalog-sync.mjs seed",
     "catalog:verify": "node scripts/catalog-sync.mjs verify",
-    "catalog:export": "node scripts/catalog-sync.mjs export"
+    "catalog:export": "node scripts/catalog-sync.mjs export",
+    "test:browser:firefox": "python3 scripts/browser-firefox.py"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

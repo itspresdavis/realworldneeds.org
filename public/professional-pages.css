@@ -86,6 +86,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .legal-header nav a:hover,
 .legal-header nav a:focus-visible,
 .legal-header nav a[aria-current="page"] { color:var(--page-blue); }
+.legal-header nav a:focus-visible { outline:3px solid #356c4e; outline-offset:3px; border-radius:2px; }
 
 /* Page introduction: concise, not a marketing hero. */
 .legal-hero,
@@ -202,7 +203,8 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .directory-downloads { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin-bottom:1.25rem; }
 .directory-downloads > strong { margin-right:.2rem; color:var(--page-ink-strong); font-size:.71rem; }
 .directory-pagination > a { min-height:44px; }
-.directory-page-picker { flex-basis:100%; min-width:0; }
+.directory-page-picker { flex:0 1 auto; min-width:0; margin-left:auto; }
+.directory-page-picker[open] { flex-basis:100%; margin-left:0; }
 .directory-page-picker > summary { width:fit-content; max-width:100%; min-height:44px; padding:.55rem .7rem; border:1px solid var(--page-line-strong); border-radius:7px; color:var(--page-blue-dark); font-size:.8125rem; font-weight:650; cursor:pointer; }
 .directory-page-picker > summary:hover { background:var(--page-green-soft); }
 .directory-page-list { display:flex; flex-wrap:wrap; gap:.5rem; margin:.65rem 0 0; padding:.4rem; list-style:none; }
@@ -251,6 +253,7 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 .legal-footer a { color:#b8c8cb; font-size:.68rem; text-decoration:none; }
 .legal-footer a:hover,
 .legal-footer a:focus-visible { color:#fff; text-decoration:underline; text-underline-offset:3px; }
+.legal-footer a:focus-visible { outline-color:#c2e5cc; }
 /* Keep shared footer links within their tracks, then reflow before columns crowd. */
 .legal-footer.rwn-unified-footer { grid-template-columns:minmax(0,1.2fr) repeat(3,minmax(0,.8fr)); }
 .legal-footer.rwn-unified-footer > * { min-width:0; overflow-wrap:anywhere; }
@@ -343,6 +346,30 @@ img.legal-brand__mark { background: transparent !important; object-fit: contain;
 }
 
 .directory-results-jump{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin:.85rem 0;padding:.72rem .82rem;border:1px solid #b8cbc2;border-left:3px solid #356c4e;border-radius:5px;background:#f8fbf9;color:#24434f;text-decoration:none}.directory-results-jump strong,.directory-results-jump small{display:block}.directory-results-jump strong{font-size:.76rem}.directory-results-jump small{margin-top:.12rem;color:#61757c;font-size:.65rem}.directory-results-jump>span:last-child{color:#24583e;font-size:1rem}.directory-results-jump:hover,.directory-results-jump:focus-visible{border-color:#356c4e;background:#f0f8f3}.directory-results-anchor{display:block;scroll-margin-top:1rem}
+
+/* Keep optional browsing tools compact, with native disclosures that expand in flow. */
+#directory .directory-browse-tools { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 1.5rem; margin-bottom:.75rem; }
+#directory .directory-browse-tools > * { min-width:0; }
+#directory .directory-browse-tools > details { margin-bottom:0; }
+#directory .directory-browse-tools > details > summary { min-height:48px; font-size:.8125rem; line-height:1.45; }
+#directory .directory-browse-tools:has(> details[open]) { grid-template-columns:minmax(0,1fr); }
+#directory .directory-browse-tools > :only-child { grid-column:1 / -1; }
+#directory .directory-results-jump { margin-top:0; }
+#directory .directory-shell.has-global-search .directory-browse-tools { display:none; }
+@media (max-width:760px) {
+  #directory .directory-search-tools { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
+  #directory .directory-search-tools > * { grid-column:1 / -1; }
+  #directory .directory-shell .directory-search-tools__top { display:contents; }
+  #directory .directory-search-control { grid-column:1 / -1; }
+  #directory .directory-country-field { grid-column:1; }
+  #directory .directory-search-tools .directory-need-field { grid-column:2; display:grid; grid-template-columns:minmax(0,1fr); align-content:end; gap:.4rem; }
+  #directory .directory-search-tools:not(:has(.directory-country-field)) .directory-need-field { grid-column:1 / -1; }
+  #directory :is(.directory-country-field,.directory-need-field) > span { font-size:.8125rem; }
+  #directory .directory-browse-tools { gap:0 1rem; }
+}
+@media (max-width:359px) {
+  #directory .directory-country-field, #directory .directory-search-tools .directory-need-field { grid-column:1 / -1; }
+}
 
 /* Readable actions; keep long names clear of action groups at tablet widths. */
 #directory .directory-global-result-actions a { min-height:44px; font-size:.8125rem; }
@@ -460,7 +487,7 @@ main#directory > .legal-hero { background: #f5f4ee; }
 
 /* Keep every need discoverable without a sideways-scroll gesture. */
 #directory .directory-need-field { display: none; }
-#directory .directory-search-tools__meta { min-height: 44px; justify-content: flex-start; }
+#directory .directory-search-tools__meta { min-height: 28px; justify-content: flex-start; }
 #directory .directory-search-tools__meta > span:last-child { margin-left: auto; }
 #directory .directory-search-tools__meta .directory-search-tools__clear { min-height: 44px; padding: .45rem .65rem; font-size: .8125rem; }
 @media (max-width: 760px) {
@@ -555,4 +582,23 @@ main#directory > .legal-hero { background: #f5f4ee; }
 }
 @media (forced-colors: active) {
   #service .service-next-steps a:focus-visible { outline-color: Highlight; }
+}
+
+
+/* Native selection behavior with consistent, readable control geometry in WebKit. */
+#directory :is(.directory-country-field, .directory-need-field) select {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 58px;
+  padding-inline-end: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2324583e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right .75rem center;
+  background-size: 1rem;
+  background-repeat: no-repeat;
+}
+@media (max-width: 760px) {
+  #directory :is(.directory-country-field, .directory-need-field) select { height: 48px; }
+}
+@media (forced-colors: active) {
+  #directory :is(.directory-country-field, .directory-need-field) select { -webkit-appearance: auto; appearance: auto; background-image: none; }
 }

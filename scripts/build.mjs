@@ -9,6 +9,7 @@ import { sourceClosureMarkup, availabilityInstructions } from "../src/utils/sour
 import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { resourceDescription } from "./resource-description.mjs";
+import { createThreeAssets, versionThreeReferences } from "./three-assets.mjs";
 
 // A page of 80 expanded records created a 34,000px scroll. Sixty compact
 // records keeps a browse page purposeful while whole-catalog search remains
@@ -57,8 +58,9 @@ async function walkFiles(directory) {
   return files.sort();
 }
 
-async function releaseHash() {
+async function releaseHash(vendorRelease) {
   const hash = createHash("sha256");
+  hash.update("three-vendor\0").update(vendorRelease);
   const files = ["index.html", ...await walkFiles("src")];
   for (const path of files) {
     hash.update(path);
@@ -217,9 +219,11 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
       <div class="directory-shell">
         ${breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
-        <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
         <a class="directory-results-jump" href="#directory-results"><span><strong>View listings</strong><small>${items.length.toLocaleString()} ${items.length === 1 ? "listing" : "listings"} on this page · page ${page} of ${totalPages}</small></span><span aria-hidden="true">↓</span></a>
-        ${browseMarkup}
+        <div class="directory-browse-tools">
+          <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
+          ${browseMarkup}
+        </div>
         ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
         <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
         ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
@@ -368,7 +372,11 @@ function resourcePage(resource) {
 </html>`;
 }
 
-const release = await releaseHash();
+const three = createThreeAssets(
+  await readFile("node_modules/three/build/three.module.min.js"),
+  await readFile("node_modules/three/build/three.core.min.js")
+);
+const release = await releaseHash(three.release);
 
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
@@ -377,14 +385,14 @@ await cp("src", "dist/src", { recursive: true });
 await cp("public", "dist", { recursive: true });
 
 let builtIndex = await readFile("dist/index.html", "utf8");
-builtIndex = versionIndexAssets(builtIndex, release);
+builtIndex = versionThreeReferences(versionIndexAssets(builtIndex, release), three);
 await writeFile("dist/index.html", builtIndex);
 
 const builtJsFiles = (await walkFiles("dist/src")).filter((path) => extname(path) === ".js");
 for (const path of builtJsFiles) {
   let source = await readFile(path, "utf8");
   if (path.endsWith(join("src", "app.js"))) source = stripClusterCountMarkup(source);
-  await writeFile(path, versionModuleImports(source, release));
+  await writeFile(path, versionThreeReferences(versionModuleImports(source, release), three));
 }
 
 const transparencyTemplate = await readFile("public/transparency.html", "utf8");
@@ -537,11 +545,15 @@ await writeFile("dist/data/sources.json", `${JSON.stringify({
   note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
-await writeFile("dist/data/release.json", `${JSON.stringify({ release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, generatedAt: new Date().toISOString() })}\n`);
+await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, generatedAt: new Date().toISOString() })}\n`);
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
 await writeFile("dist/sitemap.xml", sitemap);
 
 await mkdir("dist/vendor", { recursive: true });
-await cp("node_modules/three/build/three.module.min.js", "dist/vendor/three.module.js");
-await cp("node_modules/three/build/three.core.min.js", "dist/vendor/three.core.min.js");
+await writeFile(`dist/vendor/${three.moduleName}`, three.moduleSource);
+await writeFile(`dist/vendor/${three.coreName}`, three.coreSource);
+// Keep the currently public URLs usable for an older cached app during rollout.
+// The module alias points at its own hashed core, keeping fresh alias loads paired.
+await writeFile("dist/vendor/three.module.js", three.moduleSource);
+await writeFile("dist/vendor/three.core.min.js", three.coreSource);

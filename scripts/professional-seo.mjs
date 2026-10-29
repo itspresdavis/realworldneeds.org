@@ -116,7 +116,7 @@ function navKey(path) {
   if (path === "/editorial-policy") return "checks";
   if (path === "/sources") return "sources";
   if (path === "/transparency") return "transparency";
-  return "find";
+  return path === "/" ? "find" : null;
 }
 
 function navigationLinks(path) {

@@ -3012,25 +3012,45 @@ function bindEvents() {
 
   const siteMenu = document.querySelector(".site-menu");
   const siteMenuSummary = siteMenu?.querySelector("summary");
-  const closeSiteMenu = ({ restoreFocus = false } = {}) => {
-    if (!siteMenu?.open) return;
-    siteMenu.removeAttribute("open");
-    if (restoreFocus) siteMenuSummary?.focus();
+  const isSiteMenuControl = (node) => siteMenu?.contains(node) && node.closest?.("summary, a[href]")
+    && !node.closest("dialog, [role=dialog], input, select, textarea, [contenteditable]");
+  const repairSiteMenuFocus = () => {
+    if (!siteMenu || (!siteMenu.contains(document.activeElement) && document.activeElement !== document.body)) return;
+    const target = [siteMenuSummary, ...siteMenu.closest("header").querySelectorAll("a")].find((node) => {
+      if (!node) return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight
+        && getComputedStyle(node).visibility !== "hidden";
+    });
+    target?.focus({ preventScroll: true });
   };
-  siteMenu?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => closeSiteMenu()));
+  const closeSiteMenu = ({ restoreFocus = false, repairClosed = false } = {}) => {
+    if (!siteMenu || (!siteMenu.open && !repairClosed)) return;
+    siteMenu.removeAttribute("open");
+    if (restoreFocus) repairSiteMenuFocus();
+  };
+  // Presentation replaces navigation links after app startup; delegate to the
+  // stable menu so the replacement links still dismiss it.
+  siteMenu?.addEventListener("click", (event) => {
+    if (event.target.closest?.("a[href]")) closeSiteMenu();
+  });
   document.addEventListener("click", (event) => {
     if (siteMenu?.open && !siteMenu.contains(event.target)) {
       closeSiteMenu({ restoreFocus: siteMenu.contains(document.activeElement) });
     }
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && siteMenu?.open) {
-      event.preventDefault();
-      closeSiteMenu({ restoreFocus: true });
-    }
+    if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || !siteMenu?.open || !isSiteMenuControl(event.target)) return;
+    event.preventDefault();
+    closeSiteMenu({ restoreFocus: true });
+  });
+  // Responsive hiding can clear native focus before or after resize fires.
+  siteMenu?.addEventListener("focusout", (event) => {
+    if (!event.relatedTarget && isSiteMenuControl(event.target) && window.innerWidth > 900
+      && document.hasFocus() && document.activeElement === document.body && getComputedStyle(siteMenu).display === "none") repairSiteMenuFocus();
   });
   window.addEventListener("resize", () => {
-    if (window.innerWidth > 900) closeSiteMenu();
+    if (window.innerWidth > 900) closeSiteMenu({ restoreFocus: siteMenu?.contains(document.activeElement), repairClosed: true });
   }, { passive: true });
   window.addEventListener("popstate", (event) => {
     const wasPreparing = preparationNoticeTimer !== null;
@@ -3042,14 +3062,13 @@ function bindEvents() {
     document.getElementById("clearSearch").hidden = !state.query;
   });
 
-  const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
   const sections = ["finder", "about", "standards"].map((id) => document.getElementById(id));
   let navigationFrame = null;
   const updateCurrentSection = () => {
     navigationFrame = null;
     const marker = window.scrollY + window.innerHeight * 0.34;
     const current = sections.reduce((active, section) => section.offsetTop <= marker ? section : active, sections[0]);
-    sectionLinks.forEach((link) => {
+    document.querySelectorAll("[data-section-link]").forEach((link) => {
       if (link.dataset.sectionLink === current.id) link.setAttribute("aria-current", "location");
       else link.removeAttribute("aria-current");
     });

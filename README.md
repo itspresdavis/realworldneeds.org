@@ -71,6 +71,17 @@ The browser suite covers:
 
 CI uploads short-lived QA screenshots from the rendered browser suite.
 
+### Native Firefox fallback check
+
+Against an already running build, with Python 3, Firefox and geckodriver installed:
+
+```sh
+npm run test:browser:firefox -- --base-url http://127.0.0.1:4187 \
+  --output-dir "$HOME/.local/state/rwn-web-quality/firefox-$(date +%Y%m%dT%H%M%S)"
+```
+
+The dependency-free runner creates a private temporary profile and deliberately disables WebGL to test the text fallback; ordinary Firefox may support WebGL. It checks 1440, 390 and 320 pixel layouts, search and filters, service links, local saved services, and mobile menu focus. The required new output directory must be outside the checkout and retains screenshots, browser errors, release metadata and SHA-256 evidence. It neither builds nor starts a server, and is an explicit supplementary check rather than part of the automatic Quality gate. For an isolated build, start its existing `scripts/serve.mjs` on port 4187 from that build's workspace. The Boston fixture expects 22 matches; `--expected-boston-results` permits a deliberate catalog-fixture update. Override `--firefox`, `--geckodriver` or `--profile-root` if needed; snap Firefox requires a profile parent it can access.
+
 ## Search and low-connectivity behavior
 
 Homepage search and filters run locally. The text-directory search lazily loads a fixed same-origin static index; the typed query is not placed in that request URL or sent to an RWN endpoint. Both surfaces use the same word-start matcher and relevance rules: exact places, program words, and street phrases outrank incidental prefixes. Partial typing remains supported. The recognized complete program query WIC (including W.I.C.) requires an exact WIC token, returning 395 evidenced matches rather than implying that Wick provides WIC. Wi still finds WIC and Wick, and Wick still finds that place; other words keep the ordinary prefix rule. Diacritics, common punctuation, curated need aliases, and multiword provider/address queries are normalized consistently.

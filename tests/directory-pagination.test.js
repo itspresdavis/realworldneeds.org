@@ -72,7 +72,8 @@ test("page choices retain native focus behavior, wrap on narrow screens, and sta
     readFile("public/saved-services.css", "utf8")
   ]);
   assert.match(css, /:where\([^)]*summary[^)]*\):focus-visible\s*\{[^}]*outline:\s*3px/);
-  assert.match(css, /\.directory-page-picker\s*\{[^}]*flex-basis:100%;[^}]*min-width:0/);
+  assert.match(css, /\.directory-page-picker\s*\{[^}]*min-width:0/);
+  assert.match(css, /\.directory-page-picker\[open\]\s*\{[^}]*flex-basis:100%/, "open choices expand in flow instead of overlaying results");
   assert.match(css, /\.directory-page-list\s*\{[^}]*display:flex;[^}]*flex-wrap:wrap/);
   assert.match(css, /\.directory-page-list \[aria-current="page"\]\s*\{[^}]*min-width:44px;[^}]*min-height:44px/);
   assert.match(searchCss, /\.directory-shell\.has-global-search nav\[aria-label="Directory pages"\]\{display:none\}/);

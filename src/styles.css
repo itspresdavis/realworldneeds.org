@@ -2691,7 +2691,9 @@ svg {
   right: 1rem;
   bottom: 1rem;
   z-index: 80;
-  transform: translateY(150%);
+  transform: translateY(calc(100% + 1rem));
+  opacity: 0;
+  pointer-events: none;
   padding: 0.72rem 0.9rem;
   border: 1px solid var(--green-bright);
   border-radius: 4px;
@@ -2699,11 +2701,12 @@ svg {
   color: var(--white);
   font-size: 0.72rem;
   font-weight: 750;
-  transition: transform 220ms ease;
+  transition: transform 220ms ease, opacity 180ms ease;
 }
 
 .status-toast.is-visible {
   transform: translateY(0);
+  opacity: 1;
 }
 
 .launch-dialog {

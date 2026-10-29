@@ -25,7 +25,7 @@ export function installPageInteractions() {
     start.id = "top";
     start.className = "page-start";
     start.tabIndex = -1;
-    start.setAttribute("aria-label", "Start of page");
+    // This empty scroll sentinel has no naming role; the visible brand follows it.
     header.removeAttribute("id");
     header.before(start);
   }

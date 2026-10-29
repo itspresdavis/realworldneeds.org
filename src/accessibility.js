@@ -20,7 +20,7 @@ function installSearchAccessibility() {
   const input = document.getElementById("resourceSearch");
   if (!input) return;
   input.setAttribute("autocapitalize", "none");
-  input.setAttribute("aria-keyshortcuts", "/ Escape");
+  input.setAttribute("aria-keyshortcuts", "Alt+/ Escape");
 
   const helper = document.querySelector(".search-helper");
   if (helper) {
@@ -43,7 +43,7 @@ function installSearchAccessibility() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (!event.altKey || (event.key !== "/" && event.code !== "Slash") || event.metaKey || event.ctrlKey || event.defaultPrevented || event.isComposing) return;
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
     event.preventDefault();

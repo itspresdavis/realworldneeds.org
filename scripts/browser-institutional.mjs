@@ -438,8 +438,8 @@ async function run() {
 
     // A lost map must not leave map-sized whitespace or stale overlays between
     // the search controls and the directory. Exercise the real loss/retry
-    // handlers at both sizes; the visible tray is a presentation-state fixture.
-    for (const [width, height, mobileViewport] of [[1440, 1000, false], [390, 844, true]]) {
+    // handlers across the grid breakpoints; the visible tray is a state fixture.
+    for (const [width, height, mobileViewport] of [[1440, 1000, false], [1180, 1000, false], [901, 1000, false], [390, 844, true], [320, 844, true]]) {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: mobileViewport, screenWidth: width, screenHeight: height });
       await navigate(client, `${HOST}/`);
       const fallback = await evaluate(client, `(async () => {
@@ -459,9 +459,16 @@ async function run() {
         const retry = document.getElementById("retryGlobe");
         notice.scrollIntoView({ block: "center" });
         retry.focus();
+        const sidebarBox = document.querySelector(".finder-sidebar").getBoundingClientRect();
+        const stageBox = stage.getBoundingClientRect();
+        const inputBox = input.getBoundingClientRect();
+        const toast = document.getElementById("statusToast");
         return {
           originalHeight,
-          compactHeight: stage.getBoundingClientRect().height,
+          stacked: stageBox.top >= sidebarBox.bottom - 1 && Math.abs(stageBox.left - sidebarBox.left) <= 1 && Math.abs(stageBox.width - sidebarBox.width) <= 1,
+          usableSearch: inputBox.width >= 160 && inputBox.left >= sidebarBox.left - 1 && inputBox.right <= sidebarBox.right + 1,
+          hiddenToast: !toast.classList.contains("is-visible") && getComputedStyle(toast).opacity === "0" && getComputedStyle(toast).pointerEvents === "none",
+          compactHeight: stageBox.height,
           noticeHeight: notice.getBoundingClientRect().height,
           unavailable: stage.classList.contains("is-globe-unavailable"),
           hiddenChrome,
@@ -473,7 +480,7 @@ async function run() {
           noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth + 1
         };
       })()`);
-      if (!fallback.unavailable || !fallback.hiddenChrome || !fallback.emptySearch || !fallback.liveAnnouncement || !fallback.retryVisible || !fallback.retryFocused || !fallback.directoryRoute || !fallback.noHorizontalOverflow || fallback.compactHeight > fallback.noticeHeight + 3 || fallback.compactHeight >= fallback.originalHeight) {
+      if (!fallback.stacked || !fallback.usableSearch || !fallback.hiddenToast || !fallback.unavailable || !fallback.hiddenChrome || !fallback.emptySearch || !fallback.liveAnnouncement || !fallback.retryVisible || !fallback.retryFocused || !fallback.directoryRoute || !fallback.noHorizontalOverflow || fallback.compactHeight > fallback.noticeHeight + 3 || fallback.compactHeight >= fallback.originalHeight) {
         throw new Error(`Compact fallback failed at ${width}px: ${JSON.stringify(fallback)}`);
       }
       await capture(client, `institutional-fallback-${width}.png`);
