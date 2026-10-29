@@ -19,7 +19,7 @@ function searchFixture(fetch) {
     loadCatalog: catalog.load, results, resultList: { replaceChildren() {}, append() {} },
     shell: { classList: { add(value) { shellClasses.add(value); } } }, collator: new Intl.Collator(),
     scopedRecords: data => data.records.map(record => ({ ...record, country: "US", name: record.id, categoryLabels: ["food"] })),
-    syncCategoryLabels() {}, activeMatches: [], visibleCount: 0, scopedCount: 0, restored: null, restorePending: false,
+    syncCategoryLabels() {}, activeMatches: [], visibleCount: 0, scopedCount: 0, BATCH: 60, rendered: "", restored: null, restorePending: false,
     renderNext() { effects.rendered++; }, format: value => String(value),
     clearGlobalResults() { results.hidden = true; shellClasses.delete("has-global-search"); },
     announce(text) { effects.message = text; }, restoreView() { effects.restore++; },

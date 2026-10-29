@@ -102,7 +102,7 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
     queryTokens: value => value.trim().split(/\s+/).filter(Boolean), normalize: value => value.toLowerCase(),
     clear: {}, root: { classList: { toggle() {} } }, count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: async () => ({ records }),
     syncCategoryLabels() {}, scopedRecords: payload => payload.records, scoreRecord: () => 1,
-    collator: new Intl.Collator(), activeMatches: [], visibleCount: 0, scopedCount: 0,
+    collator: new Intl.Collator(), activeMatches: [], visibleCount: 0, scopedCount: 0, BATCH: 60, rendered: "",
     resultList: { replaceChildren() {}, querySelectorAll: () => [{ getAttribute: () => "/service/finder-fr", focus: () => effects.focus++ }] },
     renderNext: () => { f.visibleCount = Math.min(f.visibleCount + 1, f.activeMatches.length); },
     restorePending: Boolean(restored), restored, requestAnimationFrame: callback => frames.push(callback),
