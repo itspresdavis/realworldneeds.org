@@ -2,7 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 from types import SimpleNamespace
 import io
 import tempfile
@@ -49,15 +49,25 @@ class CleanupTests(unittest.TestCase):
             audit.log = io.BytesIO()
             audit.profile = output / "private-profile"
             audit.profile.mkdir()
-            with patch.object(runner, "atomic_json", side_effect=OSError("disk full")), patch.object(runner.os, "killpg") as kill:
+            with patch.object(runner, "atomic_json", side_effect=OSError("disk full")), patch.object(runner.os, "killpg", side_effect=[None, ProcessLookupError()]) as kill:
                 with self.assertRaisesRegex(RuntimeError, "disk full.*socket close failed"):
                     audit.cleanup()
             audit.wd.assert_called_once_with("DELETE", "")
             audit.bidi.close.assert_called_once()
-            kill.assert_called_once_with(12345, runner.signal.SIGTERM)
-            audit.driver.wait.assert_called_once_with(timeout=8)
+            self.assertEqual(kill.call_args_list, [call(12345, runner.signal.SIGTERM), call(12345, 0)])
+            self.assertEqual(audit.driver.wait.call_args_list, [call(timeout=8), call(timeout=5)])
             self.assertTrue(audit.log.closed)
             self.assertFalse(audit.profile.exists())
+
+
+    def test_descendants_are_stopped_even_when_driver_leader_already_exited(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            audit = runner.FirefoxAudit(SimpleNamespace(), Path(temporary))
+            audit.driver = SimpleNamespace(pid=12345, wait=Mock(return_value=0))
+            with patch.object(runner.os, "killpg") as kill:
+                audit.cleanup()
+            self.assertEqual(kill.call_args_list, [call(12345, runner.signal.SIGTERM),
+                call(12345, 0), call(12345, runner.signal.SIGKILL)])
 
 
 if __name__ == "__main__":

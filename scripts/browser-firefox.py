@@ -423,11 +423,15 @@ class FirefoxAudit:
                 try:
                     self.driver.wait(timeout=8)
                 except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(self.driver.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    self.driver.wait(timeout=5)
+                    pass
+                # The leader can exit before its Firefox descendants. Probe only
+                # the process group created by this runner, then finish cleanup.
+                try:
+                    os.killpg(self.driver.pid, 0)
+                    os.killpg(self.driver.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                self.driver.wait(timeout=5)
             attempt("stop owned driver group", stop_driver)
         if self.log:
             attempt("close driver log", self.log.close)
