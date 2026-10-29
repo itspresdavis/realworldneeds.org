@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import uuid
 
@@ -70,10 +71,11 @@ def atomic_json(path, value):
         os.close(directory)
 
 
-def clean_environment(home):
+def clean_environment(home, temp_root=None):
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
-    (home / "tmp").mkdir(exist_ok=True)
+    runtime_tmp = Path(temp_root) if temp_root is not None else home / "tmp"
+    runtime_tmp.mkdir(parents=True, exist_ok=True)
     user_config = home / "npm-user.conf"
     global_config = home / "npm-global.conf"
     user_config.write_text("")
@@ -82,7 +84,7 @@ def clean_environment(home):
     env = {key: os.environ[key] for key in keep if key in os.environ}
     env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
     env.update({
-        "HOME": str(home), "TMPDIR": str(home / "tmp"),
+        "HOME": str(home), "TMPDIR": str(runtime_tmp),
         "XDG_CONFIG_HOME": str(home / ".config"),
         "XDG_CACHE_HOME": str(home / ".cache"),
         "XDG_DATA_HOME": str(home / ".local/share"),
@@ -352,7 +354,12 @@ def main(argv=None):
     try:
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous[signum] = signal.signal(signum, interrupted)
-        env = clean_environment(run_dir / "home")
+        # Chrome SingletonSocket uses TMPDIR and Unix socket paths are limited.
+        # Keep HOME and evidence retained, but use a short private runtime path.
+        runtime_tmp = Path(tempfile.mkdtemp(prefix="rwn-q-", dir="/tmp"))
+        receipt["runtime_tmpdir"] = str(runtime_tmp)
+        save()
+        env = clean_environment(run_dir / "home", temp_root=runtime_tmp)
         lock_path = Path.home() / ".local/state/rwn-web-quality/validator.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock = lock_path.open("a")

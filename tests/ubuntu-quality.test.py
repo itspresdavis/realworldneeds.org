@@ -125,6 +125,15 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(Path(env["NPM_CONFIG_GLOBALCONFIG"]).read_text(), "")
         self.assertEqual(env["CHROME_PATH"], "/usr/bin/google-chrome")
 
+    def test_short_runtime_tmpdir_is_independent_of_retained_home(self):
+        with tempfile.TemporaryDirectory(prefix="rwn-q-", dir="/tmp") as runtime_tmp:
+            home = self.root / ("retained-evidence-" * 8) / "home"
+            env = quality.clean_environment(home, temp_root=runtime_tmp)
+            self.assertEqual(env["HOME"], str(home))
+            self.assertEqual(env["TMPDIR"], runtime_tmp)
+            self.assertLess(len(runtime_tmp.encode()), 40)
+            self.assertEqual(Path(runtime_tmp).stat().st_mode & 0o777, 0o700)
+
     def test_npm_accepts_scrubbed_environment(self):
         env = quality.clean_environment(self.root / "home")
         result = subprocess.run(["npm", "--version"], env=env, text=True,
