@@ -7,3 +7,6 @@ dist/
 supabase/.temp/
 supabase/import/
 qa-screenshots/
+
+# Python validation tooling bytecode
+__pycache__/
