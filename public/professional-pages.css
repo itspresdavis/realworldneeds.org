@@ -244,7 +244,7 @@ display:inline-flex;min-height:42px;align-items:center;justify-content:center;pa
 }
 #directory .directory-global-result-actions a { min-height:44px;font-size:.8125rem;}
 @media (min-width:651px) and (max-width:900px) {
-#directory .directory-global-result-wrap { grid-template-columns:minmax(0,1fr);}
+#directory .directory-global-result-wrap { grid-template-columns:minmax(0,1fr); }
 #directory .directory-global-result-actions { justify-content:flex-start;}
 }
 .legal-hero h1,
