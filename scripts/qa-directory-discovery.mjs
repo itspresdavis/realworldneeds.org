@@ -21,6 +21,7 @@ export function directoryDiscoverySnapshot() {
     count: pick('[data-directory-count]')?.textContent,
     focus: document?.activeElement?.getAttribute('href'), scroll: globalThis.scrollY ?? null,
     focusedId: document?.activeElement?.id,
+    queryFocused: document?.activeElement === pick('[data-directory-query]'),
     focusBox: (() => { const r = document?.activeElement?.getBoundingClientRect(); return r ? { top:r.top, bottom:r.bottom, left:r.left, right:r.right, width:r.width, height:r.height } : null; })(),
     focusVisible: (() => { const rect = document?.activeElement?.getBoundingClientRect(); return rect?.height > 0 && rect.top >= (pick('.legal-header')?.getBoundingClientRect().bottom || 0) + 6 && rect.bottom <= innerHeight - 6; })(),
     saved: pick('.directory-shell')?.classList.contains('has-saved-view'),
@@ -192,9 +193,10 @@ export async function verifyDirectoryDiscovery({ client, host, navigate, evaluat
     await goEntry(directoryId);
     await wait(s => !s.saved && !s.menuOpen && s.query === 'WIC' && s.country === 'United States' && s.rows.length === 120 && s.focusVisible && s.focus?.startsWith('/service/') && Math.abs(s.scroll - savedFrom.scroll) < 5, 'Saved Back did not restore the latest scroll with an unobscured return target');
 
-    await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key: '/', code: 'Slash', windowsVirtualKeyCode: 191 });
-    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: '/', code: 'Slash', windowsVirtualKeyCode: 191 });
-    await wait(s => s.focusVisible && s.scroll < 500, 'Search shortcut left the editable field offscreen after Saved Back');
+    await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key: '/', code: 'Slash', windowsVirtualKeyCode: 191, modifiers: 1 });
+    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: '/', code: 'Slash', windowsVirtualKeyCode: 191, modifiers: 1 });
+    await wait(s => s.queryFocused && s.focusVisible && s.scroll < 500, 'Alt+/ search shortcut left the editable field unfocused or offscreen after Saved Back');
+    await capture(client, `directory-discovery-shortcut-${width}.png`);
 
     await type('zzzz-no-service-here');
     await wait(s => s.empty?.includes('does not mean help is unavailable'), 'No-match coverage explanation missing');

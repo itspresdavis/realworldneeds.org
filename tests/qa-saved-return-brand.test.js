@@ -89,7 +89,7 @@ test('Saved journeys reuse the established native Enter and Tab protocol without
 test('institutional browser gate requires the approved Saved label and exact destination',async()=>{
  const source=await readFile('scripts/browser-institutional.mjs','utf8');
  const condition=source.match(/if \((!desktop\.professional[^\n]+)\) \{/)[1];
- const desktop={professional:true,accessibility:true,noHorizontalOverflow:true,sidebarOverflow:'visible',scrollBehavior:'auto',panelRole:'region',panelLive:false,resultLinks:1,directActions:1,jumpResults:true,mobileTaskbar:false,finderRoute:false,headerAction:'Saved',headerActionHref:'/directory#saved',searchShortcuts:'/ Escape',motionLabel:'Resume globe rotation'};
+ const desktop={professional:true,accessibility:true,noHorizontalOverflow:true,sidebarOverflow:'visible',scrollBehavior:'auto',panelRole:'region',panelLive:false,resultLinks:1,directActions:1,jumpResults:true,mobileTaskbar:false,finderRoute:false,headerAction:'Saved',headerActionHref:'/directory#saved',searchShortcuts:'Alt+/ Escape',motionLabel:'Resume globe rotation'};
  const rejects=state=>vm.runInNewContext(condition,{desktop:state});
  assert.equal(rejects(desktop),false);
  for(const change of [{headerAction:'Browse directory'},{headerActionHref:'/directory'},{headerActionHref:''},{headerAction:''}])assert.equal(rejects({...desktop,...change}),true);

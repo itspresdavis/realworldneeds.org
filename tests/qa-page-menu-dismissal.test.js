@@ -204,19 +204,19 @@ test('snapshot assigns stable exact-node IDs and finds a genuinely inert outside
   document.activeElement = summary; assert.equal(snapshot().focus.key, initial.focus.key);
 });
 
-async function keyCalls(value, shift = false) {
+async function keyCalls(value, shift = false, alt = false) {
   const source = verifyPageMenuDismissal.toString(), calls = [];
   const helper = source.slice(source.indexOf('  const key = async'), source.indexOf('  const click = async'));
   const key = vm.runInNewContext(`${helper}; key`, { call: async (method, params) => calls.push({ method, params: JSON.parse(JSON.stringify(params)) }),
     frame: async () => calls.push('frame'), assert: assert.ok });
-  await key(value, shift); return calls;
+  await key(value, shift, alt); return calls;
 }
-for (const [value, code, shift] of [['Escape', 27, false], ['Enter', 13, false], ['Tab', 9, true], ['/', 191, false]]) {
-  test(`native ${value} input sends the correct key pair and observes after it`, async () => {
-    const calls = await keyCalls(value, shift);
+for (const [value, code, shift, alt] of [['Escape', 27, false, false], ['Enter', 13, false, false], ['Tab', 9, true, false], ['/', 191, false, true]]) {
+  test(`native ${alt ? 'Alt+' : ''}${value} input sends the correct key pair and observes after it`, async () => {
+    const calls = await keyCalls(value, shift, alt);
     assert.deepEqual(calls, [
       ...[value === 'Enter' ? 'keyDown' : 'rawKeyDown', 'keyUp'].map(type => ({ method: 'Input.dispatchKeyEvent', params: {
-        type, key: value, code: value === '/' ? 'Slash' : value, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers: shift ? 8 : 0,
+        type, key: value, code: value === '/' ? 'Slash' : value, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers: (shift ? 8 : 0) | (alt ? 1 : 0),
         ...(type === 'keyDown' ? { text: '\r', unmodifiedText: '\r' } : {}) } })), 'frame'
     ]);
   });

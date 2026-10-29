@@ -122,11 +122,11 @@ export async function verifyPageMenuDismissal({ client, host, serviceUrl, naviga
   const read = expression => bounded(() => evaluate(client, expression));
   const snapshot = () => read(`(${pageMenuDismissalSnapshot.toString()})((${pageMenuReflowSnapshot.toString()})())`);
   const frame = () => read('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-  const key = async (value, shift = false) => {
+  const key = async (value, shift = false, alt = false) => {
     const code = { Tab: 9, Enter: 13, Escape: 27, '/': 191 }[value];
     assert(code, 'Unsupported native key', value);
     for (const type of [value === 'Enter' ? 'keyDown' : 'rawKeyDown', 'keyUp']) await call('Input.dispatchKeyEvent', {
-      type, key: value, code: value === '/' ? 'Slash' : value, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers: shift ? 8 : 0,
+      type, key: value, code: value === '/' ? 'Slash' : value, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, modifiers: (shift ? 8 : 0) | (alt ? 1 : 0),
       ...(type === 'keyDown' ? { text: '\r', unmodifiedText: '\r' } : {})
     });
     await frame();
@@ -196,7 +196,7 @@ export async function verifyPageMenuDismissal({ client, host, serviceUrl, naviga
       await key('Enter'); await settle(expected, { open: true, focus: 'summary' });
       await key('Enter'); record.nativeToggle = await settle(expected, { open: false, focus: 'summary' });
       if (name === 'directory' && width === 390 && height === 844) {
-        await key('Enter'); await key('/'); await settle(expected, { open: true, focus: 'query' });
+        await key('Enter'); await key('/', false, true); await settle(expected, { open: true, focus: 'query' });
         await call('Input.insertText', { text: 'library' });
         const query = await settle(expected, { open: true, focus: 'query' }, state => state.query === 'library');
         await key('Escape');
