@@ -55,7 +55,7 @@ The validator exports an immutable Git archive into a new run folder, excluding 
 
 Rendered browser QA still runs after a failed touch test; the overall result remains failed. Validation failures stop before browser testing. Chrome must be present and Node must be version 24.
 
-A host lock prevents concurrent tests from colliding on fixed preview/Chrome ports. Test processes run with lower priority and two CPU cores, a minimal environment and fresh home/browser data. Stage timeouts terminate their process groups. Credentials are not copied into test exports.
+A host lock prevents concurrent tests from colliding on fixed preview/Chrome ports. Build and unit-test processes use lower priority and two distinct physical cores. Browser phases use normal scheduling across the available CPUs so timing checks are not starved. All stages use a minimal environment and fresh home/browser data, with short private temporary paths for Chrome sockets. Stage timeouts terminate their process groups. Credentials are not copied into test exports.
 
 The existing source checkout, its generated/dependency modifications, RWN CORE, and other running services are preserved.
 

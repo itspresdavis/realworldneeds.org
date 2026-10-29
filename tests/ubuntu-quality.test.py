@@ -87,6 +87,43 @@ class QualityTests(unittest.TestCase):
             self.assertIn(str(port), (self.root / "port.log").read_text())
             self.assertGreaterEqual(listener.fileno(), 0)
 
+    def test_build_cpu_selection_skips_hyperthread_siblings(self):
+        topology = {0: (0, 0), 1: (0, 0), 2: (0, 1), 3: (0, 1)}
+        self.assertEqual(quality.select_build_cpus([3, 1, 2, 0], topology.__getitem__),
+                         ([0, 2], "distinct-physical-cores"))
+        # Matching core IDs on separate physical packages are different cores.
+        self.assertEqual(quality.select_build_cpus([0, 4], lambda cpu: (cpu // 4, 0)),
+                         ([0, 4], "distinct-physical-cores"))
+
+    def test_build_cpu_selection_falls_back_only_within_allowed_affinity(self):
+        def unavailable(cpu):
+            raise OSError("topology unavailable")
+        self.assertEqual(quality.select_build_cpus([7, 3, 5], unavailable),
+                         ([3, 5], "logical-fallback-topology-unavailable"))
+        self.assertEqual(quality.select_build_cpus([5], lambda cpu: (0, 1)),
+                         ([5], "distinct-physical-cores"))
+
+    def test_browser_policy_has_full_affinity_without_niceness_penalty(self):
+        with mock.patch.object(quality.os, "sched_getaffinity", return_value=set(range(8))), \
+             mock.patch.object(quality.os, "getpriority", return_value=0):
+            policy = quality.stage_resource_policy("browser", mock.Mock(side_effect=AssertionError))
+        self.assertEqual(policy["cpus"], list(range(8)))
+        self.assertEqual(policy["nice_increment"], 0)
+        self.assertEqual(policy["expected_nice"], 0)
+        with mock.patch.object(quality.os, "nice") as nice, \
+             mock.patch.object(quality.os, "sched_setaffinity") as affinity:
+            quality.child_limits(policy)
+        nice.assert_not_called()
+        affinity.assert_called_once_with(0, list(range(8)))
+
+    def test_check_policy_uses_two_physical_cores_and_lower_priority(self):
+        with mock.patch.object(quality.os, "sched_getaffinity", return_value=set(range(8))), \
+             mock.patch.object(quality.os, "getpriority", return_value=0):
+            policy = quality.stage_resource_policy("check", lambda cpu: (0, cpu // 2))
+        self.assertEqual(policy["cpus"], [0, 2])
+        self.assertEqual(policy["nice_increment"], 10)
+        self.assertEqual(policy["expected_nice"], 10)
+
     def test_timeout_fails_and_reaps_process(self):
         start = time.monotonic()
         result = quality.run_stage(

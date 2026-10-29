@@ -166,11 +166,49 @@ def stop_process(process):
         pass
 
 
-def child_limits():
-    # Descendants inherit both limits. Node availableParallelism observes affinity.
-    os.nice(10)
+def read_cpu_topology(cpu):
+    root = Path("/sys/devices/system/cpu") / ("cpu" + str(cpu)) / "topology"
+    return (int((root / "physical_package_id").read_text()),
+            int((root / "core_id").read_text()))
+
+
+def select_build_cpus(allowed, topology_reader=read_cpu_topology):
+    allowed = sorted(set(allowed))
+    selected, seen = [], set()
+    try:
+        for cpu in allowed:
+            identity = topology_reader(cpu)
+            if identity not in seen:
+                seen.add(identity)
+                selected.append(cpu)
+            if len(selected) == 2:
+                break
+    except (OSError, ValueError, TypeError):
+        return allowed[:2], "logical-fallback-topology-unavailable"
+    return selected, "distinct-physical-cores"
+
+
+def stage_resource_policy(name, topology_reader=read_cpu_topology):
     allowed = sorted(os.sched_getaffinity(0))
-    os.sched_setaffinity(0, allowed[:2])
+    inherited_nice = os.getpriority(os.PRIO_PROCESS, 0)
+    if name in {"touch", "browser"}:
+        cpus, selection, increment = allowed, "full-inherited-affinity", 0
+    else:
+        cpus, selection = select_build_cpus(allowed, topology_reader)
+        increment = 10
+    return {
+        "cpus": cpus, "cpu_selection": selection,
+        "inherited_nice": inherited_nice, "nice_increment": increment,
+        "expected_nice": min(19, inherited_nice + increment),
+    }
+
+
+def child_limits(policy=None):
+    # Node descendants inherit affinity; browser timing keeps normal host access.
+    policy = policy if policy is not None else stage_resource_policy("check")
+    if policy["nice_increment"]:
+        os.nice(policy["nice_increment"])
+    os.sched_setaffinity(0, policy["cpus"])
 
 
 def export_source(repo, sha, archive, workspace, env):
@@ -239,6 +277,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
     status = "error"
     exit_code = None
     detail = None
+    resources = stage_resource_policy(name)
     try:
         with Path(log_path).open("wb") as log:
             try:
@@ -248,7 +287,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
                 raise
             process = subprocess.Popen(
                 argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
-                start_new_session=True, preexec_fn=child_limits,
+                start_new_session=True, preexec_fn=lambda: child_limits(resources),
             )
             try:
                 exit_code = process.wait(timeout=timeout)
@@ -269,6 +308,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
             stop_process(process)
     return {
         "name": name, "argv": argv, "status": status, "exit_code": exit_code,
+        "resources": resources,
         "detail": detail, "started_at": started, "finished_at": now(),
         "duration_seconds": round(time.monotonic() - start, 3),
         "timeout_seconds": timeout, "log": str(log_path),
@@ -341,7 +381,8 @@ def main(argv=None):
         "started_at": now(), "finished_at": None, "active_stage": "setup",
         "stages": {}, "artifacts": [], "run_directory": str(run_dir),
         "validator_source_sha256": digest(Path(__file__)),
-        "limits": {"nice_increment": 10, "cpu_count": 2},
+        "limits": {"build": stage_resource_policy("check"),
+                   "browser": stage_resource_policy("browser")},
     }
     save = lambda: atomic_json(receipt_path, receipt)
     save()
