@@ -17,12 +17,13 @@ git fetch origin
 python3 scripts/quality-backend.py --ref HEAD
 ```
 
-The default `auto` provider reads the latest GitHub Quality run for that exact SHA:
+The default `auto` provider reads GitHub Quality results for the candidate SHA, newest update first:
 
-- A successful run passes.
+- A successful `push` or `workflow_dispatch` run passes as evidence for that exact source commit.
+- A successful `pull_request` run tests GitHub's synthetic merge checkout, so it is not exact-source release evidence. It can be skipped to an older eligible result, but never past a failure, pending run, or unknown state. If only PR successes exist, the selector stays pending until Quality is dispatched on the candidate branch.
 - A running/queued run stays pending (exit 2).
 - A real test failure, cancellation, timeout, unknown state, or API/authentication error stops (exit 1).
-- An explicit GitHub billing-blocked failed job with no executed steps runs Ubuntu validation.
+- An explicit GitHub billing-blocked failed job with no executed steps can run Ubuntu validation, including a PR job that never started. The annotation must be from the last 24 hours in the current UTC month; older annotations also require fresh allowance evidence.
 - If there is no run, a fresh, account-verified exhausted-allowance observation can authorize the backup until its expiry. Without evidence, it stops.
 
 `--provider github` never falls back.
@@ -42,7 +43,7 @@ On October 29, 2026 the signed-in `iamhuvr` dashboard showed $12.00 of $12.00 in
 Machine-local evidence: `~/.config/rwn-web-quality/allowance.json`.
 It expires conservatively at November 1, 2026 00:00 UTC. The selector checks GitHub first even before expiry and will not use stale evidence afterward. Recheck https://github.com/settings/billing in the correct account before updating evidence. Never invent an allowance or extend expiry without checking.
 
-When minutes return, use the normal PR or main Quality workflow. The workflow also accepts manual `workflow_dispatch` from the GitHub Actions page. This solution preserves GitHub as the primary test environment.
+When minutes return, keep the normal PR workflow for merge integration checks. For exact source proof before release, open GitHub Actions → Quality → Run workflow and select the branch containing the candidate commit. This uses `workflow_dispatch`, whose default checkout matches the run's `head_sha`. An existing successful `push` run for the exact commit also qualifies. The selector only reads results; it never dispatches workflows itself. This solution preserves GitHub as the primary test environment.
 
 ## What Ubuntu runs
 
@@ -55,7 +56,7 @@ The validator exports an immutable Git archive into a new run folder, excluding 
 
 Rendered browser QA still runs after a failed touch test; the overall result remains failed. Validation failures stop before browser testing. Chrome must be present and Node must be version 24.
 
-A host lock prevents concurrent tests from colliding on fixed preview/Chrome ports. Build and unit-test processes use lower priority and two distinct physical cores. Browser phases use normal scheduling across the available CPUs so timing checks are not starved. All stages use a minimal environment and fresh home/browser data, with short private temporary paths for Chrome sockets. Stage timeouts terminate their process groups. Credentials are not copied into test exports.
+A host lock prevents concurrent tests from colliding on fixed preview/Chrome ports. Build and unit-test processes use lower priority and two distinct physical cores. Browser phases use normal scheduling across the available CPUs so timing checks are not starved. All stages use a minimal environment and fresh home/browser data, with short private temporary paths for Chrome sockets. Stage timeouts terminate their process groups. The full browser suite has a one-hour outer stage cap; individual QA assertions and timeouts are unchanged. Credentials are not copied into test exports.
 
 The existing source checkout, its generated/dependency modifications, RWN CORE, and other running services are preserved.
 

@@ -24,7 +24,7 @@ ANNOTATIONS = f"repos/{backend.REPOSITORY}/check-runs/300/annotations?per_page=1
 
 
 def run(identity=200, **updates):
-    return {"id": identity, "head_sha": SHA, "path": backend.WORKFLOW, "run_attempt": 1,
+    return {"id": identity, "head_sha": SHA, "path": backend.WORKFLOW, "run_attempt": 1, "event": "push",
             "html_url": f"https://github.com/{backend.REPOSITORY}/actions/runs/{identity}",
             "status": "completed", "conclusion": "success", "updated_at": (NOW - timedelta(hours=1)).isoformat(), **updates}
 
@@ -84,6 +84,63 @@ class Decisions(unittest.TestCase):
         result = self.decide()
         self.assertEqual((result["status"], result["provider"]), ("passed", "github"))
         self.assertEqual(len(self.calls), 2)
+
+    def test_dispatch_success_is_exact_source_evidence(self):
+        self.responses[RUNS]["workflow_runs"] = [run(event="workflow_dispatch")]
+        self.assertEqual(self.decide()["status"], "passed")
+
+    def test_pr_success_alone_remains_pending_even_with_allowance_evidence(self):
+        self.responses[RUNS]["workflow_runs"] = [run(event="pull_request")]
+        self.evidence()
+        for provider in ("auto", "github"):
+            result = self.decide(provider)
+            self.assertEqual(result["status"], "pending")
+            self.assertIn("merge-checkout", result["reason"])
+        self.assertTrue(all(item[4] != JOBS for item in self.calls))
+
+    def test_pr_success_can_use_older_exact_source_success(self):
+        for event in ("push", "workflow_dispatch"):
+            self.responses[RUNS] = {"total_count": 2, "workflow_runs": [
+                run(100, event=event), run(event="pull_request", updated_at=NOW.isoformat()),
+            ]}
+            result = self.decide()
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["github_run_id"], 100)
+            self.assertEqual(result["github_event"], event)
+
+    def test_pr_success_does_not_hide_real_failure_or_pending(self):
+        for state, conclusion, expected in (
+            ("completed", "failure", "failed"), ("queued", None, "pending"),
+            ("completed", "cancelled", "failed"),
+        ):
+            self.responses[RUNS] = {"total_count": 3, "workflow_runs": [
+                run(100, updated_at=(NOW - timedelta(hours=2)).isoformat()),
+                run(status=state, conclusion=conclusion),
+                run(300, event="pull_request", updated_at=NOW.isoformat()),
+            ]}
+            self.responses[JOBS]["jobs"][0]["steps"] = [{"conclusion": "failure"}]
+            self.assertEqual(self.decide()["status"], expected)
+
+    def test_failed_pr_does_not_yield_to_older_exact_success(self):
+        self.responses[RUNS] = {"total_count": 2, "workflow_runs": [
+            run(100), run(event="pull_request", conclusion="failure", updated_at=NOW.isoformat()),
+        ]}
+        self.responses[JOBS]["jobs"][0]["steps"] = [{"conclusion": "failure"}]
+        self.assertEqual(self.decide()["status"], "failed")
+
+    def test_pr_success_does_not_hide_unknown_status_or_event(self):
+        for updates in ({"status": "mystery"}, {"event": "pull_request_target"}, {"event": None}):
+            self.responses[RUNS] = {"total_count": 2, "workflow_runs": [
+                run(**updates), run(300, event="pull_request", updated_at=NOW.isoformat()),
+            ]}
+            with self.assertRaises(backend.BackendError):
+                self.decide()
+
+    def test_unstarted_billing_blocked_pr_can_authorize_exact_local_validation(self):
+        self.responses[RUNS]["workflow_runs"] = [run(event="pull_request", conclusion="failure")]
+        result = self.decide()
+        self.assertEqual((result["status"], result["provider"]), ("selected", "ubuntu"))
+        self.assertEqual(result["source"], "github-billing-block")
 
     def test_latest_failure_wins_over_old_success(self):
         self.responses[RUNS] = {"total_count": 2, "workflow_runs": [run(100), run(conclusion="failure")]}

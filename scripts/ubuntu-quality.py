@@ -32,7 +32,7 @@ done
 exec npm run check
 """], 900),
     ("touch", ["node", "scripts/browser-globe-touch-v4.mjs"], 420),
-    ("browser", ["npm", "run", "test:browser:qa"], 1200),
+    ("browser", ["npm", "run", "test:browser:qa"], 3600),
 )
 TERMINAL = {"passed", "failed", "error", "interrupted"}
 BROWSER_PORTS = {

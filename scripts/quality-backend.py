@@ -19,6 +19,8 @@ import tempfile
 REPOSITORY = "iamhuvr/RWN-WEB"
 OWNER = "iamhuvr"
 WORKFLOW = ".github/workflows/quality.yml"
+EXACT_SOURCE_EVENTS = {"push", "workflow_dispatch"}
+KNOWN_EVENTS = EXACT_SOURCE_EVENTS | {"pull_request"}
 BILLING_MARKER = (
     "the job was not started because recent account payments have failed or "
     "your spending limit needs to be increased"
@@ -131,9 +133,18 @@ def latest_run(sha, root):
         raise BackendError("GitHub workflow results did not match the exact requested commit and workflow.")
     if any(type(run.get("id")) is not int or run["id"] < 1 or type(run.get("run_attempt")) is not int or run["run_attempt"] < 1 for run in runs):
         raise BackendError("GitHub returned a workflow run without its identity.")
-    # A rerun keeps its original run ID; its updated timestamp must supersede
-    # an older success from a newer numeric ID.
-    return max(runs, key=lambda run: (parse_time(run.get("updated_at")), run["id"], run["run_attempt"]), default=None)
+    if any(not isinstance(run.get("event"), str) or run["event"] not in KNOWN_EVENTS for run in runs):
+        raise BackendError("GitHub returned an unknown workflow event; the tested checkout cannot be established.")
+    # A rerun keeps its original run ID. A PR success tests the synthetic merge
+    # checkout, not head_sha, so it is not exact-source release evidence. Skip
+    # only those successes; pending, failed, and unknown results still govern.
+    ordered = sorted(runs, key=lambda run: (parse_time(run.get("updated_at")), run["id"], run["run_attempt"]), reverse=True)
+    for run in ordered:
+        if run["event"] == "pull_request" and run.get("status") == "completed" and run.get("conclusion") == "success":
+            continue
+        return run
+    # Retain the newest PR success to explain why exact-source proof is pending.
+    return ordered[0] if ordered else None
 
 
 def billing_blocked(run, root):
@@ -182,7 +193,7 @@ def select_backend(provider, sha, root, evidence_path, now):
     if run is None:
         if provider == "github":
             return {"status": "pending", "provider": "github", "source": "github-actions",
-                    "reason": "No Quality run exists for this commit. Push a reviewed branch/PR or start the workflow separately."}
+                    "reason": "No Quality run exists for this commit. Dispatch Quality on the branch containing this exact commit."}
         evidence = allowance_evidence(evidence_path, now)
         return {"status": "selected", "provider": "ubuntu", "source": "verified-allowance-evidence",
                 "reason": "No exact-commit Quality run exists and a fresh signed-in dashboard observation confirms exhausted allowance.",
@@ -191,14 +202,17 @@ def select_backend(provider, sha, root, evidence_path, now):
     if run.get("html_url") != expected_url:
         raise BackendError("GitHub returned an unexpected workflow URL.")
     common = {"provider": "github", "source": "github-actions", "github_url": expected_url,
-              "github_run_id": run["id"], "github_run_attempt": run["run_attempt"]}
+              "github_run_id": run["id"], "github_run_attempt": run["run_attempt"], "github_event": run["event"]}
     if run.get("status") in {"queued", "in_progress", "waiting", "requested", "pending"}:
-        return {**common, "status": "pending", "reason": "The exact-commit Quality run is still pending; Ubuntu fallback is not selected."}
+        return {**common, "status": "pending", "reason": "The latest applicable Quality run is still pending; Ubuntu fallback is not selected."}
     if run.get("status") != "completed":
         raise BackendError("GitHub returned an unknown workflow state.")
     conclusion = run.get("conclusion")
     if conclusion == "success":
-        return {**common, "status": "passed", "reason": "The latest Quality run passed for this exact commit."}
+        if run["event"] not in EXACT_SOURCE_EVENTS:
+            return {**common, "status": "pending",
+                    "reason": "Only pull-request merge-checkout successes are available; they do not prove this exact source commit. Dispatch Quality on the branch containing this commit."}
+        return {**common, "status": "passed", "reason": "The latest eligible push or workflow_dispatch Quality run passed for this exact commit."}
     if provider == "auto" and conclusion == "failure" and billing_blocked(run, root):
         backup = {**common, "status": "selected", "provider": "ubuntu", "source": "github-billing-block",
                   "github_billing_observed_at": run.get("updated_at")}
