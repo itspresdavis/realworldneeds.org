@@ -699,3 +699,51 @@ for (const outcome of ["success", "failure"]) {
     assertLondon(f); assert.equal(f.document.activeElement, f.input);
   });
 }
+
+
+test("same-catalog controller adoption keeps the pressed result node and shown window", async () => {
+  const f = fixture(); f.type("WIC"); f.start(); await f.flush(); await f.resolve();
+  f.more.dispatch("click");
+  const rows = [...f.resultList.children], link = rows[0].querySelector("a");
+  assert.equal(rows.length, 120);
+  link.focus(); link.dispatch("pointerdown");
+  f.navigator.serviceWorker.dispatch("controllerchange"); await tick();
+  assert.equal(f.requests.at(-1).options.cache, "reload", "worker replacement still requests fresh catalog bytes");
+  assert.equal(f.resultList.children[0], rows[0], "do not blank the hit target while loading");
+  await f.resolve(1, structuredClone(catalog));
+  assert.equal(f.resultList.children.length, rows.length);
+  rows.forEach((row, index) => assert.equal(f.resultList.children[index], row, `stable row ${index}`));
+  assert.equal(f.document.activeElement, link);
+  assert.equal(f.more.hidden, false);
+  link.dispatch("pointerup");
+  assert.equal(f.resultList.children[0].querySelector("a"), link, "the native activation still owns the original anchor");
+});
+
+for (const update of ["provider", "availability", "withdrawn", "failure"]) {
+  test(`controller refresh still applies ${update} changes even when the record ID is unchanged`, async () => {
+    const f = fixture(); f.type(london); f.start(); await f.flush(); await f.resolve();
+    const before = f.resultList.children[0];
+    f.navigator.serviceWorker.dispatch("controllerchange"); await tick();
+    if (update === "failure") await f.reject(1);
+    else {
+      const changed = structuredClone(catalog), record = changed.records.find(row => row.id === "london-drinking-fountains");
+      if (update === "provider") record.phoneLinks = [{ label: "Synthetic replacement", href: "tel:2025550199" }];
+      if (update === "availability") record.sourceStatus = { title: "Source reported: Closed", detail: "Synthetic changed availability" };
+      if (update === "withdrawn") changed.records = changed.records.filter(row => row.id !== record.id);
+      await f.resolve(1, changed);
+    }
+    assert.notEqual(f.resultList.children[0], before);
+    if (["failure", "withdrawn"].includes(update)) assert.deepEqual(f.ids(), []);
+    if (update === "failure") assert.equal(f.results.hidden, true, "failed refresh must not retain stale rows");
+    if (update === "provider") assert.equal(f.resultList.children[0].record.phoneLinks[0].href, "tel:2025550199");
+    if (update === "availability") assert.equal(f.resultList.children[0].record.sourceStatus.title, "Source reported: Closed");
+  });
+}
+
+test("online-mode changes rebuild row listeners even when record contents match", async () => {
+  const f = fixture({ online: false }); f.type(london); f.start(); await f.flush(); await f.resolve();
+  const offlineRow = f.resultList.children[0];
+  f.navigator.onLine = true; f.window.dispatch("online"); await tick();
+  assert.notEqual(f.resultList.children[0], offlineRow, "offline-created detail interception must not survive reconnection");
+  assertLondon(f);
+});

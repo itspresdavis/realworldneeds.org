@@ -24,6 +24,7 @@ export function initSavedServices() {
   let generation = 0;
   let entries = [];
   let shown = 0;
+  let renderedEntries = "", renderedOnline;
   const active = () => location.hash === "#saved";
   const announceFailure = () => { status.textContent = "Your saved list could not be changed. Check this browser’s storage settings and try again."; };
   const cancelClear = (focus = false) => {
@@ -110,19 +111,31 @@ export function initSavedServices() {
       restoreFocus();
       return;
     }
-    summary.textContent = "Loading your saved services…";
+    // A background refresh must not move an existing pointer/focus target.
+    if (!shown || list.children.length !== shown) summary.textContent = "Loading your saved services…";
     try {
       const payload = await loadCatalog();
       if (current !== generation || !active()) return;
       retry.hidden = true;
       const byId = new Map(payload.records.map((record) => [record.id, record]));
       // Never remove saved IDs merely because a catalog request or release changed.
-      entries = [...ids].map((id) => ({ id, record: byId.get(id) }));
+      const nextEntries = [...ids].map((id) => ({ id, record: byId.get(id) }));
+      const signature = JSON.stringify(nextEntries);
+      const unchanged = shown > 0 && list.children.length === shown
+        && signature === renderedEntries && renderedOnline === navigator.onLine;
+      entries = nextEntries;
       const unavailable = entries.filter((entry) => !entry.record).length;
       summary.textContent = `${ids.size} saved ${ids.size === 1 ? "listing" : "listings"}${unavailable ? ` · ${unavailable} no longer in the directory` : ""}. Confirm current details before you go.`;
-      list.replaceChildren();
-      shown = 0;
-      do { renderMore(); } while (shown < Math.min(previousShown, entries.length));
+      // Compare all record content, not only IDs: changed contacts, availability
+      // and withdrawn records must refresh. Offline-created rows also own a
+      // different click guard, so a navigator connection change must rebuild.
+      if (!unchanged) {
+        list.replaceChildren();
+        shown = 0;
+        do { renderMore(); } while (shown < Math.min(previousShown, entries.length));
+        renderedEntries = signature;
+        renderedOnline = navigator.onLine;
+      }
       restoreFocus();
     } catch {
       if (current !== generation || !active()) return;

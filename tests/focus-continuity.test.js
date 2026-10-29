@@ -257,13 +257,14 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
   let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
   const timers = new Map(); let now = 0, nextTimer = 0;
-  const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 };
+  const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 }, requests = [];
+  const navigator = { onLine: true, serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } };
   const location = { hash }, history = { state: null }, restores = [];
   const response = { ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) };
   let resolveCatalog, rejectCatalog;
   const catalog = pendingCatalog ? new Promise((resolve, reject) => { resolveCatalog = resolve; rejectCatalog = reject; }) : Promise.resolve(response);
   const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
-    document, URL, location, history, navigator: { serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } }, AbortController,
+    document, URL, location, history, navigator, AbortController,
     setTimeout(callback, delay) { timers.set(++nextTimer, { at: now + delay, callback }); return nextTimer; },
     clearTimeout(id) { timers.delete(id); }, SAVED_RESOURCES_KEY: "saved",
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
@@ -271,16 +272,16 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
       addEventListener: (name, handler) => { events[name] = handler; },
       dispatchEvent: (event) => { restores.push(event); return true; },
     },
-    fetch: (...args) => { effects.fetches += 1; return fetchCatalog ? fetchCatalog(...args) : catalog; },
+    fetch: (...args) => { effects.fetches += 1; requests.push(args); return fetchCatalog ? fetchCatalog(...args) : catalog; },
     readSavedResources: () => { effects.reads += 1; if (storageError) throw new Error("denied"); return new Set(currentIds); },
     setResourceSaved: (id) => { effects.writes += 1; currentIds = currentIds.filter((candidate) => candidate !== id); },
     clearSavedResources: () => { effects.writes += 1; currentIds = []; },
-    createResultRow: () => { const row = new Element(); row.append(new Element("a")); return row; },
+    createResultRow: record => { const row = new Element(); row.renderedRecord = structuredClone(record); row.renderedOnline = navigator.onLine; row.append(new Element("a")); return row; },
   });
   vm.runInContext(catalogLoader + "\n" + saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
   return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle,
-    timers, workerEvents, savedIds: () => [...currentIds],
+    timers, workerEvents, requests, navigator, savedIds: () => [...currentIds],
     advance(ms) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.callback(); } },
     setIds: (count) => { currentIds = ids.slice(0, count); },
     denyStorage: () => { storageError = true; },
@@ -581,4 +582,99 @@ test("Saved navigation away supersedes timeout without restoring the panel or st
   f.advance(8000); await settle();
   assert.equal(f.summary.textContent, summary); assert.equal(f.document.activeElement, f.search);
   assert.equal(f.retry.hidden, true); assert.equal(f.effects.writes, 0);
+});
+
+
+const catalogResponse = records => ({ ok: true, json: async () => ({ records: structuredClone(records) }) });
+
+test("Saved identical fresh catalog keeps row identity, pagination and focus through controller replacement", async () => {
+  const records = Array.from({ length: 61 }, (_, index) => ({ id: `service-${index}`, name: `Service ${index}`, sourceStatus: { title: "Open", detail: "Check with provider" } }));
+  let attempts = 0, finish;
+  const refresh = new Promise(resolve => { finish = resolve; });
+  const f = await savedFixture(61, { fetchCatalog: () => ++attempts === 1 ? catalogResponse(records) : refresh });
+  f.more.click();
+  const rows = [...f.list.children], link = rows[0].querySelector("a"), summary = f.summary.textContent;
+  link.focus(); f.workerEvents.controllerchange(); await settle();
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.requests[1][0], "/data/search-index.json");
+  assert.equal(f.requests[1][1].cache, "reload", "identity preservation must not skip a fresh release fetch");
+  assert.equal(f.list.children[0], rows[0], "pending refresh retains the current pointer target");
+  assert.equal(f.summary.textContent, summary, "pending refresh must not move rows by collapsing the summary");
+  finish(catalogResponse(records)); await settle();
+  assert.equal(f.list.children.length, 61);
+  assert.ok(f.list.children.every((row, index) => row === rows[index]));
+  assert.equal(f.document.activeElement, link);
+  assert.equal(f.more.hidden, true);
+  f.events["rwn-connection-restored"](); await settle();
+  assert.ok(f.list.children.every((row, index) => row === rows[index]));
+  assert.equal(attempts, 2, "completed catalog remains usable on ordinary connectivity notification");
+  assert.equal(f.effects.writes, 0);
+});
+
+for (const [label, change] of [
+  ["provider contact", { phone: "+1 617 555 0199", accessUrl: "https://example.invalid/new-contact" }],
+  ["availability detail", { sourceStatus: { title: "Temporarily closed", detail: "New closure information" } }],
+]) {
+  test(`Saved same-ID fresh ${label} changes rebuild rows and preserve the matching control focus`, async () => {
+    let records = [{ id: "service-0", name: "Same service", phone: "+1 617 555 0100", sourceStatus: { title: "Open", detail: "Old detail" } }];
+    const f = await savedFixture(1, { fetchCatalog: () => catalogResponse(records) });
+    const old = f.list.children[0]; old.querySelector("a").focus();
+    records = [{ ...records[0], ...change }];
+    f.workerEvents.controllerchange(); await settle();
+    const current = f.list.children[0];
+    assert.notEqual(current, old);
+    assert.equal(old.isConnected, false);
+    assert.deepEqual(current.renderedRecord, records[0]);
+    assert.equal(f.document.activeElement, current.querySelector("a"));
+    assert.deepEqual(f.savedIds(), ["service-0"]);
+    assert.equal(f.requests[1][1].cache, "reload");
+    assert.equal(f.effects.writes, 0);
+  });
+}
+
+test("Saved withdrawn record becomes an unavailable row without deleting its saved ID", async () => {
+  let records = [{ id: "service-0", name: "Withdrawn service" }];
+  const f = await savedFixture(1, { fetchCatalog: () => catalogResponse(records) });
+  const old = f.list.children[0]; records = [];
+  f.workerEvents.controllerchange(); await settle();
+  assert.notEqual(f.list.children[0], old);
+  assert.equal(f.list.children[0].querySelector("a"), null);
+  assert.match(f.summary.textContent, /1 no longer in the directory/);
+  assert.deepEqual(f.savedIds(), ["service-0"]);
+  assert.equal(f.effects.writes, 0);
+});
+
+test("Saved failed fresh reload clears old rows and identical-data recovery restores them", async () => {
+  const records = [{ id: "service-0", name: "Original service" }];
+  let attempts = 0;
+  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 2 ? { ok: false } : catalogResponse(records) });
+  const old = f.list.children[0];
+  f.workerEvents.controllerchange(); await settle();
+  assert.equal(f.list.children.length, 0);
+  assert.match(f.summary.textContent, /could not load/);
+  assert.equal(f.retry.hidden, false);
+  assert.deepEqual(f.savedIds(), ["service-0"]);
+  f.retry.focus(); await f.retry.click(); await settle();
+  assert.equal(f.list.children.length, 1);
+  assert.notEqual(f.list.children[0], old, "an identical signature cannot suppress rebuilding an emptied list");
+  assert.deepEqual(f.list.children[0].renderedRecord, records[0]);
+  assert.equal(f.document.activeElement, f.heading);
+  assert.equal(f.requests[2][1].cache, "reload");
+  assert.equal(f.effects.writes, 0);
+});
+
+test("Saved navigator mode changes rebuild offline click semantics even with unchanged records", async () => {
+  const f = await savedFixture(1);
+  let previous = f.list.children[0];
+  for (const online of [false, true]) {
+    f.navigator.onLine = online;
+    f.events[online ? "online" : "offline"](); await settle();
+    const current = f.list.children[0];
+    assert.notEqual(current, previous);
+    assert.equal(current.renderedOnline, online);
+    f.events[online ? "online" : "offline"](); await settle();
+    assert.equal(f.list.children[0], current, "an unchanged mode can retain the new rows");
+    previous = current;
+  }
+  assert.equal(f.effects.writes, 0);
 });
