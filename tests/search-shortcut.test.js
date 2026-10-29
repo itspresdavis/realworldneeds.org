@@ -7,8 +7,8 @@ const accessibility = await readFile(new URL("../src/accessibility.js", import.m
 const directory = await readFile(new URL("../public/directory.js", import.meta.url), "utf8");
 
 function fixture(kind) {
-  class Input {}
-  class Textarea {}
+  class Input { matches(selector) { return selector.split(",").includes("input"); } }
+  class Textarea { matches(selector) { return selector.split(",").includes("textarea"); } }
   let handler, focus = 0, selection = 0;
   const input = new Input();
   input.attributes = {};

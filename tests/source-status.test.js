@@ -211,7 +211,8 @@ test("aggregate refresh includes every separately supported snapshot importer", 
   assert.deepEqual(scripts["refresh:data"].split(" && "), individual.map((key) => `npm run ${key}`));
 });
 
-// The first build pass hashes every source file, before optional runtime transforms.
+// The first build pass hashes the vendor generation and every source file,
+// before optional runtime transforms.
 test("finder URLs change with generated snapshot content, including collection status", async () => {
   async function sourceFiles(directory) {
     const files = [];
@@ -223,7 +224,12 @@ test("finder URLs change with generated snapshot content, including collection s
     return files.sort();
   }
   const files = ["index.html", ...await sourceFiles("src")];
-  const actual = createHash("sha256"), changedSnapshot = createHash("sha256");
+  const vendorRelease = createHash("sha256")
+    .update("three.module\0").update(await readFile("node_modules/three/build/three.module.min.js"))
+    .update("\0three.core\0").update(await readFile("node_modules/three/build/three.core.min.js"))
+    .digest("hex").slice(0, 12);
+  const actual = createHash("sha256").update("three-vendor\0").update(vendorRelease);
+  const changedSnapshot = createHash("sha256").update("three-vendor\0").update(vendorRelease);
   for (const path of files) {
     const contents = await readFile(path);
     actual.update(path).update(contents);
@@ -232,6 +238,7 @@ test("finder URLs change with generated snapshot content, including collection s
   }
   const expected = actual.digest("hex").slice(0, 12);
   const release = JSON.parse(await read("dist/data/release.json"));
+  assert.equal(release.vendorRelease, vendorRelease, "the source release must include the actual vendor bytes");
   assert.equal(release.release, expected);
   assert.notEqual(changedSnapshot.digest("hex").slice(0, 12), expected);
   assert.ok((await read("dist/index.html")).includes(`/src/bootstrap.js?v=${expected}`));

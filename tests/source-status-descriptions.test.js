@@ -65,7 +65,10 @@ test("the actual service template escapes source/name text in metadata and JSON-
   const fixture = { ...closed, name: 'Example "centre" & </script><script>alert(1)</script>', sourceName: 'Publisher "quoted" & <unsafe>' };
   const source = await readFile("scripts/build.mjs", "utf8");
   // Exercise the production template without running its filesystem build.
-  const templates = source.slice(source.indexOf("// A page of"), source.indexOf("const release = await releaseHash();"));
+  const start = source.indexOf("// A page of");
+  const end = source.indexOf("const three = createThreeAssets(");
+  assert.ok(start >= 0 && end > start, "template extraction must stop before build execution");
+  const templates = source.slice(start, end);
   const html = vm.runInNewContext(`${templates}\nresourcePage(fixture)`, {
     fixture, resources: [fixture], categories, sourceRegistry: [],
     freeAccessLabel, freeAccessModels, formatResourcePlace, phoneLinks, phoneMarkup,

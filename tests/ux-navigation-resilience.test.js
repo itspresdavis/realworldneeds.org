@@ -35,11 +35,14 @@ test("finder and location failures have deterministic recovery paths", () => {
   assert.match(app, /id="locationRecovery"/);
 });
 
-test("mobile menu closes predictably and restores focus to its native summary control", () => {
-  assert.match(app, /const closeSiteMenu/);
-  assert.match(app, /siteMenuSummary\?\.focus\(\)/);
-  assert.match(app, /event\.key === "Escape" && siteMenu\?\.open/);
-  assert.match(app, /window\.innerWidth > 900/);
+// Native Escape, replaced links and responsive focus behavior are exercised in menu-focus.test.js.
+test("mobile menu has guarded focus recovery for native controls and desktop reflow", () => {
+  const menu = app.slice(app.indexOf('  const siteMenu ='), app.indexOf('  window.addEventListener("popstate"', app.indexOf('  const siteMenu =')));
+  assert.match(menu, /const closeSiteMenu/);
+  assert.match(menu, /const repairSiteMenuFocus/);
+  assert.match(menu, /if \(restoreFocus\) repairSiteMenuFocus\(\)/);
+  assert.match(menu, /event\.defaultPrevented \|\| event\.isComposing/);
+  assert.match(menu, /window\.innerWidth > 900/);
 });
 
 test("maintainers can run prompt-required interaction and abuse quality gates", () => {
