@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused safety and gate-order tests for the isolated Ubuntu validator."""
+"""Focused safety, platform and gate-order tests for the isolated validator."""
 import importlib.util
 import io
 import json
@@ -104,25 +104,76 @@ class QualityTests(unittest.TestCase):
                          ([5], "distinct-physical-cores"))
 
     def test_browser_policy_has_full_affinity_without_niceness_penalty(self):
-        with mock.patch.object(quality.os, "sched_getaffinity", return_value=set(range(8))), \
+        with mock.patch.object(quality.sys, "platform", "linux"), \
+             mock.patch.object(quality.os, "sched_getaffinity", return_value=set(range(8)), create=True), \
              mock.patch.object(quality.os, "getpriority", return_value=0):
             policy = quality.stage_resource_policy("browser", mock.Mock(side_effect=AssertionError))
         self.assertEqual(policy["cpus"], list(range(8)))
         self.assertEqual(policy["nice_increment"], 0)
         self.assertEqual(policy["expected_nice"], 0)
         with mock.patch.object(quality.os, "nice") as nice, \
-             mock.patch.object(quality.os, "sched_setaffinity") as affinity:
+             mock.patch.object(quality.os, "sched_setaffinity", create=True) as affinity:
             quality.child_limits(policy)
         nice.assert_not_called()
         affinity.assert_called_once_with(0, list(range(8)))
 
     def test_check_policy_uses_two_physical_cores_and_lower_priority(self):
-        with mock.patch.object(quality.os, "sched_getaffinity", return_value=set(range(8))), \
+        with mock.patch.object(quality.sys, "platform", "linux"), \
+             mock.patch.object(quality.os, "sched_getaffinity", return_value=set(range(8)), create=True), \
              mock.patch.object(quality.os, "getpriority", return_value=0):
             policy = quality.stage_resource_policy("check", lambda cpu: (0, cpu // 2))
         self.assertEqual(policy["cpus"], [0, 2])
         self.assertEqual(policy["nice_increment"], 10)
         self.assertEqual(policy["expected_nice"], 10)
+
+    def test_darwin_records_no_affinity_and_preserves_priority_policy(self):
+        for name, increment in (("check", 10), ("browser", 0), ("touch", 0)):
+            with self.subTest(stage=name), \
+                 mock.patch.object(quality.sys, "platform", "darwin"), \
+                 mock.patch.object(quality.os, "getpriority", return_value=3), \
+                 mock.patch.object(quality.os, "sched_getaffinity", create=True,
+                                   side_effect=AssertionError("Darwin has no affinity API")), \
+                 mock.patch.object(quality.os, "sched_setaffinity", create=True) as affinity, \
+                 mock.patch.object(quality.os, "nice") as nice:
+                topology = mock.Mock(side_effect=AssertionError("Do not read Linux sysfs"))
+                policy = quality.stage_resource_policy(name, topology)
+                quality.child_limits(policy)
+                self.assertEqual(policy["platform"], "darwin")
+                self.assertFalse(policy["affinity_supported"])
+                self.assertIsNone(policy["cpus"])
+                self.assertEqual(policy["cpu_selection"], "os-managed-no-affinity")
+                self.assertEqual(policy["expected_nice"], 3 + increment)
+                topology.assert_not_called()
+                affinity.assert_not_called()
+                if increment:
+                    nice.assert_called_once_with(increment)
+                else:
+                    nice.assert_not_called()
+
+    def test_platform_chrome_paths_are_explicit_and_environment_cannot_override(self):
+        for system, expected in (
+            ("linux", "/usr/bin/google-chrome"),
+            ("darwin", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ):
+            with self.subTest(system=system), mock.patch.object(quality.sys, "platform", system), \
+                 mock.patch.dict(os.environ, {"CHROME_PATH": "/untrusted/browser"}):
+                self.assertEqual(quality.clean_environment(self.root / system)["CHROME_PATH"], expected)
+        with self.assertRaisesRegex(RuntimeError, "Linux and Darwin"):
+            quality.chrome_executable("win32")
+
+    def test_setup_failure_keeps_platform_and_durable_error_receipt(self):
+        with mock.patch.object(quality.sys, "platform", "darwin"), \
+             mock.patch.object(quality, "stage_resource_policy", side_effect=RuntimeError("policy unavailable")), \
+             mock.patch("sys.stdout", new=io.StringIO()) as output:
+            code = quality.main(["--output-root", str(self.root / "runs")])
+        result = json.loads(output.getvalue())
+        saved = json.loads(Path(result["receipt"]).read_text())
+        self.assertEqual(code, 2)
+        self.assertEqual(saved["status"], "error")
+        self.assertEqual(saved["platform"]["system"], "darwin")
+        self.assertEqual(saved["provider"], "macos")
+        self.assertIn("policy unavailable", saved["error"])
+        self.assertFalse(saved["stages"])
 
     def test_timeout_fails_and_reaps_process(self):
         start = time.monotonic()
@@ -160,7 +211,7 @@ class QualityTests(unittest.TestCase):
         self.assertNotEqual(env["NPM_CONFIG_USERCONFIG"], env["NPM_CONFIG_GLOBALCONFIG"])
         self.assertEqual(Path(env["NPM_CONFIG_USERCONFIG"]).read_text(), "")
         self.assertEqual(Path(env["NPM_CONFIG_GLOBALCONFIG"]).read_text(), "")
-        self.assertEqual(env["CHROME_PATH"], "/usr/bin/google-chrome")
+        self.assertEqual(env["CHROME_PATH"], quality.chrome_executable())
 
     def test_short_runtime_tmpdir_is_independent_of_retained_home(self):
         with tempfile.TemporaryDirectory(prefix="rwn-q-", dir="/tmp") as runtime_tmp:

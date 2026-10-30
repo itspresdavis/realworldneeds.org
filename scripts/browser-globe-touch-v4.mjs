@@ -1,3 +1,4 @@
+import { waitForGlobePresentation } from "./qa-globe-readiness.mjs";
 import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -244,20 +245,41 @@ async function run() {
     ` });
     await navigate(client, HOST);
 
-    const ready = await evaluate(client, `new Promise((resolve) => {
-      const started = performance.now();
-      const check = () => {
-        if (document.getElementById('globeCanvas') && document.getElementById('globeReadout') && document.getElementById('zoomIn')) return resolve(true);
-        if (performance.now() - started > 12000) return resolve(false);
-        setTimeout(check, 50);
-      };
-      check();
-    })`);
-    if (!ready) throw new Error("Mobile globe did not initialize.");
-    const readyMs = await evaluate(client, "performance.now()");
+    phase = "map-presentation-readiness";
+    const { image: readyImage, ...readiness } = await waitForGlobePresentation({
+      sample: () => evaluate(client, `(() => {
+        const canvas = document.getElementById('globeCanvas');
+        const stage = canvas?.closest('.globe-stage');
+        const readout = document.getElementById('globeReadout');
+        const rect = canvas?.getBoundingClientRect();
+        const style = canvas ? getComputedStyle(canvas) : null;
+        const startup = document.documentElement.dataset.finderStartup;
+        const text = readout?.textContent || '';
+        const available = startup === 'ready' && /[0-9]+(?:[.][0-9]+)?×/.test(text)
+          && !stage?.classList.contains('is-globe-unavailable');
+        const gl = available && canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+        return {
+          at: performance.now(), elementsReady: !!(canvas && readout && document.getElementById('zoomIn')),
+          startup, readout: text, visibility: document.visibilityState,
+          visible: !document.hidden && !!rect && rect.width > 0 && rect.height > 0
+            && rect.top >= 0 && rect.left >= 0 && rect.bottom <= innerHeight && rect.right <= innerWidth
+            && style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0,
+          healthy: !!gl && !gl.isContextLost(),
+          rect: rect ? {x:rect.x,y:rect.y,width:rect.width,height:rect.height} : null
+        };
+      })()`),
+      prepare: () => evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})"),
+      capture: () => client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false }),
+      wait: sleep
+    });
+    observations.readiness = readiness;
+    await mkdir("qa-screenshots", { recursive: true });
+    await writeFile("qa-screenshots/globe-touch-ready.png", readyImage);
+    await writeFile("qa-screenshots/globe-touch-readiness.json", JSON.stringify(readiness, null, 2));
+    const readyMs = readiness.snapshot.at;
 
     phase = "vertical-scroll";
-    const vertical = await canvasGeometry(client);
+    const vertical = await canvasGeometry(client, false);
     observations.verticalStart = vertical;
     if (!vertical.point) throw new Error("No unobstructed WebGL touch point was available.");
     if (vertical.stageTouchAction !== "pan-y" || vertical.canvasTouchAction !== "pan-y") throw new Error(`Map touch policy is not pan-y: ${JSON.stringify(vertical)}`);
@@ -487,7 +509,15 @@ async function run() {
     console.log("Connected mobile journey passed: globe touch interaction → search → service → save → Back restores query → leave and return to Saved.");
     console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, canvas touch picking, pinch-to-drag recovery, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
   } catch (error) {
-    if (client) {
+    if (phase === "map-presentation-readiness") {
+      // A page/CDP timeout must reach finally without asking that same stalled
+      // target for more diagnostics. These checkpoints already live on the host.
+      const failure = { phase, error: String(error.message || error), observations, exceptions,
+        presentationReadinessFailure: error.globeReadiness || null };
+      await mkdir("qa-screenshots", { recursive: true });
+      await writeFile("qa-screenshots/globe-touch-failure.json", JSON.stringify(failure, null, 2));
+      console.error(`Globe readiness diagnostics: ${JSON.stringify(failure)}`);
+    } else if (client) {
       try {
         const failure = await evaluate(client, `(() => {
           const canvas=document.getElementById('globeCanvas');
@@ -496,7 +526,7 @@ async function run() {
           return {readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,scrollTrace:window.__rwnScrollTrace,scrollPreconditions:window.__rwnScrollPreconditions,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
         })()`);
         failure.runtime = await inspectFailedGlobeState(client);
-        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions, scrollPreconditionFailure: error.scrollStability || null });
+        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions, scrollPreconditionFailure: error.scrollStability || null, presentationReadinessFailure: error.globeReadiness || null });
         await mkdir("qa-screenshots", { recursive: true });
         await writeFile("qa-screenshots/globe-touch-failure.json", JSON.stringify(failure, null, 2));
         const shot=await client.call("Page.captureScreenshot", {format:"png",fromSurface:true,captureBeyondViewport:false});
