@@ -217,7 +217,7 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
     <main id="directory">
       <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p></div></section>
       <div class="directory-shell">
-        ${breadcrumbs(breadcrumbItems)}
+        ${canonicalPath === "/directory" ? "" : breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
         <div class="directory-page-tools"><nav aria-label="Directory shortcuts"><a class="directory-results-jump" href="#directory-results">View listings <span aria-hidden="true">↓</span></a><a href="#directory-browse">Browse &amp; downloads</a></nav>${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}</div>
         <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>

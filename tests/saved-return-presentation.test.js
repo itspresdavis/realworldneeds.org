@@ -46,7 +46,7 @@ test("Saved stays a visible text action with a 44px target on narrow home header
   }
 });
 
-test("every directory scope gets honest, initially hidden guidance and scope-preserving Browse links", () => {
+test("every directory scope gets one summary and one scope-preserving Browse action", () => {
   const first = generator.indexOf("function directorySearchMarkup(scope)");
   const last = generator.indexOf("function localLinksMarkup(", first);
   assert.ok(first >= 0 && last > first);
@@ -62,14 +62,14 @@ test("every directory scope gets honest, initially hidden guidance and scope-pre
     const saved = markup.slice(0, markup.indexOf("</section>") + "</section>".length);
     assert.match(saved, /id="saved"[^>]*data-saved-services[^>]*aria-labelledby="saved-services-heading"/);
     assert.match(saved, /<h2 id="saved-services-heading" tabindex="-1">Saved services<\/h2>/);
-    assert.match(saved, /data-saved-empty hidden/);
+    assert.doesNotMatch(saved, /data-saved-empty|Keep useful help close|Find services to save/);
     assert.match(saved, /data-saved-summary role="status" aria-live="polite"/);
     assert.match(saved, /Only in this browser, on this device/);
     assert.match(saved, /Anyone using this browser can see your list/);
     assert.match(saved, /Saving does not reserve a service or confirm availability/);
     assert.match(saved, /Turn on JavaScript to view or change saved services/);
-    assert.match(saved, /Find services to save/);
-    assert.equal((saved.match(/href="#directory-results"/g) || []).length, 2, `${scope} keeps both browse actions in the current directory`);
+    assert.match(saved, /Browse directory/);
+    assert.equal((saved.match(/href="#directory-results"/g) || []).length, 1, `${scope} keeps one browse action in the current directory`);
     assert.doesNotMatch(saved, /href="\/directory|<h1\b|sign in|create an account|sync across|reserved for you/i);
     for (const svg of saved.matchAll(/<svg\b[^>]*>/g)) assert.match(svg[0], /aria-hidden="true"/);
   }
@@ -86,7 +86,7 @@ test("Saved hero treatment is scoped to its fragment and preserves the directory
   assert.match(savedCss, /\.saved-services :is\(button,a\):focus-visible\{outline:3px solid/);
 });
 
-test("Saved cream guidance retains normal-text contrast and existing presentation byte budgets", async () => {
+test("Saved summary and privacy text retain contrast and existing presentation byte budgets", async () => {
   const luminance = (hex) => hex.match(/../g).map((part) => parseInt(part, 16) / 255)
     .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
     .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
@@ -95,7 +95,8 @@ test("Saved cream guidance retains normal-text contrast and existing presentatio
     const contrast = (luminance("f5f4ee") + 0.05) / (luminance(foreground) + 0.05);
     assert.ok(contrast >= 4.5, `${foreground} on cream has ${contrast.toFixed(2)}:1 contrast`);
   }
-  assert.match(savedCss, /\.saved-services__empty\{[^}]*background:#f5f4ee/);
+  assert.doesNotMatch(savedCss, /saved-services__empty|saved-services__bookmark/);
+  assert.match(savedCss, /\.saved-services__privacy,\.saved-services \[role=status\]\{[^}]*color:#405a50/);
   for (const [path, maximum] of [["public/saved-services.css", 3_000], ["src/clarity.css", 38_000]]) {
     assert.ok((await stat(path)).size <= maximum, `${path} must retain its existing byte budget`);
   }

@@ -6,7 +6,7 @@ import { SAVED_RETURN_WIDTHS, homeSavedViolations, savedViewViolations, director
 import { pressConnectivityRecoveryKey } from '../scripts/qa-connectivity-recovery.mjs';
 import { verifySavedEntryViewport } from '../scripts/qa-directory-discovery.mjs';
 const home=()=>({path:'/',width:320,overflow:false,overlay:false,savedEntry:{text:'Saved',href:'/directory#saved',visible:true,box:{left:251,top:10,right:309,bottom:54,width:58,height:44},neighbors:[{left:10,top:10,right:179,bottom:54},{left:189,top:10,right:240,bottom:54}]}});
-const saved=(ids=[])=>({hash:'#saved',savedVisible:true,overlay:false,overflow:false,title:'Saved services | Real World Needs',empty:!ids.length,rows:ids.map(id=>({id})),current:[{href:'/directory#saved',value:'page'}],privacy:'Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.'});
+const saved=(ids=[])=>({hash:'#saved',savedVisible:true,overlay:false,overflow:false,title:'Saved services | Real World Needs',empty:!ids.length,summary:ids.length ? `${ids.length} saved listings.` : 'No saved services yet. Open a listing and choose Save to keep it here.',browseActions:[{visible:true,box:{height:44}}],rows:ids.map(id=>({id})),current:[{href:'/directory#saved',value:'page'}],privacy:'Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.'});
 test('Saved return CI covers exact narrow, intermediate and desktop widths',()=>assert.deepEqual(SAVED_RETURN_WIDTHS,[320,508,1180]));
 test('home header gate rejects hidden, too-small, clipped or overlapping Saved entries',()=>{
  assert.deepEqual(homeSavedViolations(home()),[]);
@@ -16,7 +16,8 @@ test('home header gate rejects hidden, too-small, clipped or overlapping Saved e
 });
 test('Saved gate requires exact row identities, privacy, active navigation, and real empty state',()=>{
  assert.deepEqual(savedViewViolations(saved()),[]);assert.deepEqual(savedViewViolations(saved(['known']),['known']),[]);
- for(const mutate of [s=>s.empty=true,s=>s.savedVisible=false,s=>s.title='Directory',s=>s.rows=[{id:'different'}],s=>s.overflow=true,s=>s.current[0].href='/directory',s=>s.current.pop(),s=>s.privacy='Saved everywhere']){
+ const missingInstruction=saved();missingInstruction.summary='';assert.ok(savedViewViolations(missingInstruction).includes('empty-state'));
+ for(const mutate of [s=>s.empty=true,s=>s.savedVisible=false,s=>s.title='Directory',s=>s.rows=[{id:'different'}],s=>s.overflow=true,s=>s.current[0].href='/directory',s=>s.current.pop(),s=>s.privacy='Saved everywhere',s=>s.browseActions=[],s=>s.browseActions.push(s.browseActions[0]),s=>s.browseActions[0].visible=false,s=>s.browseActions[0].box.height=43,s=>s.browseActions[0].box={}]){
   const state=saved(['known']);mutate(state);assert.ok(savedViewViolations(state,['known']).length);
  }
 });
@@ -28,6 +29,8 @@ test('rendered suite invokes the focused runner with explicit keyboard, history 
  assert.doesNotMatch(helper,/\.click\(|\.focus\(|dispatchEvent\(|history\.(?:back|forward|pushState|replaceState)/);
  assert.match(helper,/await tabTo\('\[data-service-save\]'\);\s*await key\('Enter'\)/);
  assert.match(helper,/await tabTo\('\[data-saved-remove\]'\);\s*await key\('Enter'\)/);
+ assert.ok(helper.includes("await tabTo('.saved-services__heading a[href=\"#directory-results\"]');"));
+ assert.doesNotMatch(helper,/data-saved-empty|saved-services__empty/);
 });
 
 test('directory restoration requires the exact title and both original current-nav entries',()=>{

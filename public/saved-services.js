@@ -14,7 +14,6 @@ export function initSavedServices() {
     .map(link => ({ link, current: link.getAttribute("aria-current") }));
   const heading = panel.querySelector("h2");
   const summary = panel.querySelector("[data-saved-summary]");
-  const empty = panel.querySelector("[data-saved-empty]");
   const status = panel.querySelector("[data-saved-status]");
   const list = panel.querySelector("[data-saved-list]");
   const retry = panel.querySelector("[data-saved-retry]");
@@ -87,7 +86,6 @@ export function initSavedServices() {
     };
     retry.hidden = focused !== retry;
     retry.setAttribute("aria-disabled", "true");
-    if (empty) empty.hidden = true;
     let ids;
     try { ids = readSavedResources(); } catch {
       list.replaceChildren();
@@ -106,7 +104,6 @@ export function initSavedServices() {
       list.replaceChildren();
       more.hidden = true;
       summary.textContent = "No saved services yet. Open a listing and choose Save to keep it here.";
-      if (empty) empty.hidden = false;
       cancelClear();
       restoreFocus();
       return;

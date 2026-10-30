@@ -31,7 +31,7 @@ const CRITICAL_PAGE_STYLE = `<style data-rwn-page-critical>
   #service>.legal-hero{padding:1.35rem .9rem 1.15rem!important}
 }
 </style>`;
-const DIRECTORY_HEADING = "Find a service in the directory.";
+const DIRECTORY_HEADING = "Service directory";
 const DIRECTORY_DESCRIPTION = "Search by service, place, or organization. Listings include contact details, the source, and the date RWN checked it.";
 
 async function walkHtml(directory) {
