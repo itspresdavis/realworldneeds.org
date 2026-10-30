@@ -11,7 +11,7 @@ function fixture(overrides = {}) {
   let clock = 0;
   const calls = { samples: 0, prepare: 0, capture: 0, waits: [] };
   const options = {
-    now: () => clock, timeoutMs: 200,
+    now: () => clock, timeoutMs: 200, captureTimeoutMs: 200,
     sample: async () => { calls.samples++; return ready; },
     prepare: async () => { calls.prepare++; },
     capture: async () => { calls.capture++; return shot; },
@@ -30,6 +30,12 @@ test("successful setup positions the map then captures one image with hash evide
   assert.equal(result.captureSha256, createHash("sha256").update("composited image").digest("hex"));
   assert.equal(result.image.toString(), "composited image");
   assert.equal(result.snapshot, ready);
+  assert.equal(result.runtimeDurationMs, 0);
+  assert.equal(result.captureStartedMs, 0);
+  assert.equal(result.captureDurationMs, 0);
+  assert.equal(result.durationMs, 0);
+  assert.equal(result.runtimeTimeoutMs, 200);
+  assert.equal(result.captureTimeoutMs, 200);
 });
 
 test("DOM elements alone cannot pass presentation readiness", async () => {
@@ -66,29 +72,87 @@ test("positioning shares the same host deadline", async () => {
   assert.equal(f.calls.capture, 0);
 });
 
-test("DOM wait, positioning and capture cannot each obtain a fresh budget", async () => {
+test("runtime DOM wait and positioning share one deadline and cannot borrow capture time", async () => {
+  const f = fixture({captureTimeoutMs: 1000});
+  f.options.sample = async () => ++f.calls.samples === 1 ? { elementsReady: false } : ready;
+  f.options.prepare = async () => { f.calls.prepare++; f.advance(151); };
+  await assert.rejects(waitForGlobePresentation(f.options), error => {
+    assert.equal(error.globeReadiness.phase, "runtime");
+    assert.equal(error.globeReadiness.runtimeDurationMs, 201);
+    assert.equal(error.globeReadiness.captureDurationMs, null);
+    assert.equal(error.globeReadiness.timeoutMs, 200);
+    assert.equal(error.globeReadiness.stage, "map positioning");
+    return true;
+  });
+  assert.deepEqual(f.calls.waits, [50]);
+  assert.equal(f.calls.capture, 0);
+});
+
+test("a late final runtime predicate cannot start capture using its separate budget", async () => {
+  const f = fixture({captureTimeoutMs: 1000});
+  f.options.sample = async () => {
+    if (++f.calls.samples === 2) f.advance(201);
+    return ready;
+  };
+  await assert.rejects(waitForGlobePresentation(f.options), error => {
+    assert.equal(error.globeReadiness.phase, "runtime");
+    assert.equal(error.globeReadiness.stage, "render readiness");
+    assert.equal(error.globeReadiness.runtimeDurationMs, 201);
+    assert.equal(error.globeReadiness.captureStartedMs, null);
+    return true;
+  });
+  assert.equal(f.calls.capture, 0);
+});
+
+test("a deadline crossed at the runtime-to-capture handoff cannot borrow capture time", async () => {
+  const f = fixture({captureTimeoutMs: 1000});
+  let handoffClock = null;
+  f.options.now = () => handoffClock ? handoffClock.shift() ?? 200 : 0;
+  f.options.sample = async () => ++f.calls.samples === 1 ? ready : {
+    ...ready,
+    // Readiness succeeds just before the deadline; the next clock read reaches it.
+    get healthy() { handoffClock = [199, 200]; return true; }
+  };
+  await assert.rejects(waitForGlobePresentation(f.options), error => {
+    assert.equal(error.globeReadiness.phase, "runtime");
+    assert.equal(error.globeReadiness.runtimeDurationMs, 200);
+    assert.equal(error.globeReadiness.captureStartedMs, null);
+    assert.equal(error.globeReadiness.captureDurationMs, null);
+    return true;
+  });
+  assert.equal(f.calls.capture, 0);
+});
+
+test("capture has a separate deadline and preserves the measured runtime readiness time", async () => {
   const f = fixture();
   f.options.sample = async () => ++f.calls.samples === 1 ? { elementsReady: false } : ready;
   f.options.prepare = async () => { f.calls.prepare++; f.advance(120); };
   f.options.capture = async () => { f.calls.capture++; f.advance(31); return shot; };
-  await assert.rejects(waitForGlobePresentation(f.options), error => {
-    assert.equal(error.globeReadiness.durationMs, 201);
-    assert.equal(error.globeReadiness.stage, "composited map capture");
-    return true;
-  });
-  assert.deepEqual(f.calls.waits, [50]);
+  const result = await waitForGlobePresentation(f.options);
+  assert.equal(result.runtimeDurationMs, 170);
+  assert.equal(result.captureStartedMs, 170);
+  assert.equal(result.captureDurationMs, 31);
+  assert.equal(result.durationMs, 201);
+  assert.equal(result.snapshot, ready);
   assert.equal(f.calls.capture, 1);
 });
 
 test("a late successful capture is rejected and never retried", async () => {
   const f = fixture();
   f.options.capture = async () => { f.calls.capture++; f.advance(201); return shot; };
-  await assert.rejects(waitForGlobePresentation(f.options), /composited map capture/);
+  await assert.rejects(waitForGlobePresentation(f.options), error => {
+    assert.equal(error.globeReadiness.phase, "capture");
+    assert.equal(error.globeReadiness.runtimeDurationMs, 0);
+    assert.equal(error.globeReadiness.captureDurationMs, 201);
+    assert.equal(error.globeReadiness.timeoutMs, 200);
+    assert.equal(error.globeReadiness.stage, "composited map capture");
+    return true;
+  });
   assert.equal(f.calls.capture, 1);
 });
 
-test("a hung capture is stopped by the host deadline", async () => {
-  const f = fixture({ timeoutMs: 20 });
+test("a hung capture is stopped by its own host deadline", async () => {
+  const f = fixture({ captureTimeoutMs: 20 });
   f.options.capture = () => { f.calls.capture++; return new Promise(() => {}); };
   await assert.rejects(waitForGlobePresentation(f.options), /composited map capture/);
   assert.equal(f.calls.capture, 1);
