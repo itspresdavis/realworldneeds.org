@@ -31,6 +31,23 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
     const height = width <= 600 ? 844 : 1000;
     await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false, screenWidth: width, screenHeight: height });
     await navigate(client, `${host}/`);
+    // Initialization is asynchronous: wait for the real controls and renderer,
+    // not a fixed post-navigation delay, before activating the reset control.
+    const readyStarted=performance.now();let ready;
+    do {
+      ready=await evaluate(client,`(() => {
+        const startup=document.documentElement.dataset.finderStartup,canvas=document.getElementById('globeCanvas'),stage=canvas?.closest('.globe-stage');
+        if(startup==='ready'&&stage?.classList.contains('is-globe-unavailable'))throw new Error('Presentation requires a working globe');
+        const controls=startup==='ready'&&!!document.getElementById('clearSearch')&&!!document.querySelector('.quick-need--all');
+        if(controls)canvas?.scrollIntoView({block:'center',behavior:'instant'});
+        const available=controls&&/[0-9]+(?:[.][0-9]+)?×/.test(document.getElementById('globeReadout')?.textContent||'');
+        const gl=available&&canvas&&(canvas.getContext('webgl2')||canvas.getContext('webgl'));
+        return {startup,controls,healthy:!!gl&&!gl.isContextLost()};
+      })()`);
+      if(ready.controls&&ready.healthy)break;
+      await new Promise(resolve=>setTimeout(resolve,50));
+    } while(performance.now()-readyStarted<12000);
+    if(!ready?.controls||!ready?.healthy)throw new Error(`Presentation initialization did not become ready at ${width}px: ${JSON.stringify(ready)}`);
     // Earlier recovery tests intentionally leave a no-match query. Set each
     // visual state through the controls rather than silently inheriting it.
     await evaluate(client, `(async () => {
