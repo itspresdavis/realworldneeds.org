@@ -433,10 +433,9 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
     return (await settle(() => true, 'Pre-Saved visible directory context')).state;
   };
   const saved = async before => {
-    if (width < 900) await click('.rwn-page-menu > summary', true);
     const atClick = await state();
-    assert(Math.abs(atClick.scroll - before.scroll) < 5, 'Opening the responsive Saved menu moved the directory return baseline', { before: before.scroll, actual: atClick.scroll });
-    await click(`${width < 900 ? '.rwn-page-menu' : '.rwn-page-nav'} a[href="/directory#saved"]`, true);
+    assert(Math.abs(atClick.scroll - before.scroll) < 5, 'Preparing the persistent Saved control moved the directory return baseline', { before: before.scroll, actual: atClick.scroll });
+    await click('.rwn-saved-link[href="/directory#saved"]', true);
     const opened = await wait(s => s.path === '/directory' && s.saved && s.panelVisible && !s.menuOpen && s.focusedId === 'saved-services-heading', 'Saved did not own its panel and focus');
     await sleep(550);
     const held = await state();
