@@ -241,6 +241,7 @@ display: block;min-width: 0;width: 100%;margin: 0 auto;padding: clamp(3rem,5vw,5
 .rwn-professional .source-band { border-top: 1px solid var(--rwn-line);background: #fff;}
 .rwn-professional .source-band__heading { margin-left: 0;max-width: 31rem;}
 .rwn-professional .about-rwn__heading { max-width: 42rem;}
+.rwn-professional .about-rwn__heading h2 { max-width:20ch;}
 .rwn-professional .about-rwn__heading h2,
 .rwn-professional .source-band__heading h2 { margin: 0;color: var(--rwn-ink-strong);font-family: Georgia, "Times New Roman", serif;font-size: clamp(2rem,3.7vw,3.4rem);font-weight: 400;line-height: 1.07;letter-spacing: -.045em;}
 .rwn-professional .about-rwn__heading p,

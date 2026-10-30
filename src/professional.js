@@ -69,6 +69,7 @@ function rewriteFinderCopy() {
 }
 
 function rewriteMethodSections() {
+  document.querySelectorAll(".about-rwn .section-kicker, .source-band .section-kicker").forEach(node => node.remove());
   setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
   setText(
     ".about-rwn__heading p",
