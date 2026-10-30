@@ -175,6 +175,51 @@ test('snapshot handles a missing document without converting it to a usable page
   assert.equal(pageMenuReflowIdentity(result, expected()), false);
 });
 
+function contributorReflowFixture() {
+  const nodes = new Map([
+    ['h1', { textContent: 'Contribute to Real World Needs' }],
+    ['header.contributor-header', {}], ['form#accountForm', {}],
+    ['#accountForm input[name="email"][type="email"]', {}],
+    ['#accountForm input[name="password"][type="password"]', {}],
+    ['#accountForm button#accountSubmit[type="submit"]', {}]
+  ]);
+  const document = { title: 'Contribute | Real World Needs', body: {},
+    documentElement: { clientWidth: 320, scrollWidth: 320 }, readyState: 'complete',
+    querySelector: selector => nodes.get(selector) || null };
+  const globals = { document, location: { href: 'http://127.0.0.1:4175/join', pathname: '/join' },
+    performance: { timeOrigin: 101 }, innerWidth: 320, innerHeight: 422, scrollX: 0, scrollY: 0 };
+  return { nodes, globals, snapshot: () => vm.runInNewContext(`(${pageMenuReflowSnapshot.toString()})()`, globals) };
+}
+
+test('final Contribute destination is ready only with its complete standalone account page', () => {
+  const f = contributorReflowFixture(), state = f.snapshot();
+  assert.equal(state.ready, true);
+  assert.equal(state.menuOpen, false);
+  assert.equal(state.nav, undefined);
+  assert.equal(state.links.length, 0);
+  assert.equal(pageMenuReflowIdentity(state, { href: f.globals.location.href, width: 320, height: 422, previousTimeOrigin: 100 }), true);
+  assert.equal(pageMenuReflowIdentity(state, { href: f.globals.location.href, width: 320, height: 422, previousTimeOrigin: 101 }), false);
+});
+
+test('Contribute readiness rejects missing account fields, blank shells and incomplete loads', () => {
+  for (const selector of contributorReflowFixture().nodes.keys()) {
+    const f = contributorReflowFixture(); f.nodes.delete(selector);
+    assert.equal(f.snapshot().ready, false, selector);
+  }
+  for (const mutate of [
+    f => { f.globals.document.body = null; }, f => { f.globals.document.documentElement = null; },
+    f => { f.globals.document.readyState = 'loading'; }, f => { f.globals.document.readyState = 'interactive'; }
+  ]) { const f = contributorReflowFixture(); mutate(f); assert.equal(f.snapshot().ready, false); }
+});
+
+test('standalone account markers never substitute for navigation on other routes', () => {
+  for (const pathname of ['/directory', '/sources', '/editorial-policy', '/join-other', '/join/', '/']) {
+    const f = contributorReflowFixture(); f.globals.location.pathname = pathname;
+    f.globals.location.href = `http://127.0.0.1:4175${pathname}`;
+    assert.equal(f.snapshot().ready, false, pathname);
+  }
+});
+
 test('snapshot computes scrollport from client edges and entire outline from actual style', () => {
   const link = { getBoundingClientRect: () => box(20, 70, 280, 50), getAttribute: () => '/', textContent: 'Find help',
     contains: () => false, matches: selector => selector === ':focus-visible' };

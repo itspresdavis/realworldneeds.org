@@ -76,10 +76,7 @@ function rewriteMethodSections() {
   );
 
   const heading = document.querySelector('.about-rwn__heading');
-  if (heading && !heading.querySelector('.mission-drawing')) {
-    const drawing = document.createElement('img');
-    drawing.className = 'mission-drawing'; drawing.src = '/care-drawing.svg'; drawing.alt = ''; drawing.width = 420; drawing.height = 150; drawing.loading = 'lazy';
-    heading.append(drawing);
+  if (heading && !heading.querySelector('.contributor-invitation')) {
     const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
   }
 

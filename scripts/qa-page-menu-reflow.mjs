@@ -68,8 +68,14 @@ export function pageMenuReflowSnapshot() {
       focused: doc.activeElement === node, focusVisible: node.matches(':focus-visible'),
       outline: { style: css.outlineStyle, width: outline, offset, color: css.outlineColor }, ring };
   });
+  // Contribute is a standalone destination, not a source of the public menu.
+  // Require its real account form; other routes still require the full menu.
+  const contributorReady = globalThis.location?.pathname === '/join' && doc?.querySelector('header.contributor-header')
+    && doc.querySelector('form#accountForm') && doc.querySelector('#accountForm input[name="email"][type="email"]')
+    && doc.querySelector('#accountForm input[name="password"][type="password"]') && doc.querySelector('#accountForm button#accountSubmit[type="submit"]');
+  const navigationReady = globalThis.location?.pathname === '/join' ? contributorReady : menu && nav && summary;
   return {
-    ready: Boolean(doc?.documentElement && doc.body && doc.querySelector('h1') && menu && nav && summary && doc.readyState === 'complete'),
+    ready: Boolean(doc?.documentElement && doc.body && doc.querySelector('h1') && navigationReady && doc.readyState === 'complete'),
     href: globalThis.location?.href, title: doc?.title || '', heading: doc?.querySelector('h1')?.textContent.trim() || '',
     timeOrigin: globalThis.performance?.timeOrigin ?? null, width: globalThis.innerWidth, height: globalThis.innerHeight,
     clientWidth: doc?.documentElement?.clientWidth, scrollWidth: doc?.documentElement?.scrollWidth,
