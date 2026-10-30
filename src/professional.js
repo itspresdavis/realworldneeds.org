@@ -26,7 +26,7 @@ function rewriteNavigation() {
   const menuSummary = document.querySelector(".site-menu > summary");
   if (menuSummary) {
     menuSummary.textContent = "Menu";
-    menuSummary.setAttribute("aria-label", "Open navigation menu");
+    menuSummary.setAttribute("aria-label", "Navigation menu");
     menuSummary.setAttribute("title", "Menu");
   }
 
@@ -56,7 +56,7 @@ function rewriteFinderCopy() {
   );
 
   const status = document.getElementById("locationStatus");
-  if (status) status.textContent = "Nearby service locations appear first when you choose to share your location.";
+  if (status) status.textContent = "Use location to show nearby services first.";
 
   const live = document.getElementById("liveSourceStatus");
   if (live) live.textContent = "In the United States, location search can also load current USDA summer meal sites.";

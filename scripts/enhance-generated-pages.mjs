@@ -123,7 +123,6 @@ function directorySearchMarkup(scope) {
     <p class="saved-services__privacy">Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.</p>
     <noscript><p>Turn on JavaScript to view or change saved services. You can still browse the directory below.</p></noscript>
     <p data-saved-summary role="status" aria-live="polite"></p>
-    <div class="saved-services__empty" data-saved-empty hidden><svg class="saved-services__bookmark" viewBox="0 0 40 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h22v37l-11-7-11 7z" /><path d="M15 16h10m-10 6h7" /></svg><div><h3>Keep useful help close.</h3><p>Save a listing while you browse. Come back here for its contact details and source when you need them.</p><a href="#directory-results">Find services to save <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" /></svg></a></div></div>
     <div class="saved-services__tools"><button type="button" data-saved-clear aria-expanded="false" aria-controls="saved-clear-confirmation" hidden>Clear saved list</button><button type="button" data-saved-retry hidden>Try again</button></div>
     <div id="saved-clear-confirmation" data-saved-confirmation hidden><p>Remove every saved service from this browser?</p><button type="button" data-saved-cancel>Keep list</button><button type="button" data-saved-confirm>Remove all saved services</button></div>
     <div data-saved-list></div><button type="button" data-saved-more hidden>Show more saved services</button>
@@ -163,7 +162,7 @@ function enhanceCollectionPage(html, release, scope) {
     const breadcrumb = /(<nav class="directory-downloads" aria-label="Breadcrumb">[\s\S]*?<\/nav>)/;
     html = breadcrumb.test(html)
       ? html.replace(breadcrumb, `$1\n        ${searchMarkup}`)
-      : html.replace('<div class="directory-records">', `${searchMarkup}\n        <div class="directory-records">`);
+      : html.replace('<div class="directory-shell">', `<div class="directory-shell">\n        ${searchMarkup}`);
   }
   // Keep the coverage and travel caution with the search controls, including
   // filtered results, instead of repeating it below the form.

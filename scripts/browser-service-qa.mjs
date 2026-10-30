@@ -325,7 +325,7 @@ async function run() {
       };
     })()`);
     await capture(client, "directory-mobile.png");
-    const expectedMenu = ["Find help", "Directory", "Saved", "How listings are checked", "Sources", "Transparency"];
+    const expectedMenu = ["Find help", "Directory", "How listings are checked", "Sources", "Contribute"];
     const expectedActions = ["Apple Maps", "Google Maps", "View details"];
     const hasCall = directoryMobile.actionLabels?.some((label) => label.startsWith("Call "));
     const hasAllActions = expectedActions.every((label) => directoryMobile.actionLabels?.includes(label));

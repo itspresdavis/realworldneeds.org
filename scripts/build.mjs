@@ -149,7 +149,7 @@ function pagination(basePath, page, totalPages) {
       ? `<li><span aria-current="page" aria-label="Page ${number}, current page">${number}</span></li>`
       : `<li><a href="${pageHref(basePath, number)}" aria-label="Page ${number}">${number}</a></li>`;
   }).join("");
-  return `<nav class="directory-downloads directory-pagination" aria-label="Directory pages"><strong>Browse pages</strong>${links.join("")}<details class="directory-page-picker"><summary>Choose a page</summary><ol class="directory-page-list">${pages}</ol></details></nav>`;
+  return `<nav class="directory-downloads directory-pagination" aria-label="Directory pages">${links.join("")}<details class="directory-page-picker"><summary>Choose a page</summary><ol class="directory-page-list">${pages}</ol></details></nav>`;
 }
 
 function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, browseMarkup = "", breadcrumbItems = [] }) {
@@ -217,16 +217,15 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
     <main id="directory">
       <section class="legal-hero"><div class="legal-hero__inner"><p class="eyebrow">Text directory</p><h1>${escapeHtml(heading)}</h1><p class="legal-hero__lede">${escapeHtml(pageDescription)}</p></div></section>
       <div class="directory-shell">
-        ${breadcrumbs(breadcrumbItems)}
+        ${canonicalPath === "/directory" ? "" : breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
-        <a class="directory-results-jump" href="#directory-results"><span><strong>View listings</strong><small>${items.length.toLocaleString()} ${items.length === 1 ? "listing" : "listings"} on this page · page ${page} of ${totalPages}</small></span><span aria-hidden="true">↓</span></a>
-        <div class="directory-browse-tools">
+        <div class="directory-page-tools"><nav aria-label="Directory shortcuts"><a class="directory-results-jump" href="#directory-results">View listings <span aria-hidden="true">↓</span></a><a href="#directory-browse">Browse &amp; downloads</a></nav>${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}</div>
+        <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
+        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
+        <div class="directory-browse-tools" id="directory-browse" tabindex="-1">
           <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
           ${browseMarkup}
         </div>
-        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
-        <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
-        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
       </div>
     </main>
     <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>

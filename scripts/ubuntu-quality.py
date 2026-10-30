@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -37,9 +38,10 @@ exec npm run check
 TERMINAL = {"passed", "failed", "error", "interrupted"}
 BROWSER_PORTS = {
     "touch": (4178, 9228),
-    "browser": (4173, 4175, 4176, 4177, 4178, 4181, 4184,
-                9222, 9224, 9225, 9226, 9228, 9231, 9234,
-                *range(9228, 9428), *range(49152, 50152)),
+    # Only endpoints actually used by the sequential suite. Unchosen random
+    # candidates and unrelated ephemeral connections must not block the gate.
+    "browser": (4173, 4175, 4176, 4177, 4178, 4181, 4184, 4185,
+                9222, 9224, 9225, 9226, 9228, 9231, 9234, 9235),
 }
 
 
@@ -71,6 +73,15 @@ def atomic_json(path, value):
         os.close(directory)
 
 
+def chrome_executable(system=None):
+    system = sys.platform if system is None else system
+    if system == "linux":
+        return "/usr/bin/google-chrome"
+    if system == "darwin":
+        return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    raise RuntimeError("Local Quality supports Linux and Darwin only")
+
+
 def clean_environment(home, temp_root=None):
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
@@ -91,7 +102,7 @@ def clean_environment(home, temp_root=None):
         "NPM_CONFIG_USERCONFIG": str(user_config),
         "NPM_CONFIG_GLOBALCONFIG": str(global_config),
         "NPM_CONFIG_CACHE": str(home / ".cache/npm"),
-        "CHROME_PATH": "/usr/bin/google-chrome",
+        "CHROME_PATH": chrome_executable(),
         "CI": "true", "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
     })
@@ -189,14 +200,22 @@ def select_build_cpus(allowed, topology_reader=read_cpu_topology):
 
 
 def stage_resource_policy(name, topology_reader=read_cpu_topology):
-    allowed = sorted(os.sched_getaffinity(0))
+    system = sys.platform
+    if system not in {"linux", "darwin"}:
+        raise RuntimeError("Local Quality supports Linux and Darwin only")
     inherited_nice = os.getpriority(os.PRIO_PROCESS, 0)
-    if name in {"touch", "browser"}:
-        cpus, selection, increment = allowed, "full-inherited-affinity", 0
+    increment = 0 if name in {"touch", "browser"} else 10
+    if system == "darwin":
+        # Darwin has no sched_setaffinity API. Do not claim or emulate a CPU cap.
+        cpus, selection = None, "os-managed-no-affinity"
     else:
-        cpus, selection = select_build_cpus(allowed, topology_reader)
-        increment = 10
+        allowed = sorted(os.sched_getaffinity(0))
+        if name in {"touch", "browser"}:
+            cpus, selection = allowed, "full-inherited-affinity"
+        else:
+            cpus, selection = select_build_cpus(allowed, topology_reader)
     return {
+        "platform": system, "affinity_supported": system == "linux",
         "cpus": cpus, "cpu_selection": selection,
         "inherited_nice": inherited_nice, "nice_increment": increment,
         "expected_nice": min(19, inherited_nice + increment),
@@ -208,7 +227,8 @@ def child_limits(policy=None):
     policy = policy if policy is not None else stage_resource_policy("check")
     if policy["nice_increment"]:
         os.nice(policy["nice_increment"])
-    os.sched_setaffinity(0, policy["cpus"])
+    if policy["affinity_supported"]:
+        os.sched_setaffinity(0, policy["cpus"])
 
 
 def export_source(repo, sha, archive, workspace, env):
@@ -381,8 +401,10 @@ def main(argv=None):
         "started_at": now(), "finished_at": None, "active_stage": "setup",
         "stages": {}, "artifacts": [], "run_directory": str(run_dir),
         "validator_source_sha256": digest(Path(__file__)),
-        "limits": {"build": stage_resource_policy("check"),
-                   "browser": stage_resource_policy("browser")},
+        "platform": {"system": sys.platform, "machine": platform.machine(),
+                     "release": platform.release()},
+        "provider": {"linux": "ubuntu", "darwin": "macos"}.get(sys.platform),
+        "limits": {},
     }
     save = lambda: atomic_json(receipt_path, receipt)
     save()
@@ -393,6 +415,11 @@ def main(argv=None):
     def interrupted(signum, frame):
         raise Interrupted(signum)
     try:
+        # Populate resource limits inside the receipt boundary so unsupported
+        # hosts or unavailable OS APIs still leave a durable failure.
+        receipt["limits"] = {"build": stage_resource_policy("check"),
+                             "browser": stage_resource_policy("browser")}
+        save()
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous[signum] = signal.signal(signum, interrupted)
         # Chrome SingletonSocket uses TMPDIR and Unix socket paths are limited.
@@ -412,15 +439,17 @@ def main(argv=None):
         receipt["source_tree"] = git_output(repo, env, "rev-parse", receipt["sha"] + "^{tree}")
         save()
         node = run_stage("node", ["node", "--version"], repo, env, run_dir / "node.log", 15)
-        chrome = run_stage("chrome", ["/usr/bin/google-chrome", "--version"], repo, env, run_dir / "chrome.log", 15)
+        chrome = run_stage("chrome", [env["CHROME_PATH"], "--version"], repo, env, run_dir / "chrome.log", 15)
         receipt["prerequisites"] = {"node": node, "chrome": chrome}
         node_version = (run_dir / "node.log").read_text().strip()
         chrome_version = (run_dir / "chrome.log").read_text().strip()
         if node["status"] != "passed" or not re.fullmatch(r"v24\.\d+\.\d+", node_version):
             raise RuntimeError("Node.js major version 24 is required")
         if chrome["status"] != "passed" or not chrome_version.startswith("Google Chrome "):
-            raise RuntimeError("/usr/bin/google-chrome did not verify successfully")
-        receipt["runtime"] = {"node": node_version, "chrome": chrome_version}
+            raise RuntimeError(env["CHROME_PATH"] + " did not verify successfully")
+        receipt["runtime"] = {"node": node_version, "chrome": chrome_version,
+                              "node_path": shutil.which("node", path=env["PATH"]),
+                              "chrome_path": env["CHROME_PATH"]}
         archive = run_dir / "source.tar"
         receipt.update(export_source(repo, receipt["sha"], archive, workspace, env))
         receipt["source_archive"] = {"path": str(archive), "sha256": digest(archive), "bytes": archive.stat().st_size}

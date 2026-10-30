@@ -123,8 +123,26 @@ function headerFixture(positions = [20, 20]) {
 
 test('Saved sticky header preparation preserves the actual pre-Saved scroll and waits for stable native coordinates', async () => {
   const f = headerFixture([20, 24, 24]);
-  const point = await vm.runInNewContext(`(${directorySavedBrowseHeaderPoint.toString()})('.rwn-page-menu > summary')`, f.globals);
+  const point = await vm.runInNewContext(`(${directorySavedBrowseHeaderPoint.toString()})('.rwn-saved-link[href="/directory#saved"]')`, f.globals);
   assert.equal(point.y, 46); assert.equal(f.frames(), 3); assert.equal(f.calls(), 0); assert.equal(f.globals.scrollY, 4200);
+});
+
+for (const width of [1440, 390]) test(`Saved Browse uses the persistent header action without opening a menu at ${width}px`, async () => {
+  const closure = verifyDirectorySavedBrowse.toString().match(/  const saved = async before => \{[\s\S]*?\n  \};/)[0];
+  const before = base(), opened = { ...before, saved: true, panelVisible: true, focusedId: 'saved-services-heading' };
+  const calls = []; let active = before;
+  const context = { width, state: async () => active,
+    click: async (selector, header) => {
+      assert.equal(selector, '.rwn-saved-link[href="/directory#saved"]');
+      assert.equal(header, true); calls.push(selector); active = opened;
+    },
+    wait: async (predicate, label) => { assert.ok(predicate(active), label); return active; },
+    sleep: async ms => assert.equal(ms, 550),
+    assert: (ok, label) => assert.ok(ok, label)
+  };
+  const saved = vm.runInNewContext(`${closure}; saved`, context);
+  assert.equal(await saved(before), opened);
+  assert.deepEqual(calls, ['.rwn-saved-link[href="/directory#saved"]']);
 });
 
 test('covered and continuously moving Saved header targets fail before dispatch', async () => {

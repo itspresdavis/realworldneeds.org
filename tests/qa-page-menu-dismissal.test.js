@@ -42,10 +42,10 @@ test('exact focus identity detects stealing even between otherwise identical vis
 });
 
 test('retained menu-link and query ownership cannot be satisfied by summary focus', () => {
-  const state = fixture(); state.menuOpen = true; state.summary.focused = false; state.links[5].focused = true; state.links[5].hit = true;
-  assert.deepEqual(pageMenuDismissalViolations(state, expected(), { open: true, focus: 5 }), []);
-  state.links[5].hit = false;
-  assert.ok(pageMenuDismissalViolations(state, expected(), { open: true, focus: 5 }).includes('link-focus'));
+  const state = fixture(); state.menuOpen = true; state.summary.focused = false; state.links.at(-1).focused = true; state.links.at(-1).hit = true;
+  assert.deepEqual(pageMenuDismissalViolations(state, expected(), { open: true, focus: PAGE_MENU_REFLOW_LINKS.length - 1 }), []);
+  state.links.at(-1).hit = false;
+  assert.ok(pageMenuDismissalViolations(state, expected(), { open: true, focus: PAGE_MENU_REFLOW_LINKS.length - 1 }).includes('link-focus'));
   assert.ok(pageMenuDismissalViolations(state, expected(), { focus: 'query' }).includes('query-focus'));
   state.focus.query = true;
   assert.deepEqual(pageMenuDismissalViolations(state, expected(), { focus: 'query' }), []);

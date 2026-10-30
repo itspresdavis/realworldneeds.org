@@ -229,7 +229,7 @@ test("cancelling native Share does not copy or announce a failure", async () => 
   await f.control("shareResource").click(); assert.deepEqual(f.messages, []);
 });
 
-async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = false, storageUnavailable = false, emptyNode = true, hash = "#saved", originalTitle = "Food services in New York | Real World Needs" } = {}) {
+async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = false, storageUnavailable = false, emptyNode = false, hash = "#saved", originalTitle = "Food services in New York | Real World Needs" } = {}) {
   const f = domFixture(), { document, Element } = f;
   const panel = new Element("section", { "data-saved-services": "" });
   const heading = new Element("h2", { tabindex: "-1" });
@@ -242,12 +242,13 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     new Element("a", { href: "/directory#saved" }),
     new Element("a", { href: "/directory/help/food", "aria-current": "location" }),
     new Element("a", { href: "/sources", "aria-current": "false" }),
-    new Element("a", { href: "/directory#saved" }),
+    new Element("a", { href: "/directory#saved", class: "rwn-saved-link" }),
   ];
   const outsideNavigation = new Element("a", { href: "/directory#saved", "aria-current": "location" });
   const initialNavigation = navigation.map((link) => link.getAttribute("aria-current"));
   document.title = originalTitle;
-  document.querySelectorAll = (selector) => selector === ".legal-header nav a" ? navigation : document.body.querySelectorAll(selector);
+  document.querySelectorAll = (selector) => selector === ".legal-header nav a, .rwn-saved-link" ? navigation
+    : selector === ".legal-header nav a" ? navigation.slice(0, -1) : document.body.querySelectorAll(selector);
   const classes = new Set();
   const shell = { classList: { contains: (value) => classes.has(value), toggle: (value, active) => active ? classes.add(value) : classes.delete(value) } };
   panel.closest = (selector) => selector === ".directory-shell" ? shell : null;
@@ -336,7 +337,7 @@ test("saved row removal and an open clear confirmation keep their existing focus
 
 test("Saved empty guidance appears after a successful empty read without fetching or mutating storage", async () => {
   const f = await savedFixture(0);
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   assert.match(f.summary.textContent, /No saved services yet/);
   assert.equal(f.retry.hidden, true);
   assert.equal(f.clear.hidden, true);
@@ -344,14 +345,14 @@ test("Saved empty guidance appears after a successful empty read without fetchin
   assert.deepEqual(f.effects, { reads: 1, writes: 0, fetches: 0 });
 });
 
-test("Saved empty guidance stays hidden while populated details load and after they resolve", async () => {
+test("Saved summary never claims empty while populated details load or after they resolve", async () => {
   const f = await savedFixture(2, { pendingCatalog: true });
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.match(f.summary.textContent, /Loading/);
   assert.equal(f.list.children.length, 0);
   f.search.focus();
   await f.finishCatalog();
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.equal(f.list.children.length, 2);
   assert.match(f.summary.textContent, /2 saved listings/);
   assert.equal(f.document.activeElement, f.search, "finishing background work must not steal focus");
@@ -360,25 +361,25 @@ test("Saved empty guidance stays hidden while populated details load and after t
 
 test("Saved empty guidance never misrepresents unavailable storage as an empty list", async () => {
   const f = await savedFixture(0, { storageUnavailable: true });
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.equal(f.retry.hidden, false);
   assert.match(f.summary.textContent, /unavailable in this browser/);
   assert.deepEqual(f.effects, { reads: 1, writes: 0, fetches: 0 });
   f.retry.focus();
   f.allowStorage();
   await f.retry.click();
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   assert.equal(f.document.activeElement, f.heading, "a successful retry retains heading focus recovery");
   f.denyStorage();
   await f.refresh();
-  assert.equal(f.empty.hidden, true, "a later failed read removes stale empty guidance");
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/, "a later failed read replaces stale empty guidance");
   assert.equal(f.effects.writes, 0);
 });
 
-test("Saved catalog errors keep empty guidance hidden and the saved IDs untouched", async () => {
+test("Saved catalog errors replace the summary honestly and keep saved IDs untouched", async () => {
   const f = await savedFixture(2, { pendingCatalog: true });
   await f.failCatalog();
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.equal(f.retry.hidden, false);
   assert.match(f.summary.textContent, /saved list is still on this device.*could not load/);
   assert.equal(f.effects.writes, 0);
@@ -386,29 +387,29 @@ test("Saved catalog errors keep empty guidance hidden and the saved IDs untouche
 
 test("cross-tab empty, populated and empty transitions cancel stale details and preserve focus", async () => {
   const f = await savedFixture(0, { pendingCatalog: true });
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   f.search.focus();
   f.setIds(2);
   await f.refresh();
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.match(f.summary.textContent, /Loading/);
   f.setIds(0);
   await f.refresh();
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   await f.finishCatalog();
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   assert.equal(f.list.children.length, 0, "the obsolete populated request must not repopulate the list");
   assert.match(f.summary.textContent, /No saved services yet/);
   f.setIds(1);
   await f.refresh();
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.equal(f.list.children.length, 1);
   const remove = f.list.children[0].querySelector("[data-saved-remove]");
   remove.focus();
   f.setIds(0);
   f.events.storage({ key: null });
   await settle();
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   assert.equal(f.document.activeElement, f.heading, "cross-tab clearing the focused last row still recovers to the heading");
   assert.equal(f.effects.writes, 0);
 });
@@ -419,23 +420,24 @@ test("inactive Saved and unrelated storage events never read private storage or 
   f.events.storage({ key: "saved" });
   f.events.storage({ key: "unrelated" });
   await settle();
-  assert.equal(f.empty.hidden, true);
+  assert.doesNotMatch(f.summary.textContent || "", /No saved services yet/);
   assert.deepEqual(f.effects, { reads: 0, writes: 0, fetches: 0 });
   f.location.hash = "#saved";
   f.events.hashchange();
   await settle();
-  assert.equal(f.empty.hidden, false);
+  assert.equal(f.summary.textContent, "No saved services yet. Open a listing and choose Save to keep it here.");
   assert.equal(f.document.activeElement, f.heading);
   f.events.storage({ key: "unrelated" });
   await settle();
   assert.deepEqual(f.effects, { reads: 1, writes: 0, fetches: 0 });
 });
 
-test("Saved renders safely with older cached markup lacking the optional empty guidance", async () => {
-  for (const count of [0, 2]) {
-    const f = await savedFixture(count, { emptyNode: false });
+test("Saved summary works with new markup and keeps the retired cached empty card hidden", async () => {
+  for (const emptyNode of [false, true]) for (const count of [0, 2]) {
+    const f = await savedFixture(count, { emptyNode });
     assert.equal(f.list.children.length, count);
     assert.match(f.summary.textContent, count ? /2 saved listings/ : /No saved services yet/);
+    if (emptyNode) assert.equal(f.empty.hidden, true);
     assert.equal(f.effects.writes, 0);
   }
 });

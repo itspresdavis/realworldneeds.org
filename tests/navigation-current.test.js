@@ -11,13 +11,13 @@ assert.ok(start >= 0 && end > start);
 const context = vm.createContext({});
 vm.runInContext(source.slice(start, end), context);
 
-for (const path of ["/privacy", "/terms", "/accessibility", "/404", "/missing-page"]) {
+for (const path of ["/privacy", "/terms", "/accessibility", "/transparency", "/404", "/missing-page"]) {
   test(`${path} does not falsely announce Find help as the current page`, () => {
     assert.equal(context.navigationLinks(path).includes("aria-current"), false);
   });
 }
 
-for (const [path, href] of [["/", "/"], ["/directory", "/directory"], ["/directory/help/food", "/directory"], ["/service/example", "/directory"], ["/editorial-policy", "/editorial-policy"], ["/sources", "/sources"], ["/transparency", "/transparency"]]) {
+for (const [path, href] of [["/", "/"], ["/directory", "/directory"], ["/directory/help/food", "/directory"], ["/service/example", "/directory"], ["/editorial-policy", "/editorial-policy"], ["/sources", "/sources"], ["/join", "/join"]]) {
   test(`${path} has exactly its intended primary navigation item current`, () => {
     const links = context.navigationLinks(path);
     assert.equal((links.match(/aria-current="page"/g) || []).length, 1);
