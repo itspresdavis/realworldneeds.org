@@ -193,6 +193,67 @@ class QualityTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Linux and Darwin"):
             quality.chrome_executable("win32")
 
+    def test_explicit_chrome_path_accepts_executable_with_spaces_and_ignores_environment(self):
+        browser = self.root / "Google Chrome for Testing"
+        browser.write_text("#!/bin/sh\nexit 0\n")
+        browser.chmod(0o700)
+        with mock.patch.dict(os.environ, {"CHROME_PATH": "/untrusted/browser"}):
+            env = quality.clean_environment(self.root / "home", chrome_path=str(browser))
+        self.assertEqual(env["CHROME_PATH"], str(browser.resolve()))
+        with self.assertRaisesRegex(RuntimeError, "Linux and Darwin"):
+            quality.chrome_executable("win32", override=str(browser))
+
+    def test_explicit_chrome_path_rejects_relative_missing_directory_and_nonexecutable(self):
+        nonexecutable = self.root / "not-executable"
+        nonexecutable.write_text("not executable")
+        nonexecutable.chmod(0o600)
+        for path in ("relative/chrome", self.root / "missing", self.root, nonexecutable):
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "absolute path.*executable"):
+                quality.chrome_executable(override=str(path))
+
+    def test_chrome_option_records_actual_runtime_and_reaches_gates(self):
+        browser = self.root / "Google Chrome for Testing"
+        browser.write_text("#!/bin/sh\nexit 0\n")
+        browser.chmod(0o700)
+        versions = {"node": "v24.19.0", "chrome": "Google Chrome for Testing 153.0.8010.12"}
+        calls = []
+        def prerequisite(name, argv, cwd, env, log, timeout):
+            calls.append((name, argv))
+            Path(log).write_text(versions[name] + "\n")
+            return {"status": "passed", "exit_code": 0}
+        def export(repo, sha, archive, workspace, env):
+            archive.write_bytes(b"test archive")
+            workspace.mkdir()
+            return {}
+        with mock.patch.object(Path, "home", return_value=self.root), \
+             mock.patch.object(quality, "resolve_ref", return_value="a" * 40), \
+             mock.patch.object(quality, "git_output", return_value="b" * 40), \
+             mock.patch.object(quality, "run_stage", side_effect=prerequisite), \
+             mock.patch.object(quality, "export_source", side_effect=export), \
+             mock.patch.object(quality, "execute_gates", return_value="failed") as gates, \
+             mock.patch("sys.stdout", new=io.StringIO()) as output:
+            code = quality.main(["--output-root", str(self.root / "runs"), "--chrome-path", str(browser)])
+        saved = json.loads(Path(json.loads(output.getvalue())["receipt"]).read_text())
+        self.assertEqual(code, 1)
+        self.assertEqual(saved["status"], "failed")
+        self.assertEqual(calls, [("node", ["node", "--version"]),
+                                 ("chrome", [str(browser.resolve()), "--version"])])
+        self.assertEqual(saved["runtime"]["chrome"], versions["chrome"])
+        self.assertEqual(saved["runtime"]["chrome_path"], str(browser.resolve()))
+        self.assertEqual(gates.call_args.args[1]["CHROME_PATH"], str(browser.resolve()))
+        self.assertEqual(saved["validator_source_sha256"], quality.digest(SCRIPT))
+
+    def test_invalid_chrome_option_leaves_error_receipt_and_never_launches_prerequisites(self):
+        with mock.patch.object(quality, "run_stage") as runner, \
+             mock.patch("sys.stdout", new=io.StringIO()) as output:
+            code = quality.main(["--output-root", str(self.root / "runs"), "--chrome-path", "relative/chrome"])
+        saved = json.loads(Path(json.loads(output.getvalue())["receipt"]).read_text())
+        self.assertEqual(code, 2)
+        self.assertEqual(saved["status"], "error")
+        self.assertIn("--chrome-path", saved["error"])
+        self.assertFalse(saved["stages"])
+        runner.assert_not_called()
+
     def test_setup_failure_keeps_platform_and_durable_error_receipt(self):
         with mock.patch.object(quality.sys, "platform", "darwin"), \
              mock.patch.object(quality, "stage_resource_policy", side_effect=RuntimeError("policy unavailable")), \

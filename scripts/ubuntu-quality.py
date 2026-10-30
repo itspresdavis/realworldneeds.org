@@ -73,8 +73,15 @@ def atomic_json(path, value):
         os.close(directory)
 
 
-def chrome_executable(system=None):
+def chrome_executable(system=None, override=None):
     system = sys.platform if system is None else system
+    if system not in {"linux", "darwin"}:
+        raise RuntimeError("Local Quality supports Linux and Darwin only")
+    if override is not None:
+        path = Path(override)
+        if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError("--chrome-path must be an absolute path to an existing executable file")
+        return str(path.resolve(strict=True))
     if system == "linux":
         return "/usr/bin/google-chrome"
     if system == "darwin":
@@ -82,7 +89,7 @@ def chrome_executable(system=None):
     raise RuntimeError("Local Quality supports Linux and Darwin only")
 
 
-def clean_environment(home, temp_root=None):
+def clean_environment(home, temp_root=None, chrome_path=None):
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
     runtime_tmp = Path(temp_root) if temp_root is not None else home / "tmp"
@@ -102,7 +109,7 @@ def clean_environment(home, temp_root=None):
         "NPM_CONFIG_USERCONFIG": str(user_config),
         "NPM_CONFIG_GLOBALCONFIG": str(global_config),
         "NPM_CONFIG_CACHE": str(home / ".cache/npm"),
-        "CHROME_PATH": chrome_executable(),
+        "CHROME_PATH": chrome_executable(override=chrome_path),
         "CI": "true", "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
     })
@@ -386,6 +393,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ref", default="HEAD")
     parser.add_argument("--output-root", default="~/.local/state/rwn-web-quality/runs")
+    parser.add_argument("--chrome-path", help="Absolute path to installed Chrome (defaults to the platform browser)")
     options = parser.parse_args(argv)
     repo = Path(__file__).resolve().parents[1]
     root = Path(options.output_root).expanduser().resolve()
@@ -427,7 +435,7 @@ def main(argv=None):
         runtime_tmp = Path(tempfile.mkdtemp(prefix="rwn-q-", dir="/tmp"))
         receipt["runtime_tmpdir"] = str(runtime_tmp)
         save()
-        env = clean_environment(run_dir / "home", temp_root=runtime_tmp)
+        env = clean_environment(run_dir / "home", temp_root=runtime_tmp, chrome_path=options.chrome_path)
         lock_path = Path.home() / ".local/state/rwn-web-quality/validator.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock = lock_path.open("a")
