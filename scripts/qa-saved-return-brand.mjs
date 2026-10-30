@@ -4,7 +4,7 @@ import { isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
 import { pressConnectivityRecoveryKey } from './qa-connectivity-recovery.mjs';
 
 // CI-only coverage using the already-running browser. No new browser or service.
-export const SAVED_RETURN_WIDTHS = [320, 508, 1180];
+export const SAVED_RETURN_WIDTHS = [320, 390, 508, 1180];
 export function savedReturnSnapshot() {
   const box = node => {
     const r = node?.getBoundingClientRect();

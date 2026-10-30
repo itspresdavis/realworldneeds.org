@@ -261,7 +261,7 @@ async function run() {
       };
     })()`);
     await capture(client, "sources-mobile.png");
-    if (!/where RWN/i.test(sources.h1) || sources.cardCount < 4 || !sources.canonical.endsWith("/sources") || !sources.hasNoEndorsementCopy || !sources.hasMachineRegistry || !sources.hasResourceExport || sources.overflow > 8) {
+    if (sources.h1 !== "Sources" || sources.cardCount < 4 || !sources.canonical.endsWith("/sources") || !sources.hasNoEndorsementCopy || !sources.hasMachineRegistry || !sources.hasResourceExport || sources.overflow > 8) {
       throw new Error(`Rendered source-ledger QA failed: ${JSON.stringify(sources)}`);
     }
 

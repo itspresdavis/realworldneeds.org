@@ -7,7 +7,7 @@ import { pressConnectivityRecoveryKey } from '../scripts/qa-connectivity-recover
 import { verifySavedEntryViewport } from '../scripts/qa-directory-discovery.mjs';
 const home=()=>({path:'/',width:320,overflow:false,overlay:false,savedEntry:{text:'Saved',href:'/directory#saved',visible:true,box:{left:251,top:10,right:309,bottom:54,width:58,height:44},neighbors:[{left:10,top:10,right:179,bottom:54},{left:189,top:10,right:240,bottom:54}]}});
 const saved=(ids=[])=>({hash:'#saved',savedVisible:true,overlay:false,overflow:false,title:'Saved services | Real World Needs',empty:!ids.length,summary:ids.length ? `${ids.length} saved listings.` : 'No saved services yet. Open a listing and choose Save to keep it here.',browseActions:[{visible:true,box:{height:44}}],rows:ids.map(id=>({id})),current:[{href:'/directory#saved',value:'page'}],privacy:'Only in this browser, on this device. Anyone using this browser can see your list. Saving does not reserve a service or confirm availability.'});
-test('Saved return CI covers exact narrow, intermediate and desktop widths',()=>assert.deepEqual(SAVED_RETURN_WIDTHS,[320,508,1180]));
+test('Saved return CI covers exact narrow, intermediate and desktop widths',()=>assert.deepEqual(SAVED_RETURN_WIDTHS,[320,390,508,1180]));
 test('home header gate rejects hidden, too-small, clipped or overlapping Saved entries',()=>{
  assert.deepEqual(homeSavedViolations(home()),[]);
  for(const mutate of [s=>s.overflow=true,s=>s.path='/directory',s=>s.savedEntry.visible=false,s=>s.savedEntry.text='Browse directory',s=>s.savedEntry.href='#saved',s=>s.savedEntry.box.height=43,s=>s.savedEntry.box.right=320,s=>s.savedEntry.neighbors[1].right=265]){

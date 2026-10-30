@@ -7,19 +7,30 @@ const source = await readFile(new URL("../public/saved-services.js", import.meta
 const helper = source.slice(source.indexOf("function focusSavedServicesHeading("), source.indexOf("export function initSavedServices("));
 
 function focusHeading({ top = 61, height = 40, headerBottom = 74, scrollY = 45, scrollX = 13, viewportHeight = 900, hash = "#saved", canFocus = true } = {}) {
-  const calls = [], focuses = [];
-  const document = { activeElement: {}, querySelector: () => headerBottom === null ? null : { getBoundingClientRect: () => ({ bottom: headerBottom }) } };
+  const calls = [], focuses = [], frames = new Map(), events = new Map();
+  let nextFrame = 0;
+  const addEventListener = (name, callback) => { const listeners = events.get(name) || new Set(); listeners.add(callback); events.set(name, listeners); };
+  const removeEventListener = (name, callback) => events.get(name)?.delete(callback);
+  const document = { activeElement: {}, addEventListener, removeEventListener, querySelector: () => headerBottom === null ? null : { getBoundingClientRect: () => ({ bottom: headerBottom }) } };
   const heading = {
     focus(options) { focuses.push(options); if (canFocus) document.activeElement = heading; },
     getBoundingClientRect: () => ({ top, bottom: top + height, height }),
   };
   const context = vm.createContext({
     document, location: { hash },
-    window: { innerHeight: viewportHeight, scrollX, scrollY, scrollTo: (options) => calls.push({ ...options }) },
+    window: { innerHeight: viewportHeight, scrollX, scrollY, scrollTo: (options) => calls.push({ ...options }),
+      addEventListener, removeEventListener,
+      requestAnimationFrame(callback) { frames.set(++nextFrame, callback); return nextFrame; },
+      cancelAnimationFrame(id) { frames.delete(id); } },
   });
   vm.runInContext(helper, context);
   context.focusSavedServicesHeading(heading);
-  return { calls, focuses, heading, document };
+  return { calls, focuses, heading, document, context, frames,
+    restoreGeometry(next) { if ("top" in next) top=next.top; if ("headerBottom" in next) headerBottom=next.headerBottom; if ("scrollY" in next) context.window.scrollY=next.scrollY; },
+    frame() { const callbacks=[...frames.values()]; frames.clear(); for(const callback of callbacks) callback(); },
+    emit(name) { for(const callback of [...(events.get(name) || [])]) callback(); },
+    listenerCount: () => [...events.values()].reduce((total,listeners)=>total+listeners.size,0),
+  };
 }
 
 test("Back from an unfinished Browse scroll reveals the heading below the actual header", () => {
@@ -67,4 +78,42 @@ test("failed focus and hidden headings do not change scroll position", () => {
     const f = focusHeading(state);
     assert.equal(f.calls.length, 0);
   }
+});
+
+
+test("late Back restoration at 508px cannot leave the focused heading behind the header", () => {
+  const f = focusHeading({ top: 93.1875, headerBottom: 66, scrollY: 0 });
+  f.restoreGeometry({ top: 59.1875, scrollY: 34 });
+  f.frame();
+  assert.deepEqual(f.calls.at(-1), { left: 13, top: 21.1875, behavior: "instant" });
+  assert.equal(f.focuses.length, 1, "the correction adjusts scroll without refocusing");
+  assert.equal(f.frames.size, 0, "the repair is bounded to one follow-up frame");
+  assert.equal(f.listenerCount(), 0);
+});
+
+test("post-restoration correction measures the current header again", () => {
+  const f = focusHeading({ top: 106, headerBottom: 66, scrollY: 0 });
+  f.restoreGeometry({ top: 61, scrollY: 45, headerBottom: 96 });
+  f.frame();
+  assert.deepEqual(f.calls.at(-1), { left: 13, top: 4, behavior: "instant" });
+});
+
+for (const action of ["wheel", "touchstart", "pointerdown", "keydown", "focusin", "hashchange", "pagehide", "blur", "visibilitychange"]) {
+  test(`a reader's ${action} cancels the pending Saved alignment`, () => {
+    const f = focusHeading();
+    f.emit(action); f.restoreGeometry({ top: 10, scrollY: 96 }); f.frame();
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.focuses.length, 1);
+    assert.equal(f.frames.size, 0);
+    assert.equal(f.listenerCount(), 0);
+  });
+}
+
+for (const state of ["focus", "hash"]) test(`follow-up never overrides a changed ${state}`, () => {
+  const f = focusHeading();
+  if (state === "focus") f.document.activeElement = {};
+  else f.context.location.hash = "#directory-results";
+  f.restoreGeometry({ top: 10, scrollY: 96 }); f.frame();
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.listenerCount(), 0);
 });

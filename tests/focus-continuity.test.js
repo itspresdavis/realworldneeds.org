@@ -260,6 +260,24 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
   const timers = new Map(); let now = 0, nextTimer = 0;
   const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 }, requests = [];
+  const listeners = new Map(), frames = new Map();
+  let frameId = 0;
+  const addListener = (name, handler, options = {}) => {
+    const entries = listeners.get(name) || [];
+    entries.push({ handler, capture: options === true || Boolean(options.capture) });
+    listeners.set(name, entries);
+    events[name] = event => {
+      for (const entry of [...listeners.get(name)].sort((a,b)=>Number(b.capture)-Number(a.capture))) {
+        if (listeners.get(name).includes(entry)) entry.handler(event);
+      }
+    };
+  };
+  const removeListener = (name, handler, options = {}) => {
+    const capture = options === true || Boolean(options.capture);
+    listeners.set(name, (listeners.get(name) || []).filter(entry => entry.handler !== handler || entry.capture !== capture));
+  };
+  document.addEventListener = addListener;
+  document.removeEventListener = removeListener;
   const navigator = { onLine: true, serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } };
   const location = { hash }, history = { state: null }, restores = [];
   const response = { ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) };
@@ -272,7 +290,9 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
       innerHeight: 900, scrollX: 0, scrollY: 0, scrollTo() {},
-      addEventListener: (name, handler) => { events[name] = handler; },
+      addEventListener: addListener, removeEventListener: removeListener,
+      requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
+      cancelAnimationFrame(id) { frames.delete(id); },
       dispatchEvent: (event) => { restores.push(event); return true; },
     },
     fetch: (...args) => { effects.fetches += 1; requests.push(args); return fetchCatalog ? fetchCatalog(...args) : catalog; },

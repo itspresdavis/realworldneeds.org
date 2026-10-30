@@ -6,18 +6,36 @@ import { createResultRow } from "./directory-results.js";
 // Focus navigation cancels an interrupted native anchor scroll and measures
 // the actual sticky header, including wrapped navigation and browser zoom.
 function focusSavedServicesHeading(heading) {
+  focusSavedServicesHeading.cancelPending?.();
   if (location.hash !== "#saved") return;
   heading.focus({ preventScroll: true });
-  if (document.activeElement !== heading) return;
-  const rect = heading.getBoundingClientRect();
-  if (rect.height <= 0) return;
-  const edge = Math.max(0, document.querySelector(".legal-header")?.getBoundingClientRect().bottom || 0) + 6;
-  const bottom = window.innerHeight - 6;
-  const delta = rect.top < edge ? rect.top - edge
-    : rect.bottom > bottom ? Math.min(rect.bottom - bottom, rect.top - edge) : 0;
-  // Even a zero-distance instant scroll aborts a pending smooth scroll. Keep an
-  // already visible heading in place instead of realigning the whole panel.
-  window.scrollTo({ left: window.scrollX, top: Math.max(0, window.scrollY + delta), behavior: "instant" });
+  const reveal = () => {
+    if (location.hash !== "#saved" || document.activeElement !== heading) return false;
+    const rect = heading.getBoundingClientRect();
+    if (rect.height <= 0) return false;
+    const edge = Math.max(0, document.querySelector(".legal-header")?.getBoundingClientRect().bottom || 0) + 6;
+    const bottom = window.innerHeight - 6;
+    const delta = rect.top < edge ? rect.top - edge
+      : rect.bottom > bottom ? Math.min(rect.bottom - bottom, rect.top - edge) : 0;
+    // Even a zero-distance instant scroll aborts a pending smooth scroll.
+    window.scrollTo({ left: window.scrollX, top: Math.max(0, window.scrollY + delta), behavior: "instant" });
+    return true;
+  };
+  if (!reveal()) return;
+  // Native history restoration or layout anchoring can run after hashchange.
+  // Recheck once before the next paint; never refocus or fight a reader's input.
+  const interruptions = ["wheel", "touchstart", "pointerdown", "keydown", "focusin", "hashchange", "pagehide", "blur"];
+  let frame;
+  const cancel = () => {
+    window.cancelAnimationFrame(frame);
+    for (const type of interruptions) window.removeEventListener(type, cancel, true);
+    document.removeEventListener("visibilitychange", cancel);
+    if (focusSavedServicesHeading.cancelPending === cancel) delete focusSavedServicesHeading.cancelPending;
+  };
+  focusSavedServicesHeading.cancelPending = cancel;
+  for (const type of interruptions) window.addEventListener(type, cancel, { capture: true, passive: true });
+  document.addEventListener("visibilitychange", cancel);
+  frame = window.requestAnimationFrame(() => { cancel(); reveal(); });
 }
 
 export function initSavedServices() {

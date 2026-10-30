@@ -47,11 +47,14 @@ class CdpClient {
       this.ws.addEventListener("open", () => { clearTimeout(timeout); resolve(); }, { once: true });
       this.ws.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("Chrome DevTools WebSocket failed.")); }, { once: true });
     });
+    this.ws.addEventListener("close", () => this.rejectPending("Chrome DevTools connection closed."));
+    this.ws.addEventListener("error", () => this.rejectPending("Chrome DevTools WebSocket failed."));
     this.ws.addEventListener("message", (event) => {
       const message = JSON.parse(String(event.data));
       if (message.id) {
         const pending = this.pending.get(message.id);
         if (!pending) return;
+        clearTimeout(pending.timeout);
         this.pending.delete(message.id);
         if (message.error) pending.reject(new Error(`${pending.method}: ${message.error.message}`));
         else pending.resolve(message.result || {});
@@ -61,11 +64,32 @@ class CdpClient {
     });
   }
 
-  call(method, params = {}) {
+  rejectPending(reason) {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error(`${pending.method}: ${reason}`));
+    }
+    this.pending.clear();
+  }
+
+  call(method, params = {}, timeoutMs = 30_000) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
-      this.ws.send(JSON.stringify({ id, method, params }));
+      if (this.ws?.readyState !== WebSocket.OPEN) {
+        reject(new Error(`${method}: Chrome DevTools is not connected.`));
+        return;
+      }
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method}: Chrome DevTools did not respond within ${timeoutMs}ms.`));
+      }, timeoutMs);
+      this.pending.set(id, { resolve, reject, method, timeout });
+      try { this.ws.send(JSON.stringify({ id, method, params })); }
+      catch (error) {
+        clearTimeout(timeout);
+        this.pending.delete(id);
+        reject(error);
+      }
     });
   }
 
@@ -76,7 +100,10 @@ class CdpClient {
     return () => this.listeners.set(method, (this.listeners.get(method) || []).filter((entry) => entry !== listener));
   }
 
-  close() { this.ws?.close(); }
+  close() {
+    this.rejectPending("Chrome DevTools connection closed.");
+    this.ws?.close();
+  }
 }
 
 async function evaluate(client, expression) {
@@ -156,9 +183,9 @@ async function verifyGlobeMotion(client) {
     evidence.push({ phase: "keyboard-paused", ...paused });
     console.log("Globe motion QA passed: trusted keyboard resume, live reduced-motion stop, no automatic resume, and trusted keyboard pause.");
   } finally {
-    if (breakpoint) await client.call("Debugger.removeBreakpoint", { breakpointId: breakpoint }).catch(() => {});
-    await client.call("Debugger.disable").catch(() => {});
-    await client.call("Emulation.setEmulatedMedia", { features: [] }).catch(() => {});
+    if (breakpoint) await client.call("Debugger.removeBreakpoint", { breakpointId: breakpoint }, 1500).catch(() => {});
+    await client.call("Debugger.disable", {}, 1500).catch(() => {});
+    await client.call("Emulation.setEmulatedMedia", { features: [] }, 1500).catch(() => {});
     await mkdir("qa-screenshots", { recursive: true });
     await writeFile("qa-screenshots/globe-motion.json", JSON.stringify(evidence, null, 2));
   }

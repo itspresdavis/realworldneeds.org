@@ -125,7 +125,9 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   const history = { state, replaceState(...args) { writes.push(args); this.state = args[0]; } };
   const location = { pathname: path, hash, href: `https://example.org${path}${hash}` };
   const window = Object.assign(new Node("window"), { scrollX: 0, scrollY: 0, innerHeight: 800, isSecureContext: false,
-    scrollTo({ top }) { this.scrollY = top; scrolls.push(top); } });
+    scrollTo({ top }) { this.scrollY = top; scrolls.push(top); },
+    requestAnimationFrame(callback) { const frame=()=>{if(!frame.cancelled) callback();}; frames.push(frame); return frame; },
+    cancelAnimationFrame(frame) { if(frame) frame.cancelled=true; } });
   const navigator = { onLine: online, serviceWorker: new Node("serviceworker") };
   const storage = new Proxy({}, { get() { assert.fail("Directory search must never read or write web storage"); } });
   const context = vm.createContext({ document, window, history, location, navigator, URL, Intl, AbortController,

@@ -381,7 +381,7 @@ async function run() {
         resultLinks: document.querySelectorAll(".result-row-link").length
       };
     })()`);
-    if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y" || mobile.quickCount !== 7 || mobile.actionTargets.some((height) => height < 44) || mobile.quickTargets.some((target) => target.height < 40 || target.right > 391) || !mobile.jumpVisible || !mobile.jumpBeforeLocation || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
+    if (!mobile.noHorizontalOverflow || mobile.touchAction !== "pan-y pinch-zoom" || mobile.quickCount !== 7 || mobile.actionTargets.some((height) => height < 44) || mobile.quickTargets.some((target) => target.height < 40 || target.right > 391) || !mobile.jumpVisible || !mobile.jumpBeforeLocation || mobile.globeHeight > 520 || mobile.headerHeight > 80 || mobile.resultLinks < 1) {
       throw new Error(`Institutional mobile homepage failed: ${JSON.stringify(mobile)}`);
     }
 
