@@ -22,7 +22,7 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   assert.match(app, /autoRotate: false/);
   assert.match(app, /inspectorOpen: Boolean\(initialResource \|\| initialFinderHistory\?\.selectedId\)/);
   assert.match(presentation, /touch-action:pan-y/);
-  assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
+  assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important\s*;?\s*\}/);
 });
 
 test("globe points communicate service type and preserve coordinates as one semantic system", async () => {
@@ -47,7 +47,7 @@ test("institutional presentation is restrained and motion-safe", async () => {
   const css = await text("src/clarity.css");
 
   assert.doesNotMatch(bootstrap, /experience\.js/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   assert.doesNotMatch(css, /\.rwn-reveal/);
   assert.match(css, /scroll-behavior:\s*auto !important/);
 });

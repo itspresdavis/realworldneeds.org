@@ -3,6 +3,23 @@ import { SAVED_RESOURCES_KEY, readSavedResources, setResourceSaved, clearSavedRe
 
 import { createResultRow } from "./directory-results.js";
 
+// Focus navigation cancels an interrupted native anchor scroll and measures
+// the actual sticky header, including wrapped navigation and browser zoom.
+function focusSavedServicesHeading(heading) {
+  if (location.hash !== "#saved") return;
+  heading.focus({ preventScroll: true });
+  if (document.activeElement !== heading) return;
+  const rect = heading.getBoundingClientRect();
+  if (rect.height <= 0) return;
+  const edge = Math.max(0, document.querySelector(".legal-header")?.getBoundingClientRect().bottom || 0) + 6;
+  const bottom = window.innerHeight - 6;
+  const delta = rect.top < edge ? rect.top - edge
+    : rect.bottom > bottom ? Math.min(rect.bottom - bottom, rect.top - edge) : 0;
+  // Even a zero-distance instant scroll aborts a pending smooth scroll. Keep an
+  // already visible heading in place instead of realigning the whole panel.
+  window.scrollTo({ left: window.scrollX, top: Math.max(0, window.scrollY + delta), behavior: "instant" });
+}
+
 export function initSavedServices() {
   const connectivityNotice = document.getElementById("offlineDirectoryNotice");
   const release = new URL(import.meta.url).searchParams.get("v") || "";
@@ -79,10 +96,10 @@ export function initSavedServices() {
         const row = rows.find((candidate) => candidate.dataset.savedId === focusedRow.dataset.savedId);
         const next = rows[Math.min(focusedIndex, rows.length - 1)];
         const target = row?.querySelectorAll("a, button")[controlIndex] || next?.querySelector("[data-saved-remove]") || heading;
-        target.focus();
-      } else if (focused === retry) (retry.hidden ? heading : retry).focus();
-      else if ((focused === clear && clear.hidden) || (focused === more && more.hidden)) heading.focus();
-      else if (confirmation.contains(focused) && confirmation.hidden) heading.focus();
+        if (target === heading) focusSavedServicesHeading(heading); else target.focus();
+      } else if (focused === retry) { if (retry.hidden) focusSavedServicesHeading(heading); else retry.focus(); }
+      else if ((focused === clear && clear.hidden) || (focused === more && more.hidden)) focusSavedServicesHeading(heading);
+      else if (confirmation.contains(focused) && confirmation.hidden) focusSavedServicesHeading(heading);
     };
     retry.hidden = focused !== retry;
     retry.setAttribute("aria-disabled", "true");
@@ -161,7 +178,7 @@ export function initSavedServices() {
       clearSavedResources();
       status.textContent = "All saved services removed from this browser.";
       await render();
-      if (active()) heading.focus();
+      if (active()) focusSavedServicesHeading(heading);
     } catch { cancelClear(true); announceFailure(); }
   });
   const syncView = (focus = false) => {
@@ -181,7 +198,7 @@ export function initSavedServices() {
     if (visible) {
       render();
       // Focus-owned navigation must not inherit the page’s smooth-scroll animation.
-      if (focus) { heading.focus({ preventScroll: true }); panel.scrollIntoView({ block: "start", behavior: "instant" }); }
+      if (focus) focusSavedServicesHeading(heading);
     } else if (focus) {
       // History restoration owns the return target after the saved panel hides.
       if ((wasSaved || history.state?.rwnDirectory) && !window.dispatchEvent(new CustomEvent("rwn-directory-restore", {

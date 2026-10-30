@@ -233,6 +233,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   const f = domFixture(), { document, Element } = f;
   const panel = new Element("section", { "data-saved-services": "" });
   const heading = new Element("h2", { tabindex: "-1" });
+  heading.getBoundingClientRect = () => ({ top: 100, bottom: 140, height: 40 });
   const controls = Object.fromEntries(["summary", "status", "list", "retry", "clear", "confirmation", "more", "cancel", "confirm", ...(emptyNode ? ["empty"] : [])].map((key) => [key, new Element(["retry", "clear", "more", "cancel", "confirm"].includes(key) ? "button" : "div", { [`data-saved-${key}`]: "" })]));
   if (controls.empty) controls.empty.hidden = true;
   const search = new Element("input", { "data-directory-query": "" });
@@ -270,6 +271,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     clearTimeout(id) { timers.delete(id); }, SAVED_RESOURCES_KEY: "saved",
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
+      innerHeight: 900, scrollX: 0, scrollY: 0, scrollTo() {},
       addEventListener: (name, handler) => { events[name] = handler; },
       dispatchEvent: (event) => { restores.push(event); return true; },
     },

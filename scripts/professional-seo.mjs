@@ -178,6 +178,14 @@ function directoryQuickActions(resource) {
 }
 
 
+function relocateDirectoryShortcuts(html) {
+  const shortcuts = html.match(/<div class="directory-page-tools">(<nav aria-label="Directory shortcuts">[\s\S]*?<\/nav>)/)?.[1];
+  const browse = '<div class="directory-browse-tools" id="directory-browse" tabindex="-1">';
+  if (!shortcuts || !html.includes(browse)) return html;
+  const secondary = shortcuts.replace("<nav ", '<nav class="directory-secondary-navigation" ');
+  return html.replace(shortcuts, "").replace(browse, `${secondary}\n${browse}`);
+}
+
 function enhanceActionOrientation(html) {
   html = html.replace(/<article class="directory-record"([^>]*)>[\s\S]*?<\/article>/g, (article) => {
     if (article.includes("data-rwn-actions=")) return article;
@@ -254,7 +262,7 @@ function enhanceGeneratedPage(html, release) {
     html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
   }
   html = enhanceActionOrientation(html);
-  return html;
+  return relocateDirectoryShortcuts(html);
 }
 
 const releasePath = "dist/data/release.json";

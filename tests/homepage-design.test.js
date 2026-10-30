@@ -32,19 +32,50 @@ test('finder composition reuses each existing interactive node exactly once', ()
   assert.equal(appended.length, 8, 'reinstallation is a no-op');
 });
 
-test('forest hero, map legend and warning colors retain normal text contrast', () => {
+test('paper finder, map key and forest closing colors retain normal text contrast', () => {
+  const rule = selector => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declaration = css.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`))?.[1];
+    assert.ok(declaration, `${selector} has a presentation rule`);
+    return declaration;
+  };
+  const property = (selector, name) => {
+    const value = rule(selector).match(new RegExp(`(?:^|;)\\s*${name}:\\s*([^;}]+)`))?.[1].trim();
+    assert.ok(value, `${selector} declares ${name}`);
+    return value;
+  };
+  const color = (selector, name) => {
+    let value = property(selector, name);
+    if (value.startsWith('var(')) value = property(':root', value.slice(4, -1));
+    assert.match(value, /^#[\da-f]{6}$/i);
+    return value.slice(1);
+  };
   const luminance = hex => hex.match(/../g).map(c=>parseInt(c,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
-  for (const [foreground,background] of [['f9f8ef','102f27'],['c6d7cc','102f27'],['bfd1c5','102f27'],['d3e2d8','2b5948'],['b7cfc0','2b5948'],['153c30','fffefb']]) {
+  const finder = color('.rwn-professional .finder', 'background');
+  const map = color('.rwn-professional .globe-stage', 'background');
+  const closing = color('.rwn-professional .about-rwn', 'background');
+  for (const [selector, background] of [
+    ['.rwn-professional .finder-intro h1', finder],
+    ['.rwn-professional .finder-intro p', finder],
+    ['.rwn-professional .finder-safety', finder],
+    ['.atlas-key', map], ['.atlas-key small', map],
+    ['.rwn-professional .about-rwn__heading h2', closing],
+    ['.rwn-professional .about-rwn__heading p', closing],
+  ]) {
+    const foreground = color(selector, 'color');
     const levels = [luminance(foreground),luminance(background)].sort((a,b)=>a-b);
-    assert.ok((levels[1]+.05)/(levels[0]+.05)>=4.5, `${foreground} on ${background}`);
-    assert.ok(css.includes('#'+foreground), 'the tested foreground is used');
+    assert.ok((levels[1]+.05)/(levels[0]+.05)>=4.5, `${selector}: ${foreground} on ${background}`);
   }
+  assert.equal(property('.rwn-professional .finder-surface', 'background'), 'transparent');
+  assert.equal(property('.rwn-professional .finder-surface', 'box-shadow'), 'none');
+  assert.match(property('.rwn-professional .finder-intro h1', 'font-family'), /sans-serif/);
+  assert.equal(color('.rwn-professional .site-footer', 'background'), finder, 'the light footer shares the finder paper');
 });
 
 test('compact fallback removes the empty column and source review remains visible on phones', () => {
-  assert.match(css, /\.finder__grid:has\(\.is-globe-unavailable\) \{ grid-template-columns: minmax\(0,1fr\);/);
-  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:4;/);
-  assert.match(css, /\.resource-row__reviewed::before \{ content:"Source checked ";/);
+  assert.match(css, /\.finder__grid:has\(\.is-globe-unavailable\)\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(css, /\.resource-row__reviewed\s*\{\s*display:\s*block;\s*grid-column:\s*1 \/ -1;\s*grid-row:\s*4;/);
+  assert.match(css, /\.resource-row__reviewed::before\s*\{\s*content:\s*"Source checked "\s*;?\s*\}/);
   assert.match(refinement, /groupFinderDisclosures\(\);\s*composeFinderSurface\(\);/);
 });
 
@@ -73,15 +104,15 @@ test('regrouping restores a focused search and its selected text without scrolli
 
 
 test('location and clear controls can share the narrower grouped phone surface', () => {
-  assert.match(css, /\.finder-surface \.location-button \{ flex-basis: 10rem; \}/);
+  assert.match(css, /\.finder-surface \.location-button\s*\{\s*flex-basis:\s*10rem\s*;?\s*\}/);
 });
 
 test('all needs is first in DOM order and compact rows are balanced without smaller targets', () => {
   const markup = refinement.slice(refinement.indexOf('container.innerHTML ='), refinement.indexOf('search.insertAdjacentElement'));
   assert.ok(markup.indexOf('data-quick-type="all"') < markup.indexOf('QUICK_TYPES.map'));
   assert.match(css, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(css, /data-quick-type="health"\] \{ grid-column:span 2;/);
-  assert.match(css, /\.quick-need \{[^}]*min-height: 44px;/);
+  assert.match(css, /data-quick-type="health"\]\s*\{\s*grid-column:\s*span 2\s*;?\s*\}/);
+  assert.match(css, /\.quick-need\s*\{[^}]*min-height:\s*44px;/);
 });
 
 test('empty results distinguish unsaved, filtered-saved, ordinary and unavailable requests', async () => {
@@ -123,17 +154,17 @@ test('actual resource finders show their type once and retain meaningful cost la
 
 
 test('detailed filters use one readable column with high-contrast selected checks', () => {
-  assert.match(css, /\.rwn-professional \.layer-list \{ overflow:visible; grid-template-columns:minmax\(0,1fr\);/);
-  assert.match(css, /\.layer-toggle\.is-active \.layer-toggle__check \{ border-color:#24583e; background:#24583e; color:#fff;/);
+  assert.match(css, /\.rwn-professional \.layer-list\s*\{\s*overflow:\s*visible;\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(css, /\.layer-toggle\.is-active \.layer-toggle__check\s*\{\s*border-color:\s*#24583e;\s*background:\s*#24583e;\s*color:\s*#fff\s*;?\s*\}/);
 });
 
 
 test('expanded filter groups do not clip keyboard focus outlines', () => {
-  assert.match(css, /\.rwn-professional \.layer-list \{ overflow:visible;/);
-  assert.match(css, /\.rwn-professional \.access-switch \{[^}]*overflow:visible;/);
+  assert.match(css, /\.rwn-professional \.layer-list\s*\{\s*overflow:\s*visible;/);
+  assert.match(css, /\.rwn-professional \.access-switch\s*\{[^}]*overflow:\s*visible\s*;?\s*\}/);
 });
 
 
 test('native focus scrolling reserves space for outer rings at the viewport bottom', () => {
-  assert.match(css, /scroll-padding-top: var\(--rwn-header-clearance, 5rem\); scroll-padding-bottom:\.75rem;/);
+  assert.match(css, /scroll-padding-top:\s*var\(--rwn-header-clearance,\s*5rem\);\s*scroll-padding-bottom:\s*\.75rem;/);
 });

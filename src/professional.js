@@ -77,23 +77,13 @@ function rewriteMethodSections() {
   );
 
   const heading = document.querySelector('.about-rwn__heading');
+  document.querySelector(".mission-steps")?.remove();
+  const source = document.querySelector(".source-band");
+  const about = document.querySelector(".about-rwn");
+  if (source && about) about.before(source);
   if (heading && !heading.querySelector('.contributor-invitation')) {
     const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
   }
-
-  const stepCopy = [
-    ["Search", "Look by need or place. Use location only if you want nearby services sorted first."],
-    ["Review", "Check the source, review date, hours, eligibility and contact information we have."],
-    ["Contact", "Call the provider, open its official site, or get directions before you travel."]
-  ];
-  document.querySelectorAll(".mission-steps article").forEach((article, index) => {
-    const copy = stepCopy[index];
-    if (!copy) return;
-    const heading = article.querySelector("h3");
-    const paragraph = article.querySelector("p");
-    if (heading) heading.textContent = copy[0];
-    if (paragraph) paragraph.textContent = copy[1];
-  });
 
   setText(".source-band__heading h2", "Check the source before you go.");
   setText(
@@ -143,6 +133,44 @@ function simplifyStructure() {
   }
 }
 
+let responsiveMapFlow;
+function arrangeMobileMap() {
+  const finder = document.getElementById('finder');
+  const grid = finder?.querySelector('.finder__grid');
+  const map = finder?.querySelector('.globe-stage');
+  const panel = finder?.querySelector('.resource-panel');
+  if (!finder || !grid || !map || !panel) return;
+  responsiveMapFlow ??= window.matchMedia('(max-width: 600px)');
+  map.id = 'service-map';
+  if (!grid.querySelector('.finder-map-link')) {
+    const link = document.createElement('a');
+    link.className = 'finder-map-link';
+    link.href = '#service-map';
+    link.textContent = 'Explore the map ↓';
+    grid.querySelector('.finder-sidebar')?.append(link);
+  }
+  const arrange = () => {
+    const parent = responsiveMapFlow.matches ? finder : grid;
+    if (map.parentElement === parent && panel.parentElement === parent) return;
+    const focused = document.activeElement;
+    const restore = map.contains(focused) || panel.contains(focused);
+    parent.append(map, panel);
+    if (restore && focused?.isConnected) {
+      focused.focus({ preventScroll: true });
+      const box = focused.getBoundingClientRect();
+      const clearance = (document.querySelector('.site-header')?.getBoundingClientRect().bottom || 0) + 12;
+      if (box.top < clearance || box.bottom > window.innerHeight - 12) {
+        window.scrollTo({ top: Math.max(0, window.scrollY + box.top - clearance), behavior: 'instant' });
+      }
+    }
+  };
+  if (!finder.dataset.mapFlowInstalled) {
+    responsiveMapFlow.addEventListener('change', arrange);
+    finder.dataset.mapFlowInstalled = 'true';
+  }
+  arrange();
+}
+
 export function installProfessionalPresentation() {
   if (!document.querySelector(".finder-intro")) return false;
   document.documentElement.classList.add("rwn-professional");
@@ -156,11 +184,26 @@ export function installProfessionalPresentation() {
     key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Select a point to check its address and source.</small>';
     globe.append(key);
   }
+  const intro = document.querySelector('.finder-intro');
+  const grid = document.querySelector('.finder__grid');
+  if (intro && grid && intro.parentElement !== grid) grid.prepend(intro);
+  if (intro && !intro.querySelector('.finder-intro__reading')) {
+    const reading = document.createElement('div');
+    reading.className = 'finder-intro__reading';
+    const paragraph = intro.querySelector('p');
+    if (paragraph) reading.append(paragraph);
+    const link = document.createElement('a');
+    link.href = '/editorial-policy';
+    link.textContent = 'How listings are checked →';
+    reading.append(link);
+    intro.append(reading);
+  }
   installBrandMarks();
   rewriteBrandText();
   rewriteNavigation();
   rewriteFinderCopy();
   rewriteMethodSections();
   simplifyStructure();
+  arrangeMobileMap();
   return true;
 }

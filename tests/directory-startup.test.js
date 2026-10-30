@@ -8,6 +8,7 @@ import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from ".
 const catalogLoader = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replaceAll("export ", "");
 const source = await readFile(new URL("../public/directory.js", import.meta.url), "utf8");
 const savedSource = await readFile(new URL("../public/saved-services.js", import.meta.url), "utf8");
+const savedHeadingFocusSource = savedSource.slice(savedSource.indexOf("function focusSavedServicesHeading("), savedSource.indexOf("export function initSavedServices("));
 const savedSyncSource = savedSource.slice(savedSource.indexOf("  const syncView ="), savedSource.indexOf('  window.addEventListener("hashchange"'));
 const startupSource = await readFile(new URL("../public/directory-startup.js", import.meta.url), "utf8");
 const catalog = JSON.parse(await readFile(new URL("../dist/data/search-index.json", import.meta.url), "utf8"));
@@ -123,7 +124,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   let timerId = 0;
   const history = { state, replaceState(...args) { writes.push(args); this.state = args[0]; } };
   const location = { pathname: path, hash, href: `https://example.org${path}${hash}` };
-  const window = Object.assign(new Node("window"), { scrollY: 0, innerHeight: 800, isSecureContext: false,
+  const window = Object.assign(new Node("window"), { scrollX: 0, scrollY: 0, innerHeight: 800, isSecureContext: false,
     scrollTo({ top }) { this.scrollY = top; scrolls.push(top); } });
   const navigator = { onLine: online, serviceWorker: new Node("serviceworker") };
   const storage = new Proxy({}, { get() { assert.fail("Directory search must never read or write web storage"); } });
@@ -148,7 +149,8 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   savedLink.setAttribute("href", "/directory#saved"); browseLink.setAttribute("href", "#directory-results");
   savedPanel.append(savedHeading, browseLink); shell.append(savedPanel, savedLink);
   Object.assign(context, { savedPanel, savedHeading, savedLink });
-  vm.runInContext(`{ const panel = savedPanel, heading = savedHeading;
+  vm.runInContext(`${savedHeadingFocusSource}
+  { const panel = savedPanel, heading = savedHeading;
     const directoryTitle = document.title, navigation = [{ link: savedLink, current: savedLink.getAttribute("aria-current") }];
     const active = () => location.hash === "#saved"; let generation = 0;
     const render = () => {}, cancelClear = () => {};
@@ -587,9 +589,11 @@ test("untouched valid Back history wins over an earlier static Saved scroll capt
 
 test("Back to the pre-runtime Saved entry can Browse the accepted early return again", async () => {
   const f = fixture(); f.type(london); f.staticSavedBrowse(455); f.start(); await f.flush(); await f.resolve(); f.frames();
-  assertLondon(f); const count = f.scrolls.length; f.historySaved(); f.window.scrollY = 30;
+  assertLondon(f); const count = f.scrolls.length; f.historySaved();
+  assert.deepEqual(f.scrolls.slice(count), [455], "Saved cancels native smooth scrolling without moving an already visible heading");
+  f.window.scrollY = 30;
   f.leaveSaved(); await f.flush(); f.frames(); assertLondon(f);
-  assert.equal(f.scrolls.length, count + 1); assert.equal(f.scrolls.at(-1), 455);
+  assert.deepEqual(f.scrolls.slice(count), [455, 455], "Browse adds exactly one restore to the original directory position");
   assert.equal(f.history.state.rwnDirectory.query, london);
 });
 

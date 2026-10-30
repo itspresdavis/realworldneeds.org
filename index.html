@@ -38,20 +38,20 @@
       @media screen {
         .globe-stage { contain: paint; }
         .globe-cluster-tray { overscroll-behavior: contain; }
-        .preboot-finder { min-height:68vh; padding:clamp(3.5rem,7vw,5.5rem) max(1rem,5vw); background:#102f27; color:#f9f8ef; border-bottom:1px solid #335246; }
+        .preboot-finder { min-height:68vh; padding:clamp(3.5rem,7vw,5.5rem) max(1rem,5vw); background:#f5f3ed; color:#17362d; border-bottom:1px solid #c5d0cc; }
         .preboot-finder__inner { width:min(64rem,100%); margin:0 auto; }
-        .preboot-finder h1 { max-width:13ch; margin:0; color:#f9f8ef; font:400 clamp(2.2rem,4.6vw,3.6rem)/1.06 Georgia,"Times New Roman",serif; letter-spacing:-.047em; }
-        .preboot-finder p { max-width:44rem; margin:.9rem 0 0; color:#c6d7cc; font:500 clamp(.93rem,1.4vw,1.02rem)/1.6 system-ui,sans-serif; }
+        .preboot-finder h1 { max-width:18ch; margin:0; color:#17362d; font:600 clamp(2.125rem,4.5vw,4.1rem)/1.06 Arial,Helvetica,sans-serif; letter-spacing:-.047em; }
+        .preboot-finder p { max-width:44rem; margin:.9rem 0 0; color:#52675b; font:500 clamp(.93rem,1.4vw,1.02rem)/1.6 system-ui,sans-serif; }
         .preboot-finder nav { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:1.25rem; }
-        .preboot-finder a { display:inline-flex; min-height:2.75rem; align-items:center; padding:.58rem .7rem; border:1px solid #cdd7d3; border-radius:6px; background:#fff; color:#294149; font:650 .75rem/1 system-ui,sans-serif; text-decoration:none; }
+        .preboot-finder a { display:inline-flex; min-height:2.75rem; align-items:center; padding:.58rem .7rem; border:0; border-bottom:1px solid #c5d0cc; border-radius:0; background:transparent; color:#294149; font:650 .75rem/1 system-ui,sans-serif; text-decoration:none; }
         .preboot-finder__directory { margin-top:1.15rem!important; }
-        .preboot-finder__directory a, .preboot-finder__trust a { min-height:auto; border:0; padding:0; background:transparent; color:#d3e2d8; text-decoration:underline; text-underline-offset:3px; }
-        .preboot-finder__status { margin-top:1rem!important; color:#c6d7cc!important; font-size:.72rem!important; }
+        .preboot-finder__directory a, .preboot-finder__trust a { min-height:auto; border:0; padding:0; background:transparent; color:#17362d; text-decoration:underline; text-underline-offset:3px; }
+        .preboot-finder__status { margin-top:1rem!important; color:#52675b!important; font-size:.72rem!important; }
         .preboot-finder__trust { font-size:.74rem!important; }
       }
       @media (max-width:600px) {
         .preboot-finder { min-height:auto; padding:2rem .9rem 2.4rem; }
-        .preboot-finder h1 { max-width:17ch; font-size:clamp(1.9rem,8vw,2.35rem); line-height:1.03; }
+        .preboot-finder h1 { max-width:17ch; font-size:clamp(2.125rem,8.7vw,3rem); line-height:1.03; }
         .preboot-finder p { margin-top:.6rem; font-size:.84rem; line-height:1.5; }
         .preboot-finder nav { flex-wrap:wrap; margin-top:.85rem; }
       }

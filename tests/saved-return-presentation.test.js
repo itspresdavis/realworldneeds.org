@@ -37,7 +37,7 @@ test("homepage Saved entry points open the private fragment without reading any 
 
 test("Saved stays a visible text action with a 44px target on narrow home headers", () => {
   assert.match(clarity, /\.rwn-professional \.header-action\s*\{[^}]*display:\s*inline-flex;[^}]*min-height:\s*44px;/);
-  const narrowHeader = clarity.slice(clarity.indexOf("@media (max-width: 900px)"), clarity.indexOf("@media (max-width: 600px)"));
+  const narrowHeader = clarity.slice(clarity.search(/@media\s*\(max-width:\s*900px\)/), clarity.search(/@media\s*\(max-width:\s*600px\)/));
   assert.match(narrowHeader, /\.rwn-professional \.header-action\s*\{[^}]*display:\s*inline-flex;/);
   for (const rule of clarity.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     if (/\.header-action(?:\s|$|,)/.test(rule[1]) && !/\.header-action\s+svg/.test(rule[1])) {

@@ -842,9 +842,9 @@ function renderControls() {
   empty.innerHTML = state.viewMode === "needs"
     ? `<strong>No public requests are listed</strong><p>RWN does not guess where help is needed or publish requests that have not been reviewed.</p>`
     : state.filtered.length
-      ? `<strong>Phone or online help</strong><p>Matching listings have no map location. Read their coverage and contact details in the results below.</p>`
+      ? `<strong>Phone or online help</strong><p>Matching listings have no map location. Read their coverage and contact details in the search results.</p>`
     : state.savedOnly && state.savedStorageUnavailable
-      ? `<strong>Saved services are unavailable</strong><p>Check this browser’s storage settings, then use Retry saved services below. You can turn off Saved to browse all services.</p>`
+      ? `<strong>Saved services are unavailable</strong><p>Check this browser’s storage settings, then use Retry saved services in the results toolbar. You can turn off Saved to browse all services.</p>`
     : state.savedOnly
       ? `<strong>No saved services match</strong><p>Turn off Saved or adjust the current filters.</p>`
       : `<strong>No matching services</strong><p>Adjust the search, layers, or resource type.</p>`;

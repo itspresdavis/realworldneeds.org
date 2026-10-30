@@ -190,7 +190,7 @@ export async function verifyPageMenuDismissal({ client, host, serviceUrl, naviga
       record.outsideKept = await outside(expected, record.outsideEscape, 'header');
       await open(expected);
       for (let index = 0; index < PAGE_MENU_REFLOW_LINKS.length; index++) await key('Tab');
-      record.lastLink = await settle(expected, { open: true, focus: 5 });
+      record.lastLink = await settle(expected, { open: true, focus: PAGE_MENU_REFLOW_LINKS.length - 1 });
       if (height === 250) assert(record.lastLink.nav.scrollTop > 0, 'Short-height menu must scroll to its last link', record.lastLink);
       record.outsideRepaired = await outside(expected, record.lastLink, 'summary');
       await key('Enter'); await settle(expected, { open: true, focus: 'summary' });

@@ -2,51 +2,59 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
+const normalizeCss = (css) => css.replace(/\s*([{}:;,])\s*/g, "$1").replace(/\s+/g, " ");
+const readCss = async (path) => normalizeCss(await readFile(path, "utf8"));
+
 test("finder owns one map coordinate space and fixed-size controls", async () => {
-  const css = await readFile("src/clarity.css", "utf8");
-  assert.match(css, /\.rwn-professional \.globe-canvas,\s*\.rwn-professional \.globe-pin-layer\s*\{[^}]*inset: 4rem 0 4\.5rem;[^}]*height: calc\(100% - 8\.5rem\);/);
-  assert.match(css, /\.rwn-professional \.globe-controls\s*\{[^}]*top: auto;[^}]*transform: none;[^}]*grid-auto-rows: 44px;/);
-  assert.match(css, /\.rwn-professional \.globe-readout\s*\{[^}]*display: block !important;[^}]*clip-path: inset\(50%\);/);
+  const css = await readCss("src/clarity.css");
+  assert.match(css, /\.rwn-professional \.globe-canvas,\.rwn-professional \.globe-pin-layer\{[^}]*inset:4rem 0 4\.5rem;[^}]*height:calc\(100% - 8\.5rem\)/);
+  assert.match(css, /\.rwn-professional \.globe-controls\{[^}]*top:auto;[^}]*transform:none;[^}]*grid-auto-rows:44px/);
+  assert.match(css, /\.rwn-professional \.globe-readout\{[^}]*display:block !important;[^}]*clip-path:inset\(50%\)/);
   assert.doesNotMatch(css, /A GLOBAL DIRECTORY OF PRACTICAL HELP/);
 });
 
-test("explanation sections reset inherited two-column layouts at every width", async () => {
-  const css = await readFile("src/clarity.css", "utf8");
-  assert.match(css, /\.rwn-professional \.about-rwn,\s*\.rwn-professional \.source-band\s*\{[^}]*display: block;[^}]*min-width: 0;/);
-  assert.match(css, /\.rwn-professional \.principle-grid \{ min-width: 0; max-width: none;/);
+test("source guidance and contributor closing have distinct responsive layouts", async () => {
+  const css = await readCss("src/clarity.css");
+  assert.match(css, /\.rwn-professional \.about-rwn,\.rwn-professional \.source-band\{[^}]*min-width:0;[^}]*width:100%/);
+  assert.match(css, /\.rwn-professional \.principle-grid\{display:block;min-width:0/);
+  assert.match(css, /\.rwn-professional \.source-band,\.rwn-professional \.about-rwn__heading\{grid-template-columns:1fr/);
   const browser = await readFile("scripts/browser-institutional.mjs", "utf8");
   const contract = await readFile("scripts/qa-finder-presentation.mjs", "utf8");
   assert.match(browser, /await verifyFinderPresentation\(/);
   assert.match(contract, /\[320, 390, 500, 600, 760, 768, 900, 901, 1024, 1180, 1440\]/);
   assert.match(contract, /Real WebGL is required/);
+  assert.match(contract, /view\.search\.bottom > 380 \|\| view\.primaryAction\.bottom > 560/);
+  assert.match(contract, /sourceBeforeClosing/);
+  assert.match(contract, /contributorHref !== '\/join'/);
+  assert.match(contract, /resultsBeforeMap !== \(width <= 600\)/);
 });
 
-test("finder, directory, and service pages keep a shared forest-green hierarchy", async () => {
-  const css = await readFile("src/clarity.css", "utf8");
-  const pages = await readFile("public/professional-pages.css", "utf8");
+test("finder, directory, and service pages share forest accents and clear sans-serif titles", async () => {
+  const css = await readCss("src/clarity.css");
+  const pages = await readCss("public/professional-pages.css");
   const nav = await readFile("public/navigation-actions.css", "utf8");
-  assert.match(css, /--rwn-green-dark: #24583e/);
-  assert.match(pages, /--page-green-dark: #24583e/);
+  assert.match(css, /--rwn-green-dark:#24583e/);
+  assert.match(pages, /--page-green-dark:#24583e/);
   assert.match(nav, /--rwn-action-green-dark:#24583e/);
-  assert.match(css, /font-family: Georgia, "Times New Roman", serif/);
-  assert.match(pages, /#service > \.legal-hero h1 \{\s*font-family: Georgia/);
+  assert.match(css, /\.rwn-professional \.finder-intro h1\{[^}]*font-family:Arial,Helvetica,sans-serif;[^}]*font-weight:600/);
+  assert.match(pages, /#service > \.legal-hero h1\{font-family:Arial,Helvetica,sans-serif;font-weight:650/);
 });
 
 
 test("preboot style does not override the initialized finder design", async () => {
   const html = await readFile("index.html", "utf8");
-  const css = await readFile("src/clarity.css", "utf8");
+  const css = await readCss("src/clarity.css");
   assert.doesNotMatch(html, /\.finder-intro(?: h1| p)?\s*\{/);
   assert.doesNotMatch(html, /\.quick-need\s*\{|\.location-status\s*\{|\.finder-safety\s*\{/);
   assert.match(html, /\.preboot-finder h1\s*\{/);
   assert.match(html, /\.globe-stage \{ contain: paint; \}/);
   assert.match(html, /prefers-reduced-transparency/);
-  assert.match(css, /\.rwn-professional \.finder-intro \{[^}]*padding-left: 0; border-left: 0;/);
+  assert.match(css, /\.rwn-professional \.finder-intro\{grid-column:1 \/ -1;[^}]*padding:0 0 [^;]+;border:0/);
 });
 
 test("small directory and service metadata has readable text contrast", async () => {
   const pages = await readFile("public/professional-pages.css", "utf8");
-  const finder = await readFile("src/clarity.css", "utf8");
+  const finder = await readCss("src/clarity.css");
   const luminance = (hex) => {
     const channels = hex.match(/[a-f\d]{2}/gi).map((value) => parseInt(value, 16) / 255);
     const linear = channels.map((value) => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
@@ -66,7 +74,7 @@ test("small directory and service metadata has readable text contrast", async ()
   }
   assert.match(pages, /\.directory-record dt \{[^}]*font-size:\.8125rem/);
   assert.match(pages, /#service \.service-next-steps a span \{ font-size: \.8125rem/);
-  assert.match(finder, /\.resource-list-head \{ color: #586b60; font-size: \.8125rem/);
+  assert.match(finder, /\.resource-list-head\{color:#586b60;font-size:\.8125rem/);
   assert.doesNotMatch(pages, /color:#(?:748389|6f7f84|77868b|697a80|6d7d82)/);
 });
 
@@ -81,9 +89,9 @@ test("service Save states retain their own contrasting colors", async () => {
 });
 
 test("map empty state stays readable and leaves room for the controls", async () => {
-  const css = await readFile("src/clarity.css", "utf8");
-  assert.match(css, /\.rwn-professional \.globe-empty \{[^}]*width: min\(24rem, calc\(100% - 5\.5rem\)\);[^}]*background: #fff;[^}]*color: var\(--rwn-ink-strong\);/);
-  assert.match(css, /\.rwn-professional \.globe-empty p \{ color: var\(--rwn-muted\); font-size: \.8125rem;/);
+  const css = await readCss("src/clarity.css");
+  assert.match(css, /\.rwn-professional \.globe-empty\{[^}]*width:min\(24rem,calc\(100% - 5\.5rem\)\);[^}]*background:#fff;[^}]*color:var\(--rwn-ink-strong\)/);
+  assert.match(css, /\.rwn-professional \.globe-empty p\{color:var\(--rwn-muted\);font-size:\.8125rem/);
 });
 
 test("provider visiting warnings precede optional listing tools", async () => {
@@ -100,10 +108,10 @@ test("provider visiting warnings precede optional listing tools", async () => {
   }
 });
 
-test("mobile filter chips do not turn a lone reset into a full-width primary action", async () => {
-  const css = await readFile("src/clarity.css", "utf8");
-  assert.match(css, /\.quick-need--all\[aria-pressed="true"\] \{[^}]*background: var\(--rwn-green-soft\);/);
-  assert.match(css, /\.rwn-professional \.quick-need \{[^}]*min-width: 44px;[^}]*flex: 0 1 auto;/);
+test("mobile need filters retain open text treatment and full touch targets", async () => {
+  const css = await readCss("src/clarity.css");
+  assert.match(css, /\.quick-need--all\[aria-pressed="true"\]\{[^}]*border-bottom-color:var\(--rwn-green-dark\);background:transparent/);
+  assert.match(css, /\.rwn-professional \.quick-need\{[^}]*min-width:44px;[^}]*flex:0 1 auto/);
 });
 
 test("handoff subtitles and medium-width action rows share the readable layout", async () => {
@@ -117,27 +125,31 @@ test("handoff subtitles and medium-width action rows share the readable layout",
 });
 
 
-test("compact navigation keeps full focus text and editorial heading weight", async () => {
+test("compact navigation keeps full focus text and shared sans-serif heading weight", async () => {
   const source = await readFile("src/app.js", "utf8");
   const pages = await readFile("public/professional-pages.css", "utf8");
   const nav = await readFile("public/navigation-actions.css", "utf8");
   assert.match(source, /<option value="focus" hidden>This area<\/option>/);
   assert.match(pages, /\[aria-label="Breadcrumb"\] span \{ flex:0 0 auto;/);
-  assert.match(nav, /#directory>\.legal-hero h1\{[^}]*font-weight:400;/);
+  assert.match(nav, /#directory>\.legal-hero h1\{[^}]*font-weight:650;/);
 });
 
 
 test("narrow search affordances use concise labels and unbroken counts", async () => {
   const source = await readFile("src/app.js", "utf8");
-  const css = await readFile("src/clarity.css", "utf8");
+  const css = await readCss("src/clarity.css");
   assert.match(source, /placeholder="Search by service or place"/);
-  assert.match(css, /\.rwn-professional \.jump-results small \{[^}]*flex: none;[^}]*white-space: nowrap;/);
+  assert.match(css, /\.rwn-professional \.jump-results small\{[^}]*flex:none;[^}]*white-space:nowrap/);
 });
 
 
-test("map attribution stays readable on the forest footer", async () => {
-  const css = await readFile("src/clarity.css", "utf8");
-  assert.match(css, /\.rwn-professional \.site-footer > p \{[^}]*color: #acbec2; font-size: \.75rem;/);
+test("map attribution stays readable on the paper footer", async () => {
+  const css = await readCss("src/clarity.css");
+  const foreground = css.match(/\.rwn-professional \.site-footer > p\{[^}]*color:#([a-f\d]{6});font-size:\.75rem/)?.[1];
+  const background = css.match(/--rwn-paper:#([a-f\d]{6})/)?.[1];
+  assert.ok(foreground && background, 'attribution foreground and paper background are explicit');
+  assert.match(css, /\.rwn-professional \.site-footer\{[^}]*background:var\(--rwn-paper\)/);
   const luminance = (hex) => hex.match(/../g).map((channel) => parseInt(channel,16)/255).map((value) => value <= .04045 ? value/12.92 : ((value+.055)/1.055)**2.4).reduce((sum,value,index) => sum+value*[.2126,.7152,.0722][index],0);
-  assert.ok((luminance("acbec2")+.05)/(luminance("12392e")+.05) >= 4.5);
+  const levels = [luminance(foreground), luminance(background)].sort((a,b) => a-b);
+  assert.ok((levels[1]+.05)/(levels[0]+.05) >= 4.5);
 });
