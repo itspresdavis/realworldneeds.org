@@ -20,7 +20,7 @@ img.legal-brand__mark { background: transparent !important;object-fit: contain;}
 .legal-brand small::after { content:none;}
 .legal-header nav { display:flex;align-items:center;gap:clamp(1rem,2vw,2rem);font-size:.78rem;font-weight:650;}
 .legal-header nav a { color:#405158;text-decoration:none;}
-.legal-header .rwn-page-menu{position:static}.legal-header .rwn-page-menu nav{right:.8rem}
+.legal-header .rwn-page-menu{position:static}.legal-header .rwn-page-menu nav{right:.8rem;width:min(19rem,calc(100% - 1.6rem))}
 .legal-header nav a::after{display:none}
 .rwn-saved-link{display:inline-flex;flex-shrink:0;min-height:44px;align-items:center;padding:.62rem .9rem;border:1px solid var(--page-line-strong);border-radius:7px;color:#153c30;font-size:.75rem;font-weight:700;text-decoration:none}.rwn-saved-link:hover,.rwn-saved-link[aria-current]{background:var(--page-green-soft)}
 .legal-header nav a[aria-current="page"] { text-decoration:underline;text-underline-offset:.45em;text-decoration-thickness:2px;}
