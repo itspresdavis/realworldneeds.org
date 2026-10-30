@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
-import { countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
+import { captureLoadingAndReleasePair, countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
 
 const host = "http://127.0.0.1:4175";
 const endpoint = "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/Summer_Meals_Site_Finder_2026_(Testing)/FeatureServer/0/query";
@@ -13,7 +13,7 @@ const countUrl = `${endpoint}?returnCountOnly=true`;
 function fixture(origin = host, mapData = {}) {
   const native = [], listeners = [];
   const context = vm.createContext({
-    location: { origin, href: `${origin}/` }, navigator: {}, URL, Request, Response, ReadableStream, TextEncoder, DOMException, queueMicrotask,
+    location: { origin, href: `${origin}/` }, navigator: {}, URL, Request, Response, ReadableStream, TextEncoder, DOMException, queueMicrotask, structuredClone,
     document: { addEventListener: (type, callback) => listeners.push({ type, callback }) },
     fetch: async (...args) => { native.push(args); const data = mapData[new URL(args[0], origin).pathname]; return new Response(typeof data === "string" ? data : data ? JSON.stringify(data) : "local"); },
   });
@@ -311,4 +311,64 @@ test("ordinary production source and build output contain no CI country observer
     const source = await readFile(new URL(path, import.meta.url), "utf8");
     assert.doesNotMatch(source, /__rwnLiveCountQA|countryStateProbeSource/);
   }
+});
+
+test("atomic loading capture retains pre-release evidence and releases only its exact current pair", async () => {
+  const f = fixture();
+  const oldController = new AbortController();
+  const old = f.context.fetch(countUrl, { signal: oldController.signal });
+  const nearby = f.context.fetch(nearbyUrl), count = f.context.fetch(countUrl);
+  const events = [];
+  let status = "Checking USDA";
+  f.context.takeSnapshot = () => {
+    events.push("snapshot");
+    return { status, probe: { requests: f.probe.requests, clicks: f.probe.clicks } };
+  };
+  const release = f.probe.release;
+  f.probe.release = ids => {
+    events.push("release");
+    status = "settled";
+    release(ids);
+    f.probe.clicks.push({ id: "later", trusted: true });
+  };
+  const captured = vm.runInContext(`(${captureLoadingAndReleasePair})([1, 2], takeSnapshot)`, f.context);
+  assert.deepEqual(events, ["snapshot", "release"]);
+  assert.equal(captured.status, "Checking USDA");
+  assert.deepEqual(captured.probe.requests.map(request => request.headersReleased), [false, false, false]);
+  assert.deepEqual(captured.probe.clicks, [], "release cannot mutate an already captured observation");
+  assert.equal(f.probe.requests[0].headersReleased, false, "an unrelated older request must remain held");
+  assert.deepEqual(await (await nearby).json(), { features: [] });
+  assert.deepEqual(await (await count).json(), { count: 0 });
+  oldController.abort();
+  await assert.rejects(old, error => error.name === "AbortError");
+});
+
+test("atomic loading capture refuses stale, missing, duplicate, aborted or released pairs", () => {
+  const base = [{ id: 0, kind: "nearby", headersReleased: false, aborted: false }, { id: 1, kind: "count", headersReleased: false, aborted: false }];
+  const invalid = [
+    { ids: [0, 1], requests: [...base, { id: 2, kind: "nearby" }] },
+    { ids: [0, 1], requests: base.slice(0, 1) },
+    { ids: [0, 0], requests: base },
+    { ids: [0, 1], requests: [base[0], { ...base[1], id: 2 }] },
+    { ids: [0, 1], requests: [base[0], { ...base[1], kind: "nearby" }] },
+    { ids: [0, 1], requests: [base[0], { ...base[1], aborted: true }] },
+    { ids: [0, 1], requests: [base[0], { ...base[1], headersReleased: true }] },
+  ];
+  for (const entry of invalid) {
+    let releases = 0;
+    const context = vm.createContext({ structuredClone, ids: entry.ids,
+      takeSnapshot: () => ({ probe: { requests: entry.requests } }),
+      window: { __rwnLiveCountQA: { release: () => { releases += 1; } } } });
+    assert.throws(() => vm.runInContext(`(${captureLoadingAndReleasePair})(ids, takeSnapshot)`, context), /exactly the expected pending request pair/);
+    assert.equal(releases, 0, "invalid evidence must not release any response");
+  }
+});
+
+test("a snapshot failure cannot release the held pair", () => {
+  let releases = 0;
+  const context = vm.createContext({ structuredClone,
+    takeSnapshot: () => { throw new Error("Snapshot unavailable"); },
+    window: { __rwnLiveCountQA: { release: () => { releases += 1; } } } });
+  assert.throws(() => vm.runInContext(`(${captureLoadingAndReleasePair})([0, 1], takeSnapshot)`, context), /Snapshot unavailable/);
+  assert.equal(releases, 0);
 });

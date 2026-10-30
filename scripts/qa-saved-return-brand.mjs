@@ -4,7 +4,7 @@ import { isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
 import { pressConnectivityRecoveryKey } from './qa-connectivity-recovery.mjs';
 
 // CI-only coverage using the already-running browser. No new browser or service.
-export const SAVED_RETURN_WIDTHS = [320, 508, 1180];
+export const SAVED_RETURN_WIDTHS = [320, 390, 508, 1180];
 export function savedReturnSnapshot() {
   const box = node => {
     const r = node?.getBoundingClientRect();
@@ -16,17 +16,19 @@ export function savedReturnSnapshot() {
   const neighbors = header ? [...header.children].filter(node => node !== saved && visible(node)).map(box) : [];
   const panel = document.querySelector('[data-saved-services]');
   const focus = document.activeElement;
+  const summary = document.querySelector('[data-saved-summary]');
   return {
     path:location.pathname, hash:location.hash, title:document.title, width:innerWidth, height:innerHeight, scroll:scrollY,
     headingBox:box(document.querySelector('#saved-services-heading')),headerBottom:document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0,
     overflow:document.documentElement.scrollWidth > innerWidth + 1,
     savedEntry: saved ? { text:saved.textContent.trim(), href:saved.getAttribute('href'), visible:visible(saved), box:box(saved),
       focused:focus === saved, focusVisible:saved.matches(':focus-visible'), neighbors } : null,
-    savedVisible:visible(panel), empty:visible(document.querySelector('[data-saved-empty]')),
-    summary:document.querySelector('[data-saved-summary]')?.textContent,
+    savedVisible:visible(panel), empty:visible(summary) && summary.textContent === 'No saved services yet. Open a listing and choose Save to keep it here.',
+    summary:summary?.textContent,
+    browseActions:[...(panel?.querySelectorAll('a[href="#directory-results"]') || [])].map(node=>({visible:visible(node),box:box(node)})),
     privacy:document.querySelector('.saved-services__privacy')?.textContent,
     rows:[...document.querySelectorAll('[data-saved-id]')].map(node => ({id:node.dataset.savedId,text:node.textContent})),
-    current:[...document.querySelectorAll('.legal-header nav a[aria-current]')].map(node => ({href:node.getAttribute('href'),value:node.getAttribute('aria-current')})),
+    current:[...document.querySelectorAll('.legal-header nav a[aria-current], .rwn-saved-link[aria-current]')].map(node => ({href:node.getAttribute('href'),value:node.getAttribute('aria-current')})),
     focus:{id:focus?.id,href:focus?.getAttribute('href'),remove:focus?.hasAttribute('data-saved-remove'),save:focus?.hasAttribute('data-service-save')},
     reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,
     overlay:Boolean(document.querySelector('vite-error-overlay,nextjs-portal,#webpack-dev-server-client-overlay'))
@@ -43,9 +45,10 @@ export function homeSavedViolations(s) {
 export function savedViewViolations(s, ids=[]) {
   const issues=[];
   if (!s || s.hash !== '#saved' || !s.savedVisible || s.overlay || s.overflow || s.title !== 'Saved services | Real World Needs') issues.push('saved-identity-or-overflow');
-  if (s?.empty !== (ids.length === 0)) issues.push('empty-state');
+  if (s?.empty !== (ids.length === 0) || (!ids.length && s?.summary !== 'No saved services yet. Open a listing and choose Save to keep it here.')) issues.push('empty-state');
+  if (s?.browseActions?.length !== 1 || !s.browseActions[0].visible || !(s.browseActions[0].box?.height >= 44)) issues.push('single-browse-action');
   if (JSON.stringify(s?.rows.map(row=>row.id)) !== JSON.stringify(ids)) issues.push('saved-identity');
-  if (s?.current.length !== 2 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
+  if (s?.current.length !== 1 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
   if (!s?.privacy?.includes('Only in this browser, on this device') || !s.privacy.includes('Anyone using this browser can see your list') || !s.privacy.includes('does not reserve a service or confirm availability')) issues.push('privacy');
   return issues;
 }
@@ -99,13 +102,13 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
     await capture(client,`saved-return-home-${width}.png`);
     evidence.push({width,state,stage:'home-keyboard-entry'});
     await key('Enter');
-    await destination("location.pathname === '/directory' && location.hash === '#saved' && document.querySelector('[data-saved-empty]')?.hidden === false");
+    await destination("location.pathname === '/directory' && location.hash === '#saved' && document.querySelector('[data-saved-summary]')?.textContent === 'No saved services yet. Open a listing and choose Save to keep it here.'");
     state=await snapshot();
     assert(savedViewViolations(state).length===0,'Empty Saved layout failed',{width,issues:savedViewViolations(state),state});
     assert(savedFocusViolations(state).length===0,'Direct Saved entry lost visible heading focus',state);
     await capture(client,`saved-return-empty-${width}.png`);
     evidence.push({width,state,stage:'empty'});
-    await tabTo('.saved-services__empty a');
+    await tabTo('.saved-services__heading a[href="#directory-results"]');
     await key('Enter');
     await waitForUI("location.hash === '#directory-results' && !document.querySelector('.has-saved-view')");
     state=await snapshot();
@@ -137,7 +140,7 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
     evidence.push({width,state,stage:'first-save-return'});
     await tabTo('[data-saved-remove]');
     await key('Enter');
-    await waitForUI("document.querySelectorAll('[data-saved-id]').length === 0 && document.querySelector('[data-saved-empty]').hidden === false");
+    await waitForUI("document.querySelectorAll('[data-saved-id]').length === 0 && document.querySelector('[data-saved-summary]')?.textContent === 'No saved services yet. Open a listing and choose Save to keep it here.'");
     state=await snapshot();
     assert(savedViewViolations(state).length===0 && savedFocusViolations(state).length===0,'Final removal lost empty state or focus',state);
     evidence.push({width,state,stage:'last-removal'});

@@ -44,23 +44,24 @@ function safeLink(label, href) {
 }
 
 if (document.body.dataset.page === "join") {
-  let mode = "signin";
+  let mode = "signin", pendingAccount = false;
   const form = $("#accountForm");
   const status = $("#accountStatus");
   function setMode(next) {
+    if (pendingAccount) return;
     mode = next;
     const signup = mode === "signup",
       recover = mode === "recover";
     $("#accountTitle").textContent = signup
-      ? "Make a useful contribution."
+      ? "Create an account"
       : recover
-        ? "Find your way back."
-        : "Welcome back.";
+        ? "Reset your password"
+        : "Sign in";
     $("#accountIntro").textContent = signup
       ? "Create an account to check listings and leave review notes."
       : recover
         ? "We’ll send a link to reset your password."
-        : "Sign in to review the catalog and add a note.";
+        : "Sign in to review listings and add a note.";
     $("#accountSubmit").textContent = signup
       ? "Create account"
       : recover
@@ -88,22 +89,28 @@ if (document.body.dataset.page === "join") {
       "That link could not be verified. Request a new link and open it in this browser.";
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const submit = $("#accountSubmit");
-    submit.disabled = true;
+    if (pendingAccount) return;
+    const submittedMode = mode;
+    pendingAccount = true;
+    const controls = [$("#accountSubmit"), $("#signupSwitch"), $("#recoverSwitch")];
+    for (const control of controls) control.disabled = true;
+    form.setAttribute("aria-busy", "true");
     status.textContent = "One moment…";
     try {
       const data = await request("/api/account", {
-        action: mode,
+        action: submittedMode,
         email: form.elements.email.value.trim(),
         password: form.elements.password.value,
       });
       form.elements.password.value = "";
-      if (mode === "signin" || data.signedIn) location.assign("/workspace");
+      if (submittedMode === "signin" || data.signedIn) location.assign("/workspace");
       else status.textContent = data.message;
     } catch (error) {
       status.textContent = message(error);
     } finally {
-      submit.disabled = false;
+      pendingAccount = false;
+      for (const control of controls) control.disabled = false;
+      form.setAttribute("aria-busy", "false");
     }
   });
 }

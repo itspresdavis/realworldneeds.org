@@ -67,7 +67,10 @@ async function labelHtml(directory) {
 
 // This server deliberately has no imports from api/ or server/ and accepts only
 // static GET/HEAD requests. It cannot read source files outside its temporary dist.
-async function staticServer(root, catalogControl, navigationControl) {
+export async function staticServer(root, catalogControl, navigationControl) {
+  // Compare canonical paths on both sides: macOS temp roots may use /var or
+  // /tmp aliases, while realpath(file) resolves them beneath /private.
+  root = await realpath(root);
   const inside = path => path === root || path.startsWith(`${root}${sep}`);
   const server = createServer(async (request, response) => {
     const end = (status, text) => { response.writeHead(status, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); response.end(request.method === "HEAD" ? undefined : text); };

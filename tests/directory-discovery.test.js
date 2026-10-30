@@ -184,17 +184,42 @@ test("Saved handoff hides its panel before requesting directory return-focus own
 
 test("Saved navigation closes the narrow menu before moving focus into either view", async () => {
   const saved = await readFile("public/saved-services.js", "utf8");
+  const focusSource = saved.slice(saved.indexOf("function focusSavedServicesHeading("), saved.indexOf("export function initSavedServices("));
   const syncSource = saved.slice(saved.indexOf("  const syncView ="), saved.indexOf('  window.addEventListener("hashchange"'));
+  const eventTarget = () => {
+    const events = new Map();
+    const key = (type, options) => `${type}:${typeof options === "boolean" ? options : !!options?.capture}`;
+    return {
+      addEventListener(type, callback, options) {
+        const name = key(type, options), listeners = events.get(name) || new Set();
+        listeners.add(callback); events.set(name, listeners);
+      },
+      removeEventListener(type, callback, options) { events.get(key(type, options))?.delete(callback); },
+    };
+  };
   for (const visible of [true, false]) {
-    const effects = [];
-    const f = vm.createContext({ active: () => visible, generation: 0, navigation: [], directoryTitle: "Directory | Real World Needs",
-      document: { querySelector(selector) { assert.equal(selector, ".rwn-page-menu"); return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } }; } },
-      panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }), scrollIntoView(options) { assert.equal(options.behavior, "instant"); effects.push("instant-entry"); } },
-      cancelClear() {}, render() {}, heading: { focus() { effects.push("focus"); } },
-      history: { state: { rwnDirectory: {} } }, location: { hash: "#directory-results" }, CustomEvent: class {},
-      window: { dispatchEvent() { effects.push("handoff"); return false; } }
+    const effects = [], frames = new Map();
+    let frameId = 0;
+    const document = { ...eventTarget(), activeElement: null, querySelector(selector) {
+      if (selector === ".legal-header") return { getBoundingClientRect: () => ({ bottom: 74 }) };
+      assert.equal(selector, ".rwn-page-menu");
+      return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } };
+    } };
+    const heading = { focus(options) { assert.equal(options.preventScroll, true); document.activeElement = heading; effects.push("focus"); },
+      getBoundingClientRect: () => ({ top: 100, bottom: 140, height: 40 }) };
+    const f = vm.createContext({ active: () => visible, generation: 0, navigation: [], directoryTitle: "Directory | Real World Needs", document, heading,
+      panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }) },
+      cancelClear() {}, render() {},
+      history: { state: { rwnDirectory: {} } }, location: { hash: visible ? "#saved" : "#directory-results" }, CustomEvent: class {},
+      window: { ...eventTarget(), innerHeight: 900, scrollX: 0, scrollY: 0,
+        requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
+        cancelAnimationFrame(id) { frames.delete(id); },
+        scrollTo(options) { assert.equal(options.behavior, "instant"); assert.equal(options.top, 0); effects.push("instant-entry"); },
+        dispatchEvent() { effects.push("handoff"); return false; } }
     });
-    vm.runInContext(`${syncSource}\nsyncView(true);`, f);
+    vm.runInContext(`${focusSource}
+${syncSource}
+syncView(true);`, f);
     assert.deepEqual(effects, ["closed", "toggled", ...(visible ? ["focus", "instant-entry"] : ["handoff"])]);
   }
 });

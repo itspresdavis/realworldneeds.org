@@ -178,6 +178,26 @@ export function liveSourceCountSnapshot() {
   };
 }
 
+// Preserve the loading observation before releasing only this scenario's pair.
+// One page evaluation avoids adding another CDP round trip to the deliberately
+// held response's real seven-second product deadline.
+export function captureLoadingAndReleasePair(requestIds, takeSnapshot) {
+  const loading = structuredClone(takeSnapshot());
+  const requests = loading.probe?.requests || [];
+  const pair = requests.slice(-2);
+  if (!Array.isArray(requestIds) || requestIds.length !== 2
+    || !requestIds.every(Number.isSafeInteger) || requestIds[0] < 0
+    || requestIds[1] !== requestIds[0] + 1
+    || requests.length !== requestIds[1] + 1 || pair.length !== 2
+    || !pair.every((request, index) => request.id === requestIds[index] && !request.headersReleased && !request.aborted)
+    || new Set(pair.map(request => request.kind)).size !== 2
+    || !pair.every(request => ["nearby", "count"].includes(request.kind))) {
+    throw new Error("USDA loading capture did not contain exactly the expected pending request pair");
+  }
+  window.__rwnLiveCountQA.release(requestIds);
+  return loading;
+}
+
 // Runs in the existing GitHub browser suite. No browser is launched here.
 export async function verifyLiveSourceCounts(options) {
   return withCountryStateProbe(() => verifyLiveSourceCountsInFixture(options));
@@ -232,10 +252,10 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
         const before = await snapshot();
         await activate("locateMe");
         await wait(`window.__rwnLiveCountQA.requests.length === ${before.probe.requests.length + 2}`, "both synthetic requests");
-        const loading = await snapshot();
+        const requestIds = [before.probe.requests.length, before.probe.requests.length + 1];
+        const loading = await evaluate(client, `(${captureLoadingAndReleasePair})(${JSON.stringify(requestIds)}, ${liveSourceCountSnapshot})`);
         check(loading.probe.countryState.userCountry === "United States" && loading.probe.countryState.detailGeometryReady === (scenario.label !== "zero"), "Full-world country lookup changed before/after detailed geometry", loading);
         check(/Checking USDA/.test(loading.status) && !/active nationally today/.test(loading.status), "Loading presented an old current count", loading);
-        await evaluate(client, "window.__rwnLiveCountQA.release()");
         await wait("!document.getElementById('locateMe').classList.contains('is-loading')", "source settled");
         if (scenario.label === "zero") {
           const closed = await snapshot();

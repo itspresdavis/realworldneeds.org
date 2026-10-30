@@ -42,13 +42,43 @@ test('exact focus identity detects stealing even between otherwise identical vis
 });
 
 test('retained menu-link and query ownership cannot be satisfied by summary focus', () => {
-  const state = fixture(); state.menuOpen = true; state.summary.focused = false; state.links[5].focused = true; state.links[5].hit = true;
-  assert.deepEqual(pageMenuDismissalViolations(state, expected(), { open: true, focus: 5 }), []);
-  state.links[5].hit = false;
-  assert.ok(pageMenuDismissalViolations(state, expected(), { open: true, focus: 5 }).includes('link-focus'));
+  const state = fixture(); state.menuOpen = true; state.summary.focused = false; state.links.at(-1).focused = true; state.links.at(-1).hit = true;
+  assert.deepEqual(pageMenuDismissalViolations(state, expected(), { open: true, focus: PAGE_MENU_REFLOW_LINKS.length - 1 }), []);
+  state.links.at(-1).hit = false;
+  assert.ok(pageMenuDismissalViolations(state, expected(), { open: true, focus: PAGE_MENU_REFLOW_LINKS.length - 1 }).includes('link-focus'));
   assert.ok(pageMenuDismissalViolations(state, expected(), { focus: 'query' }).includes('query-focus'));
   state.focus.query = true;
   assert.deepEqual(pageMenuDismissalViolations(state, expected(), { focus: 'query' }), []);
+});
+
+test('actual final-link traversal targets the last menu index after exactly one Tab per link', async () => {
+  const source = verifyPageMenuDismissal.toString();
+  const start = source.indexOf('      await open(expected);\n      for (let index');
+  const end = source.indexOf('      if (height === 250)', start);
+  assert.ok(start >= 0 && end > start);
+  const traversal = source.slice(start, end);
+  const run = async code => {
+    const state = fixture(), record = {}; let tabs = 0;
+    const execute = vm.runInNewContext(`(async () => { ${code}; return record.lastLink; })`, {
+      PAGE_MENU_REFLOW_LINKS, expected: expected(), record,
+      open: async () => { state.menuOpen = true; state.summary.focused = true; },
+      key: async key => {
+        assert.equal(key, 'Tab'); state.summary.focused = false;
+        for (const link of state.links) { link.focused = false; link.hit = false; }
+        const link = state.links[tabs++]; assert.ok(link, 'Traversal must not leave the menu');
+        link.focused = true; link.hit = true;
+      },
+      settle: async (wanted, options) => {
+        assert.equal(tabs, PAGE_MENU_REFLOW_LINKS.length);
+        assert.equal(state.links.at(-1).href, '/join');
+        assert.deepEqual(pageMenuDismissalViolations(state, wanted, options), [], 'The native final link must satisfy the exact focus oracle');
+        return state;
+      }
+    });
+    return execute();
+  };
+  assert.equal((await run(traversal)).links.at(-1).focused, true);
+  await assert.rejects(run(traversal.replace('focus: PAGE_MENU_REFLOW_LINKS.length - 1', 'focus: PAGE_MENU_REFLOW_LINKS.length')), /exact focus oracle/);
 });
 
 test('reload identity requires a different time origin with exact route and page identity', () => {

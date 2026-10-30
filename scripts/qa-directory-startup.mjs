@@ -528,18 +528,15 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     await evaluate(client, `document.querySelector('[data-directory-query]').scrollIntoView({ block: 'center', behavior: 'instant' })`);
     baselineEvidence = await waitForDirectoryStartupSavedBaseline({ sample: savedState, query, inputCount, timeOrigin: before.timeOrigin });
     const preSaved = baselineEvidence.state;
-    if (width < 900) await clickEarlySavedHeader('.rwn-page-menu > summary', preSaved);
-    await clickEarlySavedHeader(`${width < 900 ? '.rwn-page-menu' : '.rwn-page-nav'} a[href="/directory#saved"]`, preSaved);
+    await clickEarlySavedHeader('.rwn-saved-link[href="/directory#saved"]', preSaved);
     const early = await wait(s => new URL(s.href).hash === '#saved' && !s.ready && held.module.length > 0 && s.query === query, 'Native Saved did not occur while the real directory module remained held');
     assert(early.probe.catalogReads === 0 && !held.catalog.length, 'Early Saved searched the private input before runtime', early);
     assertInputs(early, { count: inputCount });
     let opened = await savedState();
     if (browseBeforeRuntime) {
       // :target exposes the genuine static panel even while its deferred
-      // modules are held. Native details can close its still-uninitialized menu.
-      if (opened.menuOpen) await clickEarlySavedHeader('.rwn-page-menu > summary');
-      opened = await savedState();
-      assert(!opened.ready && opened.panelVisible && held.module.length > 0, 'Static Saved panel was not available before module release', opened);
+      // modules are held; the persistent Saved action needs no open menu.
+      assert(!opened.ready && opened.panelVisible && !opened.menuOpen && held.module.length > 0, 'Static Saved panel was not available before module release', opened);
       await click('[data-saved-services] a[href="#directory-results"]');
       const departed = await wait(s => new URL(s.href).hash === '#directory-results' && !s.ready && held.module.length > 0 && s.query === query, 'Native Browse did not precede the held entry module');
       assert(departed.probe.catalogReads === 0 && !held.catalog.length, 'Browse before runtime unexpectedly searched the input', departed);

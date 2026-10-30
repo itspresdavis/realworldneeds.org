@@ -1,3 +1,4 @@
+import { selectAll } from "./qa-keyboard.mjs";
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
@@ -282,7 +283,7 @@ export async function verifyDirectoryPagination({ client, host, navigate, evalua
     if (scripts) {
       expected = await load('/directory', width, height);
       await click(s => s.query, expected);
-      await key('a', { control: true });
+      await selectAll(client);
       await client.call('Input.insertText', { text: 'zzzz-pagination-no-match' });
       record.search = await settled(s => directoryPaginationIdentity(s, expected) && s.search && s.queryValue === 'zzzz-pagination-no-match'
         && s.count === 'No matching listings', 'Search hides both pagination landmarks');

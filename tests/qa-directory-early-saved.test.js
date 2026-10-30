@@ -63,8 +63,8 @@ test('early Saved header reuses settled non-scrolling coordinates and the exact 
   const listeners = new Map(), node = { contains: () => false };
   let preparations = 0;
   const globals = { document: { querySelector: () => node, addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type) },
-    prepare: async selector => { assert.equal(selector, '.rwn-page-menu > summary'); preparations++; return { x: 40, y: 40 }; } };
-  const point = await vm.runInNewContext(`(${directoryStartupSavedHeaderPoint.toString()})('.rwn-page-menu > summary', prepare)`, globals);
+    prepare: async selector => { assert.equal(selector, '.rwn-saved-link[href="/directory#saved"]'); preparations++; return { x: 40, y: 40 }; } };
+  const point = await vm.runInNewContext(`(${directoryStartupSavedHeaderPoint.toString()})('.rwn-saved-link[href="/directory#saved"]', prepare)`, globals);
   assert.equal(point.x, 40); assert.equal(preparations, 1);
   for (const type of ['mousedown', 'mouseup', 'click']) listeners.get(type)({ type, target: node, isTrusted: true });
   assert.equal(directoryStartupClickWasDelivered(globals.__rwnEarlySavedHeaderQA), true);
@@ -210,9 +210,9 @@ test('paused animation frames cannot bypass the header deadline', async () => {
   assert.equal(f.frames(), 1); assert.equal(f.cancelled(), 1);
 });
 
-test('early Saved captures the quiet baseline before Menu, checks preservation, and writes bounded failure evidence', async () => {
+test('early Saved captures the quiet baseline before persistent Saved, checks preservation, and writes bounded failure evidence', async () => {
   const source = await readFile(new URL('../scripts/qa-directory-startup.mjs', import.meta.url), 'utf8');
-  assert.match(source, /baselineEvidence = await waitForDirectoryStartupSavedBaseline\([\s\S]*?const preSaved = baselineEvidence\.state;[\s\S]*?clickEarlySavedHeader\('\.rwn-page-menu > summary', preSaved\)/);
+  assert.match(source, /baselineEvidence = await waitForDirectoryStartupSavedBaseline\([\s\S]*?const preSaved = baselineEvidence\.state;[\s\S]*?clickEarlySavedHeader\('\.rwn-saved-link\[href="\/directory#saved"\]', preSaved\)/);
   assert.match(source, /directoryStartupSavedBaselinePreserved\(current, baseline\)/);
   assert.match(source, /activation\.events\.every\(event => event\.scroll === baseline\.scroll\)/);
   assert.match(source, /directory-startup-failure\.json/);
@@ -240,8 +240,8 @@ for (const movement of ['none', 'during-preparation', 'between-native-events']) 
     assert: (ok, label, detail) => assert.ok(ok, `${label}: ${JSON.stringify(detail)}`)
   };
   const click = vm.runInNewContext(`${closure}; clickEarlySavedHeader`, context);
-  if (movement === 'none') await click('.rwn-page-nav a[href="/directory#saved"]', before);
-  else await assert.rejects(click('.rwn-page-nav a[href="/directory#saved"]', before), /settled directory baseline/);
+  if (movement === 'none') await click('.rwn-saved-link[href="/directory#saved"]', before);
+  else await assert.rejects(click('.rwn-saved-link[href="/directory#saved"]', before), /settled directory baseline/);
   assert.deepEqual(calls, movement === 'during-preparation' ? [] : ['mousePressed', 'mouseReleased']);
 });
 
@@ -338,7 +338,7 @@ test('reload fixture completes native restoration before its first focus/type an
   assert.match(source, /await seedStaleHistory\(\);[\s\S]*?source: await waitForDirectoryStartupReloadGeometry\(\{ sample: savedState \}\)/);
   assert.match(source, /initialReloadEvidence\.destination = await waitForDirectoryStartupReloadGeometry\([\s\S]*?await type\(clear \? 'WIC' : QUERY\);/);
   assert.match(source, /captured\.scroll === stable\.scroll/);
-  assert.match(source, /baselineEvidence = await waitForDirectoryStartupSavedBaseline/);
+  assert.match(source, /baselineEvidence = await waitForDirectoryStartupSavedBaseline\([\s\S]*?const preSaved = baselineEvidence\.state;[\s\S]*?clickEarlySavedHeader\('\.rwn-saved-link\[href="\/directory#saved"\]', preSaved\)/);
   assert.match(source, /Math\.abs\(returned\.scroll - preSaved\.scroll\) < 5/);
   assert.doesNotMatch(waitForDirectoryStartupReloadGeometry.toString(), /focus\(|scrollIntoView|scrollTo\(|replaceState|pushState|dispatchMouseEvent|\.hash\s*=/);
 });

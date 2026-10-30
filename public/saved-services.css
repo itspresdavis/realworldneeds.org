@@ -20,12 +20,6 @@
 .saved-service-row{padding:1.3rem 0;border-bottom:1px solid #d8e0dd}
 .saved-service-row>button{margin-top:.6rem;justify-self:start}
 .directory-global-result :is(span,small,strong){min-width:0;white-space:normal;overflow-wrap:anywhere}
-.saved-services__empty{display:flex;align-items:flex-start;gap:1.5rem;margin:1.2rem 0 2rem;padding:clamp(1.25rem,4vw,3rem);border:1px solid #d8e0dd;background:#f5f4ee}
-.saved-services__bookmark{width:40px;height:48px;flex:none;color:#356c4e}
-.saved-services__empty h3{margin:0;font:400 clamp(1.5rem,3vw,2rem)/1.2 Georgia,serif;letter-spacing:-.025em}
-.saved-services__empty p{max-width:34rem;margin:.7rem 0;color:#405a50;line-height:1.6}
-.saved-services__empty a{display:inline-flex;align-items:center;gap:.75rem;min-height:44px}
 .directory-global-result-actions [hidden] { display: none !important; }
-@media(max-width:380px){.saved-services__empty{gap:.75rem}.saved-services__bookmark{width:28px}}
 @media print{.saved-services__tools,.saved-services button,.saved-services [data-saved-confirmation]{display:none!important}}
 @media(forced-colors:active){.saved-services button{border-color:CanvasText}}

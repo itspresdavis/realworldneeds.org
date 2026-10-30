@@ -16,8 +16,9 @@ function rewriteNavigation() {
   const links = `
     <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
     <a href="/directory">Directory</a>
-    <a href="/editorial-policy">How listings are checked</a>
+    <a href="/editorial-policy">How we check</a>
     <a href="/sources">Sources</a>
+    <a href="/shop">Shop</a>
     <a href="/join">Contribute</a>
   `;
   if (desktop) desktop.innerHTML = links;
@@ -26,7 +27,7 @@ function rewriteNavigation() {
   const menuSummary = document.querySelector(".site-menu > summary");
   if (menuSummary) {
     menuSummary.textContent = "Menu";
-    menuSummary.setAttribute("aria-label", "Open navigation menu");
+    menuSummary.setAttribute("aria-label", "Navigation menu");
     menuSummary.setAttribute("title", "Menu");
   }
 
@@ -49,14 +50,14 @@ function rewriteBrandText() {
 }
 
 function rewriteFinderCopy() {
-  setText(".finder-intro h1", "Find essential services near you.");
+  setText(".finder-intro h1", "Find essential services.");
   setText(
     ".finder-intro p",
-    "Practical help, with contact details and sources you can check."
+    "Food, water, shelter and other support. Search by place or explore the map."
   );
 
   const status = document.getElementById("locationStatus");
-  if (status) status.textContent = "Nearby service locations appear first when you choose to share your location.";
+  if (status) status.textContent = "Use location to show nearby services first.";
 
   const live = document.getElementById("liveSourceStatus");
   if (live) live.textContent = "In the United States, location search can also load current USDA summer meal sites.";
@@ -69,51 +70,39 @@ function rewriteFinderCopy() {
 }
 
 function rewriteMethodSections() {
-  setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
+  document.querySelectorAll(".about-rwn .section-kicker, .source-band .section-kicker").forEach(node => node.remove());
+  setText(".about-rwn__heading h2", "About Real World Needs");
   setText(
     ".about-rwn__heading p",
-    "Find practical support. Review the details. Reach the people who can help. The provider confirms eligibility and availability."
+    "Real World Needs brings together public information about essential services. We help people find providers and check the details. Careful source reviews help keep the directory useful."
   );
 
   const heading = document.querySelector('.about-rwn__heading');
-  if (heading && !heading.querySelector('.mission-drawing')) {
-    const drawing = document.createElement('img');
-    drawing.className = 'mission-drawing'; drawing.src = '/care-drawing.svg'; drawing.alt = ''; drawing.width = 420; drawing.height = 150; drawing.loading = 'lazy';
-    heading.append(drawing);
-    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
+  document.querySelector(".mission-steps")?.remove();
+  const source = document.querySelector(".source-band");
+  const about = document.querySelector(".about-rwn");
+  if (source && about) about.before(source);
+  if (heading && !heading.querySelector('.contributor-invitation')) {
+    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help improve the directory →'; heading.append(invitation);
   }
 
-  const stepCopy = [
-    ["Search", "Look by need or place. Use location only if you want nearby services sorted first."],
-    ["Review", "Check the source, review date, hours, eligibility and contact information we have."],
-    ["Contact", "Call the provider, open its official site, or get directions before you travel."]
-  ];
-  document.querySelectorAll(".mission-steps article").forEach((article, index) => {
-    const copy = stepCopy[index];
-    if (!copy) return;
-    const heading = article.querySelector("h3");
-    const paragraph = article.querySelector("p");
-    if (heading) heading.textContent = copy[0];
-    if (paragraph) paragraph.textContent = copy[1];
-  });
-
-  setText(".source-band__heading h2", "Check the source before you go.");
+  setText(".source-band__heading h2", "Before you visit");
   setText(
     ".source-band__heading p",
-    "Listings include the source and the date we reviewed it. Hours, capacity and eligibility can change, so the provider remains the final authority."
+    "Hours, eligibility and availability can change. Contact the provider before travelling, especially when you need help today."
   );
 
   const principles = document.getElementById("principleGrid");
   if (principles) {
     principles.innerHTML = `
-      <article><span>01</span><div><h3>Source</h3><p>We name and link the public source used for the listing.</p></div></article>
-      <article><span>02</span><div><h3>Review date</h3><p>We show when the source was last checked by RWN.</p></div></article>
-      <article><span>03</span><div><h3>Provider authority</h3><p>The provider is responsible for current hours, eligibility, capacity and service decisions.</p></div></article>
+      <p><strong>Check the source and review date.</strong> Each listing names the public source and shows when RWN checked it. The provider confirms current details and whether a service is available to you.</p>
+      <nav aria-label="Directory information"><a href="/editorial-policy">How listings are checked <span aria-hidden="true">↗</span></a><a href="/sources">Browse the sources <span aria-hidden="true">↗</span></a></nav>
     `;
   }
 }
 
 function simplifyStructure() {
+  document.querySelector(".results-heading .section-kicker")?.remove();
   document.querySelector(".directory-strip")?.remove();
   document.getElementById("accountability")?.remove();
 
@@ -124,7 +113,7 @@ function simplifyStructure() {
   if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/shop">Shop</a><a href="/join">Contributor workspace</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {
@@ -145,6 +134,22 @@ function simplifyStructure() {
   }
 }
 
+function installMapShortcut() {
+  const map = document.querySelector('.globe-stage');
+  const surface = document.querySelector('.finder-surface') || document.querySelector('.finder-sidebar');
+  if (!map || !surface) return;
+  map.id = 'service-map';
+  map.tabIndex = -1;
+  if (!surface.querySelector('.finder-map-link')) {
+    const link = document.createElement('a');
+    link.className = 'finder-map-link';
+    link.href = '#service-map';
+    link.textContent = 'Map ↓';
+    link.setAttribute('aria-label', 'Explore the interactive map');
+    surface.append(link);
+  }
+}
+
 export function installProfessionalPresentation() {
   if (!document.querySelector(".finder-intro")) return false;
   document.documentElement.classList.add("rwn-professional");
@@ -158,11 +163,26 @@ export function installProfessionalPresentation() {
     key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Select a point to check its address and source.</small>';
     globe.append(key);
   }
+  const intro = document.querySelector('.finder-intro');
+  const grid = document.querySelector('.finder__grid');
+  if (intro && grid && intro.parentElement !== grid) grid.prepend(intro);
+  if (intro && !intro.querySelector('.finder-intro__reading')) {
+    const reading = document.createElement('div');
+    reading.className = 'finder-intro__reading';
+    const paragraph = intro.querySelector('p');
+    if (paragraph) reading.append(paragraph);
+    const link = document.createElement('a');
+    link.href = '/editorial-policy';
+    link.textContent = 'How listings are checked →';
+    reading.append(link);
+    intro.append(reading);
+  }
   installBrandMarks();
   rewriteBrandText();
   rewriteNavigation();
   rewriteFinderCopy();
   rewriteMethodSections();
   simplifyStructure();
+  installMapShortcut();
   return true;
 }

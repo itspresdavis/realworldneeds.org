@@ -1,3 +1,4 @@
+import { waitForGlobePresentation } from "./qa-globe-readiness.mjs";
 import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -181,6 +182,28 @@ async function inspectFailedGlobeState(client) {
   }
 }
 
+// Observe closed-over state through DevTools for the cancellation contract;
+// nothing is exported by the production application. This probe is enabled
+// only after the frame-timing samples, then removed before the remaining QA.
+async function installGlobeGestureProbe(client) {
+  const lines=(await readFile("dist/src/app.js","utf8")).split("\n");
+  const resetStart=lines.findIndex(line=>line.includes("const resetGlobeInput ="));
+  const resetLine=lines.findIndex((line,index)=>index>resetStart && line.trim()==="wakeGlobe();");
+  const renderLine=lines.findIndex(line=>line.trim()==="updateGlobeReadout(now);");
+  if(resetStart<0 || resetLine<0 || renderLine<0) throw new Error("Gesture runtime probe locations were not found.");
+  const state="{at:performance.now(),reducedMotion:reduceMotion,dragging:state.dragging,touching:state.touching,pinching:state.pinching,pointers:activeGlobePointers.size,velocityLon:state.velocityLon,velocityLat:state.velocityLat,rotationLon:state.rotationLon,rotationLat:state.rotationLat,frame:globeRenderer.info.render.frame,moving:globeStageElement.classList.contains('is-globe-moving')}";
+  await client.call("Debugger.enable");
+  const breakpoints=[];
+  for(const [name,lineNumber] of [["__rwnGestureReset",resetLine],["__rwnGestureFrame",renderLine]]) {
+    const result=await client.call("Debugger.setBreakpointByUrl",{urlRegex:"/src/app\\.js(?:\\?|$)",lineNumber,condition:`(globalThis.${name}=${state},false)`});
+    breakpoints.push(result.breakpointId);
+  }
+  return async () => {
+    for(const breakpointId of breakpoints) await client.call("Debugger.removeBreakpoint",{breakpointId});
+    await client.call("Debugger.disable");
+  };
+}
+
 async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-globe-touch-"));
   const server = spawn(process.execPath, ["scripts/serve.mjs", "4178"], { stdio: "ignore" });
@@ -244,20 +267,41 @@ async function run() {
     ` });
     await navigate(client, HOST);
 
-    const ready = await evaluate(client, `new Promise((resolve) => {
-      const started = performance.now();
-      const check = () => {
-        if (document.getElementById('globeCanvas') && document.getElementById('globeReadout') && document.getElementById('zoomIn')) return resolve(true);
-        if (performance.now() - started > 12000) return resolve(false);
-        setTimeout(check, 50);
-      };
-      check();
-    })`);
-    if (!ready) throw new Error("Mobile globe did not initialize.");
-    const readyMs = await evaluate(client, "performance.now()");
+    phase = "map-presentation-readiness";
+    const { image: readyImage, ...readiness } = await waitForGlobePresentation({
+      sample: () => evaluate(client, `(() => {
+        const canvas = document.getElementById('globeCanvas');
+        const stage = canvas?.closest('.globe-stage');
+        const readout = document.getElementById('globeReadout');
+        const rect = canvas?.getBoundingClientRect();
+        const style = canvas ? getComputedStyle(canvas) : null;
+        const startup = document.documentElement.dataset.finderStartup;
+        const text = readout?.textContent || '';
+        const available = startup === 'ready' && /[0-9]+(?:[.][0-9]+)?×/.test(text)
+          && !stage?.classList.contains('is-globe-unavailable');
+        const gl = available && canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+        return {
+          at: performance.now(), elementsReady: !!(canvas && readout && document.getElementById('zoomIn')),
+          startup, readout: text, visibility: document.visibilityState,
+          visible: !document.hidden && !!rect && rect.width > 0 && rect.height > 0
+            && rect.top >= 0 && rect.left >= 0 && rect.bottom <= innerHeight && rect.right <= innerWidth
+            && style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0,
+          healthy: !!gl && !gl.isContextLost(),
+          rect: rect ? {x:rect.x,y:rect.y,width:rect.width,height:rect.height} : null
+        };
+      })()`),
+      prepare: () => evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})"),
+      capture: () => client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false }),
+      wait: sleep
+    });
+    observations.readiness = readiness;
+    await mkdir("qa-screenshots", { recursive: true });
+    await writeFile("qa-screenshots/globe-touch-ready.png", readyImage);
+    await writeFile("qa-screenshots/globe-touch-readiness.json", JSON.stringify(readiness, null, 2));
+    const readyMs = readiness.snapshot.at;
 
     phase = "vertical-scroll";
-    const vertical = await canvasGeometry(client);
+    const vertical = await canvasGeometry(client, false);
     observations.verticalStart = vertical;
     if (!vertical.point) throw new Error("No unobstructed WebGL touch point was available.");
     if (vertical.stageTouchAction !== "pan-y" || vertical.canvasTouchAction !== "pan-y") throw new Error(`Map touch policy is not pan-y: ${JSON.stringify(vertical)}`);
@@ -357,6 +401,39 @@ async function run() {
     await evaluate(client, "window.__rwnSamplingFrames=false");
     if (await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Pinch-to-drag transition left the globe moving.");
 
+    phase = "cancel-restart";
+    const closeGestureProbe = await installGlobeGestureProbe(client);
+    try {
+      const cancelled = await canvasGeometry(client);
+      await touch(client, "touchStart", [touchPoint(cancelled.point.x, cancelled.point.y)]);
+      await touch(client, "touchMove", [touchPoint(cancelled.point.x+35, cancelled.point.y+15)]);
+      await touch(client, "touchCancel", []);
+      const cancelState=await evaluate(client,"({reset:window.__rwnGestureReset,event:window.__rwnInputTrace.findLast(e=>e.type==='touchcancel')})");
+      const reset=cancelState.reset;
+      if(!reset || !cancelState.event || reset.at<cancelState.event.at
+        || reset.dragging || reset.touching || reset.pinching || reset.pointers || reset.velocityLon || reset.velocityLat) {
+        throw new Error(`Native cancellation failed to clear actual input state synchronously: ${JSON.stringify(cancelState)}`);
+      }
+      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${reset.frame} && !window.__rwnGestureFrame.moving && !document.querySelector('.globe-stage').classList.contains('is-globe-moving')`,"Cancelled gesture did not produce a settled render frame.");
+      const settled=await evaluate(client,"window.__rwnGestureFrame");
+      if(settled.dragging || settled.touching || settled.pinching || settled.pointers || settled.velocityLon || settled.velocityLat
+        || settled.rotationLon!==reset.rotationLon || settled.rotationLat!==reset.rotationLat) throw new Error(`Cancellation restarted movement: ${JSON.stringify({reset,settled})}`);
+      await touch(client, "touchStart", [touchPoint(cancelled.point.x, cancelled.point.y)]);
+      await touch(client, "touchMove", [touchPoint(cancelled.point.x+25, cancelled.point.y+2)]);
+      await touch(client, "touchMove", [touchPoint(cancelled.point.x+50, cancelled.point.y+4)]);
+      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${settled.frame} && window.__rwnGestureFrame.dragging && window.__rwnGestureFrame.moving`,"Direct touch rotation stopped working after cancellation.");
+      const restarted=await evaluate(client,"window.__rwnGestureFrame");
+      if(Math.abs(restarted.rotationLon-settled.rotationLon)<.001) throw new Error(`Post-cancel horizontal drag did not actually rotate: ${JSON.stringify({settled,restarted})}`);
+      await touch(client, "touchEnd", []);
+      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${restarted.frame} && !window.__rwnGestureFrame.moving && !document.querySelector('.globe-stage').classList.contains('is-globe-moving')`,"Touch release did not settle on a completed frame.");
+      const released=await evaluate(client,"window.__rwnGestureFrame");
+      if(released.dragging || released.touching || released.pinching || released.pointers || released.velocityLon || released.velocityLat
+        || released.rotationLon!==restarted.rotationLon || released.rotationLat!==restarted.rotationLat) throw new Error(`Touch release retained movement: ${JSON.stringify({restarted,released})}`);
+      observations.cancelAndRestart = {cancelState,settled,restarted,released};
+    } finally {
+      await closeGestureProbe();
+    }
+
     phase = "canvas-touch-picking";
     // Use the reset globe centre (land in western Africa) for an actual touch
     // hit-test of the rendered sphere, rather than clicking a DOM marker.
@@ -420,6 +497,7 @@ async function run() {
     if (performanceReport.globeAssets.some(asset => asset.name.endsWith('/earth-blue-marble-detail.jpg'))) throw new Error("Mobile close view downloaded the 8K desktop texture.");
     await mkdir("qa-screenshots", { recursive: true });
     await writeFile("qa-screenshots/globe-touch-performance.json", JSON.stringify(performanceReport, null, 2));
+    await writeFile("qa-screenshots/globe-touch-interactions.json", JSON.stringify(observations, null, 2));
     console.log(`Globe mobile performance evidence: ${JSON.stringify(performanceReport)}`);
     if (exceptions.length) throw new Error(`Globe touch QA emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
 
@@ -487,7 +565,15 @@ async function run() {
     console.log("Connected mobile journey passed: globe touch interaction → search → service → save → Back restores query → leave and return to Saved.");
     console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, canvas touch picking, pinch-to-drag recovery, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
   } catch (error) {
-    if (client) {
+    if (phase === "map-presentation-readiness") {
+      // A page/CDP timeout must reach finally without asking that same stalled
+      // target for more diagnostics. These checkpoints already live on the host.
+      const failure = { phase, error: String(error.message || error), observations, exceptions,
+        presentationReadinessFailure: error.globeReadiness || null };
+      await mkdir("qa-screenshots", { recursive: true });
+      await writeFile("qa-screenshots/globe-touch-failure.json", JSON.stringify(failure, null, 2));
+      console.error(`Globe readiness diagnostics: ${JSON.stringify(failure)}`);
+    } else if (client) {
       try {
         const failure = await evaluate(client, `(() => {
           const canvas=document.getElementById('globeCanvas');
@@ -496,7 +582,7 @@ async function run() {
           return {readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,scrollTrace:window.__rwnScrollTrace,scrollPreconditions:window.__rwnScrollPreconditions,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
         })()`);
         failure.runtime = await inspectFailedGlobeState(client);
-        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions, scrollPreconditionFailure: error.scrollStability || null });
+        Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions, scrollPreconditionFailure: error.scrollStability || null, presentationReadinessFailure: error.globeReadiness || null });
         await mkdir("qa-screenshots", { recursive: true });
         await writeFile("qa-screenshots/globe-touch-failure.json", JSON.stringify(failure, null, 2));
         const shot=await client.call("Page.captureScreenshot", {format:"png",fromSurface:true,captureBeyondViewport:false});
