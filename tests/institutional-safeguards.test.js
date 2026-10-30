@@ -41,8 +41,9 @@ test("service print retains related fallback resources without raw URL clutter",
   assert.doesNotMatch(serviceActionsCss, /attr\(href\)/);
 });
 
-test("maintainers have a standard package test command", () => {
-  assert.equal(packageJson.scripts.test, "npm run build && node --test");
+test("standard quality commands bound competing full-build fixtures to one test file", () => {
+  assert.equal(packageJson.scripts.test, "npm run build && node --test --test-concurrency=1");
+  assert.ok(packageJson.scripts.check.endsWith(" && node --test --test-concurrency=1"));
 });
 
 test("offline cache and service-worker failures stay fail-open and report availability truthfully", () => {

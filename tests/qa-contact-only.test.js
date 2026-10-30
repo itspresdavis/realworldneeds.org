@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, stat, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import vm from "node:vm";
@@ -8,7 +9,7 @@ import test from "node:test";
 import { phoneLinks } from "../src/utils/phone.js";
 import { validateResourceLocation } from "../src/utils/resource-location.js";
 import { resources } from "../src/data/resources.js";
-import { createContactFixtureApp, contactFixtureResources, contactFixtureLabel } from "../scripts/qa-contact-fixture-app.mjs";
+import { createContactFixtureApp, contactFixtureResources, contactFixtureLabel, staticServer } from "../scripts/qa-contact-fixture-app.mjs";
 import { assertContactRows, assertContactService, contactHomepageSnapshot, isContactHomepageReady, contactFailureSnapshot } from "../scripts/qa-contact-only.mjs";
 
 const contacts = contactFixtureResources.filter(resource => resource.locationPrecision === "contact-only");
@@ -88,6 +89,36 @@ test("fixture failure evidence includes bounded document context without capturi
   const outside = vm.runInNewContext(`(${contactFailureSnapshot})('http://127.0.0.1:9999')`, context);
   assert.equal(outside.fixture, false);
   for (const field of ["url", "title", "serviceId", "bodyText", "searchRows", "savedRows"]) assert.equal(outside[field], null);
+});
+
+test("static fixture serves an aliased root without allowing symlink escapes", { timeout: 5_000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rwn-contact-alias-"));
+  let server;
+  try {
+    const root = join(directory, "dist"), alias = join(directory, "alias");
+    await mkdir(root);
+    await writeFile(join(root, "index.html"), "Synthetic fixture home");
+    await writeFile(join(directory, "outside.html"), "Must not be served");
+    await symlink(root, alias, "dir");
+    await symlink(join(root, "index.html"), join(root, "inside-link.html"));
+    await symlink(join(directory, "outside.html"), join(root, "outside-link.html"));
+    server = await staticServer(alias);
+    const host = `http://127.0.0.1:${server.address().port}`;
+    for (const path of ["/", "/inside-link.html"]) {
+      const response = await fetch(host + path);
+      assert.equal(response.status, 200, path);
+      assert.equal(await response.text(), "Synthetic fixture home");
+    }
+    for (const path of ["/outside-link.html", "/%2e%2e%2foutside.html"]) {
+      assert.equal((await fetch(host + path)).status, 400, path);
+    }
+  } finally {
+    if (server?.listening) await new Promise((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+      server.closeAllConnections();
+    });
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("full isolated fixture build has complete homepage exports, local-only labels and a static loopback server", { timeout: 60_000 }, async () => {
