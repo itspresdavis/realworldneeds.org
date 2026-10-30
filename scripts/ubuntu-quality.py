@@ -38,9 +38,10 @@ exec npm run check
 TERMINAL = {"passed", "failed", "error", "interrupted"}
 BROWSER_PORTS = {
     "touch": (4178, 9228),
-    "browser": (4173, 4175, 4176, 4177, 4178, 4181, 4184,
-                9222, 9224, 9225, 9226, 9228, 9231, 9234,
-                *range(9228, 9428), *range(49152, 50152)),
+    # Only endpoints actually used by the sequential suite. Unchosen random
+    # candidates and unrelated ephemeral connections must not block the gate.
+    "browser": (4173, 4175, 4176, 4177, 4178, 4181, 4184, 4185,
+                9222, 9224, 9225, 9226, 9228, 9231, 9234, 9235),
 }
 
 

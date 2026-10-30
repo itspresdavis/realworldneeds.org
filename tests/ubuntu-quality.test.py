@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -86,6 +87,37 @@ class QualityTests(unittest.TestCase):
             self.assertEqual(result["status"], "error")
             self.assertIn(str(port), (self.root / "port.log").read_text())
             self.assertGreaterEqual(listener.fileno(), 0)
+
+    def test_preflight_matches_exact_ports_used_by_each_browser_stage(self):
+        root = SCRIPT.parents[1]
+        package = json.loads((root / "package.json").read_text())
+        browser_scripts = [command.split()[1] for command in
+                           package["scripts"]["test:browser:qa"].split(" && ")]
+        for stage, paths in (("touch", ["scripts/browser-globe-touch-v4.mjs"]),
+                             ("browser", browser_scripts)):
+            expected = set()
+            for path in paths:
+                declarations = "\n".join((root / path).read_text().splitlines()[:40])
+                expected.update(map(int, re.findall(r"http://127\.0\.0\.1:(\d+)", declarations)))
+                expected.update(map(int, re.findall(r"const [A-Z_]*PORT = (\d+);", declarations)))
+            self.assertTrue(expected)
+            self.assertEqual(set(quality.BROWSER_PORTS[stage]), expected)
+        self.assertIn(4185, quality.BROWSER_PORTS["browser"])
+        self.assertIn(9235, quality.BROWSER_PORTS["browser"])
+
+    def test_unselected_ephemeral_port_is_never_probed(self):
+        probed = []
+        probe = mock.MagicMock()
+        def bind(address):
+            probed.append(address[1])
+            if address[1] in {49230, 49242}:
+                raise OSError("Unrelated ephemeral connection")
+        probe.__enter__.return_value.bind.side_effect = bind
+        with mock.patch.object(quality.socket, "socket", return_value=probe):
+            quality.ensure_ports_available(quality.BROWSER_PORTS["browser"])
+        self.assertEqual(probed, sorted(set(quality.BROWSER_PORTS["browser"])))
+        self.assertNotIn(49230, probed)
+        self.assertNotIn(49242, probed)
 
     def test_build_cpu_selection_skips_hyperthread_siblings(self):
         topology = {0: (0, 0), 1: (0, 0), 2: (0, 1), 3: (0, 1)}

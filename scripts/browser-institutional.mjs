@@ -1,7 +1,6 @@
 import { verifyPageInteractions } from "./qa-page-interactions.mjs";
 import { verifyFinderEditing } from "./qa-search-editing.mjs";
 import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
-import { randomQaHttpPort } from "./qa-port.mjs";
 import { verifyFocusContinuity } from "./qa-focus-continuity.mjs";
 import { verifyFinderPresentation } from "./qa-finder-presentation.mjs";
 import { verifyFinderSearchRelevance } from "./qa-search-relevance.mjs";
@@ -10,9 +9,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const SERVER_PORT = randomQaHttpPort();
+// Dedicated Fetch-safe ports; the local validator checks these exact endpoints.
+const SERVER_PORT = 4185;
 const HOST = `http://127.0.0.1:${SERVER_PORT}`;
-const CDP_PORT = 9228 + Math.floor(Math.random() * 200);
+const CDP_PORT = 9235;
 const CDP_HOST = `http://127.0.0.1:${CDP_PORT}`;
 const QA_DIR = "qa-screenshots";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
