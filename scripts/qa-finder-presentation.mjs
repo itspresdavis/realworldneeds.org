@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { waitForGlobePresentation } from "./qa-globe-readiness.mjs";
 
 // Serialized into the CI browser and exercised directly with color fixtures.
 // Transparent controls inherit their painted background; rgba(0,0,0,0) is not black.
@@ -46,7 +47,10 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         const box = element.getBoundingClientRect();
         return { x: box.x, y: box.y, width: box.width, height: box.height, right: box.right, bottom: box.bottom };
       };
+      const shortcut = document.querySelector('.finder-map-link');
+      const shortcutBox = shortcut?.getBoundingClientRect();
       return {
+        mapShortcut: shortcut && { href:shortcut.getAttribute('href'), label:shortcut.getAttribute('aria-label'), width:shortcutBox.width, height:shortcutBox.height, target:document.getElementById('service-map')===document.querySelector('.globe-stage'), beforeSearch:Boolean(shortcut.compareDocumentPosition(document.querySelector('.finder-search')) & Node.DOCUMENT_POSITION_FOLLOWING), visible:getComputedStyle(shortcut).display!=='none' },
         surface: rect('.finder-surface'),
         search: rect('#resourceSearch'),
         primaryAction: rect('#jumpResults'),
@@ -95,8 +99,11 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
     if (!view.guidance.sourceBeforeClosing || view.guidance.sourceHeading !== 'Check the source before you go.' || view.guidance.closingHeading !== 'Everyone deserves a clear next step.' || view.guidance.sourceLabels.join('|') !== 'Source|Review date|Provider authority' || view.guidance.contributorHref !== '/join' || !view.guidance.contributorLabel?.startsWith('Help keep the directory useful') || view.guidance.repeatedSteps) {
       throw new Error(`Source guidance or contributor closing is incomplete at ${width}px: ${JSON.stringify(view.guidance)}`);
     }
-    if (!view.flow.searchBeforeResults || !view.flow.mapBeforePanel || view.flow.resultsBeforeMap !== (width <= 600) || (width <= 600 ? view.flow.mapParent !== 'finder' : !view.flow.mapParent.includes('finder__grid'))) {
+    if (!view.flow.searchBeforeResults || !view.flow.mapBeforePanel || view.flow.resultsBeforeMap || !view.flow.mapParent.includes('finder__grid')) {
       throw new Error(`Responsive map reading order failed at ${width}px: ${JSON.stringify(view.flow)}`);
+    }
+    if (width <= 600 && (!view.mapShortcut?.visible || view.mapShortcut.href !== '#service-map' || view.mapShortcut.label !== 'Explore the interactive map' || !view.mapShortcut.target || !view.mapShortcut.beforeSearch || view.mapShortcut.width < 44 || view.mapShortcut.height < 44)) {
+      throw new Error(`Mobile map shortcut is missing or unusable at ${width}px: ${JSON.stringify(view.mapShortcut)}`);
     }
     const lastNeedRow = view.needRows.at(-1).top;
     if (view.needRows.filter(need => need.top === lastNeedRow).length < 2 || view.needRows.some(need => need.width < 44 || need.height < 44)) {
@@ -197,12 +204,36 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
     }
   }
   const focusEvidence = [];
+  const focusReadiness = [];
   for (const selector of ['#globeCanvas', '#zoomIn', '#resourcePanel .panel-actions--primary a[href]']) {
     await client.call('Emulation.setDeviceMetricsOverride', { width: 600, height: 844, deviceScaleFactor: 1, mobile: false, screenWidth: 600, screenHeight: 844 });
     await navigate(client, `${host}/?resource=bowery-mission`);
+    const { image: readyImage, ...readiness } = await waitForGlobePresentation({
+      sample: () => evaluate(client, `(() => {
+        const canvas = document.getElementById('globeCanvas');
+        const stage = canvas?.closest('.globe-stage');
+        const panel = document.getElementById('resourcePanel');
+        const startup = document.documentElement.dataset.finderStartup;
+        if (startup === 'ready' && stage?.classList.contains('is-globe-unavailable')) throw new Error('Responsive focus setup has an unavailable globe');
+        const readout = document.getElementById('globeReadout')?.textContent || '';
+        const rect = canvas?.getBoundingClientRect();
+        const style = canvas ? getComputedStyle(canvas) : null;
+        const panelReady = !panel?.hidden && !!panel?.getClientRects().length && document.getElementById('resourcePanelHeading')?.textContent.trim() === 'The Bowery Mission';
+        const available = startup === 'ready' && /[0-9]+(?:[.][0-9]+)?×/.test(readout) && !stage?.classList.contains('is-globe-unavailable');
+        const gl = available && canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+        return { elementsReady:startup==='ready' && panelReady && !!(canvas && document.getElementById('zoomIn')), startup, readout, panelReady,
+          visible:!document.hidden && !!rect && rect.width>0 && rect.height>0 && rect.top>=0 && rect.left>=0 && rect.bottom<=innerHeight && rect.right<=innerWidth && style.display!=='none' && style.visibility==='visible' && Number(style.opacity)>0,
+          healthy:!!gl && !gl.isContextLost() };
+      })()`),
+      prepare: () => evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'instant'})"),
+      capture: () => client.call('Page.captureScreenshot', {format:'png',fromSurface:true,captureBeyondViewport:false}),
+      wait: ms => new Promise(resolve => setTimeout(resolve,ms))
+    });
+    focusReadiness.push({selector,...readiness});
+    await writeFile(`qa-screenshots/responsive-focus-ready-${focusReadiness.length}.png`, readyImage);
     await evaluate(client, `(() => {
       const target = document.querySelector(${JSON.stringify(selector)});
-      if (!target || !target.getClientRects().length) throw new Error('Responsive focus target is unavailable: ' + ${JSON.stringify(selector)});
+      if (!target || !target.getClientRects().length) throw new Error('Responsive focus target is unavailable: ' + JSON.stringify({selector:${JSON.stringify(selector)},href:location.href,startup:document.documentElement.dataset.finderStartup,stage:document.querySelector('.globe-stage')?.className,panelHidden:document.getElementById('resourcePanel')?.hidden,targetPresent:Boolean(target),targetDisplay:target&&getComputedStyle(target).display,readyState:document.readyState}));
       target.scrollIntoView({block:'center',behavior:'instant'});
       target.focus({preventScroll:true});
       if (document.activeElement !== target) throw new Error('Responsive focus precondition failed');
@@ -216,14 +247,15 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         const headerBottom = document.querySelector('.site-header').getBoundingClientRect().bottom;
         const map = document.querySelector('.globe-stage');
         const results = document.getElementById('results');
-        resolve({focused:document.activeElement===target,top:box.top,bottom:box.bottom,left:box.left,right:box.right,headerBottom,width:innerWidth,height:innerHeight,resultsBeforeMap:Boolean(results.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING)});
+        resolve({focused:document.activeElement===target,top:box.top,bottom:box.bottom,left:box.left,right:box.right,headerBottom,width:innerWidth,height:innerHeight,mapInGrid:map.parentElement.classList.contains('finder__grid'),resultsBeforeMap:Boolean(results.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING)});
       })))`);
       focusEvidence.push({selector,width,...focus});
-      if (!focus.focused || focus.top < focus.headerBottom + 1 || focus.bottom > focus.height - 1 || focus.left < -1 || focus.right > focus.width + 1 || focus.resultsBeforeMap !== (width <= 600)) {
+      if (!focus.focused || focus.top < focus.headerBottom + 1 || focus.bottom > focus.height - 1 || focus.left < -1 || focus.right > focus.width + 1 || focus.resultsBeforeMap || !focus.mapInGrid) {
         throw new Error(`Responsive map focus was lost or hidden at ${width}px for ${selector}: ${JSON.stringify(focus)}`);
       }
     }
   }
+  await writeFile('qa-screenshots/homepage-responsive-readiness.json', JSON.stringify(focusReadiness, null, 2));
   await writeFile('qa-screenshots/homepage-responsive-focus.json', JSON.stringify(focusEvidence, null, 2));
   await writeFile('qa-screenshots/homepage-design-geometry.json', JSON.stringify(designEvidence, null, 2));
   console.log('Finder presentation QA passed: 11 widths, real globe framing, aligned marker layers, compact controls, and no page overflow.');

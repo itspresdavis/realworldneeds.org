@@ -133,42 +133,20 @@ function simplifyStructure() {
   }
 }
 
-let responsiveMapFlow;
-function arrangeMobileMap() {
-  const finder = document.getElementById('finder');
-  const grid = finder?.querySelector('.finder__grid');
-  const map = finder?.querySelector('.globe-stage');
-  const panel = finder?.querySelector('.resource-panel');
-  if (!finder || !grid || !map || !panel) return;
-  responsiveMapFlow ??= window.matchMedia('(max-width: 600px)');
+function installMapShortcut() {
+  const map = document.querySelector('.globe-stage');
+  const surface = document.querySelector('.finder-surface') || document.querySelector('.finder-sidebar');
+  if (!map || !surface) return;
   map.id = 'service-map';
-  if (!grid.querySelector('.finder-map-link')) {
+  map.tabIndex = -1;
+  if (!surface.querySelector('.finder-map-link')) {
     const link = document.createElement('a');
     link.className = 'finder-map-link';
     link.href = '#service-map';
-    link.textContent = 'Explore the map ↓';
-    grid.querySelector('.finder-sidebar')?.append(link);
+    link.textContent = 'Map ↓';
+    link.setAttribute('aria-label', 'Explore the interactive map');
+    surface.append(link);
   }
-  const arrange = () => {
-    const parent = responsiveMapFlow.matches ? finder : grid;
-    if (map.parentElement === parent && panel.parentElement === parent) return;
-    const focused = document.activeElement;
-    const restore = map.contains(focused) || panel.contains(focused);
-    parent.append(map, panel);
-    if (restore && focused?.isConnected) {
-      focused.focus({ preventScroll: true });
-      const box = focused.getBoundingClientRect();
-      const clearance = (document.querySelector('.site-header')?.getBoundingClientRect().bottom || 0) + 12;
-      if (box.top < clearance || box.bottom > window.innerHeight - 12) {
-        window.scrollTo({ top: Math.max(0, window.scrollY + box.top - clearance), behavior: 'instant' });
-      }
-    }
-  };
-  if (!finder.dataset.mapFlowInstalled) {
-    responsiveMapFlow.addEventListener('change', arrange);
-    finder.dataset.mapFlowInstalled = 'true';
-  }
-  arrange();
 }
 
 export function installProfessionalPresentation() {
@@ -181,7 +159,7 @@ export function installProfessionalPresentation() {
     const key = document.createElement('div');
     key.className = 'atlas-key';
     key.setAttribute('aria-label', 'Map marker key');
-    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Select a point to check its address and source.</small>';
+    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Drag to rotate; zoom for detail. Select a point to check its address and source.</small>';
     globe.append(key);
   }
   const intro = document.querySelector('.finder-intro');
@@ -204,6 +182,6 @@ export function installProfessionalPresentation() {
   rewriteFinderCopy();
   rewriteMethodSections();
   simplifyStructure();
-  arrangeMobileMap();
+  installMapShortcut();
   return true;
 }

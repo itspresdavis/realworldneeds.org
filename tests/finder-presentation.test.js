@@ -26,7 +26,10 @@ test("source guidance and contributor closing have distinct responsive layouts",
   assert.match(contract, /view\.search\.bottom > 380 \|\| view\.primaryAction\.bottom > 560/);
   assert.match(contract, /sourceBeforeClosing/);
   assert.match(contract, /contributorHref !== '\/join'/);
-  assert.match(contract, /resultsBeforeMap !== \(width <= 600\)/);
+  assert.match(contract, /view\.flow\.resultsBeforeMap \|\| !view\.flow\.mapParent\.includes\('finder__grid'\)/);
+  assert.match(contract, /view\.mapShortcut\.href !== '#service-map'/);
+  assert.match(contract, /!view\.mapShortcut\.beforeSearch/);
+  assert.match(contract, /await waitForGlobePresentation\(/);
 });
 
 test("finder, directory, and service pages share forest accents and clear sans-serif titles", async () => {

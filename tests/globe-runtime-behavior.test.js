@@ -33,15 +33,16 @@ function fixture() {
   const window = new ElementStub(); Object.assign(window, { innerWidth: 390, innerHeight: 844, scrollY: 100 });
   const document = new ElementStub(); Object.assign(document, { hidden: false, documentElement: { scrollHeight: 2000 }, getElementById: id => { if (!nodes.has(id)) nodes.set(id, new ElementStub()); return nodes.get(id); } });
   const calls = { selected: [], wake: 0 };
+  const motionPreference = new ElementStub();
   const state = { zoom: 1, targetZoom: 1, rotationLon: 0, rotationLat: 0, targetLon: null, targetLat: null, velocityLon: 0, velocityLat: 0, dragging: false, pinching: false, clusterIds: [], pointerMoved: false };
-  const context = vm.createContext({ Element: ElementStub, document, window, performance: { now: () => 100 }, Math, state, activeGlobePointers: new Map(), pinchStartDistance: 0, pinchStartZoom: 1, globeGestureHadMultiplePointers: false, globeEngaged: false, globeContextLost: false, globeContextRecoveryExtension: null, MIN_GLOBE_ZOOM: 0.82, reduceMotion: false,
+  const context = vm.createContext({ Element: ElementStub, document, window, performance: { now: () => 100 }, Math, state, activeGlobePointers: new Map(), pinchStartDistance: 0, pinchStartZoom: 1, globeGestureHadMultiplePointers: false, globeEngaged: false, globeContextLost: false, globeContextRecoveryExtension: null, MIN_GLOBE_ZOOM: 0.82, reduceMotion: false, motionPreference,
     classifyGlobeDragIntent, pinchZoom, pointerDistance, classifyWheelIntent, wheelZoomFactor,
     wakeGlobe() { calls.wake++; }, pauseGlobe() {}, markGlobeEngaged() {}, renderClusterTray() {}, setCountryHighlight() {}, maxGlobeZoom: () => 8, normalizeLongitude: value => ((value + 540) % 360) - 180, clampGlobeLatitude: value => Math.max(-82, Math.min(82, value)), selectCountryFromPointer: event => calls.selected.push(event), zoomTowardPointer() {}, focusRegion() {}, recoverGlobeContext() {}, icon: { pause: "", play: "" } });
   vm.runInContext(inputSource, context);
   const point = (x = 100, y = 100, identifier = 1, target = canvas) => ({ clientX: x, clientY: y, identifier, target });
   const touch = (type, touches, changedTouches = [], target = canvas) => stage.dispatch(type, { target, touches, changedTouches });
   const pointer = (type, props = {}) => stage.dispatch(type, { target: canvas, ...props });
-  return { stage, canvas, pin, chrome, context, calls, state, window, document, point, touch, pointer };
+  return { stage, canvas, pin, chrome, context, calls, state, window, document, motionPreference, point, touch, pointer };
 }
 
 test("a stationary touch on the canvas selects once, including browsers that also emit pointer events", () => {
@@ -251,4 +252,51 @@ test("reduced-motion focus and zoom settle immediately", () => {
   f.advance(16);
   assert.equal(f.state.targetLon, null); assert.equal(f.state.rotationLon, 100);
   assert.equal(f.state.zoom, f.state.targetZoom);
+});
+
+for (const input of ["keyboard", "button"]) test(`${input} resumes rotation immediately after a recent interaction and pauses on a second activation`, () => {
+  const f = fixture();
+  f.state.autoRotate = false;
+  f.state.interactionUntil = 6100;
+  const activate = () => input === "keyboard"
+    ? f.canvas.dispatch("keydown", { key: " " })
+    : f.document.getElementById("toggleMotion").dispatch("click");
+  const event = activate();
+  assert.equal(f.state.autoRotate, true);
+  assert.equal(f.state.interactionUntil, 0, "explicit Resume must cancel the ordinary post-interaction delay");
+  assert.equal(f.document.getElementById("toggleMotion").title, "Pause globe rotation");
+  assert.ok(f.calls.wake > 0);
+  if (input === "keyboard") assert.equal(event.defaultPrevented, true);
+  activate();
+  assert.equal(f.state.autoRotate, false);
+  assert.equal(f.document.getElementById("toggleMotion").title, "Resume globe rotation");
+});
+
+test("enabling reduced motion live stops rotation and inertia and settles an active camera transition", () => {
+  const f = fixture();
+  Object.assign(f.state, { autoRotate: true, interactionUntil: 6100, velocityLon: 36, velocityLat: 20,
+    targetLon: 100, targetLat: 40, zoom: 1, targetZoom: 6, ambientZoom: 1 });
+  f.motionPreference.dispatch("change", { matches: true });
+  assert.equal(f.context.reduceMotion, true);
+  assert.equal(f.state.autoRotate, false);
+  assert.equal(f.state.velocityLon, 0); assert.equal(f.state.velocityLat, 0);
+  assert.equal(f.document.getElementById("toggleMotion").title, "Resume globe rotation");
+  assert.equal(f.calls.wake, 1);
+  Object.assign(f.context, { lastFrame: 100, shortestLongitude: (from, to) => ((to - from + 540) % 360) - 180 });
+  vm.runInContext(functionSource("advanceGlobe", "pauseGlobe") + "\nadvanceGlobe(116);", f.context);
+  assert.equal(f.state.rotationLon, 100); assert.equal(f.state.rotationLat, 40);
+  assert.equal(f.state.targetLon, null); assert.equal(f.state.zoom, 6);
+});
+
+test("returning to normal motion never resumes rotation or inertia without another explicit action", () => {
+  const f = fixture();
+  f.state.autoRotate = true; f.state.velocityLon = 12; f.state.velocityLat = 8;
+  f.motionPreference.dispatch("change", { matches: true });
+  const wakes = f.calls.wake;
+  f.motionPreference.dispatch("change", { matches: false });
+  assert.equal(f.context.reduceMotion, false);
+  assert.equal(f.state.autoRotate, false);
+  assert.equal(f.state.velocityLon, 0); assert.equal(f.state.velocityLat, 0);
+  assert.equal(f.calls.wake, wakes, "normal preference must not restart the idle loop");
+  assert.equal(f.document.getElementById("toggleMotion").title, "Resume globe rotation");
 });

@@ -115,7 +115,7 @@ function composeFinderSurface() {
   search.before(surface);
   surface.append(label);
   // Reuse the live controls. Moving a focused node can blur it in older browsers.
-  for (const selector of [".finder-search", ".quick-needs", ".jump-results", ".location-actions", "#locationStatus", "#locationRecovery", ".finder-disclosures"]) {
+  for (const selector of [".finder-map-link", ".finder-search", ".quick-needs", ".jump-results", ".location-actions", "#locationStatus", "#locationRecovery", ".finder-disclosures"]) {
     const node = sidebar.querySelector(selector);
     if (node) surface.append(node);
   }

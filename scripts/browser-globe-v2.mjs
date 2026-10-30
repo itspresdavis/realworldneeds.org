@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -95,6 +95,73 @@ async function navigate(client, url) {
   await sleep(600);
 }
 
+// Non-pausing DevTools observation verifies actual shipped state after a
+// rendered frame. It is removed before deep-view QA and makes no FPS claim.
+async function verifyGlobeMotion(client) {
+  const source = await readFile("dist/src/app.js", "utf8");
+  const lineNumber = source.split("\n").findIndex(line => line.trim() === "if (globeHasMotion(state)) wakeGlobe(false);");
+  if (lineNumber < 0) throw new Error("The shipped globe motion observation point was not found.");
+  let breakpoint;
+  const evidence = [];
+  const snapshot = () => evaluate(client, "globalThis.__rwnMotionQA || null");
+  const wait = async (accept, label) => {
+    let current;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      current = await snapshot();
+      if (current && accept(current)) return current;
+      await sleep(75);
+    }
+    throw new Error(label + ": " + JSON.stringify(current));
+  };
+  const press = async (key, code, virtualKey) => {
+    await client.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey });
+    await client.call("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey });
+  };
+  try {
+    await client.call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
+    await client.call("Debugger.enable");
+    const result = await client.call("Debugger.setBreakpointByUrl", {
+      urlRegex: "/src/app\\.js(?:\\?|$)", lineNumber,
+      condition: "(globalThis.__rwnMotionQA = { serial:(globalThis.__rwnMotionQA?.serial || 0)+1, at:performance.now(), reduceMotion, autoRotate:state.autoRotate, interactionUntil:state.interactionUntil, rotationLon:state.rotationLon, velocityLon:state.velocityLon, velocityLat:state.velocityLat, targetLon:state.targetLon, zoom:state.zoom, targetZoom:state.targetZoom, label:document.getElementById('toggleMotion')?.getAttribute('aria-label') },false)"
+    });
+    breakpoint = result.breakpointId;
+    await evaluate(client, "(() => { const canvas=document.getElementById('globeCanvas'); canvas.scrollIntoView({block:'center',behavior:'instant'}); canvas.focus({preventScroll:true}); })()");
+    await press("ArrowRight", "ArrowRight", 39);
+    const manual = await wait(row => !row.autoRotate && row.interactionUntil > row.at, "Manual rotation did not establish an interaction delay");
+    evidence.push({ phase: "manual-paused", ...manual });
+    await press(" ", "Space", 32);
+    const resumed = await wait(row => row.serial > manual.serial && row.autoRotate && row.interactionUntil === 0 && row.rotationLon !== manual.rotationLon, "Keyboard Resume did not start actual rotation immediately");
+    if (resumed.label !== "Pause globe rotation") throw new Error("Resume did not update the accessible control label.");
+    evidence.push({ phase: "keyboard-resumed", ...resumed });
+
+    await client.call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+    const reduced = await wait(row => row.serial > resumed.serial && row.reduceMotion && !row.autoRotate && row.velocityLon === 0 && row.velocityLat === 0, "Live reduced-motion change did not stop rotation and inertia");
+    if (reduced.label !== "Resume globe rotation") throw new Error("Reduced motion left a misleading Pause label.");
+    evidence.push({ phase: "live-reduced", ...reduced });
+    await client.call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
+    await sleep(200);
+    const stillPaused = await snapshot();
+    if (stillPaused.autoRotate || await evaluate(client, "document.getElementById('toggleMotion').getAttribute('aria-label')") !== "Resume globe rotation") {
+      throw new Error("Normal motion preference restarted rotation without an explicit action.");
+    }
+    await press("ArrowRight", "ArrowRight", 39);
+    const normal = await wait(row => row.serial > reduced.serial && !row.reduceMotion && !row.autoRotate && row.velocityLon === 0 && row.velocityLat === 0, "Normal preference did not retain manual-only motion");
+    evidence.push({ phase: "normal-still-paused", ...normal });
+    await press(" ", "Space", 32);
+    const secondResume = await wait(row => row.serial > normal.serial && row.autoRotate && row.interactionUntil === 0, "Explicit resume after a preference change failed");
+    await press(" ", "Space", 32);
+    const paused = await wait(row => row.serial > secondResume.serial && !row.autoRotate && row.label === "Resume globe rotation", "Keyboard pause failed after explicit resume");
+    evidence.push({ phase: "keyboard-paused", ...paused });
+    console.log("Globe motion QA passed: trusted keyboard resume, live reduced-motion stop, no automatic resume, and trusted keyboard pause.");
+  } finally {
+    if (breakpoint) await client.call("Debugger.removeBreakpoint", { breakpointId: breakpoint }).catch(() => {});
+    await client.call("Debugger.disable").catch(() => {});
+    await client.call("Emulation.setEmulatedMedia", { features: [] }).catch(() => {});
+    await mkdir("qa-screenshots", { recursive: true });
+    await writeFile("qa-screenshots/globe-motion.json", JSON.stringify(evidence, null, 2));
+  }
+}
+
 async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-globe-v2-"));
   const server = spawn(process.execPath, ["scripts/serve.mjs", "4173"], { stdio: ["ignore", "pipe", "pipe"] });
@@ -144,6 +211,7 @@ async function run() {
       check();
     })`);
     if (!ready) throw new Error("Deep-zoom globe controls did not initialize within 12 seconds.");
+    await verifyGlobeMotion(client);
 
     const deep = await evaluate(client, `new Promise((resolve) => {
       const button = document.getElementById('zoomIn');

@@ -42,7 +42,8 @@ import {
 } from "./utils/privacy.js";
 
 const DEFAULT_RESOURCE = null;
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reduceMotion = motionPreference.matches;
 const MIN_GLOBE_ZOOM = 0.82;
 // Returned when the globe has no camera yet, so callers treat the point as
 // behind the sphere and simply skip drawing instead of guessing a position.
@@ -1357,7 +1358,10 @@ function loadEarthImagery() {
   earthTextureRequested = true;
   const image = new Image();
   image.decoding = "async";
-  image.onload = () => {
+  image.onload = async () => {
+    // Publish imagery after the initial land mask settles, avoiding a dark
+    // unmasked ocean frame. The shared geometry request has a bounded fallback.
+    await landGeometryPromise;
     earthTextureImage = image;
     if (globeSurface) {
       globeSurface.material.emissive.setHex(0xffffff);
@@ -2032,12 +2036,12 @@ function updateGlobeReadout(now = performance.now()) {
     ? "detailed + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
-    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`
+    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} mapped listings · ${zoomLabel} · ${detailLabel}</span>`
     : hasMapCoordinates(resource) && state.focusPoint
-    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
+    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${isExactServiceSite(resource) ? `${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")}` : "Coverage marker"} · ${zoomLabel}</span>`
     : state.focusedCountry && state.focusPoint
-      ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
-    : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`;
+      ? `<strong>${state.focusedCountry}</strong><span>Country view · ${zoomLabel}</span>`
+    : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} mapped listings · ${zoomLabel} · ${detailLabel}</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
@@ -2732,6 +2736,22 @@ function bindEvents() {
 
   const canvas = document.getElementById("globeCanvas");
   const globeStage = canvas.closest(".globe-stage");
+  const setGlobeRotation = (enabled) => {
+    state.autoRotate = enabled;
+    state.interactionUntil = 0;
+    const button = document.getElementById("toggleMotion");
+    button.innerHTML = enabled ? icon.pause : icon.play;
+    button.title = enabled ? "Pause globe rotation" : "Resume globe rotation";
+    button.setAttribute("aria-label", button.title);
+    wakeGlobe();
+  };
+  motionPreference.addEventListener("change", (event) => {
+    reduceMotion = event.matches;
+    if (!reduceMotion) return;
+    state.velocityLon = 0;
+    state.velocityLat = 0;
+    setGlobeRotation(false);
+  });
   const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
 
   const prepareGlobeInteraction = () => {
@@ -2981,11 +3001,7 @@ function bindEvents() {
       return;
     }
     else if (event.key === " ") {
-      state.autoRotate = !state.autoRotate;
-      const motionButton = document.getElementById("toggleMotion");
-      motionButton.innerHTML = state.autoRotate ? icon.pause : icon.play;
-      motionButton.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
-      motionButton.setAttribute("aria-label", motionButton.title);
+      setGlobeRotation(!state.autoRotate);
       event.preventDefault();
       return;
     }
@@ -3024,13 +3040,8 @@ function bindEvents() {
     state.interactionUntil = performance.now() + 5000;
   });
   document.getElementById("regionFocus").addEventListener("change", (event) => focusRegion(event.target.value, true));
-  document.getElementById("toggleMotion").addEventListener("click", (event) => {
-    wakeGlobe();
-    state.autoRotate = !state.autoRotate;
-    event.currentTarget.innerHTML = state.autoRotate ? icon.pause : icon.play;
-    event.currentTarget.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
-    event.currentTarget.setAttribute("aria-label", event.currentTarget.title);
-    state.interactionUntil = 0;
+  document.getElementById("toggleMotion").addEventListener("click", () => {
+    setGlobeRotation(!state.autoRotate);
   });
   document.getElementById("retryGlobe")?.addEventListener("click", () => {
     const context = globeRenderer?.getContext();
