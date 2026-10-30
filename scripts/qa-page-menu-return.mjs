@@ -74,7 +74,8 @@ export function observePageMenuReturn(origin, binding) {
     if (!selector) return;
     const node = document.querySelector(selector);
     report({ type, selector, trusted: event.isTrusted, expected: Boolean(node && (event.target === node || node.contains(event.target))),
-      href: location.href, targetHref: event.target.closest?.('a')?.getAttribute('href') || null, scroll: scrollY });
+      href: location.href, targetHref: event.target.closest?.('a')?.getAttribute('href') || null,
+      inMenu: Boolean(node && document.querySelector('.rwn-page-menu')?.contains(node)), scroll: scrollY });
   }, true);
 }
 
@@ -102,9 +103,13 @@ export function pageMenuReturnSnapshot() {
   const focusVisible = useful && visible(active) && (inHeader || rect.top >= (header?.getBoundingClientRect().bottom || 0) + 1);
   const rows = selector => all(selector).map(node => ({ href: node.getAttribute('href'), text: node.textContent.trim() }));
   const panel = pick('[data-saved-services]');
+  // Contribute is an existing standalone account page, not a menu source.
+  const contributorReady = globalThis.location?.pathname === '/join' && pick('header.contributor-header')
+    && pick('form#accountForm') && pick('#accountForm input[name="email"][type="email"]')
+    && pick('#accountForm input[name="password"][type="password"]') && pick('#accountForm button#accountSubmit[type="submit"]');
   return {
     documentPresent: Boolean(document?.documentElement && document.body),
-    ready: Boolean(document?.documentElement && document.body && pick('h1') && summary && (!input || pick('.directory-global-results'))),
+    ready: Boolean(document?.documentElement && document.body && pick('h1') && (globalThis.location?.pathname === '/join' ? contributorReady : summary) && (!input || pick('.directory-global-results'))),
     href: globalThis.location?.href || '', path: globalThis.location?.pathname || '', title: document?.title || '', heading: pick('h1')?.textContent || '',
     timeOrigin: globalThis.performance?.timeOrigin ?? null, navigationType: globalThis.performance?.getEntriesByType?.('navigation')[0]?.type || '',
     viewport: { width: globalThis.innerWidth ?? null, height: globalThis.innerHeight ?? null },
@@ -148,6 +153,18 @@ export function pageMenuReturnedFromBFCache(actual, source) {
     && actual.probe?.shows?.length === source.probe?.shows?.length + 1 && actual.probe?.hides?.length === source.probe?.hides?.length + 1
     && show?.persisted === true && show.trusted === true && show.href === source.href && show.timeOrigin === source.timeOrigin
     && hide?.persisted === true && hide.trusted === true && hide.href === source.href && hide.timeOrigin === source.timeOrigin);
+}
+
+// The persistent Saved control is outside details, so its trusted click closes
+// the menu before departure. Links inside details retain it until persisted Back.
+export function pageMenuDepartureMatchesControl(actual, source, activation) {
+  const events = activation?.events, click = events?.at(-1);
+  return Boolean(pageMenuReturnedFromBFCache(actual, source) && events?.length === 3
+    && typeof click.inMenu === 'boolean' && typeof click.targetHref === 'string' && click.targetHref.length > 0
+    && ['mousedown', 'mouseup', 'click'].every((type, index) => events[index].type === type
+      && events[index].trusted === true && events[index].expected === true && events[index].href === source.href
+      && events[index].inMenu === click.inMenu && events[index].targetHref === click.targetHref)
+    && actual.probe.hides.at(-1).menuOpen === click.inMenu);
 }
 
 const validNativeHistory = snapshot => Boolean(Array.isArray(snapshot?.entries) && Number.isInteger(snapshot.index)
@@ -354,26 +371,34 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       && Math.abs(s.scroll - source.scroll) <= 1 && pageMenuRetainedState(s, source, { requireHistory: false }), 'Menu remains usable before real navigation');
     await capture(client, `page-menu-${name}-opened.png`);
     const leftBy = await nativeClick(target === "/directory#saved" ? ".rwn-saved-link" : `.rwn-page-menu a[href="${target}"]`);
+    assert(leftBy.events.at(-1).inMenu === (target !== '/directory#saved'),
+      'Saved must remain outside details and real menu destinations must remain inside', leftBy);
     const destinationUrl = new URL(target, origin).href;
     const destination = await settled(s => s.href === destinationUrl && pageMenuFreshDocument(s, source.timeOrigin) && !s.menuOpen
       && (target !== '/directory#saved' || s.saved && s.panelVisible), 'Native menu link destination');
     const destinationEntry = await entry();
     assert(pageMenuNativeEntryWasAdded(sourceEntry, destinationEntry, destinationUrl),
       'Menu link did not add one new native entry adjacent to its exact source', { sourceEntry, destinationEntry });
+    const repeated = [];
+    // Retain the actual outgoing control and destination even if Back fails.
+    const record = { name, phase: 'destination-verified', source, opened, openedBy, leftBy, sourceEntry, destinationEntry,
+      destination, expectedDepartureMenuOpen: leftBy.events.at(-1).inMenu, repeated };
+    evidence.push(record);
     await client.call('Page.navigateToHistoryEntry', { entryId: sourceEntry.entry.id });
     let returned = await settled(s => pageMenuReturnedFromBFCache(s, source) && pageMenuRetainedState(s, source)
       && !s.menuOpen && !s.saved && !s.panelVisible && s.focus.visible && !s.focus.inMenu && Math.abs(s.scroll - source.scroll) <= 1,
     'Actual persisted Back must close the menu and retain query, exact rows, scroll and visible focus');
-    assert(returned.probe.hides.at(-1).menuOpen, 'The real source must enter BFCache with its menu open', returned.probe);
+    record.back = returned;
+    record.departure = returned.probe.hides.at(-1);
+    assert(pageMenuDepartureMatchesControl(returned, source, leftBy),
+      'Persisted departure must match the trusted control containment', { leftBy, departure: record.departure });
     const primaryBackEntry = await entry();
     assert(primaryBackEntry.entry.id === sourceEntry.entry.id && primaryBackEntry.entry.url === sourceEntry.entry.url,
       'Back returned to the wrong history entry', primaryBackEntry);
-    const repeated = [];
-    // Publish the passed primary proof before any later cycle can fail. The
-    // artifact must retain real progress as well as the final failure state.
-    const record = { name, phase: 'primary-back-verified', source, opened, openedBy, leftBy, sourceEntry, destinationEntry,
-      destination, primaryBackClassification: 'persisted', primaryBackEntry, back: returned, repeated };
-    evidence.push(record);
+    // Publish the passed primary proof before any later cycle can fail.
+    record.phase = 'primary-back-verified';
+    record.primaryBackClassification = 'persisted';
+    record.primaryBackEntry = primaryBackEntry;
     await capture(client, `page-menu-${name}-back.png`);
     if (repeat) for (let iteration = 0; iteration < 2; iteration++) {
       const previousReturn = returned;

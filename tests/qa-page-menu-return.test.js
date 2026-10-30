@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import {
   PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, PAGE_MENU_VIEWPORTS, PAGE_MENU_SHORT_HEIGHT_LIMITATION, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
-  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded, pageMenuHistoryTraversalClassification, verifyPageMenuReturn, pageMenuReloadSourceReady, pageMenuReloadRestored
+  pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuDepartureMatchesControl, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded, pageMenuHistoryTraversalClassification, verifyPageMenuReturn, pageMenuReloadSourceReady, pageMenuReloadRestored
 } from '../scripts/qa-page-menu-return.mjs';
 
 const event = (persisted, timeOrigin = 100, extra = {}) => ({ persisted, trusted: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, timeOrigin, ...extra });
@@ -32,6 +32,36 @@ test('BFCache classifier requires trusted persisted lifecycle evidence from the 
   ]) {
     const state = returned(); mutate(state);
     assert.equal(pageMenuReturnedFromBFCache(state, source()), false, JSON.stringify(state));
+  }
+});
+
+const activation = (inMenu = false, targetHref = '/directory#saved') => ({ events:
+  ['mousedown', 'mouseup', 'click'].map(type => ({ type, trusted: true, expected: true, href: source().href, targetHref, inMenu })) });
+const savedReturn = () => {
+  const state = returned(); state.probe.hides.at(-1).menuOpen = false; return state;
+};
+
+test('departure requires closed Saved and open real-menu pagehide according to observed control containment', () => {
+  assert.equal(pageMenuDepartureMatchesControl(savedReturn(), source(), activation(false)), true);
+  assert.equal(pageMenuDepartureMatchesControl(returned(), source(), activation(true, '/sources')), true);
+  assert.equal(pageMenuDepartureMatchesControl(returned(), source(), activation(false)), false, 'Outside Saved must close before pagehide');
+  assert.equal(pageMenuDepartureMatchesControl(savedReturn(), source(), activation(true, '/sources')), false, 'Inside menu links must retain open departure coverage');
+});
+
+test('departure rejects missing, untrusted, wrong-source or inconsistent outgoing-control and persisted lifecycle proof', () => {
+  for (const mutate of [a => { a.events = []; }, a => { a.events.pop(); }, a => { a.events[2].type = 'mouseup'; },
+    a => { a.events[2].trusted = false; }, a => { a.events[2].expected = false; },
+    a => { a.events[2].href += '#different'; }, a => { delete a.events[2].inMenu; }, a => { a.events[2].inMenu = 'false'; },
+    a => { a.events[0].inMenu = true; }, a => { a.events[0].targetHref = '/sources'; }, a => { a.events[2].targetHref = ''; }]) {
+    const control = activation(); mutate(control);
+    assert.equal(pageMenuDepartureMatchesControl(savedReturn(), source(), control), false, JSON.stringify(control));
+  }
+  assert.equal(pageMenuDepartureMatchesControl(savedReturn(), source(), null), false);
+  for (const mutate of [s => { s.probe.hides.at(-1).persisted = false; }, s => { s.probe.hides.at(-1).trusted = false; },
+    s => { s.probe.hides.at(-1).href += '#different'; }, s => { s.probe.hides.at(-1).timeOrigin++; },
+    s => { s.probe.hides = []; }, s => { s.probe.shows.at(-1).persisted = false; }]) {
+    const state = savedReturn(); mutate(state);
+    assert.equal(pageMenuDepartureMatchesControl(state, source(), activation()), false);
   }
 });
 
@@ -155,6 +185,37 @@ test('snapshot rejects provisional documents and cannot turn body, clipped or oc
   assert.equal(snapshot(f.globals).focus.visible, true); assert.equal(snapshot(f.globals).focus.keyboardRing, false);
 });
 
+const contributorSelectors = ['header.contributor-header', 'form#accountForm',
+  '#accountForm input[name="email"][type="email"]', '#accountForm input[name="password"][type="password"]',
+  '#accountForm button#accountSubmit[type="submit"]'];
+function contributorFixture() {
+  const f = domFixture();
+  f.globals.location = { href: 'http://rwn.test/join', pathname: '/join' };
+  for (const selector of ['.rwn-page-menu > summary', '[data-directory-query]', '.directory-global-results']) f.nodes.delete(selector);
+  for (const selector of contributorSelectors) f.nodes.set(selector, {});
+  return f;
+}
+
+test('standalone Join destination is ready only with its actual contributor header, H1 and complete account controls', () => {
+  const f = contributorFixture(), state = snapshot(f.globals);
+  assert.equal(state.ready, true); assert.equal(state.path, '/join'); assert.equal(state.summaryVisible, false);
+  for (const selector of [...contributorSelectors, 'h1']) {
+    const missing = contributorFixture(); missing.nodes.delete(selector);
+    assert.equal(snapshot(missing.globals).ready, false, selector);
+  }
+});
+
+test('standalone Join controls cannot excuse a missing menu on ordinary or unknown destinations', () => {
+  for (const pathname of [PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, '/editorial-policy', '/sources', '/unknown', '/join/']) {
+    const f = contributorFixture(); f.globals.location.pathname = pathname;
+    assert.equal(snapshot(f.globals).ready, false, pathname);
+  }
+  const joinMissingForm = domFixture(); joinMissingForm.globals.location.pathname = '/join';
+  assert.equal(snapshot(joinMissingForm.globals).ready, false, 'A generic menu cannot substitute for Join account controls');
+  const missingSummary = domFixture(); missingSummary.nodes.delete('.rwn-page-menu > summary');
+  assert.equal(snapshot(missingSummary.globals).ready, false);
+});
+
 test('probe records real lifecycle flags and trusted input without changing menu, history or page state', () => {
   const listeners = new Map(), reports = [], root = { open: true };
   const globals = { location: { origin: 'http://rwn.test', href: 'http://rwn.test/directory' }, performance: { timeOrigin: 100 }, scrollY: 240,
@@ -169,6 +230,22 @@ test('probe records real lifecycle flags and trusted input without changing menu
   assert.equal(globals.__rwnPageMenuQA.hides[0].menuOpen, true); assert.equal(globals.__rwnPageMenuQA.inputs[0].trusted, true);
   assert.equal(reports.length, 3); assert.equal(root.open, true);
   assert.equal(globals.history, undefined);
+});
+
+test('native click observer records actual control containment for both header Saved and menu links', () => {
+  for (const inMenu of [false, true]) {
+    const listeners = new Map(), reports = [];
+    const anchor = { closest: () => anchor, getAttribute: () => inMenu ? '/sources' : '/directory#saved' };
+    const menu = { contains: node => inMenu && node === anchor };
+    const globals = { location: { origin: 'http://rwn.test', href: 'http://rwn.test/directory' }, performance: { timeOrigin: 100 }, scrollY: 240,
+      __rwnPageMenuExpectedClick: '.control', __report: value => reports.push(JSON.parse(value)),
+      window: { addEventListener: () => {} }, document: { addEventListener: (type, callback) => listeners.set(type, callback),
+        querySelector: selector => selector === '.rwn-page-menu' ? menu : anchor } };
+    vm.runInNewContext(`(${observePageMenuReturn.toString()})('http://rwn.test', '__report')`, globals);
+    for (const type of ['mousedown', 'mouseup', 'click']) listeners.get(type)({ isTrusted: true, target: anchor });
+    assert.equal(reports.length, 3);
+    assert.ok(reports.every(item => item.inMenu === inMenu && item.trusted && item.expected));
+  }
 });
 
 test('BFCache eligibility override is limited to successful allowlisted HTML; ordinary no-store assets and routes are unchanged', () => {
@@ -341,15 +418,15 @@ test('actual round-trip orchestration preserves passed primary Back evidence whe
   const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 5 }, () => ({ visible: true, box: { height: 50 } })) };
   const dest = { ...forwardFixture({ fresh: true }).actual, timeOrigin: 102,
     probe: { shows: [event(false, 102, { href: 'http://127.0.0.1:9999/directory#saved' })], hides: [] } };
-  const back = returned();
+  const back = savedReturn();
   const sourceEntry = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]);
   const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
   let samples = 0, entries = 0;
   const evidence = [], navigation = [];
   const globals = { URL, PAGE_MENU_REFLOW_LINKS, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, source: src, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999',
-    evidence, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
+    evidence, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuDepartureMatchesControl, pageMenuNativeEntryWasAdded,
     pageMenuHistoryTraversalClassification, historySnapshot: async () => {},
-    open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
+    open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => activation(false), capture: async () => {},
     client: { call: async (method, params) => navigation.push({ method, params }) },
     entry: async () => (++entries === 2 ? destinationEntry : sourceEntry),
     assert: (ok, label) => assert.ok(ok, label),
@@ -420,7 +497,7 @@ function completeRoundTripFixture(repeat) {
   const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
   const freshDestination = timeOrigin => ({ ...forwardFixture({ fresh: true }).actual, timeOrigin,
     probe: { shows: [event(false, timeOrigin, { href: destinationHref })], hides: [] } });
-  const destination = freshDestination(200), primary = returned();
+  const destination = freshDestination(200), primary = savedReturn();
   const back = count => ({ ...returned(), nativeHistory: sourceEntry, probe: {
     shows: [event(false), ...Array.from({ length: count }, () => event(true))],
     hides: Array.from({ length: count }, () => event(true, 100, { menuOpen: true }))
@@ -434,9 +511,9 @@ function completeRoundTripFixture(repeat) {
   let samples = 0, entries = 0;
   const evidence = [], calls = [];
   const globals = { URL, PAGE_MENU_REFLOW_LINKS, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999', evidence,
-    pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
+    pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuDepartureMatchesControl, pageMenuNativeEntryWasAdded,
     pageMenuHistoryTraversalClassification, pageMenuReloadSourceReady, pageMenuReloadRestored, historySnapshot: async () => {},
-    open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
+    open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => activation(false), capture: async () => {},
     client: { call: async (method, params) => calls.push({ method, params }) },
     entry: async () => (++entries === 2 ? destinationEntry : sourceEntry), assert: (ok, label) => assert.ok(ok, label),
     settled: async (predicate, label) => {
