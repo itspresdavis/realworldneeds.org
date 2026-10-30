@@ -324,7 +324,7 @@ display: inline-flex;align-items: center;min-height: 44px;margin-top: .2rem;font
 }
 #directory .directory-need-field { display: none;}
 #directory .directory-search-tools{margin-bottom:.5rem}
-#saved:first-child+.directory-search-tools{margin-top:0;border-top:0}
+#saved:first-child~.directory-search-tools{margin-top:0;border-top:0}
 #directory .directory-search-tools__meta { min-height: 28px;justify-content: flex-start;}
 #directory .directory-search-tools__meta > span:last-child { margin-left: auto;}
 #directory .directory-search-tools__meta .directory-search-tools__clear { min-height: 44px;padding: .45rem .65rem;font-size: .8125rem;}
