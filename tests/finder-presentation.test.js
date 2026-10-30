@@ -7,7 +7,7 @@ const readCss = async (path) => normalizeCss(await readFile(path, "utf8"));
 
 test("finder owns one map coordinate space and fixed-size controls", async () => {
   const css = await readCss("src/clarity.css");
-  assert.match(css, /\.rwn-professional \.globe-canvas,\.rwn-professional \.globe-pin-layer\{[^}]*inset:var\(--map-top\) 0 var\(--map-bottom\);[^}]*height:calc\(100% - var\(--map-top\) - var\(--map-bottom\)\)/);
+  assert.match(css, /\.rwn-professional \.globe-canvas,\.rwn-professional \.globe-pin-layer\{[^}]*inset:4rem 0 4\.5rem;[^}]*height:calc\(100% - 8\.5rem\)/);
   assert.match(css, /\.rwn-professional \.globe-controls\{[^}]*top:auto;[^}]*transform:none;[^}]*grid-auto-rows:44px/);
   assert.match(css, /\.rwn-professional \.globe-readout\{[^}]*display:block !important;[^}]*clip-path:inset\(50%\)/);
   assert.doesNotMatch(css, /A GLOBAL DIRECTORY OF PRACTICAL HELP/);
@@ -159,20 +159,12 @@ test("map attribution stays readable on the paper footer", async () => {
 });
 
 
-test("touch exploration has an explicit toolbar outside the shared map coordinate space", async () => {
+test("restored mobile globe preserves page scrolling without the deferred Explore mode", async () => {
   const css = await readCss("src/clarity.css");
-  assert.match(css, /\.globe-touch-controls\{[^}]*position:absolute;[^}]*grid-template-columns:auto 1fr/);
-  assert.match(css, /\.globe-touch-controls\[hidden\]\{display:none/);
-  assert.match(css, /\.globe-touch-controls button\{min-height:44px;min-width:7\.5rem/);
-  assert.match(css, /\.globe-stage:has\(\.globe-touch-controls:not\(\[hidden\]\)\)\{--map-top:9\.25rem/);
-  assert.match(css, /\.rwn-professional \.globe-canvas\{touch-action:pan-y pinch-zoom/);
-  assert.match(css, /\.rwn-professional \.is-touch-exploring :is\(\.globe-canvas,\.globe-pin\)\{touch-action:none/);
-  assert.doesNotMatch(css, /\.globe-stage\.is-touch-exploring\{[^}]*touch-action:none/);
-  assert.match(css, /@media\(max-width:900px\) and \(max-height:600px\) and \(orientation:landscape\)\{/);
-  assert.match(css, /\.globe-stage\.is-globe-unavailable :is\(\.globe-meta,\.globe-touch-controls/);
-  const source = await readFile("src/refinement.js", "utf8");
-  assert.match(source, /choose Explore globe to rotate in any direction and pinch to zoom/);
-  assert.match(source, /Choose Done or press Escape to return to page scrolling/);
+  const source = await readFile("src/app.js", "utf8");
+  assert.match(css, /\.rwn-professional \.globe-canvas\{touch-action:pan-y;overscroll-behavior-y:auto/);
+  assert.doesNotMatch(css, /globe-touch-controls|is-touch-exploring/);
+  assert.doesNotMatch(source, /id="toggleGlobeExplore"|id="globeTouchControls"/);
 });
 
 test("the closing explains provider checks and contributions without repeating a slogan", async () => {

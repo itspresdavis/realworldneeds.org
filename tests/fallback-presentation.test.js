@@ -15,7 +15,7 @@ test("unavailable maps hide unusable controls but retain the live status announc
   const hiddenChrome = fallbackCss.match(/\.globe-stage\.is-globe-unavailable :is\(([^)]+)\)\s*\{\s*display:\s*none\s*!important\s*;?\s*\}/)?.[1];
   assert.ok(hiddenChrome, "unavailable map chrome has an explicit hidden rule");
   assert.deepEqual(hiddenChrome.split(",").map(selector => selector.trim()).sort(), [
-    ".globe-meta", ".globe-touch-controls", ".atlas-key", ".globe-empty",
+    ".globe-meta", ".atlas-key", ".globe-empty",
     ".globe-cluster-tray", ".globe-gesture-hint", "#globeHelp"
   ].sort(), "all unusable map chrome, including Explore/Done, is hidden without hiding the live readout");
   assert.match(css, /\.rwn-professional \.globe-readout\s*\{[^}]*display:\s*block !important;[^}]*clip-path:\s*inset\(50%\);/);

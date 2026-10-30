@@ -52,13 +52,16 @@ test('paper finder, map key and documentary closing retain normal text contrast'
   };
   const luminance = hex => hex.match(/../g).map(c=>parseInt(c,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
   const finder = color('.rwn-professional .finder', 'background');
-  const map = color('.rwn-professional .globe-stage', 'background');
+  const map = property('.rwn-professional .globe-stage', 'background');
+  assert.match(map, /^radial-gradient\(/, 'the restored map uses the live radial background');
+  const mapStops = [...map.matchAll(/#([\da-f]{6})/gi)].map(match => match[1]);
+  assert.equal(mapStops.length, 3, 'all live gradient stops are checked');
   const closing = color('.rwn-professional .about-rwn', 'background');
   for (const [selector, background] of [
     ['.rwn-professional .finder-intro h1', finder],
     ['.rwn-professional .finder-intro p', finder],
     ['.rwn-professional .finder-safety', finder],
-    ['.atlas-key', map], ['.atlas-key small', map],
+    ...mapStops.flatMap(background => [['.atlas-key', background], ['.atlas-key small', background]]),
     ['.rwn-professional .about-rwn__heading h2', closing],
     ['.rwn-professional .about-rwn__heading p', closing],
   ]) {

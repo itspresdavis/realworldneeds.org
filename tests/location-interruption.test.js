@@ -20,7 +20,7 @@ const deferred = () => {
 };
 const position = (latitude = 51.5, longitude = -0.1) => ({ coords: { latitude, longitude, accuracy: 1000 } });
 
-function fixture({ country = "United Kingdom", geometry = () => Promise.resolve(true) } = {}) {
+function fixture({ country = "United Kingdom" } = {}) {
   const callbacks = [], effects = [], requests = [];
   const classes = new Set();
   const button = {
@@ -38,7 +38,6 @@ function fixture({ country = "United Kingdom", geometry = () => Promise.resolve(
     document: { getElementById: (id) => id === "locateMe" ? button : null },
     navigator: { geolocation: { getCurrentPosition: (success, failure) => callbacks.push({ success, failure }) } },
     icon: { locate: "" },
-    loadLandGeometry: geometry,
     countryAtCoordinate: () => ({ properties: { NAME: country } }),
     resourceCountryForFeature: (name) => name,
     isLikelyUnitedStatesPoint: () => false,
@@ -108,7 +107,6 @@ for (const outcome of ["resolve", "reject"]) {
     const f = fixture({ country: "United States" });
     f.button.click();
     const success = f.callbacks[0].success(position(40.7, -74));
-    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(f.requests.length, 2);
     f.context.clear();
     const effects = [...f.effects];
@@ -141,29 +139,4 @@ test("an older live-service request cannot overwrite the replacement request", a
   assert.equal(f.state.liveResources[0].id, "new");
   assert.equal(f.state.liveNationalCount, 200);
   assert.deepEqual(f.effects, effects);
-});
-
-for (const available of [true, false]) {
-  test(`clearing while country geometry ${available ? "loads" : "fails"} cannot restore location`, async () => {
-    const pending = deferred();
-    const f = fixture({ geometry: () => pending.promise });
-    f.button.click();
-    const success = f.callbacks[0].success(position());
-    assert.equal(f.state.userLocation, null, "country inference finishes before storing coordinates");
-    f.context.clear();
-    const effects = [...f.effects];
-    pending.resolve(available);
-    await success;
-    assert.equal(f.state.userLocation, null);
-    assert.equal(f.classes.has("is-loading"), false);
-    assert.deepEqual(f.effects, effects, "late geometry must not recenter, select, or announce old location");
-  });
-}
-
-test("a country-data outage still completes the current location request", async () => {
-  const f = fixture({ geometry: () => Promise.resolve(false) });
-  f.button.click();
-  await f.callbacks[0].success(position());
-  assert.equal(f.state.userLocation.lat, 51.5);
-  assert.equal(f.classes.has("is-loading"), false);
 });

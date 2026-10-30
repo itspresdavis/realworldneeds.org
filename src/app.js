@@ -42,8 +42,7 @@ import {
 } from "./utils/privacy.js";
 
 const DEFAULT_RESOURCE = null;
-const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
-let reduceMotion = motionPreference.matches;
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MIN_GLOBE_ZOOM = 0.82;
 // Returned when the globe has no camera yet, so callers treat the point as
 // behind the sphere and simply skip drawing instead of guessing a position.
@@ -238,9 +237,6 @@ let globeLight = null;
 let globeFocusLight = null;
 let globeBaseCameraDistance = 3.2;
 let earthTextureImage = null;
-let earthTextureRequested = false;
-let landGeometryPromise = null;
-let landGeometryReady = false;
 let earthDetailTextureImage = null;
 let earthDetailTextureRequested = false;
 let earthDetailTextureReady = false;
@@ -490,12 +486,8 @@ function shell() {
                 </label>
               </div>
             </div>
-            <div id="globeTouchControls" class="globe-touch-controls" hidden>
-            <button id="toggleGlobeExplore" type="button" aria-controls="globeCanvas" aria-describedby="globeTouchInstructions" aria-pressed="false">Explore globe</button>
-            <p id="globeTouchInstructions" role="status">Swipe to scroll. Choose Explore globe to rotate and zoom.</p>
-          </div>
-          <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
-            <p class="sr-only" id="globeHelp">With a mouse, drag to rotate. On touch screens, choose Explore globe, then drag in any direction or pinch to zoom. Choose Done or press Escape to leave exploration. Outside the globe, swipes always scroll the page. With the globe focused, arrow keys rotate, plus and minus zoom, Home resets the view, and Space plays or pauses rotation. Hold Control or Command while scrolling for precise zoom. Select a service point for details. Higher-detail boundaries and imagery load as you move closer.</p>
+            <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
+            <p class="sr-only" id="globeHelp">Drag left or right to rotate. On touch screens, vertical swipes keep scrolling the page and two fingers zoom the globe. Use plus and minus, or hold Control or Command while scrolling, for precise zoom. Select a service point for details. Higher-detail boundaries and imagery load as you move closer.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
@@ -1358,14 +1350,9 @@ function createGlobeTexture() {
 }
 
 function loadEarthImagery() {
-  if (earthTextureImage || earthTextureRequested) return;
-  earthTextureRequested = true;
   const image = new Image();
   image.decoding = "async";
-  image.onload = async () => {
-    // Publish imagery after the initial land mask settles, avoiding a dark
-    // unmasked ocean frame. The shared geometry request has a bounded fallback.
-    await landGeometryPromise;
+  image.onload = () => {
     earthTextureImage = image;
     if (globeSurface) {
       globeSurface.material.emissive.setHex(0xffffff);
@@ -1373,10 +1360,6 @@ function loadEarthImagery() {
       globeSurface.material.roughness = 0.94;
     }
     refreshGlobeSurface();
-  };
-  image.onerror = () => {
-    earthTextureRequested = false;
-    console.warn("Earth imagery could not be loaded; aid locations remain available.");
   };
   image.src = "/media/earth-blue-marble.jpg";
 }
@@ -1772,7 +1755,6 @@ function reportGlobeUnavailable(message = "Interactive map unavailable on this d
   if (globeUnavailableReported && !retry) return;
   globeUnavailableReported = true;
   const stage = globeStageElement || document.querySelector(".globe-stage");
-  const focusWasInTouchControls = Boolean(document.getElementById("globeTouchControls")?.contains(document.activeElement));
   if (stage) stage.classList.add("is-globe-unavailable");
   const status = document.getElementById("globeReadout");
   if (status) status.textContent = message;
@@ -1782,10 +1764,6 @@ function reportGlobeUnavailable(message = "Interactive map unavailable on this d
   if (fallbackMessage) fallbackMessage.textContent = message;
   const retryButton = document.getElementById("retryGlobe");
   if (retryButton) retryButton.hidden = !retry;
-  if (focusWasInTouchControls) {
-    const recoveryControl = retry ? retryButton : fallback?.querySelector("a");
-    recoveryControl?.focus({ preventScroll: true });
-  }
 }
 
 function resetGlobeContextResources() {
@@ -1844,8 +1822,6 @@ function recoverGlobeContext() {
       reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
       return;
     }
-    loadEarthImagery();
-    loadLandGeometry();
     rebuildCountryBorders();
     syncGlobePointLayer();
     wakeGlobe();
@@ -2045,12 +2021,12 @@ function updateGlobeReadout(now = performance.now()) {
     ? "detailed + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
-    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} mapped listings · ${zoomLabel} · ${detailLabel}</span>`
+    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`
     : hasMapCoordinates(resource) && state.focusPoint
-    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${isExactServiceSite(resource) ? `${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")}` : "Coverage marker"} · ${zoomLabel}</span>`
+    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
     : state.focusedCountry && state.focusPoint
-      ? `<strong>${state.focusedCountry}</strong><span>Country view · ${zoomLabel}</span>`
-    : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} mapped listings · ${zoomLabel} · ${detailLabel}</span>`;
+      ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
+    : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
@@ -2370,7 +2346,7 @@ function selectCountryFromPointer(event) {
 }
 
 async function loadDetailGeometry() {
-  if (!globeRenderer || state.detailGeometryRequested) return;
+  if (state.detailGeometryRequested) return;
   state.detailGeometryRequested = true;
   const status = document.getElementById("globeDetailStatus");
   if (navigator.connection?.saveData) {
@@ -2390,46 +2366,27 @@ async function loadDetailGeometry() {
   }
 }
 
-function loadLandGeometry() {
-  if (landGeometryReady) return Promise.resolve(true);
-  if (landGeometryPromise) return landGeometryPromise;
-  // Location lookup and map recovery share one request. Bound a stalled body as
-  // well as its headers so explicit location still works when map data is down.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  landGeometryPromise = (async () => {
-    try {
-      const response = await fetch("/data/countries.geojson", { signal: controller.signal });
-      if (!response.ok) throw new Error(`Map data returned ${response.status}`);
-      const data = await response.json();
-      if (!Array.isArray(data.features) || !data.features.length) throw new Error("Map data has no country features");
-      const rings = data.features.flatMap((feature) => extractRings(feature.geometry));
-      state.countryFeatures = data.features;
-      state.landRings = rings;
-      landGeometryReady = true;
-      if (globeRenderer) {
-        rebuildCountryBorders();
-        updateGlobeLandMask();
-        wakeGlobe();
-      }
-      if (state.userLocation && !state.userCountry) {
-        const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
-        state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
-        updateFilters();
-      }
-      const resource = selectedResource();
-      if (resource && state.focusPoint) focusGlobeOn(resource);
-      return true;
-    } catch (error) {
-      console.error("Natural Earth geometry could not be loaded.", error);
-      notify("Base map could not be loaded; aid locations remain available.");
-      return false;
-    } finally {
-      clearTimeout(timeout);
-      landGeometryPromise = null;
+async function loadLandGeometry() {
+  try {
+    const response = await fetch("/data/countries.geojson");
+    if (!response.ok) throw new Error(`Map data returned ${response.status}`);
+    const data = await response.json();
+    state.countryFeatures = data.features;
+    state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
+    rebuildCountryBorders();
+    updateGlobeLandMask();
+    wakeGlobe();
+    if (state.userLocation && !state.userCountry) {
+      const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
+      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
+      updateFilters();
     }
-  })();
-  return landGeometryPromise;
+    const resource = selectedResource();
+    if (resource && state.focusPoint) focusGlobeOn(resource);
+  } catch (error) {
+    console.error("Natural Earth geometry could not be loaded.", error);
+    notify("Base map could not be loaded; aid locations remain available.");
+  }
 }
 
 function bindEvents() {
@@ -2722,9 +2679,6 @@ function bindEvents() {
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
       if (requestGeneration !== locationRequestGeneration) return;
-      // Fallback search needs country boundaries only after location is granted.
-      await loadLandGeometry();
-      if (requestGeneration !== locationRequestGeneration) return;
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
@@ -2760,23 +2714,7 @@ function bindEvents() {
 
   const canvas = document.getElementById("globeCanvas");
   const globeStage = canvas.closest(".globe-stage");
-  const setGlobeRotation = (enabled) => {
-    state.autoRotate = enabled;
-    state.interactionUntil = 0;
-    const button = document.getElementById("toggleMotion");
-    button.innerHTML = enabled ? icon.pause : icon.play;
-    button.title = enabled ? "Pause globe rotation" : "Resume globe rotation";
-    button.setAttribute("aria-label", button.title);
-    wakeGlobe();
-  };
-  motionPreference.addEventListener("change", (event) => {
-    reduceMotion = event.matches;
-    if (!reduceMotion) return;
-    state.velocityLon = 0;
-    state.velocityLat = 0;
-    setGlobeRotation(false);
-  });
-  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-touch-controls, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
+  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
 
   const prepareGlobeInteraction = () => {
     wakeGlobe();
@@ -2847,17 +2785,7 @@ function bindEvents() {
   globeStage.addEventListener("lostpointercapture", (event) => finishGlobePointer(event, true));
 
   let touchState = null;
-  let touchExploring = false;
-  let wheelOwner = null;
-  let lastWheelTime = 0;
-  const touchControls = document.getElementById("globeTouchControls");
-  const exploreButton = document.getElementById("toggleGlobeExplore");
-  const touchInstructions = document.getElementById("globeTouchInstructions");
-  const coarsePointer = window.matchMedia("(any-pointer: coarse)");
-  const touchModeAvailable = () => window.innerWidth <= 900 || coarsePointer.matches || navigator.maxTouchPoints > 0;
-  const isTouchSurface = (target) => target instanceof Element && !isGlobeChrome(target)
-    && (target === canvas || Boolean(target.closest(".globe-pin")));
-  const mapTouches = (touches) => Array.from(touches).filter((touch) => isTouchSurface(touch.target));
+  const mapTouches = (touches) => Array.from(touches).filter((touch) => globeStage.contains(touch.target) && !isGlobeChrome(touch.target));
   const touchListDistance = (touches) => Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
   const beginTouch = (touch, hadMultiple = false) => ({
     identifier: touch.identifier,
@@ -2876,20 +2804,16 @@ function bindEvents() {
     prepareGlobeInteraction();
   };
   const preventNativePagePinch = (event) => {
-    if (touchExploring && touchState?.intent === "pinch") event.preventDefault();
+    if (touchState?.intent === "pinch") event.preventDefault();
   };
   globeStage.addEventListener("gesturestart", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gesturechange", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gestureend", preventNativePagePinch, { passive: false });
 
   globeStage.addEventListener("touchstart", (event) => {
+    if (isGlobeChrome(event.target)) return;
     const touches = mapTouches(event.touches);
     state.touching = touches.length > 0;
-    // Native scrolling and page magnification own touch until explicitly enabled.
-    // Keep stationary pin buttons mounted, without taking over their click.
-    if (!touchExploring) return;
-    if (touches.length !== event.touches.length) { resetGlobeInput(); return; }
-    if (!isTouchSurface(event.target)) return;
     if (touches.length > 1) {
       beginTouchPinch(touches);
       event.preventDefault();
@@ -2898,9 +2822,8 @@ function bindEvents() {
     }
   }, { passive: false });
   globeStage.addEventListener("touchmove", (event) => {
-    if (!touchExploring || !touchState) return;
+    if (!touchState) return;
     const touches = mapTouches(event.touches);
-    if (touches.length !== event.touches.length) { resetGlobeInput(); return; }
     if (touches.length > 1) {
       if (touchState.intent !== "pinch") beginTouchPinch(touches);
       state.targetZoom = pinchZoom(touchState.pinchStartZoom, touchState.pinchStartDistance,
@@ -2918,12 +2841,15 @@ function bindEvents() {
     }
     if (Math.hypot(touch.clientX - touchState.startX, touch.clientY - touchState.startY) > 6) touchState.moved = true;
     if (touchState.intent === "pending") {
-      if (!touchState.moved) return;
-      touchState.intent = "rotate";
+      const intent = classifyGlobeDragIntent(touch.clientX - touchState.startX, touch.clientY - touchState.startY);
+      touchState.intent = intent;
+      if (intent !== "rotate") return;
       state.dragging = true;
       state.pinching = false;
       markGlobeEngaged();
       prepareGlobeInteraction();
+      touchState.lastX = touch.clientX;
+      touchState.lastY = touch.clientY;
     }
     if (touchState.intent !== "rotate") return;
     const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
@@ -2937,10 +2863,9 @@ function bindEvents() {
     event.preventDefault();
   }, { passive: false });
   globeStage.addEventListener("touchend", (event) => {
+    if (!touchState) return;
     const touches = mapTouches(event.touches);
     state.touching = touches.length > 0;
-    if (!touchExploring || !touchState) { wakeGlobe(); return; }
-    if (touches.length !== event.touches.length) { resetGlobeInput(); return; }
     if (touches.length > 1) { beginTouchPinch(touches); return; }
     state.dragging = false;
     state.pinching = false;
@@ -2977,63 +2902,18 @@ function bindEvents() {
     lastWheelTime = 0;
     wakeGlobe();
   };
-  const setTouchExploring = (enabled) => {
-    resetGlobeInput();
-    touchExploring = Boolean(enabled && touchModeAvailable() && !globeContextLost
-      && !globeStage.classList.contains("is-globe-unavailable"));
-    globeStage.classList.toggle("is-touch-exploring", touchExploring);
-    exploreButton.setAttribute("aria-pressed", String(touchExploring));
-    exploreButton.textContent = touchExploring ? "Done" : "Explore globe";
-    exploreButton.setAttribute("aria-label", touchExploring ? "Done exploring globe" : "Explore globe");
-    touchInstructions.textContent = touchExploring
-      ? "Drag in any direction. Pinch to zoom. Choose Done to scroll."
-      : "Swipe to scroll. Choose Explore globe to rotate and zoom.";
-  };
-  let touchViewportWidth = window.innerWidth;
-  const syncTouchControls = () => {
-    const available = touchModeAvailable();
-    const widthChanged = touchViewportWidth !== window.innerWidth;
-    touchViewportWidth = window.innerWidth;
-    if (!available || widthChanged) setTouchExploring(false);
-    else resetGlobeInput();
-    // Never leave keyboard focus on a control hidden by a capability change.
-    if (!available && touchControls.contains(document.activeElement)) canvas.focus({ preventScroll: true });
-    touchControls.hidden = !available;
-  };
-  const leaveTouchExploration = () => setTouchExploring(false);
-  exploreButton.addEventListener("click", () => {
-    setTouchExploring(!touchExploring);
-    if (!touchExploring) return;
-    const toolbar = touchControls.getBoundingClientRect();
-    const surface = canvas.getBoundingClientRect();
-    const headerBottom = Math.max(0, document.querySelector("header")?.getBoundingClientRect().bottom || 0);
-    if (toolbar.top < headerBottom + 8 || surface.top > window.innerHeight - 100) {
-      window.scrollTo({ top: window.scrollY + toolbar.top - headerBottom - 12, behavior: "instant" });
-    }
-  });
-  window.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || !touchExploring) return;
-    const restoreFocus = globeStage.contains(document.activeElement);
-    leaveTouchExploration();
-    if (restoreFocus) exploreButton.focus({ preventScroll: true });
-    event.preventDefault();
-  });
-  document.addEventListener("touchstart", (event) => {
-    if (touchExploring && touchState && mapTouches(event.touches).length !== event.touches.length) resetGlobeInput();
-  }, { passive: true });
   globeStage.addEventListener("touchcancel", resetGlobeInput, { passive: true });
-  canvas.addEventListener("webglcontextlost", leaveTouchExploration);
-  window.addEventListener("blur", leaveTouchExploration);
-  window.addEventListener("pagehide", leaveTouchExploration);
-  window.addEventListener("popstate", leaveTouchExploration);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) leaveTouchExploration(); });
-  window.addEventListener("resize", syncTouchControls, { passive: true });
-  coarsePointer.addEventListener("change", syncTouchControls);
-  touchControls.hidden = !touchModeAvailable();
+  canvas.addEventListener("webglcontextlost", resetGlobeInput);
+  window.addEventListener("blur", resetGlobeInput);
+  window.addEventListener("pagehide", resetGlobeInput);
+  window.addEventListener("popstate", resetGlobeInput);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) resetGlobeInput(); });
 
   // Wheel ownership is decided per gesture from its shape, so the page keeps
   // scrolling normally and the map only claims the wheel when the visitor
   // clearly means the map. See src/utils/globe-zoom.js for the rules.
+  let wheelOwner = null;
+  let lastWheelTime = 0;
   globeStage.addEventListener("wheel", (event) => {
     const now = event.timeStamp || performance.now();
     // Never interfere with the globe's own scrollable chrome.
@@ -3083,7 +2963,11 @@ function bindEvents() {
       return;
     }
     else if (event.key === " ") {
-      setGlobeRotation(!state.autoRotate);
+      state.autoRotate = !state.autoRotate;
+      const motionButton = document.getElementById("toggleMotion");
+      motionButton.innerHTML = state.autoRotate ? icon.pause : icon.play;
+      motionButton.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
+      motionButton.setAttribute("aria-label", motionButton.title);
       event.preventDefault();
       return;
     }
@@ -3122,8 +3006,13 @@ function bindEvents() {
     state.interactionUntil = performance.now() + 5000;
   });
   document.getElementById("regionFocus").addEventListener("change", (event) => focusRegion(event.target.value, true));
-  document.getElementById("toggleMotion").addEventListener("click", () => {
-    setGlobeRotation(!state.autoRotate);
+  document.getElementById("toggleMotion").addEventListener("click", (event) => {
+    wakeGlobe();
+    state.autoRotate = !state.autoRotate;
+    event.currentTarget.innerHTML = state.autoRotate ? icon.pause : icon.play;
+    event.currentTarget.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
+    event.currentTarget.setAttribute("aria-label", event.currentTarget.title);
+    state.interactionUntil = 0;
   });
   document.getElementById("retryGlobe")?.addEventListener("click", () => {
     const context = globeRenderer?.getContext();
@@ -3290,10 +3179,9 @@ updateFilters();
 const searchPreparation = warmSearchIndex(resources);
 bindEvents();
 writeFinderHistory();
-if (initThreeGlobe()) {
-  loadEarthImagery();
-  loadLandGeometry();
-}
+initThreeGlobe();
+loadEarthImagery();
+loadLandGeometry();
 if (requestedResource && requestedResource === initialResource) {
   const resource = resources.find((item) => item.id === requestedResource);
   if (resource) focusGlobeOn(resource);

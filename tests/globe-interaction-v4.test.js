@@ -23,25 +23,20 @@ test("build output preserves the source globe profile without post-build patchin
   assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288/);
 });
 
-test("explicit touch exploration separates native page gestures from two-axis globe manipulation", async () => {
+test("single-touch map ownership distinguishes scroll, rotation and pinch", async () => {
   const app = await text("src/app.js");
-  const css = await text("scripts/globe-css-contract.mjs");
+  const css = await text("dist/src/clarity.css");
   assert.match(app, /event\.pointerType === "touch" \|\| event\.button !== 0/);
-  assert.match(app, /if \(!touchExploring\) return/);
-  assert.match(app, /if \(!touchState\.moved\) return/);
+  assert.match(app, /classifyGlobeDragIntent/);
   assert.match(app, /intent !== "rotate"/);
   assert.match(app, /setPointerCapture\(event\.pointerId\)/);
   assert.match(app, /mapTouches\(event\.touches\)/);
   assert.match(app, /lostpointercapture/);
   assert.match(app, /touchcancel", resetGlobeInput/);
-  assert.match(app, /visibilitychange.*leaveTouchExploration/);
+  assert.match(app, /visibilitychange.*resetGlobeInput/);
   assert.match(css, /RWN globe touch-surface contract/);
-  assert.match(css, /\.rwn-professional \.globe-stage \{ touch-action: pan-y pinch-zoom; overscroll-behavior-y: auto; \}/);
-  assert.match(css, /\.rwn-professional \.globe-pin \{ touch-action: pan-y pinch-zoom; \}/);
-  assert.match(css, /\.globe-stage\.is-touch-exploring \.globe-canvas,/);
-  assert.match(css, /\.globe-stage\.is-touch-exploring \.globe-pin \{ touch-action: none; \}/);
-  assert.doesNotMatch(css, /\.globe-stage\.is-touch-exploring \{ touch-action: none/);
-  assert.match(css, /\.globe-touch-controls\[hidden\]/);
+  assert.match(css, /\.rwn-professional \.globe-stage \{ touch-action: pan-y; overscroll-behavior-y: auto; \}/);
+  assert.match(css, /\.rwn-professional \.globe-pin \{ touch-action: pan-y; \}/);
 });
 
 test("service point picking scales from screen space instead of a fixed world radius", async () => {
@@ -62,15 +57,4 @@ test("the build no longer rewrites application source after bundling", async () 
   const pkg = JSON.parse(await text("package.json"));
   assert.doesNotMatch(pkg.scripts.build, /globe-production|globe-touch-production/);
   assert.doesNotMatch(pkg.scripts.check, /globe-production|globe-touch-production/);
-});
-
-
-test("built CSS preserves both inactive page gestures and explicit canvas ownership", async () => {
-  const css = await text("dist/src/clarity.css");
-  assert.equal(css.split("/* RWN globe touch-surface contract */").length - 1, 1);
-  assert.match(css, /\.rwn-professional \.globe-stage \{ touch-action: pan-y pinch-zoom; overscroll-behavior-y: auto; \}/);
-  assert.match(css, /\.rwn-professional \.globe-pin \{ touch-action: pan-y pinch-zoom; \}/);
-  assert.match(css, /\.globe-stage\.is-touch-exploring \.globe-canvas,/);
-  assert.match(css, /\.globe-stage\.is-touch-exploring \.globe-pin \{ touch-action: none; \}/);
-  assert.doesNotMatch(css, /\.globe-stage\.is-touch-exploring \{ touch-action: none/);
 });

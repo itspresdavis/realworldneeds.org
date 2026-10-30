@@ -155,12 +155,12 @@ export function installProfessionalPresentation() {
   document.documentElement.classList.add("rwn-professional");
   document.body.classList.add("rwn-professional", "rwn-atlas");
   const globe = document.querySelector('.globe-stage');
-  setText(".globe-meta > div:first-child strong", "Service map");
+  setText(".globe-meta > div:first-child strong", "Explore the map");
   if (globe && !globe.querySelector('.atlas-key')) {
     const key = document.createElement('div');
     key.className = 'atlas-key';
     key.setAttribute('aria-label', 'Map marker key');
-    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small><span class="atlas-key__gesture">Drag to rotate; use + / − to zoom.</span> Select a point to see the provider, address and source.</small>';
+    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Select a point to check its address and source.</small>';
     globe.append(key);
   }
   const intro = document.querySelector('.finder-intro');

@@ -137,26 +137,6 @@ async function canvasGeometry(client, recenter = true) {
   })()`);
 }
 
-async function tapControl(client, id) {
-  await evaluate(client, `document.getElementById(${JSON.stringify(id)}).scrollIntoView({block:'nearest',behavior:'instant'})`);
-  await sleep(100);
-  const point = await evaluate(client, `(() => {
-    const node=document.getElementById(${JSON.stringify(id)});
-    const r=node.getBoundingClientRect(); const x=r.left+r.width/2,y=r.top+r.height/2;
-    return {x,y,visible:r.width>0 && r.height>0 && y>=0 && y<innerHeight && node.contains(document.elementFromPoint(x,y))};
-  })()`);
-  if (!point.visible) throw new Error(`Touch control ${id} is hidden or covered: ${JSON.stringify(point)}`);
-  await touch(client, "touchStart", [touchPoint(point.x, point.y)]);
-  await touch(client, "touchEnd", []);
-  await sleep(120);
-}
-
-async function setExplore(client, enabled) {
-  const active = await evaluate(client, "document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed')==='true'");
-  if (active !== enabled) await tapControl(client, "toggleGlobeExplore");
-  await waitForExpression(client, `document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed') === '${enabled}'`, "Explore mode did not change after its native button tap.");
-}
-
 async function cropDigest(client, rect) {
   const width = Math.max(1, Math.min(390, rect.width));
   const height = Math.max(1, Math.min(560, rect.height));
@@ -256,10 +236,6 @@ async function run() {
       window.__rwnInputTimings = [];
       window.__rwnFrameSamples = {};
       window.__rwnInputTrace = [];
-      window.__rwnTouchDefaults = [];
-      for(const type of ['touchstart','touchmove']) document.addEventListener(type,event=>{
-        window.__rwnTouchDefaults.push({type,target:event.target.id || event.target.className,prevented:event.defaultPrevented});
-      },{passive:true});
       window.__rwnScrollPreconditions = [];
       window.__rwnScrollTrace = [];
       const recordScroll = (type) => {
@@ -328,7 +304,7 @@ async function run() {
     const vertical = await canvasGeometry(client, false);
     observations.verticalStart = vertical;
     if (!vertical.point) throw new Error("No unobstructed WebGL touch point was available.");
-    if (vertical.stageTouchAction !== "pan-y pinch-zoom" || vertical.canvasTouchAction !== "pan-y pinch-zoom") throw new Error(`Inactive map must allow page scrolling and magnification: ${JSON.stringify(vertical)}`);
+    if (vertical.stageTouchAction !== "pan-y" || vertical.canvasTouchAction !== "pan-y") throw new Error(`Map touch policy is not pan-y: ${JSON.stringify(vertical)}`);
     await touch(client, "touchStart", [touchPoint(vertical.point.x, vertical.point.y)]);
     for (let i = 1; i <= 5; i += 1) {
       await touch(client, "touchMove", [touchPoint(vertical.point.x + 2, vertical.point.y - i * 22)]);
@@ -341,63 +317,6 @@ async function run() {
     if (verticalEnd.moving) throw new Error("Vertical page swipe incorrectly left the globe moving.");
 
     observations.vertical = verticalEnd;
-    phase = "native-page-pinch";
-    const pagePinch = await canvasGeometry(client);
-    await evaluate(client, "window.__rwnTouchDefaults=[]");
-    const pageScaleBefore = await evaluate(client, "visualViewport.scale");
-    const pageZoomBefore = await evaluate(client, "document.getElementById('globeReadout').innerText");
-    await client.call("Input.synthesizePinchGesture", { x:pagePinch.point.x, y:pagePinch.point.y, scaleFactor:1.4, relativeSpeed:300, gestureSourceType:"touch" });
-    await sleep(250);
-    const pageScaleAfter = await evaluate(client, "visualViewport.scale");
-    const pagePinchPolicy = await evaluate(client, `(() => {
-      const actions=[];let n=document.getElementById('globeCanvas');
-      while(n){actions.push(getComputedStyle(n).touchAction);n=n.parentElement;}
-      return {actions,viewport:document.querySelector('meta[name=viewport]').content,events:window.__rwnTouchDefaults.filter(e=>e.target==='globeCanvas')};
-    })()`);
-    if (pagePinchPolicy.actions.some(action=>!/(auto|manipulation|pinch-zoom)/.test(action))
-      || /user-scalable\s*=\s*no|maximum-scale\s*=\s*1(?:[,. ]|$)/i.test(pagePinchPolicy.viewport)
-      || !pagePinchPolicy.events.length || pagePinchPolicy.events.some(event=>event.prevented)) throw new Error(`Inactive globe restricts native page magnification: ${JSON.stringify(pagePinchPolicy)}`);
-    let nativePageMagnification = pageScaleAfter > pageScaleBefore + .1;
-    let baselineScale;
-    if (!nativePageMagnification) {
-      // Some headless Chromium builds emit the native touches but do not run
-      // page-scale gestures. Compare the ordinary page margin, never silently
-      // treat an unchanged map scale as proof that browser zoom works.
-      await client.call("Input.synthesizePinchGesture", {x:5,y:400,scaleFactor:2,relativeSpeed:150,gestureSourceType:"touch"});
-      await sleep(250);
-      baselineScale=await evaluate(client,"visualViewport.scale");
-      if (baselineScale > pageScaleBefore + .1) throw new Error("Native page zoom worked outside the map but was blocked over the inactive globe.");
-    }
-    if (await evaluate(client, "document.getElementById('globeReadout').innerText") !== pageZoomBefore) throw new Error("Native page pinch also manipulated the inactive globe.");
-    observations.pagePinch = { pageScaleBefore,pageScaleAfter,baselineScale,nativePageMagnification,
-      limitation:nativePageMagnification?null:"This headless Chromium backend did not magnify the ordinary page baseline; permissive CSS, viewport and unprevented native touches are verified.",policy:pagePinchPolicy };
-    await client.call("Emulation.setPageScaleFactor", { pageScaleFactor:1 });
-    await canvasGeometry(client);
-
-    phase = "explore-activation";
-    await setExplore(client, true);
-    const exploring = await canvasGeometry(client);
-    if (exploring.stageTouchAction !== "pan-y pinch-zoom" || exploring.canvasTouchAction !== "none") throw new Error(`Explore must own the canvas without locking its ancestor: ${JSON.stringify(exploring)}`);
-    if (!await evaluate(client, "document.getElementById('toggleMotion').getAttribute('aria-label') === 'Resume globe rotation'")) throw new Error("Explore unexpectedly enabled automatic rotation.");
-
-    phase = "vertical-globe-drag";
-    const activeVertical = await canvasGeometry(client);
-    const verticalBefore = await cropDigest(client, activeVertical.rect);
-    const activeVerticalStart = await canvasGeometry(client, false);
-    if (!sameCaptureGeometry(activeVertical, activeVerticalStart)) throw new Error("Globe moved before vertical rotation comparison.");
-    await touch(client, "touchStart", [touchPoint(activeVertical.point.x, activeVertical.point.y)]);
-    for (let i=1;i<=5;i++) {
-      await touch(client, "touchMove", [touchPoint(activeVertical.point.x+2, activeVertical.point.y+i*12)]);
-      await sleep(30);
-    }
-    if (!await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Active vertical touch did not rotate the globe.");
-    await touch(client, "touchEnd", []);
-    await sleep(250);
-    const activeVerticalEnd = await canvasGeometry(client, false);
-    if (Math.abs(activeVerticalEnd.scrollY-activeVerticalStart.scrollY)>2) throw new Error("Active vertical globe drag leaked into page scrolling.");
-    if (verticalBefore === await cropDigest(client, activeVertical.rect)) throw new Error("Active vertical drag left the rendered globe unchanged.");
-    observations.activeVertical = { scrollBefore:activeVerticalStart.scrollY,scrollAfter:activeVerticalEnd.scrollY,renderChanged:true };
-
     phase = "horizontal-drag";
     let horizontal = await canvasGeometry(client);
     const captureGeometry = horizontal;
@@ -482,7 +401,7 @@ async function run() {
     await evaluate(client, "window.__rwnSamplingFrames=false");
     if (await evaluate(client, "document.querySelector('.globe-stage').classList.contains('is-globe-moving')")) throw new Error("Pinch-to-drag transition left the globe moving.");
 
-    phase = "cancel-restart-reduced-motion";
+    phase = "cancel-restart";
     const closeGestureProbe = await installGlobeGestureProbe(client);
     try {
       const cancelled = await canvasGeometry(client);
@@ -499,49 +418,21 @@ async function run() {
       const settled=await evaluate(client,"window.__rwnGestureFrame");
       if(settled.dragging || settled.touching || settled.pinching || settled.pointers || settled.velocityLon || settled.velocityLat
         || settled.rotationLon!==reset.rotationLon || settled.rotationLat!==reset.rotationLat) throw new Error(`Cancellation restarted movement: ${JSON.stringify({reset,settled})}`);
-      await client.call("Emulation.setEmulatedMedia", { features:[{name:"prefers-reduced-motion",value:"reduce"}] });
-      await waitForExpression(client,"window.__rwnGestureFrame?.reducedMotion === true","The live reduced-motion preference did not reach the globe runtime.");
       await touch(client, "touchStart", [touchPoint(cancelled.point.x, cancelled.point.y)]);
-      await touch(client, "touchMove", [touchPoint(cancelled.point.x+25, cancelled.point.y+35)]);
-      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${settled.frame} && window.__rwnGestureFrame.dragging && window.__rwnGestureFrame.moving`,"Direct touch rotation stopped working after cancellation/reduced-motion change.");
+      await touch(client, "touchMove", [touchPoint(cancelled.point.x+25, cancelled.point.y+2)]);
+      await touch(client, "touchMove", [touchPoint(cancelled.point.x+50, cancelled.point.y+4)]);
+      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${settled.frame} && window.__rwnGestureFrame.dragging && window.__rwnGestureFrame.moving`,"Direct touch rotation stopped working after cancellation.");
       const restarted=await evaluate(client,"window.__rwnGestureFrame");
-      if(!restarted.reducedMotion || Math.abs(restarted.rotationLon-settled.rotationLon)<.001) throw new Error(`Post-cancel reduced-motion drag did not actually rotate: ${JSON.stringify({settled,restarted})}`);
+      if(Math.abs(restarted.rotationLon-settled.rotationLon)<.001) throw new Error(`Post-cancel horizontal drag did not actually rotate: ${JSON.stringify({settled,restarted})}`);
       await touch(client, "touchEnd", []);
-      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${restarted.frame} && !window.__rwnGestureFrame.moving && !document.querySelector('.globe-stage').classList.contains('is-globe-moving')`,"Reduced-motion touch release did not settle on a completed frame.");
+      await waitForExpression(client,`window.__rwnGestureFrame?.frame>${restarted.frame} && !window.__rwnGestureFrame.moving && !document.querySelector('.globe-stage').classList.contains('is-globe-moving')`,"Touch release did not settle on a completed frame.");
       const released=await evaluate(client,"window.__rwnGestureFrame");
       if(released.dragging || released.touching || released.pinching || released.pointers || released.velocityLon || released.velocityLat
-        || released.rotationLon!==restarted.rotationLon || released.rotationLat!==restarted.rotationLat) throw new Error(`Reduced-motion release retained movement: ${JSON.stringify({restarted,released})}`);
-      await client.call("Emulation.setEmulatedMedia", { features:[{name:"prefers-reduced-motion",value:"no-preference"}] });
-      observations.cancelAndReducedMotion = {cancelState,settled,restarted,released};
+        || released.rotationLon!==restarted.rotationLon || released.rotationLat!==restarted.rotationLat) throw new Error(`Touch release retained movement: ${JSON.stringify({restarted,released})}`);
+      observations.cancelAndRestart = {cancelState,settled,restarted,released};
     } finally {
       await closeGestureProbe();
     }
-
-    phase = "explore-outside-scroll-and-exit";
-    await evaluate(client, "document.getElementById('globeTouchInstructions').scrollIntoView({block:'center',behavior:'instant'})");
-    await sleep(120);
-    const outside = await evaluate(client, `(() => {const n=document.getElementById('globeTouchInstructions'),r=n.getBoundingClientRect();return {x:r.left+r.width*.7,y:r.top+r.height*.7,scrollY,hit:n.contains(document.elementFromPoint(r.left+r.width*.7,r.top+r.height*.7))};})()`);
-    if (!outside.hit) throw new Error("Explore instructions are covered; outside scrolling cannot be tested.");
-    await touch(client, "touchStart", [touchPoint(outside.x,outside.y)]);
-    for(let i=1;i<=5;i++){await touch(client,"touchMove",[touchPoint(outside.x,outside.y-i*18)]);await sleep(25);}
-    await touch(client,"touchEnd",[]);
-    await sleep(250);
-    const outsideEnd=await evaluate(client,"({scrollY,active:document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed')})");
-    if(Math.abs(outsideEnd.scrollY-outside.scrollY)<30 || outsideEnd.active!=="true") throw new Error(`Outside swipes must scroll while Explore remains available: ${JSON.stringify({outside,outsideEnd})}`);
-    await setExplore(client,false);
-    const afterDone=await canvasGeometry(client);
-    if(afterDone.canvasTouchAction!=="pan-y pinch-zoom") throw new Error("Done did not restore native page touch policy.");
-    await touch(client,"touchStart",[touchPoint(afterDone.point.x,afterDone.point.y)]);
-    for(let i=1;i<=5;i++){await touch(client,"touchMove",[touchPoint(afterDone.point.x,afterDone.point.y-i*18)]);await sleep(25);}
-    await touch(client,"touchEnd",[]);await sleep(250);
-    if(Math.abs(await evaluate(client,"scrollY")-afterDone.scrollY)<30) throw new Error("Page swipes did not resume after Done.");
-    await setExplore(client,true);
-    await evaluate(client,"document.getElementById('globeCanvas').focus({preventScroll:true})");
-    await client.call("Input.dispatchKeyEvent",{type:"keyDown",key:"Escape",code:"Escape",windowsVirtualKeyCode:27});
-    await client.call("Input.dispatchKeyEvent",{type:"keyUp",key:"Escape",code:"Escape",windowsVirtualKeyCode:27});
-    if(!await evaluate(client,"document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed')==='false' && document.activeElement.id==='toggleGlobeExplore'")) throw new Error("Native Escape did not exit and restore control focus.");
-    observations.exits = { doneRestoredScroll:true,escapeRestoredFocus:true,outsideScroll:true };
-    await setExplore(client,true);
 
     phase = "canvas-touch-picking";
     // Use the reset globe centre (land in western Africa) for an actual touch
@@ -590,25 +481,8 @@ async function run() {
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, screenWidth: 844, screenHeight: 390 });
     await sleep(450);
-    if (!await evaluate(client,"document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed')==='false'")) throw new Error("Landscape width change retained stale Explore ownership.");
-    await setExplore(client,true);
-    await canvasGeometry(client);
-    const landscapeExit = await evaluate(client,`(() => {const b=document.getElementById('toggleGlobeExplore'),r=b.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,visible:r.top>=0 && r.bottom<=innerHeight && b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};})()`);
-    if(!landscapeExit.visible) throw new Error(`Done is trapped offscreen in landscape: ${JSON.stringify(landscapeExit)}`);
-    await setExplore(client,false);
     const landscape = await evaluate(client, `(() => { const r=document.querySelector('.globe-stage')?.getBoundingClientRect(); return { overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth), width:r?.width||0, height:r?.height||0, viewportWidth:innerWidth }; })()`);
     if (landscape.overflow > 8 || !landscape.width || !landscape.height || landscape.width > landscape.viewportWidth + 8) throw new Error(`Landscape globe layout failed: ${JSON.stringify(landscape)}`);
-    await client.call("Emulation.setDeviceMetricsOverride", { width: 640, height: 320, deviceScaleFactor: 2, mobile: true, screenWidth: 640, screenHeight: 320 });
-    await sleep(300);
-    await setExplore(client,true);
-    await canvasGeometry(client);
-    const shortLandscape = await evaluate(client,`(() => {
-      const b=document.getElementById('toggleGlobeExplore'),r=b.getBoundingClientRect(),c=document.getElementById('globeCanvas').getBoundingClientRect();
-      return {top:r.top,bottom:r.bottom,canvasHeight:c.height,visible:r.top>=0 && r.bottom<=innerHeight && b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};
-    })()`);
-    if(!shortLandscape.visible || shortLandscape.canvasHeight<100) throw new Error(`Short landscape cannot reach Done or use the canvas: ${JSON.stringify(shortLandscape)}`);
-    await setExplore(client,false);
-    observations.landscape = { regular:landscapeExit,short:shortLandscape };
     const performanceReport = await evaluate(client, `(() => ({
       readyMs: ${readyMs},
       longTasks: window.__rwnLongTasks || [],
@@ -689,7 +563,7 @@ async function run() {
     await waitForExpression(client, `!!document.querySelector('[data-saved-remove="${serviceId}"]')`, "Saved service was lost after leaving and returning.");
     if (exceptions.length) throw new Error(`Mobile service journey emitted uncaught exceptions: ${exceptions.slice(0,3).join(" | ")}`);
     console.log("Connected mobile journey passed: globe touch interaction → search → service → save → Back restores query → leave and return to Saved.");
-    console.log(`RWN globe touch QA passed: native page scrolling and permissive magnification policy, explicit Explore/Done, two-axis rotation without scroll leakage, Escape/outside scrolling, cancellation/reduced motion, canvas touch picking, pinch-to-drag recovery, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
+    console.log(`RWN globe touch QA passed: native vertical scroll, horizontal rotation, canvas touch picking, pinch-to-drag recovery, prompt target stabilization, pinch zoom, ${deep.zoom.toFixed(2)}x mobile detail, DPR/layout budget, and landscape resize.`);
   } catch (error) {
     if (phase === "map-presentation-readiness") {
       // A page/CDP timeout must reach finally without asking that same stalled

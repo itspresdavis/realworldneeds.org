@@ -15,7 +15,7 @@ test("production globe starts calm, zooms deeply, and preserves ordinary page sc
   assert.match(app, /minimumCameraDistance/);
   assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288, window\.innerWidth <= 600 \? 112 : 180\)/);
   assert.match(app, /pointPickThresholdWorld/);
-  assert.match(app, /if \(!touchExploring\) return/);
+  assert.match(app, /classifyGlobeDragIntent/);
 
   // Wheel ownership is resolved per gesture by classifyWheelIntent. The
   // invariant that matters is that the listener returns without calling

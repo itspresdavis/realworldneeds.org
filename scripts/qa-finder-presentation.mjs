@@ -87,13 +87,7 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         pins: rect('.globe-pin-layer'),
         controls: rect('.globe-controls'),
         webgl: !document.querySelector('.globe-stage').classList.contains('is-globe-unavailable'),
-        touch: (() => {
-          const toolbar = document.getElementById('globeTouchControls');
-          const button = document.getElementById('toggleGlobeExplore');
-          const instruction = document.getElementById('globeTouchInstructions');
-          if (!toolbar || !button || !instruction) return null;
-          return { visible:!toolbar.hidden, toolbar:rect('#globeTouchControls'), button:rect('#toggleGlobeExplore'), label:button.textContent.trim(), pressed:button.getAttribute('aria-pressed'), stageAction:getComputedStyle(document.querySelector('.globe-stage')).touchAction, canvasAction:getComputedStyle(document.querySelector('.globe-canvas')).touchAction, buttonContrast:(${renderedTextContrast.toString()})(button), instructionContrast:(${renderedTextContrast.toString()})(instruction) };
-        })(),
+        canvasTouchAction: getComputedStyle(document.querySelector('.globe-canvas')).touchAction,
         targets: [...document.querySelectorAll('.globe-controls button')].filter((node) => getComputedStyle(node).display !== 'none').map((node) => ({id:node.id,width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height})),
         sections: ['.about-rwn', '.source-band', '.principle-grid'].map((selector) => ({selector,...rect(selector)})),
         guidance: {
@@ -139,11 +133,9 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       throw new Error(`Finder or explanation section overflows at ${width}px: ${JSON.stringify(view)}`);
     }
     if (!view.webgl) throw new Error(`Real WebGL is required for finder visual QA at ${width}px.`);
-    if (!view.touch || (width <= 900 && !view.touch.visible)) throw new Error(`Mobile map exploration control is missing at ${width}px.`);
-    if (view.touch.visible && (view.touch.button.width < 44 || view.touch.button.height < 44 || view.touch.button.bottom > view.canvas.y || view.touch.toolbar.bottom > view.canvas.y || view.touch.pressed !== 'false' || view.touch.label !== 'Explore globe' || view.touch.canvasAction !== 'pan-y pinch-zoom' || view.touch.stageAction !== 'pan-y pinch-zoom' || view.touch.buttonContrast < 4.5 || view.touch.instructionContrast < 4.5)) {
-      throw new Error(`Map exploration toolbar is crowded, unreadable or captures page scrolling at ${width}px: ${JSON.stringify(view.touch)}`);
+    if (width <= 900 && view.canvasTouchAction !== 'pan-y') {
+      throw new Error(`Restored mobile globe no longer preserves ordinary page scrolling at ${width}px: ${view.canvasTouchAction}`);
     }
-
     if (!['x', 'y', 'width', 'height'].every((key) => close(view.canvas[key], view.pins[key]))) {
       throw new Error(`Globe canvas and marker coordinate systems differ at ${width}px: ${JSON.stringify(view)}`);
     }
@@ -154,17 +146,6 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       await capture(client, `finder-presentation-${width}.png`);
       await evaluate(client, `document.querySelector('.globe-stage').scrollIntoView({block:'center'})`);
       await capture(client, `finder-map-${width}.png`);
-      if (view.touch.visible) {
-        await evaluate(client, `document.getElementById('toggleGlobeExplore').click()`);
-        const exploring = await evaluate(client, `(() => {
-          const button=document.getElementById('toggleGlobeExplore');
-          return { pressed:button.getAttribute('aria-pressed'), label:button.textContent.trim(), contrast:(${renderedTextContrast.toString()})(button), canvas:getComputedStyle(document.getElementById('globeCanvas')).touchAction, stage:getComputedStyle(document.querySelector('.globe-stage')).touchAction, class:document.querySelector('.globe-stage').classList.contains('is-touch-exploring') };
-        })()`);
-        if (!exploring.class || exploring.pressed !== 'true' || exploring.label !== 'Done' || exploring.canvas !== 'none' || exploring.stage !== 'pan-y pinch-zoom' || exploring.contrast < 4.5) throw new Error(`Active exploration has an unsafe or unclear presentation at ${width}px: ${JSON.stringify(exploring)}`);
-        await capture(client, `finder-map-exploring-${width}.png`);
-        await evaluate(client, `document.getElementById('toggleGlobeExplore').click()`);
-      }
-
       for (const section of ['results', 'about', 'standards']) {
         await evaluate(client, `document.getElementById('${section}').scrollIntoView({block:'start'})`);
         await capture(client, `finder-${section}-${width}.png`);
@@ -299,7 +280,6 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
   await writeFile('qa-screenshots/homepage-responsive-readiness.json', JSON.stringify(focusReadiness, null, 2));
   await writeFile('qa-screenshots/homepage-responsive-focus.json', JSON.stringify(focusEvidence, null, 2));
   await writeFile('qa-screenshots/homepage-design-geometry.json', JSON.stringify(designEvidence, null, 2));
-  await verifyFinderExploreFraming({client,host,navigate,evaluate,capture});
   await verifyFinderMapNavigation({client,host,navigate,evaluate,capture});
   await verifyFinderSearchSubmit({client,host,navigate,evaluate,capture});
   console.log('Finder presentation QA passed: 11 widths, real globe framing, aligned marker layers, compact controls, and no page overflow.');
@@ -460,35 +440,4 @@ export async function verifyFinderSearchSubmit({client,host,navigate,evaluate,ca
   if(JSON.stringify(evidence[0].after.ids)!==JSON.stringify(evidence[1].after.ids))throw new Error('Pending and settled Search Enter returned different Boston results');
   await writeFile('qa-screenshots/mobile-search-submit-native.json',JSON.stringify(evidence,null,2));
   console.log('Search Enter QA passed: native pending/settled submission, results focus, private query, and no late jump after blur.');
-}
-
-
-/** Short portrait must keep its reserved toolbar; landscape has a compact mode. */
-export async function verifyFinderExploreFraming({client,host,navigate,evaluate,capture}) {
-  const evidence=[];
-  for(const [width,height] of [[320,422],[844,390],[844,320]]) {
-    await client.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false,screenWidth:width,screenHeight:height});
-    await navigate(client,`${host}/`);
-    const started=performance.now();let ready;
-    do {
-      ready=await evaluate(client,`(() => {const stage=document.querySelector('.globe-stage'),canvas=document.getElementById('globeCanvas'),startup=document.documentElement.dataset.finderStartup;if(startup==='ready'&&stage?.classList.contains('is-globe-unavailable'))throw new Error('Short viewport requires a working globe');const gl=canvas&&(canvas.getContext('webgl2')||canvas.getContext('webgl'));return startup==='ready'&&!!gl&&!gl.isContextLost()&&/[0-9]+(?:[.][0-9]+)?×/.test(document.getElementById('globeReadout')?.textContent||'');})()`);
-      if(ready)break;await new Promise(resolve=>setTimeout(resolve,50));
-    } while(performance.now()-started<12000);
-    if(!ready)throw new Error(`Short viewport globe did not become ready at ${width}×${height}`);
-    await evaluate(client,`document.getElementById('service-map').scrollIntoView({block:'start',behavior:'instant'});document.getElementById('toggleGlobeExplore').click()`);
-    await evaluate(client,'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
-    const active=await evaluate(client,`(() => {
-      const box=node=>{const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height};};
-      const toolbar=box(document.getElementById('globeTouchControls')),button=box(document.getElementById('toggleGlobeExplore')),canvas=box(document.getElementById('globeCanvas')),pins=box(document.getElementById('pinLayer')),stage=box(document.getElementById('service-map')),header=box(document.querySelector('.site-header'));
-      return {toolbar,button,canvas,pins,stage,header,pressed:document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed'),usableCanvas:Math.min(canvas.bottom,innerHeight)-Math.max(canvas.top,toolbar.bottom,header.bottom),region:document.getElementById('regionFocus').value,regionVisible:!!document.getElementById('regionFocus').getClientRects().length,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1};
-    })()`);
-    if(active.pressed!=='true'||active.overflow||active.button.width<44||active.button.height<44||active.button.top<active.header.bottom||active.button.bottom>height||active.button.left<0||active.button.right>width||active.usableCanvas<(height<=320?120:160)||!['top','left','width','height'].every(key=>Math.abs(active.canvas[key]-active.pins[key])<=1))throw new Error(`Active short-viewport map has hidden controls, an obstructed canvas or misaligned pins at ${width}×${height}: ${JSON.stringify(active)}`);
-    if(width<height&&!active.regionVisible)throw new Error('Compact landscape treatment incorrectly hides portrait region controls');
-    await capture(client,`finder-map-active-${width}x${height}.png`);
-    await evaluate(client,"document.getElementById('toggleGlobeExplore').click()");
-    const restored=await evaluate(client,`({pressed:document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed'),region:document.getElementById('regionFocus').value,regionVisible:!!document.getElementById('regionFocus').getClientRects().length})`);
-    if(restored.pressed!=='false'||!restored.regionVisible||restored.region!==active.region)throw new Error(`Done did not restore region controls at ${width}×${height}: ${JSON.stringify(restored)}`);
-    evidence.push({width,height,active,restored});
-  }
-  await writeFile('qa-screenshots/mobile-globe-short-viewport.json',JSON.stringify(evidence,null,2));
 }
