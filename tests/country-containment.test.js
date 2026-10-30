@@ -147,6 +147,7 @@ test("repeated synthetic US location uses the real country lookup before and aft
     document: { getElementById: (id) => id === "locateMe" ? button : null },
     navigator: { geolocation: { getCurrentPosition: (success) => callbacks.push(success) } },
     icon: { locate: "" },
+    loadLandGeometry: async () => true,
     isLikelyUnitedStatesPoint: () => { throw new Error("Real geometry must identify the country without a regional fallback"); },
     updateFilters() {}, focusGlobeNearUser() {}, renderLocationState() {}, renderLiveSourceState() {}, notify() {},
     rebuildCountryBorders() {}, updateGlobeLandMask() {},

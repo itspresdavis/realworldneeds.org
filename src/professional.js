@@ -26,7 +26,7 @@ function rewriteNavigation() {
   const menuSummary = document.querySelector(".site-menu > summary");
   if (menuSummary) {
     menuSummary.textContent = "Menu";
-    menuSummary.setAttribute("aria-label", "Open navigation menu");
+    menuSummary.setAttribute("aria-label", "Navigation menu");
     menuSummary.setAttribute("title", "Menu");
   }
 

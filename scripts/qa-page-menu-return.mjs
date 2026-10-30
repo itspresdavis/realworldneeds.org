@@ -1,3 +1,4 @@
+import { PAGE_MENU_REFLOW_LINKS } from './qa-page-menu-reflow.mjs';
 import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { newYorkCatalogFixtures } from './qa-catalog-expectations.mjs';
@@ -23,7 +24,7 @@ export const PAGE_MENU_SHORT_HEIGHT_LIMITATION = {
   source: 'CI 38200935924: page-menu-return.json, retained menu-link geometry in the Saved failure snapshot',
   note: 'Prior CI reported a last-link box bottom of 426.671875px, suggesting clipping risk at a 422px height. That shorter viewport was not rendered in this observation. This suite uses a 500px-high zoom-equivalent viewport; it does not verify 422px-height coverage or change existing menu CSS.'
 };
-const fixturePaths = new Set([PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, '/directory', '/editorial-policy', '/sources', '/transparency']);
+const fixturePaths = new Set([PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, '/directory', '/editorial-policy', '/sources', '/transparency', '/join']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const assert = (ok, label, detail) => { if (!ok) throw new Error(`${label}: ${JSON.stringify(detail)}`); };
 
@@ -349,10 +350,10 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     assert(!new URL(source.href).search && !new URL(source.href).hash, 'Local query escaped into URL', source.href);
     const sourceEntry = await entry();
     const openedBy = await nativeClick('.rwn-page-menu > summary');
-    const opened = await settled(s => s.path === path && s.menuOpen && s.menuLinks.length === 6 && s.menuLinks.every(link => link.visible && link.box.height >= 44)
+    const opened = await settled(s => s.path === path && s.menuOpen && s.menuLinks.length === PAGE_MENU_REFLOW_LINKS.length && s.menuLinks.every(link => link.visible && link.box.height >= 44)
       && Math.abs(s.scroll - source.scroll) <= 1 && pageMenuRetainedState(s, source, { requireHistory: false }), 'Menu remains usable before real navigation');
     await capture(client, `page-menu-${name}-opened.png`);
-    const leftBy = await nativeClick(`.rwn-page-menu a[href="${target}"]`);
+    const leftBy = await nativeClick(target === "/directory#saved" ? ".rwn-saved-link" : `.rwn-page-menu a[href="${target}"]`);
     const destinationUrl = new URL(target, origin).href;
     const destination = await settled(s => s.href === destinationUrl && pageMenuFreshDocument(s, source.timeOrigin) && !s.menuOpen
       && (target !== '/directory#saved' || s.saved && s.panelVisible), 'Native menu link destination');
@@ -431,8 +432,9 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
       await roundTrip({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: 'library', name: `${name}-library`, repeat: true });
       await roundTrip({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: '', name: `${name}-default` });
       await roundTrip({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: 'zzzz-no-local-service-here', name: `${name}-empty` });
+      await roundTrip({ path: PAGE_MENU_LOCAL, target: '/sources', query: 'library', name: `${name}-library-menu-sources` });
       await roundTrip({ path: PAGE_MENU_SERVICE, target: '/sources', name: `${name}-service-sources` });
-      await roundTrip({ path: '/editorial-policy', target: '/transparency', name: `${name}-trust-transparency` });
+      await roundTrip({ path: '/editorial-policy', target: '/join', name: `${name}-trust-contribute` });
     }
     assert(errors.length === 0, 'Page-menu QA observed browser runtime errors', errors);
     assert(fixture.responses.some(response => response.upstreamCache === 'no-store' && response.cache === 'private, max-age=0, must-revalidate'),

@@ -27,6 +27,7 @@ outline: 3px solid #356c4e !important;outline-offset: 3px !important;box-shadow:
 .rwn-professional .primary-nav{display:flex;justify-content:center;align-items:center;gap:clamp(1.05rem,2vw,2rem);font-size:.78rem;font-weight:650;}
 .rwn-professional .primary-nav a{position:relative;padding:.7rem .05rem;color:#405158;text-decoration:none;}
 .rwn-professional .primary-nav a::after{display:none;}
+.rwn-professional .primary-nav a[aria-current]{text-decoration:underline;text-underline-offset:.45em;text-decoration-thickness:2px;}
 .rwn-professional .primary-nav a:hover,.rwn-professional .primary-nav a:focus-visible,.rwn-professional .primary-nav a[aria-current="location"]{color:var(--rwn-blue);}
 .rwn-professional .header-action{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:.62rem .9rem;border:1px solid var(--rwn-line-strong);border-radius:7px;background:#fff;color:var(--rwn-ink-strong);font-size:.75rem;font-weight:700;text-decoration:none;}
 .rwn-professional .header-action:hover,.rwn-professional .header-action:focus-visible{border-color:#8baea0;background:var(--rwn-green-soft);color:var(--rwn-green-dark);}

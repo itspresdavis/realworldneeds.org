@@ -237,6 +237,9 @@ let globeLight = null;
 let globeFocusLight = null;
 let globeBaseCameraDistance = 3.2;
 let earthTextureImage = null;
+let earthTextureRequested = false;
+let landGeometryPromise = null;
+let landGeometryReady = false;
 let earthDetailTextureImage = null;
 let earthDetailTextureRequested = false;
 let earthDetailTextureReady = false;
@@ -1350,6 +1353,8 @@ function createGlobeTexture() {
 }
 
 function loadEarthImagery() {
+  if (earthTextureImage || earthTextureRequested) return;
+  earthTextureRequested = true;
   const image = new Image();
   image.decoding = "async";
   image.onload = () => {
@@ -1360,6 +1365,10 @@ function loadEarthImagery() {
       globeSurface.material.roughness = 0.94;
     }
     refreshGlobeSurface();
+  };
+  image.onerror = () => {
+    earthTextureRequested = false;
+    console.warn("Earth imagery could not be loaded; aid locations remain available.");
   };
   image.src = "/media/earth-blue-marble.jpg";
 }
@@ -1822,6 +1831,8 @@ function recoverGlobeContext() {
       reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
       return;
     }
+    loadEarthImagery();
+    loadLandGeometry();
     rebuildCountryBorders();
     syncGlobePointLayer();
     wakeGlobe();
@@ -2346,7 +2357,7 @@ function selectCountryFromPointer(event) {
 }
 
 async function loadDetailGeometry() {
-  if (state.detailGeometryRequested) return;
+  if (!globeRenderer || state.detailGeometryRequested) return;
   state.detailGeometryRequested = true;
   const status = document.getElementById("globeDetailStatus");
   if (navigator.connection?.saveData) {
@@ -2366,27 +2377,46 @@ async function loadDetailGeometry() {
   }
 }
 
-async function loadLandGeometry() {
-  try {
-    const response = await fetch("/data/countries.geojson");
-    if (!response.ok) throw new Error(`Map data returned ${response.status}`);
-    const data = await response.json();
-    state.countryFeatures = data.features;
-    state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
-    rebuildCountryBorders();
-    updateGlobeLandMask();
-    wakeGlobe();
-    if (state.userLocation && !state.userCountry) {
-      const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
-      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
-      updateFilters();
+function loadLandGeometry() {
+  if (landGeometryReady) return Promise.resolve(true);
+  if (landGeometryPromise) return landGeometryPromise;
+  // Location lookup and map recovery share one request. Bound a stalled body as
+  // well as its headers so explicit location still works when map data is down.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  landGeometryPromise = (async () => {
+    try {
+      const response = await fetch("/data/countries.geojson", { signal: controller.signal });
+      if (!response.ok) throw new Error(`Map data returned ${response.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data.features) || !data.features.length) throw new Error("Map data has no country features");
+      const rings = data.features.flatMap((feature) => extractRings(feature.geometry));
+      state.countryFeatures = data.features;
+      state.landRings = rings;
+      landGeometryReady = true;
+      if (globeRenderer) {
+        rebuildCountryBorders();
+        updateGlobeLandMask();
+        wakeGlobe();
+      }
+      if (state.userLocation && !state.userCountry) {
+        const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
+        state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
+        updateFilters();
+      }
+      const resource = selectedResource();
+      if (resource && state.focusPoint) focusGlobeOn(resource);
+      return true;
+    } catch (error) {
+      console.error("Natural Earth geometry could not be loaded.", error);
+      notify("Base map could not be loaded; aid locations remain available.");
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      landGeometryPromise = null;
     }
-    const resource = selectedResource();
-    if (resource && state.focusPoint) focusGlobeOn(resource);
-  } catch (error) {
-    console.error("Natural Earth geometry could not be loaded.", error);
-    notify("Base map could not be loaded; aid locations remain available.");
-  }
+  })();
+  return landGeometryPromise;
 }
 
 function bindEvents() {
@@ -2663,6 +2693,9 @@ function bindEvents() {
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
+      if (requestGeneration !== locationRequestGeneration) return;
+      // Fallback search needs country boundaries only after location is granted.
+      await loadLandGeometry();
       if (requestGeneration !== locationRequestGeneration) return;
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
@@ -3099,9 +3132,10 @@ updateFilters();
 const searchPreparation = warmSearchIndex(resources);
 bindEvents();
 writeFinderHistory();
-initThreeGlobe();
-loadEarthImagery();
-loadLandGeometry();
+if (initThreeGlobe()) {
+  loadEarthImagery();
+  loadLandGeometry();
+}
 if (requestedResource && requestedResource === initialResource) {
   const resource = resources.find((item) => item.id === requestedResource);
   if (resource) focusGlobeOn(resource);

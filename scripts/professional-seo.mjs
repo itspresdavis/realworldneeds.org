@@ -115,7 +115,7 @@ function navKey(path) {
   if (path.startsWith("/directory") || path.startsWith("/service/")) return "directory";
   if (path === "/editorial-policy") return "checks";
   if (path === "/sources") return "sources";
-  if (path === "/transparency") return "transparency";
+  if (path === "/join") return "contribute";
   return path === "/" ? "find" : null;
 }
 
@@ -124,10 +124,9 @@ function navigationLinks(path) {
   const links = [
     ["find", "/", "Find help"],
     ["directory", "/directory", "Directory"],
-    ["saved", "/directory#saved", "Saved"],
     ["checks", "/editorial-policy", "How listings are checked"],
     ["sources", "/sources", "Sources"],
-    ["transparency", "/transparency", "Transparency"]
+    ["contribute", "/join", "Contribute"]
   ];
   return links.map(([key, href, label]) => `<a href="${href}"${key === current ? ' aria-current="page"' : ""}>${label}</a>`).join("");
 }
@@ -138,6 +137,7 @@ function unifiedHeader(path) {
     <a class="legal-brand" href="/" aria-label="Real World Needs home"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
     <nav class="rwn-page-nav" aria-label="Primary navigation">${links}</nav>
     <details class="rwn-page-menu"><summary aria-label="Navigation menu">Menu</summary><nav aria-label="Mobile navigation">${links}</nav></details>
+    <a class="rwn-saved-link" href="/directory#saved" aria-label="Open saved services">Saved</a>
   </header>`;
 }
 

@@ -1,3 +1,4 @@
+import { PAGE_MENU_REFLOW_LINKS } from '../scripts/qa-page-menu-reflow.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
@@ -337,7 +338,7 @@ test('actual round-trip orchestration preserves passed primary Back evidence whe
   const code = verifyPageMenuReturn.toString();
   const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
   const src = { ...source(), menuOpen: false, summaryVisible: true };
-  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 6 }, () => ({ visible: true, box: { height: 50 } })) };
+  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 5 }, () => ({ visible: true, box: { height: 50 } })) };
   const dest = { ...forwardFixture({ fresh: true }).actual, timeOrigin: 102,
     probe: { shows: [event(false, 102, { href: 'http://127.0.0.1:9999/directory#saved' })], hides: [] } };
   const back = returned();
@@ -345,7 +346,7 @@ test('actual round-trip orchestration preserves passed primary Back evidence whe
   const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
   let samples = 0, entries = 0;
   const evidence = [], navigation = [];
-  const globals = { URL, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, source: src, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999',
+  const globals = { URL, PAGE_MENU_REFLOW_LINKS, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, source: src, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999',
     evidence, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
     pageMenuHistoryTraversalClassification, historySnapshot: async () => {},
     open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
@@ -413,7 +414,7 @@ function completeRoundTripFixture(repeat) {
   const code = verifyPageMenuReturn.toString();
   const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
   const src = { ...source(), menuOpen: false, summaryVisible: true };
-  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 6 }, () => ({ visible: true, box: { height: 50 } })) };
+  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 5 }, () => ({ visible: true, box: { height: 50 } })) };
   const destinationHref = 'http://127.0.0.1:9999/directory#saved';
   const sourceEntry = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]);
   const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
@@ -432,7 +433,7 @@ function completeRoundTripFixture(repeat) {
     ...(repeat ? [freshDestination(201), back(2), freshDestination(202), finalBack, finalBack, reload] : []), keyboard];
   let samples = 0, entries = 0;
   const evidence = [], calls = [];
-  const globals = { URL, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999', evidence,
+  const globals = { URL, PAGE_MENU_REFLOW_LINKS, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999', evidence,
     pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
     pageMenuHistoryTraversalClassification, pageMenuReloadSourceReady, pageMenuReloadRestored, historySnapshot: async () => {},
     open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},

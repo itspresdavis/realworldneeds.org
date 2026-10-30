@@ -9,7 +9,12 @@ test("directory pages offer a compact direct route to the first listing while pr
   const css = await read("public/professional-pages.css");
   assert.match(build, /class="directory-results-jump" href="#directory-results"/);
   assert.match(build, /class="directory-results-anchor" id="directory-results" tabindex="-1"/);
-  assert.match(css, /\.directory-results-jump/);
+  const html = await read("dist/directory/index.html");
+  assert.match(html, /href="#directory-browse"/);
+  assert.ok(html.indexOf('class="directory-records"') < html.indexOf('id="directory-browse"'), "secondary browse panels must not delay the first listing");
+  assert.match(html, /id="directory-browse" tabindex="-1"/);
+  assert.match(html, /href="\/directory.csv" download/);
+  assert.match(css, /\.directory-page-tools/);
 });
 
 test("static scale remains guarded by explicit route and payload budgets", async () => {

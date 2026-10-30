@@ -17,9 +17,10 @@ test("public pages share one task-first navigation order and an explicit mobile 
     text("dist/transparency.html"),
     text("dist/editorial-policy.html")
   ]);
-  const expected = ["Find help", "Directory", "Saved", "How listings are checked", "Sources", "Transparency"];
+  const expected = ["Find help", "Directory", "How listings are checked", "Sources", "Contribute"];
   for (const html of pages) {
     assert.deepEqual(primaryLabels(html), expected);
+    assert.match(html, /<a class="rwn-saved-link" href="\/directory#saved" aria-label="Open saved services">Saved<\/a>/, "Saved stays available outside the closed mobile menu");
     assert.match(html, /class="rwn-page-menu"/);
     assert.match(html, /<summary[^>]*>Menu<\/summary>/);
     assert.match(html, /\/navigation-actions\.css\?v=[a-f0-9]{12}/);

@@ -26,7 +26,7 @@ export function savedReturnSnapshot() {
     summary:document.querySelector('[data-saved-summary]')?.textContent,
     privacy:document.querySelector('.saved-services__privacy')?.textContent,
     rows:[...document.querySelectorAll('[data-saved-id]')].map(node => ({id:node.dataset.savedId,text:node.textContent})),
-    current:[...document.querySelectorAll('.legal-header nav a[aria-current]')].map(node => ({href:node.getAttribute('href'),value:node.getAttribute('aria-current')})),
+    current:[...document.querySelectorAll('.legal-header nav a[aria-current], .rwn-saved-link[aria-current]')].map(node => ({href:node.getAttribute('href'),value:node.getAttribute('aria-current')})),
     focus:{id:focus?.id,href:focus?.getAttribute('href'),remove:focus?.hasAttribute('data-saved-remove'),save:focus?.hasAttribute('data-service-save')},
     reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,
     overlay:Boolean(document.querySelector('vite-error-overlay,nextjs-portal,#webpack-dev-server-client-overlay'))
@@ -45,7 +45,7 @@ export function savedViewViolations(s, ids=[]) {
   if (!s || s.hash !== '#saved' || !s.savedVisible || s.overlay || s.overflow || s.title !== 'Saved services | Real World Needs') issues.push('saved-identity-or-overflow');
   if (s?.empty !== (ids.length === 0)) issues.push('empty-state');
   if (JSON.stringify(s?.rows.map(row=>row.id)) !== JSON.stringify(ids)) issues.push('saved-identity');
-  if (s?.current.length !== 2 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
+  if (s?.current.length !== 1 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
   if (!s?.privacy?.includes('Only in this browser, on this device') || !s.privacy.includes('Anyone using this browser can see your list') || !s.privacy.includes('does not reserve a service or confirm availability')) issues.push('privacy');
   return issues;
 }
