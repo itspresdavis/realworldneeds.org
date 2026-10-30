@@ -3,7 +3,7 @@ import { isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
 
 export const PAGE_MENU_REFLOW_LINKS = [
   ['/', 'Find help'], ['/directory', 'Directory'],
-  ['/editorial-policy', 'How listings are checked'], ['/sources', 'Sources'], ['/join', 'Contribute']
+  ['/editorial-policy', 'How we check'], ['/sources', 'Sources'], ['/shop', 'Shop'], ['/join', 'Contribute']
 ];
 export const PAGE_MENU_REFLOW_VIEWPORTS = [
   [320, 422], [390, 422], [320, 250], [390, 250], [320, 189], [390, 189],

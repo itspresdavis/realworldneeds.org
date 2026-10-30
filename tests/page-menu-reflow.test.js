@@ -28,6 +28,6 @@ test('short-height reflow retains generated link targets and every navigation la
   const menu = html.match(/<details class="rwn-page-menu">([\s\S]*?)<\/details>/)?.[1] || '';
   assert.deepEqual([...menu.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([,href,label]) => [href,label]), [
     ['/', 'Find help'], ['/directory', 'Directory'],
-    ['/editorial-policy', 'How listings are checked'], ['/sources', 'Sources'], ['/join', 'Contribute']
+    ['/editorial-policy', 'How we check'], ['/sources', 'Sources'], ['/shop', 'Shop'], ['/join', 'Contribute']
   ]);
 });

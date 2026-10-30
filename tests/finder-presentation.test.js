@@ -30,6 +30,7 @@ test("source guidance and contributor closing have distinct responsive layouts",
   assert.match(contract, /view\.mapShortcut\.href !== '#service-map'/);
   assert.match(contract, /!view\.mapShortcut\.beforeSearch/);
   assert.match(contract, /await waitForGlobePresentation\(/);
+  assert.match(contract, /await verifyFinderMapNavigation\(/);
 });
 
 test("finder, directory, and service pages share forest accents and clear sans-serif titles", async () => {

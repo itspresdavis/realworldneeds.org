@@ -1,5 +1,7 @@
 /** Rendered navigation bounds and genuine keyboard/pointer input at reduced CSS viewports.
  * Browser zoom is checked separately through the ordinary cloud browser UI. */
+import { PAGE_MENU_REFLOW_LINKS } from "./qa-page-menu-reflow.mjs";
+
 export const menuViewports = [[320, 568], [320, 379], [320, 250], [568, 250], [390, 180], [320, 189], [900, 250]];
 
 export async function verifyMenuReflow({ client, host, navigate, evaluate, capture }) {
@@ -34,7 +36,7 @@ export async function verifyMenuReflow({ client, host, navigate, evaluate, captu
         viewportHeight: innerHeight, overflowY: getComputedStyle(nav).overflowY,
         scrollable: nav.scrollHeight > nav.clientHeight, count: nav.querySelectorAll('a').length };
     })()`);
-    if (!bounds.open || bounds.count !== 5 || bounds.left < 0 || bounds.right > bounds.clientWidth + 1 || bounds.top < 0 || bounds.bottom > height || bounds.scrollWidth > bounds.clientWidth + 1 || bounds.overflowY !== 'auto') {
+    if (!bounds.open || bounds.count !== PAGE_MENU_REFLOW_LINKS.length || bounds.left < 0 || bounds.right > bounds.clientWidth + 1 || bounds.top < 0 || bounds.bottom > height || bounds.scrollWidth > bounds.clientWidth + 1 || bounds.overflowY !== 'auto') {
       throw new Error(`Navigation bounds failed at ${width}x${height}: ${JSON.stringify(bounds)}`);
     }
     const focus = [];

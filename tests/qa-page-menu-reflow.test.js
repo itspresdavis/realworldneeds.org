@@ -27,7 +27,7 @@ test('matrix includes exact short-height widths, landscape, inclusive mobile bre
   }
   for (const viewport of [[568, 250], [900, 250], [390, 844]]) assert.ok(PAGE_MENU_REFLOW_VIEWPORTS.some(value => JSON.stringify(value) === JSON.stringify(viewport)));
   assert.equal(PAGE_MENU_REFLOW_VIEWPORTS.length, 9);
-  assert.deepEqual(PAGE_MENU_REFLOW_LINKS.map(([href]) => href), ['/', '/directory', '/editorial-policy', '/sources', '/join']);
+  assert.deepEqual(PAGE_MENU_REFLOW_LINKS.map(([href]) => href), ['/', '/directory', '/editorial-policy', '/sources', '/shop', '/join']);
 });
 
 test('strict document identity rejects stale contexts, wrong routes, blank/loading/error documents and wrong viewports', () => {

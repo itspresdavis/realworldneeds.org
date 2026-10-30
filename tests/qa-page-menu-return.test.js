@@ -415,7 +415,7 @@ test('actual round-trip orchestration preserves passed primary Back evidence whe
   const code = verifyPageMenuReturn.toString();
   const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
   const src = { ...source(), menuOpen: false, summaryVisible: true };
-  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 5 }, () => ({ visible: true, box: { height: 50 } })) };
+  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: PAGE_MENU_REFLOW_LINKS.length }, () => ({ visible: true, box: { height: 50 } })) };
   const dest = { ...forwardFixture({ fresh: true }).actual, timeOrigin: 102,
     probe: { shows: [event(false, 102, { href: 'http://127.0.0.1:9999/directory#saved' })], hides: [] } };
   const back = savedReturn();
@@ -491,7 +491,7 @@ function completeRoundTripFixture(repeat) {
   const code = verifyPageMenuReturn.toString();
   const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
   const src = { ...source(), menuOpen: false, summaryVisible: true };
-  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 5 }, () => ({ visible: true, box: { height: 50 } })) };
+  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: PAGE_MENU_REFLOW_LINKS.length }, () => ({ visible: true, box: { height: 50 } })) };
   const destinationHref = 'http://127.0.0.1:9999/directory#saved';
   const sourceEntry = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]);
   const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);

@@ -122,12 +122,14 @@ async function verifyGlobeMotion(client) {
     await client.call("Debugger.enable");
     const result = await client.call("Debugger.setBreakpointByUrl", {
       urlRegex: "/src/app\\.js(?:\\?|$)", lineNumber,
-      condition: "(globalThis.__rwnMotionQA = { serial:(globalThis.__rwnMotionQA?.serial || 0)+1, at:performance.now(), reduceMotion, autoRotate:state.autoRotate, interactionUntil:state.interactionUntil, rotationLon:state.rotationLon, velocityLon:state.velocityLon, velocityLat:state.velocityLat, targetLon:state.targetLon, zoom:state.zoom, targetZoom:state.targetZoom, label:document.getElementById('toggleMotion')?.getAttribute('aria-label') },false)"
+      condition: "(globalThis.__rwnMotionQA = { serial:(globalThis.__rwnMotionQA?.serial || 0)+1, at:performance.now(), reduceMotion, autoRotate:state.autoRotate, interactionUntil:state.interactionUntil, rotationLon:state.rotationLon, velocityLon:state.velocityLon, velocityLat:state.velocityLat, targetLon:state.targetLon, zoom:state.zoom, targetZoom:state.targetZoom, baseReady:Boolean(landGeometryReady && earthTextureImage?.complete && earthTextureImage.naturalWidth > 0), label:document.getElementById('toggleMotion')?.getAttribute('aria-label') },false)"
     });
     breakpoint = result.breakpointId;
     await evaluate(client, "(() => { const canvas=document.getElementById('globeCanvas'); canvas.scrollIntoView({block:'center',behavior:'instant'}); canvas.focus({preventScroll:true}); })()");
     await press("ArrowRight", "ArrowRight", 39);
-    const manual = await wait(row => !row.autoRotate && row.interactionUntil > row.at, "Manual rotation did not establish an interaction delay");
+    const warm = await wait(row => row.baseReady, "The base image and land mask did not finish a rendered frame");
+    await press("ArrowRight", "ArrowRight", 39);
+    const manual = await wait(row => row.serial > warm.serial && !row.autoRotate && row.interactionUntil > row.at, "Manual rotation did not establish an interaction delay");
     evidence.push({ phase: "manual-paused", ...manual });
     await press(" ", "Space", 32);
     const resumed = await wait(row => row.serial > manual.serial && row.autoRotate && row.interactionUntil === 0 && row.rotationLon !== manual.rotationLon, "Keyboard Resume did not start actual rotation immediately");

@@ -26,7 +26,7 @@ function fixture(fragment) {
   return { state, writes, input, restore: context.restoreFinderHistory, renders: () => renders };
 }
 
-for (const fragment of ["#results", "#finder", "#top", "#about"]) {
+for (const fragment of ["#service-map", "#results", "#finder", "#top", "#about", "#standards"]) {
   test(`section navigation to ${fragment} preserves the query, filters and selection`, () => {
     const f = fixture(fragment);
     f.restore(null);

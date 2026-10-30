@@ -14,8 +14,8 @@ test("shared footer reflows at tablet widths without hiding overflowing links", 
 });
 
 test("all generated page types keep the complete shared footer navigation", async () => {
-  const expected = ["/", "/directory", "/directory#saved", "/editorial-policy", "/sources", "/transparency", "/privacy", "/terms", "/accessibility", "/directory/help/food", "/directory/help/shelter", "/directory/help/health", "/directory/help/hygiene", "/directory/help/clothing", "/directory/help/water"];
-  for (const path of ["directory/index.html", "service/whitechapel-mission/index.html", "privacy.html", "terms.html", "accessibility.html"]) {
+  const expected = ["/", "/directory", "/directory#saved", "/editorial-policy", "/sources", "/transparency", "/shop", "/privacy", "/terms", "/accessibility", "/directory/help/food", "/directory/help/shelter", "/directory/help/health", "/directory/help/hygiene", "/directory/help/clothing", "/directory/help/water"];
+  for (const path of ["directory/index.html", "service/whitechapel-mission/index.html", "privacy.html", "terms.html", "accessibility.html", "shop.html"]) {
     const html = await readFile(`dist/${path}`, "utf8");
     const footer = html.match(/<footer class="legal-footer rwn-unified-footer">([\s\S]*?)<\/footer>/)?.[1];
     assert.ok(footer, `${path} has its shared footer`);

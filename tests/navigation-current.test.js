@@ -17,7 +17,7 @@ for (const path of ["/privacy", "/terms", "/accessibility", "/transparency", "/4
   });
 }
 
-for (const [path, href] of [["/", "/"], ["/directory", "/directory"], ["/directory/help/food", "/directory"], ["/service/example", "/directory"], ["/editorial-policy", "/editorial-policy"], ["/sources", "/sources"], ["/join", "/join"]]) {
+for (const [path, href] of [["/", "/"], ["/directory", "/directory"], ["/directory/help/food", "/directory"], ["/service/example", "/directory"], ["/editorial-policy", "/editorial-policy"], ["/sources", "/sources"], ["/shop", "/shop"], ["/join", "/join"]]) {
   test(`${path} has exactly its intended primary navigation item current`, () => {
     const links = context.navigationLinks(path);
     assert.equal((links.match(/aria-current="page"/g) || []).length, 1);

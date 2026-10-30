@@ -3096,11 +3096,76 @@ function bindEvents() {
   window.addEventListener("resize", () => {
     if (window.innerWidth > 900) closeSiteMenu({ restoreFocus: siteMenu?.contains(document.activeElement), repairClosed: true });
   }, { passive: true });
+  const sectionSnapshot = () => ({ ...finderHistorySnapshot(), query: pendingSearchValue });
+  let nativeSectionNavigation = null;
+  const preserveNativeSection = () => {
+    const navigation = nativeSectionNavigation;
+    nativeSectionNavigation = null;
+    if (!navigation || navigation.event.defaultPrevented || navigation.href !== window.location.href) return false;
+    const snapshot = sectionSnapshot();
+    window.history.replaceState({ ...(window.history.state || {}), [FINDER_HISTORY_KEY]: snapshot }, "", window.location.href);
+    writeFinderHistory.lastSignature = JSON.stringify(snapshot);
+    return true;
+  };
+  // Let native anchors own URL, scroll and focus. Commit the draft privately
+  // before their new entry, so one Back returns to the same search.
+  window.addEventListener("click", (event) => {
+    nativeSectionNavigation = null;
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest?.("a[href]");
+    if (!link || link.hasAttribute("download") || (link.target && link.target.toLowerCase() !== "_self")) return;
+    let destination, current, target;
+    try {
+      current = new URL(window.location.href);
+      destination = new URL(link.href, current);
+      target = decodeURIComponent(destination.hash.slice(1));
+    } catch { return; }
+    if (destination.origin !== current.origin || destination.pathname !== current.pathname || destination.search !== current.search
+      || !target || destination.href === current.href || !document.getElementById(target)) return;
+    const snapshot = sectionSnapshot(), signature = JSON.stringify(snapshot);
+    if (signature !== writeFinderHistory.lastSignature) {
+      window.history.pushState({ ...(window.history.state || {}), [FINDER_HISTORY_KEY]: snapshot }, "", current.href);
+      writeFinderHistory.lastSignature = signature;
+    }
+    nativeSectionNavigation = { href: destination.href, event };
+  });
+  window.addEventListener("hashchange", preserveNativeSection);
   window.addEventListener("popstate", (event) => {
+    if (preserveNativeSection()) return;
     const wasPreparing = preparationNoticeTimer !== null;
     cancelPendingSearch();
+    const snapshot = event.state?.[FINDER_HISTORY_KEY];
+    const query = sanitizeFinderQuery(snapshot?.query);
+    if (snapshot && query && !searchPreparation.prepared) {
+      // Back can revisit a draft saved by a native section link. Restore its
+      // filters now, but keep query matching on the existing sliced preparation.
+      pendingSearchValue = query;
+      restoreFinderHistory({ ...event.state, [FINDER_HISTORY_KEY]: { ...snapshot, query: state.query } });
+      writeFinderHistory.lastSignature = JSON.stringify(sectionSnapshot());
+      searchInput.value = query;
+      document.getElementById("clearSearch").hidden = false;
+      const revision = searchRevision;
+      showSearchPreparation(revision);
+      searchPreparation.prioritize();
+      searchPreparation.ready.then(() => {
+        if (revision !== searchRevision) return;
+        if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+        preparationNoticeTimer = null;
+        // Filters and selection may have changed while preparation was pending.
+        // Apply only this query, then refresh the current private history entry.
+        state.query = query;
+        updateFilters();
+        pendingSearchValue = state.query;
+        searchInput.value = state.query;
+        document.getElementById("clearSearch").hidden = !state.query;
+        const restored = finderHistorySnapshot();
+        window.history.replaceState({ ...(window.history.state || {}), [FINDER_HISTORY_KEY]: restored }, "", window.location.href);
+        writeFinderHistory.lastSignature = JSON.stringify(restored);
+      });
+      return;
+    }
     restoreFinderHistory(event.state);
-    if (wasPreparing && !event.state?.[FINDER_HISTORY_KEY]) updateFilters();
+    if (wasPreparing && !snapshot) updateFilters();
     pendingSearchValue = state.query;
     searchInput.value = state.query;
     document.getElementById("clearSearch").hidden = !state.query;

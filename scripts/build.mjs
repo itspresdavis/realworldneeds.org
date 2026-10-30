@@ -420,7 +420,7 @@ const categoryLinks = categoryTypes.map((type) => {
 }).join("");
 const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
-const sitemapPaths = ["/", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
+const sitemapPaths = ["/", "/shop", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
   title: "Free Essential Services Directory",
   heading: "Find free essential services without using the globe.",
@@ -546,7 +546,7 @@ await writeFile("dist/data/sources.json", `${JSON.stringify({
 }, null, 2)}\n`);
 await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, generatedAt: new Date().toISOString() })}\n`);
 
-const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc>${path === "/shop" ? "" : `<lastmod>${latestReview}</lastmod>`}</url>`).join("\n")}\n</urlset>\n`;
 await writeFile("dist/sitemap.xml", sitemap);
 
 await mkdir("dist/vendor", { recursive: true });

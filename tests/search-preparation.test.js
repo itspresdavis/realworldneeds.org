@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { privateResourceUrl, clearResourceFromUrl } from "../src/utils/privacy.js";
 
 const source = await readFile("src/app.js", "utf8");
 const sanitizer = source.slice(
@@ -16,9 +17,11 @@ const handlers = source.slice(
   source.indexOf("  let catalogFilterFrame ="),
 );
 const popstate = source.slice(
-  source.indexOf('  window.addEventListener("popstate", (event) => {'),
+  source.indexOf("  const sectionSnapshot =") >= 0 ? source.indexOf("  const sectionSnapshot =") : source.indexOf('  window.addEventListener("popstate", (event) => {'),
   source.indexOf("  const sections ="),
 );
+const historySource = source.slice(source.indexOf("function finderHistorySnapshot("), source.indexOf("function renderStatic("));
+const historyNormalizers = source.slice(source.indexOf("function finderTypesFromHistory("), source.indexOf("if (requestedResource &&"));
 const controlSync = source.slice(
   source.indexOf('  const search = document.getElementById("resourceSearch");', source.indexOf("function renderControls")),
   source.indexOf('  document.getElementById("locateMe").disabled', source.indexOf("function renderControls")),
@@ -32,6 +35,8 @@ function fixture() {
   const events = {},
     timers = new Map(),
     history = [],
+    privateHistory = [],
+    windowEvents = {},
     filtered = [];
   let timerId = 0,
     back;
@@ -53,7 +58,7 @@ function fixture() {
       events.clear = handler;
     },
   };
-  const state = { query: "", viewMode: "aid", savedOnly: false, savedIds: new Set(), filtered: [{ id: "first" }, { id: "second" }], visibleResults: 60 };
+  const state = { query: "", accessMode: "all", activeTypes: new Set(["food", "water"]), selectedId: null, inspectorOpen: false, viewMode: "aid", savedOnly: false, savedIds: new Set(), filtered: [{ id: "first" }, { id: "second" }], visibleResults: 60 };
   const count = { textContent: "Showing 2 of 2 listings" };
   const status = { textContent: "Current search: " };
   const badge = { textContent: "2 matches" };
@@ -68,7 +73,8 @@ function fixture() {
     resultTitle: { textContent: "" },
   };
   const context = vm.createContext({
-    state,
+    state, URL, privateResourceUrl, clearResourceFromUrl, resources: [{ id: "first" }, { id: "second" }],
+    resourceTypes: ["food", "water"], createInitialTypeSet: () => new Set(["food", "water"]),
     FINDER_HISTORY_KEY: "rwnFinder",
     FINDER_QUERY_LIMIT: 180,
     cancelPendingSearch: () => {},
@@ -84,16 +90,30 @@ function fixture() {
     },
     document: {
       activeElement: input,
-      getElementById: (id) => nodes[id],
+      getElementById: (id) => nodes[id] || (["service-map", "results", "finder", "top", "about", "standards"].includes(id) ? { id } : null),
     },
     window: {
+      location: { href: "https://www.realworldneeds.org/" },
+      history: {
+        state: { unrelated: "keep" },
+        pushState(next, _title, href) {
+          history.push(next.rwnFinder.query);
+          this.state = next; context.window.location.href = href;
+          privateHistory.push({ mode: "push", state: structuredClone(next), href });
+        },
+        replaceState(next, _title, href) {
+          this.state = next; context.window.location.href = href;
+          privateHistory.push({ mode: "replace", state: structuredClone(next), href });
+        },
+      },
       setTimeout: (callback, delay) => {
         timers.set(++timerId, { callback, delay });
         return timerId;
       },
       clearTimeout: (id) => timers.delete(id),
-      addEventListener: (_, handler) => {
-        back = handler;
+      addEventListener: (type, handler) => {
+        windowEvents[type] = handler;
+        if (type === "popstate") back = handler;
       },
     },
     updateFilters: () => {
@@ -103,17 +123,10 @@ function fixture() {
       status.textContent = `Current search: ${state.query}`;
       context.renderResults();
     },
-    writeFinderHistory: () => history.push(state.query),
-    restoreFinderHistory: (event) => {
-      const snapshot = event?.rwnFinder;
-      if (snapshot) {
-        state.query = snapshot.query;
-        input.value = snapshot.query;
-        context.updateFilters();
-      }
-    },
   });
-  vm.runInContext(`${sanitizer} function syncSearchControls() { const aidMode = true; ${controlSync} }\n${resultsRenderer}${handlers}${popstate}`, context);
+  vm.runInContext(`${historySource}\n${historyNormalizers}\n${sanitizer} function syncSearchControls() { const aidMode = true; ${controlSync} }\n${resultsRenderer}${handlers}${popstate}`, context);
+  context.writeFinderHistory.lastSignature = JSON.stringify(context.finderHistorySnapshot());
+  context.window.history.state.rwnFinder = context.finderHistorySnapshot();
   const type = (value) => {
     input.value = value;
     events.input({ target: input });
@@ -134,7 +147,31 @@ function fixture() {
     clear,
     state,
     filtered,
-    history,
+    history, privateHistory,
+    href: () => context.window.location.href,
+    currentHistory: () => structuredClone(context.window.history.state),
+    changeFilters(fields) {
+      Object.assign(state, fields);
+      context.updateFilters();
+      context.writeFinderHistory("push");
+    },
+    activateSection(fragment, options = {}) {
+      const link = { href: new URL(fragment, context.window.location.href).href, target: options.target || "",
+        hasAttribute: name => name === "download" && Boolean(options.download) };
+      const event = { button: 0, ...options, target: { closest: () => link } };
+      windowEvents.click?.(event);
+      if (options.navigate === false) return event;
+      context.window.location.href = link.href;
+      context.window.history.state = null;
+      back({ state: null });
+      windowEvents.hashchange?.({});
+      return event;
+    },
+    traverse(entry) {
+      context.window.location.href = entry.href;
+      context.window.history.state = structuredClone(entry.state);
+      back({ state: context.window.history.state });
+    },
     ready: () => {
       context.searchPreparation.prepared = true;
       resolveReady();
@@ -152,7 +189,10 @@ function fixture() {
       return events.blur();
     },
     render: () => context.updateFilters(),
-    back: (query) => back({ state: query === null ? null : { rwnFinder: { query } } }),
+    back: (query) => {
+      context.window.history.state = query === null ? null : { rwnFinder: { query } };
+      back({ state: context.window.history.state });
+    },
     cancel: () => context.cancelPendingSearch(),
   };
 }
@@ -522,4 +562,119 @@ test("cancelling a preparing search through IME clears its preparation feedback"
   assert.equal(f.count.textContent, "Showing 2 of 2 listings");
   assert.equal(f.status.textContent, "Current search: ");
   assert.equal(f.badge.textContent, "2 matches");
+});
+
+for (const fragment of ["#service-map", "#results", "#finder", "#top", "#about", "#standards"]) {
+  test(`native ${fragment} navigation preserves a preparing query and one-step Back/Forward history privately`, async () => {
+    const f = fixture();
+    f.type("Boston"); f.flush();
+    const blur = f.blur();
+    assert.equal(f.count.textContent, "Preparing search…");
+    f.activateSection(fragment);
+    assert.equal(f.input.value, "Boston");
+    assert.equal(f.state.query, "", "matching must still wait for sliced preparation");
+    assert.equal(f.count.textContent, "Preparing search…");
+    assert.equal(f.clear.hidden, false);
+    assert.equal(f.privateHistory.length, 2);
+    const [origin, destination] = f.privateHistory;
+    assert.equal(origin.mode, "push"); assert.equal(origin.href, "https://www.realworldneeds.org/");
+    assert.equal(origin.state.unrelated, "keep");
+    assert.equal(destination.mode, "replace"); assert.equal(destination.href, "https://www.realworldneeds.org/" + fragment);
+    assert.equal(origin.state.rwnFinder.query, "Boston"); assert.equal(destination.state.rwnFinder.query, "Boston");
+    f.ready(); await blur; await settle();
+    assert.equal(f.state.query, "Boston"); assert.equal(f.input.value, "Boston");
+    assert.equal(f.count.textContent, "Showing 1 of 1 listings");
+    assert.equal(f.privateHistory.length, 2, "readiness must not add a duplicate fragment entry");
+    assert.ok(f.privateHistory.every(entry => !/Boston|query=|search=/.test(entry.href)));
+    f.traverse(origin); assert.equal(f.state.query, "Boston"); assert.equal(f.href(), origin.href);
+    f.traverse(destination); assert.equal(f.state.query, "Boston"); assert.equal(f.href(), destination.href);
+  });
+}
+
+test("a native anchor before debounce retains the draft until preparation finishes", async () => {
+  const f = fixture(); f.type("Boston"); f.activateSection("#service-map");
+  assert.equal(f.input.value, "Boston"); assert.equal(f.state.query, "");
+  f.flush(); f.ready(); await settle(); f.flush(640);
+  assert.equal(f.state.query, "Boston");
+  assert.equal(f.privateHistory.length, 2);
+});
+
+test("Back and Forward between draft section entries wait for preparation without synchronous matching", async () => {
+  const f = fixture(); f.type("Boston"); f.flush(); f.activateSection("#service-map");
+  const [origin, destination] = f.privateHistory;
+  f.traverse(origin);
+  assert.equal(f.input.value, "Boston");
+  assert.ok(!f.filtered.includes("Boston"));
+  f.traverse(destination);
+  assert.equal(f.input.value, "Boston");
+  assert.ok(!f.filtered.includes("Boston"));
+  f.ready(); await settle();
+  assert.equal(f.state.query, "Boston");
+  assert.equal(f.href(), destination.href);
+  assert.deepEqual(f.privateHistory.map(entry => entry.mode), ["push", "replace", "replace"], "readiness refreshes the current entry without adding another Back step");
+  assert.equal(f.currentHistory().rwnFinder.query, "Boston");
+});
+
+for (const action of ["newer typing", "Clear", "explicit Back", "null-state Back"]) test(`${action} cancels a deferred draft-history restore without stale results`, async () => {
+  const f = fixture(); f.type("Boston"); f.flush(); f.activateSection("#service-map"); f.traverse(f.privateHistory[0]);
+  if (action === "newer typing") { f.type("WIC"); f.flush(); }
+  else if (action === "Clear") f.events.clear();
+  else f.back(action === "explicit Back" ? "London" : null);
+  f.ready(); await settle();
+  const expected = action === "newer typing" ? "WIC" : action === "explicit Back" ? "London" : "";
+  assert.equal(f.input.value, expected); assert.equal(f.state.query, expected);
+  assert.ok(!f.filtered.includes("Boston"));
+});
+
+for (const options of [{ defaultPrevented: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true },
+  { button: 1 }, { target: "_blank" }, { download: true }]) test(`nonordinary anchor activation does not write private history: ${JSON.stringify(options)}`, () => {
+  const f = fixture(); f.type("Boston");
+  f.activateSection("#service-map", { ...options, navigate: false });
+  assert.equal(f.privateHistory.length, 0); assert.equal(f.input.value, "Boston");
+});
+
+for (const href of ["#", "/", "/directory#results", "https://example.org/#results", "?query=other#results", "#missing"]) test(`nonsection destination ${href} does not write private history`, () => {
+  const f = fixture(); f.type("Boston"); f.activateSection(href, { navigate: false });
+  assert.equal(f.privateHistory.length, 0);
+});
+
+test("same-fragment activation does not leave a new navigation intent or duplicate history", async () => {
+  const f = fixture(); f.type("Boston"); f.flush(); f.activateSection("#service-map");
+  f.activateSection("#service-map", { navigate: false });
+  assert.equal(f.privateHistory.length, 2);
+  f.back(null); f.ready(); await settle();
+  assert.equal(f.input.value, ""); assert.equal(f.state.query, "");
+});
+
+test("an explicit self-target still follows ordinary native section history", () => {
+  const f = fixture(); f.type("Boston"); f.activateSection("#service-map", { target: "_self" });
+  assert.equal(f.input.value, "Boston"); assert.equal(f.privateHistory.length, 2);
+});
+
+test("newer filter and selection changes survive a deferred history query without an extra query entry", async () => {
+  const f = fixture(); f.type("Boston"); f.flush(); f.activateSection("#service-map");
+  f.traverse(f.privateHistory[0]);
+  f.changeFilters({ accessMode: "direct", activeTypes: new Set(["water"]), savedOnly: true, selectedId: "first", inspectorOpen: true });
+  const beforeReady = f.privateHistory.length;
+  f.ready(); await settle();
+  assert.equal(f.state.query, "Boston");
+  assert.equal(f.state.accessMode, "direct");
+  assert.deepEqual([...f.state.activeTypes], ["water"]);
+  assert.equal(f.state.savedOnly, true);
+  assert.equal(f.state.selectedId, "first"); assert.equal(f.state.inspectorOpen, true);
+  assert.equal(f.privateHistory.length, beforeReady + 1);
+  assert.equal(f.privateHistory.at(-1).mode, "replace", "readiness must update the current entry rather than add a new Back step");
+  assert.equal(f.currentHistory().rwnFinder.query, "Boston");
+  assert.deepEqual(f.currentHistory().rwnFinder.activeTypes, ["water"]);
+});
+
+test("Back to a draft then another section before readiness does not duplicate the existing source entry", async () => {
+  const f = fixture(); f.type("Boston"); f.flush(); f.activateSection("#service-map");
+  f.traverse(f.privateHistory[0]);
+  f.activateSection("#results");
+  assert.equal(f.privateHistory.length, 3, "the existing Boston source entry needs no duplicate push");
+  assert.deepEqual(f.privateHistory.map(entry => entry.mode), ["push", "replace", "replace"]);
+  f.ready(); await settle();
+  assert.equal(f.state.query, "Boston");
+  assert.equal(f.href(), "https://www.realworldneeds.org/#results");
 });

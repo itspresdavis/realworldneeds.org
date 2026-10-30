@@ -258,5 +258,105 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
   await writeFile('qa-screenshots/homepage-responsive-readiness.json', JSON.stringify(focusReadiness, null, 2));
   await writeFile('qa-screenshots/homepage-responsive-focus.json', JSON.stringify(focusEvidence, null, 2));
   await writeFile('qa-screenshots/homepage-design-geometry.json', JSON.stringify(designEvidence, null, 2));
+  await verifyFinderMapNavigation({client,host,navigate,evaluate,capture});
   console.log('Finder presentation QA passed: 11 widths, real globe framing, aligned marker layers, compact controls, and no page overflow.');
+}
+
+// Hold background preparation only, leaving the application's matcher, input,
+// blur, anchor, and history handlers untouched. This is a functional fixture,
+// not a search-performance measurement.
+export async function verifyFinderMapNavigation({client,host,navigate,evaluate,capture}) {
+  const pause = ms => new Promise(resolve => setTimeout(resolve,ms));
+  const press = async (key, code) => {
+    await client.call('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,windowsVirtualKeyCode:code});
+    await client.call('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:code});
+  };
+  const sample = () => evaluate(client, `(() => ({
+    href:location.href,hash:location.hash,query:document.getElementById('resourceSearch')?.value,
+    historyQuery:history.state?.rwnFinder?.query,count:document.getElementById('resultCount')?.textContent || '',
+    ids:[...document.querySelectorAll('.resource-card[data-result-resource-id]')].map(node=>node.dataset.resultResourceId),
+    shortcut:!!document.querySelector('.finder-map-link'),startup:document.documentElement.dataset.finderStartup,
+    activation:window.__rwnMapNavigation?.activation || null
+  }))()`);
+  const until = async (label,predicate) => {
+    const started=performance.now();let last;
+    while(performance.now()-started<12000) {
+      last=await sample();if(predicate(last))return last;await pause(25);
+    }
+    throw new Error(`Map navigation ${label} did not settle: ${JSON.stringify(last)}`);
+  };
+  const evidence=[];
+  for(const pending of [true,false]) {
+    let instrumentation;
+    try {
+      instrumentation=await client.call('Page.addScriptToEvaluateOnNewDocument',{source:`
+        (()=>{
+          const idle=window.requestIdleCallback?.bind(window),Channel=window.MessageChannel;
+          const queued=[];let held=${pending};
+          window.__rwnMapNavigation={activation:null,release(){
+            held=false;if(idle)window.requestIdleCallback=idle;window.MessageChannel=Channel;
+            for(const run of queued.splice(0))run();
+          }};
+          if(held){
+            if(idle)window.requestIdleCallback=(callback,options)=>idle(deadline=>held?queued.push(()=>idle(callback,options)):callback(deadline),options);
+            window.MessageChannel=function(...args){
+              const channel=new Channel(...args),post=channel.port2.postMessage.bind(channel.port2);
+              channel.port2.postMessage=(...messages)=>held?queued.push(()=>post(...messages)):post(...messages);
+              return channel;
+            };
+            window.MessageChannel.prototype=Channel.prototype;
+          }
+          document.addEventListener('keydown',event=>{
+            if(event.key==='Enter'&&event.target.matches?.('.finder-map-link'))window.__rwnMapNavigation.activation={
+              trusted:event.isTrusted,held,value:document.getElementById('resourceSearch').value,
+              historyQuery:history.state?.rwnFinder?.query,count:document.getElementById('resultCount').textContent
+            };
+          },true);
+        })();
+      `});
+      await client.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false,screenWidth:390,screenHeight:844});
+      await navigate(client,'about:blank');
+      await navigate(client,`${host}/`);
+      await until('startup',view=>view.startup==='ready'&&view.shortcut&&view.ids.length>0);
+      await evaluate(client,"document.getElementById('resourceSearch').focus();document.getElementById('resourceSearch').select()");
+      await client.call('Input.insertText',{text:'Boston'});
+      const before=await until(pending?'pending query':'settled query',view=>view.query==='Boston'&&(pending
+        ? /preparing/i.test(view.count)
+        : view.historyQuery==='Boston'&&!/preparing/i.test(view.count)&&view.ids.length>0));
+      await evaluate(client,"document.querySelector('.finder-map-link').focus({preventScroll:true})");
+      await press('Enter',13);
+      await pause(50);
+      const activated=await sample();
+      if(activated.query!=='Boston'||!activated.activation?.trusted||activated.activation.value!=='Boston'||activated.activation.held!==pending||(pending&&!/preparing/i.test(activated.activation.count))) {
+        throw new Error(`Map shortcut discarded pending intent or skipped the native-key precondition: ${JSON.stringify({pending,before,activated})}`);
+      }
+      await evaluate(client,'window.__rwnMapNavigation.release()');
+      const after=await until('map destination',view=>view.hash==='#service-map'&&view.query==='Boston'&&view.historyQuery==='Boston'&&!/preparing/i.test(view.count)&&view.ids.length>0);
+      if(new URL(after.href).search||after.href.toLowerCase().includes('boston')||(!pending&&JSON.stringify(before.ids)!==JSON.stringify(after.ids))) {
+        throw new Error(`Map shortcut leaked or changed the query: ${JSON.stringify({pending,before,after})}`);
+      }
+      await press('Tab',9);
+      const focus=await evaluate(client,`(() => {
+        const map=document.getElementById('service-map'),box=map.getBoundingClientRect();
+        return {inMap:map.contains(document.activeElement),id:document.activeElement.id,top:box.top,bottom:box.bottom,headerBottom:document.querySelector('.site-header').getBoundingClientRect().bottom,height:innerHeight};
+      })()`);
+      if(!focus.inMap||focus.top<focus.headerBottom-1||focus.bottom>focus.height+1)throw new Error(`Map keyboard destination is hidden or skipped: ${JSON.stringify(focus)}`);
+      await capture(client,`map-shortcut-${pending?'pending':'settled'}.png`);
+      const history=await client.call('Page.getNavigationHistory');
+      const previous=history.entries[history.currentIndex-1],destination=history.entries[history.currentIndex];
+      if(!previous||new URL(previous.url).hash==='#service-map')throw new Error(`Map shortcut created an unexpected extra history entry: ${JSON.stringify(history)}`);
+      await client.call('Page.navigateToHistoryEntry',{entryId:previous.id});
+      const back=await until('native Back',view=>view.hash!== '#service-map'&&view.query==='Boston'&&view.historyQuery==='Boston'&&!/preparing/i.test(view.count)&&JSON.stringify(view.ids)===JSON.stringify(after.ids));
+      await client.call('Page.navigateToHistoryEntry',{entryId:destination.id});
+      const forward=await until('native Forward',view=>view.hash==='#service-map'&&view.query==='Boston'&&view.historyQuery==='Boston'&&!/preparing/i.test(view.count)&&JSON.stringify(view.ids)===JSON.stringify(after.ids));
+      if(new URL(back.href).search||new URL(forward.href).search||[back.href,forward.href].some(url=>url.toLowerCase().includes('boston')))throw new Error('Map history navigation exposed the private query');
+      evidence.push({pending,before,activated,after,focus,back,forward});
+    } finally {
+      try { await evaluate(client,'window.__rwnMapNavigation?.release()'); }
+      finally { if(instrumentation?.identifier)await client.call('Page.removeScriptToEvaluateOnNewDocument',{identifier:instrumentation.identifier}); }
+    }
+  }
+  if(JSON.stringify(evidence[0].after.ids)!==JSON.stringify(evidence[1].after.ids))throw new Error('Pending and settled map journeys returned different Boston results');
+  await writeFile('qa-screenshots/mobile-map-shortcut-native.json',JSON.stringify(evidence,null,2));
+  console.log('Map shortcut QA passed: pending and settled trusted input, native Enter/Tab, Back/Forward, and private query preservation.');
 }
