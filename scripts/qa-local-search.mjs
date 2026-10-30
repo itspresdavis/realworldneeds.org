@@ -1,3 +1,4 @@
+import { selectAll } from "./qa-keyboard.mjs";
 import { selectDirectoryNeed } from "./qa-directory-need.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { newYorkCatalogFixtures } from "./qa-catalog-expectations.mjs";
@@ -84,8 +85,7 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
   const type = async text => {
     await click("[data-directory-query]");
     await evaluate(client, `(() => { window.__localSearchInputs = []; document.querySelector('[data-directory-query]').addEventListener('input', event => window.__localSearchInputs.push(event.isTrusted), { once: true }); })()`);
-    await client.call("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 2 });
-    await client.call("Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 2 });
+    await selectAll(client);
     await client.call("Input.insertText", { text });
     assert(await evaluate(client, "window.__localSearchInputs.length === 1 && window.__localSearchInputs[0]"), "Local search must use trusted input", text);
   };

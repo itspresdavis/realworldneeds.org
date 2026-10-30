@@ -130,7 +130,7 @@ test('keyboard checks require real focus, hit testing, visible ring, and sticky-
   ]) { const broken = structuredClone(state); mutate(broken); assert.ok(issues(broken, { focus }).length, mutate.toString()); }
 });
 
-test('Enter and Space send complete native activation sequences; Tab preserves Shift and Ctrl+A selects text', async () => {
+test('Enter and Space send complete native activation sequences; Tab preserves Shift and explicit Control stays physical', async () => {
   for (const [key, code, name, text] of [['Enter', 13, 'Enter', '\r'], [' ', 32, 'Space', ' ']]) {
     const calls = []; await directoryPaginationKey({ call: async (method, params) => calls.push({ method, params }) }, key);
     assert.deepEqual(calls, [

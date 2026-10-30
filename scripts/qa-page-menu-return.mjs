@@ -1,3 +1,4 @@
+import { selectAll } from "./qa-keyboard.mjs";
 import { PAGE_MENU_REFLOW_LINKS } from './qa-page-menu-reflow.mjs';
 import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -326,8 +327,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
   };
   const type = async query => {
     await nativeClick('[data-directory-query]', false);
-    await client.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 2 });
-    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: 2 });
+    await selectAll(client);
     await client.call('Input.insertText', { text: query });
   };
   const entry = async () => { const history = await client.call('Page.getNavigationHistory'); return { entry: history.entries[history.currentIndex], index: history.currentIndex, entries: history.entries }; };
