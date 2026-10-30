@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import platform
+import pwd
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -297,6 +298,20 @@ def ensure_ports_available(ports):
                            ", ".join(map(str, occupied)))
 
 
+def stage_environment(name, env):
+    stage_env = dict(env)
+    home_policy = "isolated"
+    if sys.platform == "darwin" and name in {"touch", "browser"}:
+        # macOS Chrome needs the native account home for system integration.
+        # Browser profiles, XDG state, npm and Git configuration remain isolated.
+        native_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+        if not native_home.is_absolute() or not native_home.is_dir():
+            raise RuntimeError("The native macOS account home must be an existing absolute directory")
+        stage_env["HOME"] = str(native_home)
+        home_policy = "macos-native-home-isolated-browser-profile"
+    return stage_env, {"home_policy": home_policy, "home": stage_env.get("HOME")}
+
+
 def run_stage(name, argv, cwd, env, log_path, timeout):
     started = now()
     start = time.monotonic()
@@ -304,8 +319,10 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
     status = "error"
     exit_code = None
     detail = None
+    environment = None
     resources = stage_resource_policy(name)
     try:
+        stage_env, environment = stage_environment(name, env)
         with Path(log_path).open("wb") as log:
             try:
                 ensure_ports_available(BROWSER_PORTS.get(name, ()))
@@ -313,7 +330,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
                 log.write((str(error) + "\n").encode())
                 raise
             process = subprocess.Popen(
-                argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
+                argv, cwd=cwd, env=stage_env, stdout=log, stderr=subprocess.STDOUT,
                 start_new_session=True, preexec_fn=lambda: child_limits(resources),
             )
             try:
@@ -335,7 +352,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
             stop_process(process)
     return {
         "name": name, "argv": argv, "status": status, "exit_code": exit_code,
-        "resources": resources,
+        "resources": resources, "environment": environment,
         "detail": detail, "started_at": started, "finished_at": now(),
         "duration_seconds": round(time.monotonic() - start, 3),
         "timeout_seconds": timeout, "log": str(log_path),

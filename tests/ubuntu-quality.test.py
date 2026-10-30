@@ -182,6 +182,79 @@ class QualityTests(unittest.TestCase):
                 else:
                     nice.assert_not_called()
 
+    def test_linux_stage_environment_keeps_isolated_home(self):
+        original = {"HOME": "/isolated/home", "XDG_CONFIG_HOME": "/isolated/config"}
+        with mock.patch.object(quality.sys, "platform", "linux"), \
+             mock.patch.object(quality.pwd, "getpwuid") as account:
+            for name in ("install", "check", "touch", "browser"):
+                env, metadata = quality.stage_environment(name, original)
+                self.assertEqual(env, original)
+                self.assertIsNot(env, original)
+                self.assertEqual(metadata["home_policy"], "isolated")
+            account.assert_not_called()
+
+    def test_darwin_uses_native_home_only_for_browser_stages_without_mutating_input(self):
+        original = {"HOME": "/isolated/home", "TMPDIR": "/isolated/tmp"}
+        with mock.patch.object(quality.sys, "platform", "darwin"), \
+             mock.patch.object(quality.pwd, "getpwuid", return_value=mock.Mock(pw_dir=str(self.root))) as account:
+            for name in ("node", "chrome", "install", "check"):
+                env, metadata = quality.stage_environment(name, original)
+                self.assertEqual(env, original)
+                self.assertEqual(metadata["home_policy"], "isolated")
+            account.assert_not_called()
+            for name in ("touch", "browser"):
+                env, metadata = quality.stage_environment(name, original)
+                self.assertEqual(env, dict(original, HOME=str(self.root)))
+                self.assertEqual(metadata, {"home_policy": "macos-native-home-isolated-browser-profile",
+                                            "home": str(self.root)})
+                account.assert_called_with(os.getuid())
+        self.assertEqual(original["HOME"], "/isolated/home")
+
+    def test_browser_home_compatibility_preserves_scrubbing_and_private_state_paths(self):
+        with mock.patch.dict(os.environ, {"HOME": "/untrusted/home", "GH_TOKEN": "secret",
+                                         "NPM_TOKEN": "secret", "NODE_OPTIONS": "untrusted"}), \
+             mock.patch.object(quality.sys, "platform", "darwin"), \
+             mock.patch.object(quality.pwd, "getpwuid", return_value=mock.Mock(pw_dir=str(self.root))):
+            original = quality.clean_environment(self.root / "isolated")
+            env, _ = quality.stage_environment("browser", original)
+        self.assertEqual(env, dict(original, HOME=str(self.root)))
+        for key in ("GH_TOKEN", "NPM_TOKEN", "NODE_OPTIONS"):
+            self.assertNotIn(key, env)
+        for key in ("TMPDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
+                    "NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG", "NPM_CONFIG_CACHE",
+                    "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "CHROME_PATH"):
+            self.assertEqual(env[key], original[key])
+        self.assertEqual(original["HOME"], str(self.root / "isolated"))
+
+    def test_browser_stage_records_home_policy_and_spawns_with_selected_environment(self):
+        original = quality.clean_environment(self.root / "isolated")
+        process = mock.Mock()
+        process.wait.return_value = 0
+        argv = ["node", "scripts/browser-globe-touch-v4.mjs"]
+        with mock.patch.object(quality.sys, "platform", "darwin"), \
+             mock.patch.object(quality.pwd, "getpwuid", return_value=mock.Mock(pw_dir=str(self.root))), \
+             mock.patch.object(quality, "ensure_ports_available"), \
+             mock.patch.object(quality, "stop_process"), \
+             mock.patch.object(quality.subprocess, "Popen", return_value=process) as spawn:
+            result = quality.run_stage("touch", argv, self.root, original, self.root / "stage.log", 420)
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["environment"], {"home_policy": "macos-native-home-isolated-browser-profile",
+                                                "home": str(self.root)})
+        self.assertEqual(spawn.call_args.args[0], argv)
+        self.assertEqual(spawn.call_args.kwargs["env"], dict(original, HOME=str(self.root)))
+        self.assertTrue(spawn.call_args.kwargs["start_new_session"])
+        process.wait.assert_called_once_with(timeout=420)
+
+    def test_invalid_native_home_fails_closed_without_launch(self):
+        with mock.patch.object(quality.sys, "platform", "darwin"), \
+             mock.patch.object(quality.pwd, "getpwuid", return_value=mock.Mock(pw_dir="relative/home")), \
+             mock.patch.object(quality.subprocess, "Popen") as spawn:
+            result = quality.run_stage("browser", ["node"], self.root, {}, self.root / "stage.log", 1)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("native macOS account home", result["detail"])
+        self.assertIsNone(result["environment"])
+        spawn.assert_not_called()
+
     def test_platform_chrome_paths_are_explicit_and_environment_cannot_override(self):
         for system, expected in (
             ("linux", "/usr/bin/google-chrome"),
