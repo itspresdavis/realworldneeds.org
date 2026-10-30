@@ -133,7 +133,6 @@ a:hover { color: #055f34; }
 
 .legal-footer { display: grid; grid-template-columns: 1fr auto; gap: 1rem 2rem; align-items: center; padding: 2.35rem clamp(1rem, 4vw, 4rem); border-top: 1px solid rgba(196, 222, 218, .1); background: var(--navy-950); color: #96a9ae; font-size: .77rem; }
 .legal-footer p { margin: 0; color: #a5b6ba; font-weight: 650; }
-.legal-footer p::first-letter { color: var(--green-soft); }
 .legal-footer nav { display: flex; flex-wrap: wrap; gap: .82rem 1.2rem; }
 .legal-footer a { color: #d8f2e4; text-decoration-color: rgba(216, 242, 228, .35); }
 .legal-footer a:hover { color: var(--green-soft); }

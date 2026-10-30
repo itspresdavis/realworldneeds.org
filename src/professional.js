@@ -50,10 +50,10 @@ function rewriteBrandText() {
 }
 
 function rewriteFinderCopy() {
-  setText(".finder-intro h1", "Find essential services near you.");
+  setText(".finder-intro h1", "Find essential services.");
   setText(
     ".finder-intro p",
-    "Practical help, with contact details and sources you can check."
+    "Food, water, shelter and other support. Search by place or explore the map."
   );
 
   const status = document.getElementById("locationStatus");
@@ -71,10 +71,10 @@ function rewriteFinderCopy() {
 
 function rewriteMethodSections() {
   document.querySelectorAll(".about-rwn .section-kicker, .source-band .section-kicker").forEach(node => node.remove());
-  setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
+  setText(".about-rwn__heading h2", "About Real World Needs");
   setText(
     ".about-rwn__heading p",
-    "Find practical support. Review the details. Reach the people who can help. The provider confirms eligibility and availability."
+    "Real World Needs brings together public information about essential services. We help people find providers and check the details. Careful source reviews help keep the directory useful."
   );
 
   const heading = document.querySelector('.about-rwn__heading');
@@ -83,26 +83,26 @@ function rewriteMethodSections() {
   const about = document.querySelector(".about-rwn");
   if (source && about) about.before(source);
   if (heading && !heading.querySelector('.contributor-invitation')) {
-    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
+    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help improve the directory →'; heading.append(invitation);
   }
 
-  setText(".source-band__heading h2", "Check the source before you go.");
+  setText(".source-band__heading h2", "Before you visit");
   setText(
     ".source-band__heading p",
-    "Listings include the source and the date we reviewed it. Hours, capacity and eligibility can change, so the provider remains the final authority."
+    "Hours, eligibility and availability can change. Contact the provider before travelling, especially when you need help today."
   );
 
   const principles = document.getElementById("principleGrid");
   if (principles) {
     principles.innerHTML = `
-      <article><span>01</span><div><h3>Source</h3><p>We name and link the public source used for the listing.</p></div></article>
-      <article><span>02</span><div><h3>Review date</h3><p>We show when the source was last checked by RWN.</p></div></article>
-      <article><span>03</span><div><h3>Provider authority</h3><p>The provider is responsible for current hours, eligibility, capacity and service decisions.</p></div></article>
+      <p><strong>Check the source and review date.</strong> Each listing names the public source and shows when RWN checked it. The provider confirms current details and whether a service is available to you.</p>
+      <nav aria-label="Directory information"><a href="/editorial-policy">How listings are checked <span aria-hidden="true">↗</span></a><a href="/sources">Browse the sources <span aria-hidden="true">↗</span></a></nav>
     `;
   }
 }
 
 function simplifyStructure() {
+  document.querySelector(".results-heading .section-kicker")?.remove();
   document.querySelector(".directory-strip")?.remove();
   document.getElementById("accountability")?.remove();
 
@@ -155,12 +155,12 @@ export function installProfessionalPresentation() {
   document.documentElement.classList.add("rwn-professional");
   document.body.classList.add("rwn-professional", "rwn-atlas");
   const globe = document.querySelector('.globe-stage');
-  setText(".globe-meta > div:first-child strong", "Explore the map");
+  setText(".globe-meta > div:first-child strong", "Service map");
   if (globe && !globe.querySelector('.atlas-key')) {
     const key = document.createElement('div');
     key.className = 'atlas-key';
     key.setAttribute('aria-label', 'Map marker key');
-    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Drag to rotate; zoom for detail. Select a point to check its address and source.</small>';
+    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small><span class="atlas-key__gesture">Drag to rotate; use + / − to zoom. </span>Select a point to see the provider, address and source.</small>';
     globe.append(key);
   }
   const intro = document.querySelector('.finder-intro');

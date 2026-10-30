@@ -185,7 +185,7 @@ test('snapshot rejects provisional documents and cannot turn body, clipped or oc
   assert.equal(snapshot(f.globals).focus.visible, true); assert.equal(snapshot(f.globals).focus.keyboardRing, false);
 });
 
-const contributorSelectors = ['header.contributor-header', 'form#accountForm',
+const contributorSelectors = ['header.rwn-unified-header a[href="/join"][aria-current="page"]', 'form#accountForm',
   '#accountForm input[name="email"][type="email"]', '#accountForm input[name="password"][type="password"]',
   '#accountForm button#accountSubmit[type="submit"]'];
 function contributorFixture() {

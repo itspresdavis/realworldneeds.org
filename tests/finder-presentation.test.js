@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const normalizeCss = (css) => css.replace(/\s*([{}:;,])\s*/g, "$1").replace(/\s+/g, " ");
+const normalizeCss = (css) => css.replace(/\s*([{};,])\s*/g, "$1").replace(/([-\w]+):\s+/g, "$1:").replace(/\s+/g, " ");
 const readCss = async (path) => normalizeCss(await readFile(path, "utf8"));
 
 test("finder owns one map coordinate space and fixed-size controls", async () => {
   const css = await readCss("src/clarity.css");
-  assert.match(css, /\.rwn-professional \.globe-canvas,\.rwn-professional \.globe-pin-layer\{[^}]*inset:4rem 0 4\.5rem;[^}]*height:calc\(100% - 8\.5rem\)/);
+  assert.match(css, /\.rwn-professional \.globe-canvas,\.rwn-professional \.globe-pin-layer\{[^}]*inset:var\(--map-top\) 0 var\(--map-bottom\);[^}]*height:calc\(100% - var\(--map-top\) - var\(--map-bottom\)\)/);
   assert.match(css, /\.rwn-professional \.globe-controls\{[^}]*top:auto;[^}]*transform:none;[^}]*grid-auto-rows:44px/);
   assert.match(css, /\.rwn-professional \.globe-readout\{[^}]*display:block !important;[^}]*clip-path:inset\(50%\)/);
   assert.doesNotMatch(css, /A GLOBAL DIRECTORY OF PRACTICAL HELP/);
@@ -33,15 +33,15 @@ test("source guidance and contributor closing have distinct responsive layouts",
   assert.match(contract, /await verifyFinderMapNavigation\(/);
 });
 
-test("finder, directory, and service pages share forest accents and clear sans-serif titles", async () => {
+test("editorial headings use restrained serif type while service titles remain clear sans-serif", async () => {
   const css = await readCss("src/clarity.css");
   const pages = await readCss("public/professional-pages.css");
   const nav = await readFile("public/navigation-actions.css", "utf8");
   assert.match(css, /--rwn-green-dark:#24583e/);
   assert.match(pages, /--page-green-dark:#24583e/);
   assert.match(nav, /--rwn-action-green-dark:#24583e/);
-  assert.match(css, /\.rwn-professional \.finder-intro h1\{[^}]*font-family:Arial,Helvetica,sans-serif;[^}]*font-weight:600/);
-  assert.match(pages, /#service > \.legal-hero h1\{font-family:Arial,Helvetica,sans-serif;font-weight:650/);
+  assert.match(css, /\.rwn-professional \.finder-intro h1\{[^}]*font-family:Georgia,"Times New Roman",serif;[^}]*font-size:clamp\(2\.5rem,3\.4vw,3rem\);font-weight:400/);
+  assert.match(pages, /\.directory-record h2[^}]*font-family:Arial,Helvetica,sans-serif/);
 });
 
 
@@ -57,7 +57,7 @@ test("preboot style does not override the initialized finder design", async () =
 });
 
 test("small directory and service metadata has readable text contrast", async () => {
-  const pages = await readFile("public/professional-pages.css", "utf8");
+  const pages = await readCss("public/professional-pages.css");
   const finder = await readCss("src/clarity.css");
   const luminance = (hex) => {
     const channels = hex.match(/[a-f\d]{2}/gi).map((value) => parseInt(value, 16) / 255);
@@ -69,25 +69,25 @@ test("small directory and service metadata has readable text contrast", async ()
     return (levels[1] + .05) / (levels[0] + .05);
   };
   for (const selector of [".directory-record dt", ".service-next-steps a span", ".legal-toc a"]) {
-    const rule = pages.slice(pages.indexOf(`${selector} {`)).split("}")[0];
+    const rule = pages.slice(pages.indexOf(`${selector}{`)).split("}")[0];
     const color = rule.match(/color:\s*(#[a-f\d]{6})/i)?.[1];
     assert.ok(color, `${selector} exposes its foreground`);
     for (const background of ["#ffffff", "#f5f4ee"]) {
       assert.ok(ratio(color, background) >= 4.5, `${selector} against ${background} has normal-text contrast`);
     }
   }
-  assert.match(pages, /\.directory-record dt \{[^}]*font-size:\.8125rem/);
-  assert.match(pages, /#service \.service-next-steps a span \{ font-size: \.8125rem/);
+  assert.match(pages, /\.directory-record dt\{[^}]*font-size:\.8125rem/);
+  assert.match(pages, /#service \.service-next-steps a span\{font-size:\.8125rem/);
   assert.match(finder, /\.resource-list-head\{color:#586b60;font-size:\.8125rem/);
   assert.doesNotMatch(pages, /color:#(?:748389|6f7f84|77868b|697a80|6d7d82)/);
 });
 
 test("service Save states retain their own contrasting colors", async () => {
-  const pages = await readFile("public/professional-pages.css", "utf8");
+  const pages = await readCss("public/professional-pages.css");
   const browser = await readFile("scripts/qa-finder-presentation.mjs", "utf8");
   assert.doesNotMatch(pages, /#service \.service-utility-actions button\s*\{[^}]*color:/);
-  assert.match(pages, /#service \.service-utility-actions__buttons button \{ color: #24583e;/);
-  assert.match(pages, /#service \[data-service-save\] \{ transition: none;/);
+  assert.match(pages, /#service \.service-utility-actions__buttons button\{color:#24583e;/);
+  assert.match(pages, /#service \[data-service-save\]\{transition:none;/);
   assert.match(browser, /state\.contrast < 4\.5/);
   assert.match(browser, /service\.before\.pressed !== service\.restored\.pressed/);
 });
@@ -114,28 +114,28 @@ test("provider visiting warnings precede optional listing tools", async () => {
 
 test("mobile need filters retain open text treatment and full touch targets", async () => {
   const css = await readCss("src/clarity.css");
-  assert.match(css, /\.quick-need--all\[aria-pressed="true"\]\{[^}]*border-bottom-color:var\(--rwn-green-dark\);background:transparent/);
+  assert.match(css, /\.quick-need\[aria-pressed="true"\]\{[^}]*border-bottom-color:var\(--rwn-green-dark\);background:transparent/);
   assert.match(css, /\.rwn-professional \.quick-need\{[^}]*min-width:44px;[^}]*flex:0 1 auto/);
 });
 
 test("handoff subtitles and medium-width action rows share the readable layout", async () => {
   const nav = await readFile("public/navigation-actions.css", "utf8");
-  const pages = await readFile("public/professional-pages.css", "utf8");
+  const pages = await readCss("public/professional-pages.css");
   const finder = await readFile("src/clarity.css", "utf8");
   assert.match(nav, /\.service-next-steps a\.is-primary span\{color:#586b60!important\}/);
   assert.doesNotMatch(nav, /color:#(?:6f7f84|697a80|728188)/);
-  assert.match(pages, /@media \(max-width:1024px\) \{\s*\.service-next-steps \{ grid-template-columns:1fr; \}/);
+  assert.match(pages, /@media \(max-width:1024px\)\{\.service-next-steps\{grid-template-columns:1fr;\}/);
   assert.match(finder, /\.results-empty__reset\)\{min-height:44px/);
 });
 
 
-test("compact navigation keeps full focus text and shared sans-serif heading weight", async () => {
+test("compact navigation keeps full focus text and restrained editorial heading weight", async () => {
   const source = await readFile("src/app.js", "utf8");
-  const pages = await readFile("public/professional-pages.css", "utf8");
+  const pages = await readCss("public/professional-pages.css");
   const nav = await readFile("public/navigation-actions.css", "utf8");
   assert.match(source, /<option value="focus" hidden>This area<\/option>/);
-  assert.match(pages, /\[aria-label="Breadcrumb"\] span \{ flex:0 0 auto;/);
-  assert.match(nav, /#directory>\.legal-hero h1\{[^}]*font-weight:650;/);
+  assert.match(pages, /\[aria-label="Breadcrumb"\] span\{flex:0 0 auto;/);
+  assert.match(nav, /#directory>\.legal-hero h1\{[^}]*font-weight:400;/);
 });
 
 
@@ -156,4 +156,33 @@ test("map attribution stays readable on the paper footer", async () => {
   const luminance = (hex) => hex.match(/../g).map((channel) => parseInt(channel,16)/255).map((value) => value <= .04045 ? value/12.92 : ((value+.055)/1.055)**2.4).reduce((sum,value,index) => sum+value*[.2126,.7152,.0722][index],0);
   const levels = [luminance(foreground), luminance(background)].sort((a,b) => a-b);
   assert.ok((levels[1]+.05)/(levels[0]+.05) >= 4.5);
+});
+
+
+test("touch exploration has an explicit toolbar outside the shared map coordinate space", async () => {
+  const css = await readCss("src/clarity.css");
+  assert.match(css, /\.globe-touch-controls\{[^}]*position:absolute;[^}]*grid-template-columns:auto 1fr/);
+  assert.match(css, /\.globe-touch-controls\[hidden\]\{display:none/);
+  assert.match(css, /\.globe-touch-controls button\{min-height:44px;min-width:7\.5rem/);
+  assert.match(css, /\.globe-stage:has\(\.globe-touch-controls:not\(\[hidden\]\)\)\{--map-top:9\.25rem/);
+  assert.match(css, /\.rwn-professional \.globe-canvas\{touch-action:pan-y pinch-zoom/);
+  assert.match(css, /\.rwn-professional \.is-touch-exploring :is\(\.globe-canvas,\.globe-pin\)\{touch-action:none/);
+  assert.doesNotMatch(css, /\.globe-stage\.is-touch-exploring\{[^}]*touch-action:none/);
+  assert.match(css, /@media\(max-width:900px\) and \(max-height:600px\) and \(orientation:landscape\)\{/);
+  assert.match(css, /\.globe-stage\.is-globe-unavailable :is\(\.globe-meta,\.globe-touch-controls/);
+  const source = await readFile("src/refinement.js", "utf8");
+  assert.match(source, /choose Explore globe to rotate in any direction and pinch to zoom/);
+  assert.match(source, /Choose Done or press Escape to return to page scrolling/);
+});
+
+test("the closing explains provider checks and contributions without repeating a slogan", async () => {
+  const source = await readFile("src/professional.js", "utf8");
+  assert.match(source, /Find essential services\./);
+  assert.match(source, /About Real World Needs/);
+  assert.match(source, /Before you visit/);
+  assert.match(source, /Check the source and review date/);
+  assert.match(source, /href="\/editorial-policy"/);
+  assert.match(source, /href="\/sources"/);
+  assert.match(source, /Help improve the directory/);
+  assert.doesNotMatch(source, /Everyone deserves a clear next step|<article><span>0[123]<\/span>/);
 });

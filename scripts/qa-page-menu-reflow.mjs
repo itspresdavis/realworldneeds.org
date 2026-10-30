@@ -68,9 +68,9 @@ export function pageMenuReflowSnapshot() {
       focused: doc.activeElement === node, focusVisible: node.matches(':focus-visible'),
       outline: { style: css.outlineStyle, width: outline, offset, color: css.outlineColor }, ring };
   });
-  // Contribute is a standalone destination, not a source of the public menu.
-  // Require its real account form; other routes still require the full menu.
-  const contributorReady = globalThis.location?.pathname === '/join' && doc?.querySelector('header.contributor-header')
+  // Contribute must expose the shared current-page navigation and its real
+  // account form before destination readiness can be claimed.
+  const contributorReady = globalThis.location?.pathname === '/join' && doc?.querySelector('header.rwn-unified-header a[href="/join"][aria-current="page"]')
     && doc.querySelector('form#accountForm') && doc.querySelector('#accountForm input[name="email"][type="email"]')
     && doc.querySelector('#accountForm input[name="password"][type="password"]') && doc.querySelector('#accountForm button#accountSubmit[type="submit"]');
   const navigationReady = globalThis.location?.pathname === '/join' ? contributorReady : menu && nav && summary;

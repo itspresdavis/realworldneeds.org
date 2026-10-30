@@ -48,7 +48,7 @@ function fixture() {
     selectionEnd: 0,
     setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; },
     addEventListener: (event, handler) => {
-      events[event] = handler;
+      events[event] = values => handler({ preventDefault() {}, ...values });
     },
     focus() {},
   };
@@ -71,6 +71,7 @@ function fixture() {
     resourceGrid: { innerHTML: "" },
     showMoreResults: { hidden: true },
     resultTitle: { textContent: "" },
+    jumpResults: { clicks: 0, click() { this.clicks++; } },
   };
   const context = vm.createContext({
     state, URL, privateResourceUrl, clearResourceFromUrl, resources: [{ id: "first" }, { id: "second" }],
@@ -141,6 +142,8 @@ function fixture() {
   return {
     events,
     input,
+    resultsJump: nodes.jumpResults,
+    refocus: () => { context.document.activeElement = input; },
     count,
     status,
     badge,
@@ -677,4 +680,54 @@ test("Back to a draft then another section before readiness does not duplicate t
   f.ready(); await settle();
   assert.equal(f.state.query, "Boston");
   assert.equal(f.href(), "https://www.realworldneeds.org/#results");
+});
+
+
+test("Enter navigates through the existing results link only after its query has settled", async () => {
+  const f = fixture(); f.type("Boston");
+  f.events.keydown({ key: "Enter" });
+  assert.equal(f.resultsJump.clicks, 0);
+  f.ready(); await settle();
+  assert.equal(f.state.query, "Boston");
+  assert.equal(f.resultsJump.clicks, 1);
+  assert.equal(String(f.href()), "https://www.realworldneeds.org/", "query text stays private before the existing link owns its fragment");
+});
+
+test("a pending Enter never steals focus after the reader leaves and returns to the input", async () => {
+  const f = fixture(); f.type("Boston");
+  f.events.keydown({ key: "Enter" }); f.blur(); f.refocus();
+  f.ready(); await settle();
+  assert.equal(f.state.query, "Boston");
+  assert.equal(f.resultsJump.clicks, 0);
+});
+
+test("newer typing invalidates an older Enter navigation request", async () => {
+  const f = fixture(); f.type("Boston");
+  f.events.keydown({ key: "Enter" }); f.type("London"); f.flush();
+  f.ready(); await settle();
+  assert.equal(f.state.query, "London");
+  assert.equal(f.resultsJump.clicks, 0);
+});
+
+test("only the latest repeated Enter request navigates once", async () => {
+  const f = fixture(); f.type("Boston");
+  f.events.keydown({ key: "Enter" }); f.events.keydown({ key: "Enter" });
+  f.ready(); await settle();
+  assert.equal(f.resultsJump.clicks, 1);
+});
+
+test("IME Enter cannot navigate away from composition", async () => {
+  const f = fixture(); f.type("Boston");
+  f.events.compositionstart({});
+  f.events.keydown({ key: "Enter", isComposing: true, keyCode: 229 });
+  f.ready(); await settle();
+  assert.equal(f.resultsJump.clicks, 0);
+});
+
+test("Enter on already prepared search reuses results navigation and blur does not navigate again", async () => {
+  const f = fixture(); f.ready(); f.type("Boston"); f.flush(); await settle();
+  f.events.keydown({ key: "Enter" }); await settle();
+  assert.equal(f.resultsJump.clicks, 1);
+  f.blur(); await settle();
+  assert.equal(f.resultsJump.clicks, 1);
 });

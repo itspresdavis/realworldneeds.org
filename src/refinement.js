@@ -34,7 +34,7 @@ function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
   input.placeholder = "Search by service or place";
-  input.setAttribute("aria-label", "What do you need? Search by need, service, place, ZIP or postcode, or organization");
+  input.setAttribute("aria-label", "Search the directory by need, service, place, ZIP or postcode, or organization");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");
 
@@ -111,7 +111,7 @@ function composeFinderSurface() {
   const label = document.createElement("label");
   label.className = "finder-search-label";
   label.htmlFor = "resourceSearch";
-  label.textContent = "What do you need?";
+  label.textContent = "Search the directory";
   search.before(surface);
   surface.append(label);
   // Reuse the live controls. Moving a focused node can blur it in older browsers.
@@ -134,7 +134,7 @@ function improveFilterSummary() {
 
 function refineGlobeInstructions() {
   const help = document.getElementById("globeHelp");
-  if (help) help.textContent = "Drag or use arrow keys to rotate. Zoom by double-clicking, pinching, pressing plus and minus, or holding Control or Command while scrolling. Ordinary scrolling always moves the page. Select a country or service point for details.";
+  if (help) help.textContent = "On touch screens, choose Explore globe to rotate in any direction and pinch to zoom. Choose Done or press Escape to return to page scrolling. With a mouse, drag to rotate; hold Control or Command while scrolling to zoom. Arrow keys rotate the focused globe, and plus and minus zoom. Select a country or service point for details.";
 
   const hint = document.querySelector(".globe-gesture-hint");
   if (hint) hint.textContent = "Drag to rotate · Double-click, pinch or + / − to zoom";

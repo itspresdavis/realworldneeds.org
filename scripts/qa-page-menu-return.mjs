@@ -104,7 +104,7 @@ export function pageMenuReturnSnapshot() {
   const rows = selector => all(selector).map(node => ({ href: node.getAttribute('href'), text: node.textContent.trim() }));
   const panel = pick('[data-saved-services]');
   // Contribute is an existing standalone account page, not a menu source.
-  const contributorReady = globalThis.location?.pathname === '/join' && pick('header.contributor-header')
+  const contributorReady = globalThis.location?.pathname === '/join' && pick('header.rwn-unified-header a[href="/join"][aria-current="page"]')
     && pick('form#accountForm') && pick('#accountForm input[name="email"][type="email"]')
     && pick('#accountForm input[name="password"][type="password"]') && pick('#accountForm button#accountSubmit[type="submit"]');
   return {

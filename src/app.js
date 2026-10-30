@@ -428,8 +428,8 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find essential services near you.</h1>
-              <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
+              <h1>Find essential services.</h1>
+              <p>Food, water, shelter and other support. Search by place or explore the map.</p>
             </div>
 
             <div class="finder-search" role="search">
@@ -490,8 +490,12 @@ function shell() {
                 </label>
               </div>
             </div>
-            <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
-            <p class="sr-only" id="globeHelp">Drag left or right to rotate. On touch screens, vertical swipes keep scrolling the page and two fingers zoom the globe. Use plus and minus, or hold Control or Command while scrolling, for precise zoom. Select a service point for details. Higher-detail boundaries and imagery load as you move closer.</p>
+            <div id="globeTouchControls" class="globe-touch-controls" hidden>
+            <button id="toggleGlobeExplore" type="button" aria-controls="globeCanvas" aria-describedby="globeTouchInstructions" aria-pressed="false">Explore globe</button>
+            <p id="globeTouchInstructions" role="status">Swipe to scroll. Choose Explore globe to rotate and zoom.</p>
+          </div>
+          <canvas id="globeCanvas" class="globe-canvas" tabindex="0" role="img" aria-describedby="globeHelp" aria-label="Interactive globe showing free essential services and resource finders"></canvas>
+            <p class="sr-only" id="globeHelp">With a mouse, drag to rotate. On touch screens, choose Explore globe, then drag in any direction or pinch to zoom. Choose Done or press Escape to leave exploration. Outside the globe, swipes always scroll the page. With the globe focused, arrow keys rotate, plus and minus zoom, Home resets the view, and Space plays or pauses rotation. Hold Control or Command while scrolling for precise zoom. Select a service point for details. Higher-detail boundaries and imagery load as you move closer.</p>
             <div class="globe-pin-layer" id="pinLayer"></div>
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
@@ -1768,6 +1772,7 @@ function reportGlobeUnavailable(message = "Interactive map unavailable on this d
   if (globeUnavailableReported && !retry) return;
   globeUnavailableReported = true;
   const stage = globeStageElement || document.querySelector(".globe-stage");
+  const focusWasInTouchControls = Boolean(document.getElementById("globeTouchControls")?.contains(document.activeElement));
   if (stage) stage.classList.add("is-globe-unavailable");
   const status = document.getElementById("globeReadout");
   if (status) status.textContent = message;
@@ -1777,6 +1782,10 @@ function reportGlobeUnavailable(message = "Interactive map unavailable on this d
   if (fallbackMessage) fallbackMessage.textContent = message;
   const retryButton = document.getElementById("retryGlobe");
   if (retryButton) retryButton.hidden = !retry;
+  if (focusWasInTouchControls) {
+    const recoveryControl = retry ? retryButton : fallback?.querySelector("a");
+    recoveryControl?.focus({ preventScroll: true });
+  }
 }
 
 function resetGlobeContextResources() {
@@ -2429,6 +2438,7 @@ function bindEvents() {
   let composingSearch = false;
   hasPendingSearch = () => composingSearch || pendingSearchValue !== state.query;
   let searchRevision = 0;
+  let searchNavigationRevision = 0;
   let searchFilterTimer = null;
   let searchHistoryTimer = null;
   let preparationNoticeTimer = null;
@@ -2545,7 +2555,18 @@ function bindEvents() {
   searchInput.addEventListener("keydown", (event) => {
     if (event.isComposing || composingSearch || event.keyCode === 229) return;
     if (event.key === "Enter") {
-      commitPendingSearch();
+      event.preventDefault();
+      const revision = searchRevision;
+      const navigationRevision = ++searchNavigationRevision;
+      const query = pendingSearchValue;
+      commitPendingSearch().then(() => {
+        // Enter is a deliberate request to see results. Reuse their native
+        // link only while this exact request still owns the input focus.
+        if (revision !== searchRevision || navigationRevision !== searchNavigationRevision
+          || composingSearch || query !== pendingSearchValue || query !== state.query
+          || document.activeElement !== searchInput) return;
+        document.getElementById("jumpResults")?.click();
+      });
       return;
     }
     if (event.key !== "Escape" || (!state.query && !pendingSearchValue && !searchInput.value)) return;
@@ -2555,7 +2576,10 @@ function bindEvents() {
     updateFilters();
     writeFinderHistory("push");
   });
-  searchInput.addEventListener("blur", commitPendingSearch);
+  searchInput.addEventListener("blur", () => {
+    searchNavigationRevision += 1;
+    return commitPendingSearch();
+  });
   document.getElementById("clearSearch").addEventListener("click", () => {
     cancelPendingSearch();
     state.query = "";
@@ -2752,7 +2776,7 @@ function bindEvents() {
     state.velocityLat = 0;
     setGlobeRotation(false);
   });
-  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
+  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-touch-controls, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
 
   const prepareGlobeInteraction = () => {
     wakeGlobe();
@@ -2823,7 +2847,17 @@ function bindEvents() {
   globeStage.addEventListener("lostpointercapture", (event) => finishGlobePointer(event, true));
 
   let touchState = null;
-  const mapTouches = (touches) => Array.from(touches).filter((touch) => globeStage.contains(touch.target) && !isGlobeChrome(touch.target));
+  let touchExploring = false;
+  let wheelOwner = null;
+  let lastWheelTime = 0;
+  const touchControls = document.getElementById("globeTouchControls");
+  const exploreButton = document.getElementById("toggleGlobeExplore");
+  const touchInstructions = document.getElementById("globeTouchInstructions");
+  const coarsePointer = window.matchMedia("(any-pointer: coarse)");
+  const touchModeAvailable = () => window.innerWidth <= 900 || coarsePointer.matches || navigator.maxTouchPoints > 0;
+  const isTouchSurface = (target) => target instanceof Element && !isGlobeChrome(target)
+    && (target === canvas || Boolean(target.closest(".globe-pin")));
+  const mapTouches = (touches) => Array.from(touches).filter((touch) => isTouchSurface(touch.target));
   const touchListDistance = (touches) => Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
   const beginTouch = (touch, hadMultiple = false) => ({
     identifier: touch.identifier,
@@ -2842,16 +2876,20 @@ function bindEvents() {
     prepareGlobeInteraction();
   };
   const preventNativePagePinch = (event) => {
-    if (touchState?.intent === "pinch") event.preventDefault();
+    if (touchExploring && touchState?.intent === "pinch") event.preventDefault();
   };
   globeStage.addEventListener("gesturestart", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gesturechange", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gestureend", preventNativePagePinch, { passive: false });
 
   globeStage.addEventListener("touchstart", (event) => {
-    if (isGlobeChrome(event.target)) return;
     const touches = mapTouches(event.touches);
     state.touching = touches.length > 0;
+    // Native scrolling and page magnification own touch until explicitly enabled.
+    // Keep stationary pin buttons mounted, without taking over their click.
+    if (!touchExploring) return;
+    if (touches.length !== event.touches.length) { resetGlobeInput(); return; }
+    if (!isTouchSurface(event.target)) return;
     if (touches.length > 1) {
       beginTouchPinch(touches);
       event.preventDefault();
@@ -2860,8 +2898,9 @@ function bindEvents() {
     }
   }, { passive: false });
   globeStage.addEventListener("touchmove", (event) => {
-    if (!touchState) return;
+    if (!touchExploring || !touchState) return;
     const touches = mapTouches(event.touches);
+    if (touches.length !== event.touches.length) { resetGlobeInput(); return; }
     if (touches.length > 1) {
       if (touchState.intent !== "pinch") beginTouchPinch(touches);
       state.targetZoom = pinchZoom(touchState.pinchStartZoom, touchState.pinchStartDistance,
@@ -2879,15 +2918,12 @@ function bindEvents() {
     }
     if (Math.hypot(touch.clientX - touchState.startX, touch.clientY - touchState.startY) > 6) touchState.moved = true;
     if (touchState.intent === "pending") {
-      const intent = classifyGlobeDragIntent(touch.clientX - touchState.startX, touch.clientY - touchState.startY);
-      touchState.intent = intent;
-      if (intent !== "rotate") return;
+      if (!touchState.moved) return;
+      touchState.intent = "rotate";
       state.dragging = true;
       state.pinching = false;
       markGlobeEngaged();
       prepareGlobeInteraction();
-      touchState.lastX = touch.clientX;
-      touchState.lastY = touch.clientY;
     }
     if (touchState.intent !== "rotate") return;
     const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
@@ -2901,9 +2937,10 @@ function bindEvents() {
     event.preventDefault();
   }, { passive: false });
   globeStage.addEventListener("touchend", (event) => {
-    if (!touchState) return;
     const touches = mapTouches(event.touches);
     state.touching = touches.length > 0;
+    if (!touchExploring || !touchState) { wakeGlobe(); return; }
+    if (touches.length !== event.touches.length) { resetGlobeInput(); return; }
     if (touches.length > 1) { beginTouchPinch(touches); return; }
     state.dragging = false;
     state.pinching = false;
@@ -2940,18 +2977,63 @@ function bindEvents() {
     lastWheelTime = 0;
     wakeGlobe();
   };
+  const setTouchExploring = (enabled) => {
+    resetGlobeInput();
+    touchExploring = Boolean(enabled && touchModeAvailable() && !globeContextLost
+      && !globeStage.classList.contains("is-globe-unavailable"));
+    globeStage.classList.toggle("is-touch-exploring", touchExploring);
+    exploreButton.setAttribute("aria-pressed", String(touchExploring));
+    exploreButton.textContent = touchExploring ? "Done" : "Explore globe";
+    exploreButton.setAttribute("aria-label", touchExploring ? "Done exploring globe" : "Explore globe");
+    touchInstructions.textContent = touchExploring
+      ? "Drag in any direction. Pinch to zoom. Choose Done to scroll."
+      : "Swipe to scroll. Choose Explore globe to rotate and zoom.";
+  };
+  let touchViewportWidth = window.innerWidth;
+  const syncTouchControls = () => {
+    const available = touchModeAvailable();
+    const widthChanged = touchViewportWidth !== window.innerWidth;
+    touchViewportWidth = window.innerWidth;
+    if (!available || widthChanged) setTouchExploring(false);
+    else resetGlobeInput();
+    // Never leave keyboard focus on a control hidden by a capability change.
+    if (!available && touchControls.contains(document.activeElement)) canvas.focus({ preventScroll: true });
+    touchControls.hidden = !available;
+  };
+  const leaveTouchExploration = () => setTouchExploring(false);
+  exploreButton.addEventListener("click", () => {
+    setTouchExploring(!touchExploring);
+    if (!touchExploring) return;
+    const toolbar = touchControls.getBoundingClientRect();
+    const surface = canvas.getBoundingClientRect();
+    const headerBottom = Math.max(0, document.querySelector("header")?.getBoundingClientRect().bottom || 0);
+    if (toolbar.top < headerBottom + 8 || surface.top > window.innerHeight - 100) {
+      window.scrollTo({ top: window.scrollY + toolbar.top - headerBottom - 12, behavior: "instant" });
+    }
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || !touchExploring) return;
+    const restoreFocus = globeStage.contains(document.activeElement);
+    leaveTouchExploration();
+    if (restoreFocus) exploreButton.focus({ preventScroll: true });
+    event.preventDefault();
+  });
+  document.addEventListener("touchstart", (event) => {
+    if (touchExploring && touchState && mapTouches(event.touches).length !== event.touches.length) resetGlobeInput();
+  }, { passive: true });
   globeStage.addEventListener("touchcancel", resetGlobeInput, { passive: true });
-  canvas.addEventListener("webglcontextlost", resetGlobeInput);
-  window.addEventListener("blur", resetGlobeInput);
-  window.addEventListener("pagehide", resetGlobeInput);
-  window.addEventListener("popstate", resetGlobeInput);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) resetGlobeInput(); });
+  canvas.addEventListener("webglcontextlost", leaveTouchExploration);
+  window.addEventListener("blur", leaveTouchExploration);
+  window.addEventListener("pagehide", leaveTouchExploration);
+  window.addEventListener("popstate", leaveTouchExploration);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) leaveTouchExploration(); });
+  window.addEventListener("resize", syncTouchControls, { passive: true });
+  coarsePointer.addEventListener("change", syncTouchControls);
+  touchControls.hidden = !touchModeAvailable();
 
   // Wheel ownership is decided per gesture from its shape, so the page keeps
   // scrolling normally and the map only claims the wheel when the visitor
   // clearly means the map. See src/utils/globe-zoom.js for the rules.
-  let wheelOwner = null;
-  let lastWheelTime = 0;
   globeStage.addEventListener("wheel", (event) => {
     const now = event.timeStamp || performance.now();
     // Never interfere with the globe's own scrollable chrome.

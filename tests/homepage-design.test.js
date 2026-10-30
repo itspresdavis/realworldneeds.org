@@ -9,7 +9,7 @@ const refinement = await readFile('src/refinement.js', 'utf8');
 
 // Tests the rearrangement itself, rather than relying on a static markup claim.
 test('finder composition reuses each existing interactive node exactly once', () => {
-  const selectors = ['.finder-search', '.quick-needs', '.jump-results', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
+  const selectors = ['.finder-map-link', '.finder-search', '.quick-needs', '.jump-results', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
   const nodes = new Map(selectors.map(selector => [selector, {selector, marker:Symbol(selector)}]));
   const search = nodes.get('.finder-search');
   const appended = [];
@@ -26,13 +26,13 @@ test('finder composition reuses each existing interactive node exactly once', ()
   context.composeFinderSurface();
   assert.equal(surface.className, 'finder-surface');
   assert.equal(appended[0].htmlFor, 'resourceSearch');
-  assert.equal(appended[0].textContent, 'What do you need?');
+  assert.equal(appended[0].textContent, 'Search the directory');
   assert.deepEqual(appended.slice(1), [...nodes.values()]);
   context.composeFinderSurface();
-  assert.equal(appended.length, 8, 'reinstallation is a no-op');
+  assert.equal(appended.length, 9, 'reinstallation is a no-op');
 });
 
-test('paper finder, map key and forest closing colors retain normal text contrast', () => {
+test('paper finder, map key and documentary closing retain normal text contrast', () => {
   const rule = selector => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const declaration = css.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`))?.[1];
@@ -68,7 +68,7 @@ test('paper finder, map key and forest closing colors retain normal text contras
   }
   assert.equal(property('.rwn-professional .finder-surface', 'background'), 'transparent');
   assert.equal(property('.rwn-professional .finder-surface', 'box-shadow'), 'none');
-  assert.match(property('.rwn-professional .finder-intro h1', 'font-family'), /sans-serif/);
+  assert.match(property('.rwn-professional .finder-intro h1', 'font-family'), /^Georgia,.*serif$/);
   assert.equal(color('.rwn-professional .site-footer', 'background'), finder, 'the light footer shares the finder paper');
 });
 
@@ -81,7 +81,7 @@ test('compact fallback removes the empty column and source review remains visibl
 
 
 test('visible search prompt is included in the accessible name', () => {
-  assert.match(refinement, /input\.setAttribute\("aria-label", "What do you need\? Search by need, service, place, ZIP or postcode, or organization"\)/);
+  assert.match(refinement, /input\.setAttribute\("aria-label", "Search the directory by need, service, place, ZIP or postcode, or organization"\)/);
 });
 
 test('regrouping restores a focused search and its selected text without scrolling', () => {

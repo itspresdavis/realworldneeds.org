@@ -21,14 +21,14 @@ const CRITICAL_HOME_STYLE = `<style data-rwn-critical-shell>
 </style>`;
 const CRITICAL_PAGE_STYLE = `<style data-rwn-page-critical>
 .directory-category-chips button{min-height:44px!important}
-#service>.legal-hero{padding-top:2.6rem!important;padding-bottom:2.2rem!important}
+#service>.legal-hero{padding-top:1.25rem!important;padding-bottom:1.5rem!important}
 @media(max-width:650px){
   #directory>.legal-hero{padding:1.2rem .9rem 1rem!important}
-  #directory>.legal-hero h1{max-width:19ch!important;font-size:clamp(1.85rem,8vw,2.3rem)!important;line-height:1.04!important;letter-spacing:-.04em!important}
-  #directory>.legal-hero .legal-hero__lede{margin-top:.55rem!important;font-size:.84rem!important;line-height:1.48!important}
+  #directory>.legal-hero h1{max-width:19ch!important;font-size:2rem!important;line-height:1.1!important;letter-spacing:-.035em!important}
+  #directory>.legal-hero .legal-hero__lede{margin-top:.55rem!important;font-size:.9375rem!important;line-height:1.55!important}
   #directory>.legal-hero .eyebrow{font-size:.62rem!important}
   .directory-shell{padding-top:.7rem!important}
-  #service>.legal-hero{padding:1.35rem .9rem 1.15rem!important}
+  #service>.legal-hero{padding:1rem .9rem 1.25rem!important}
 }
 </style>`;
 const DIRECTORY_HEADING = "Service directory";
@@ -220,6 +220,40 @@ function enhanceActionOrientation(html) {
   return html;
 }
 
+function refineEditorialPage(html, path) {
+  const documents = {
+    "/sources": ["Sources", "The public sources behind the directory, with review dates and details of how RWN uses them."],
+    "/editorial-policy": ["How we check listings", "What we check before a listing is published, and how we review corrections."],
+    "/privacy": ["Privacy", "What information RWN uses, what stays in your browser, and the choices available to you."],
+    "/terms": ["Terms of use", "How to use the directory and what to expect from the information it contains."],
+    "/accessibility": ["Accessibility", "Using the directory with a keyboard, assistive technology, or a small screen."],
+    "/transparency": ["About Real World Needs", "How the directory works, where its information comes from, and what it can and cannot tell you."]
+  };
+  if (documents[path]) {
+    const [heading, description] = documents[path];
+    html = html.replace(/<h1>[^<]*<\/h1>/, `<h1>${escapeHtml(heading)}</h1>`)
+      .replace(/<p class="legal-hero__lede">[\s\S]*?<\/p>/, `<p class="legal-hero__lede">${escapeHtml(description)}</p>`)
+      .replace(/<p class="eyebrow">[^<]*<\/p>/, "");
+  }
+  if (path === "/sources") {
+    if (!html.includes('data-rwn-page="sources"')) html = html.replace("<body", '<body data-rwn-page="sources"');
+    // Counts remain in the main source summary; keep the distinct review range here.
+    html = html.replace(/<div class="legal-meta">([\s\S]*?)<\/div>/, (block, content) => {
+      const spans = [...content.matchAll(/<span>[\s\S]*?<\/span>/g)].map(match => match[0]);
+      return spans.length === 4 && spans.at(-1).includes("Listing source checks")
+        ? `<div class="legal-meta">${spans.at(-1)}</div>` : block;
+    });
+  }
+  if (path === "/sources" || path.startsWith("/service/")) {
+    const breadcrumb = html.match(/<nav class="directory-downloads" aria-label="Breadcrumb">[\s\S]*?<\/nav>/)?.[0];
+    const hero = html.match(/<section class="legal-hero">[\s\S]*?<\/section>/)?.[0];
+    if (breadcrumb && hero && !hero.includes(breadcrumb)) {
+      html = html.replace(breadcrumb, "").replace('<div class="legal-hero__inner">', `<div class="legal-hero__inner">${breadcrumb}`);
+    }
+  }
+  return html;
+}
+
 function enhanceHome(html, release) {
   html = html
     .replace('<html lang="en">', '<html lang="en" class="rwn-professional">')
@@ -260,13 +294,15 @@ function enhanceGeneratedPage(html, release) {
   html = addSocialMetadata(html);
   html = html.replace(/<meta\b[^>]*\bname=(["'])theme-color\1[^>]*\bcontent=(["'])(.*?)\2[^>]*>/i, '<meta name="theme-color" content="#ffffff" />');
 
-  const path = canonicalPathFrom(html);
+  const path = html.includes('data-page="join"') ? "/join" : canonicalPathFrom(html);
+  if (path === "/join") html = html.replace(/<header class="contributor-header">[\s\S]*?<\/header>/, unifiedHeader(path));
   if (/<header class="legal-header">[\s\S]*?<\/header>/.test(html)) html = html.replace(/<header class="legal-header">[\s\S]*?<\/header>/, unifiedHeader(path));
   if (/<footer class="legal-footer">[\s\S]*?<\/footer>/.test(html)) html = html.replace(/<footer class="legal-footer">[\s\S]*?<\/footer>/, unifiedFooter(path));
   if (html.includes('class="rwn-page-menu"')) {
     html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
   }
   html = enhanceActionOrientation(html);
+  html = refineEditorialPage(html, path);
   return relocateDirectoryShortcuts(html);
 }
 

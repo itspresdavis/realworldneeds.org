@@ -70,13 +70,21 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         pins: rect('.globe-pin-layer'),
         controls: rect('.globe-controls'),
         webgl: !document.querySelector('.globe-stage').classList.contains('is-globe-unavailable'),
+        touch: (() => {
+          const toolbar = document.getElementById('globeTouchControls');
+          const button = document.getElementById('toggleGlobeExplore');
+          const instruction = document.getElementById('globeTouchInstructions');
+          if (!toolbar || !button || !instruction) return null;
+          return { visible:!toolbar.hidden, toolbar:rect('#globeTouchControls'), button:rect('#toggleGlobeExplore'), label:button.textContent.trim(), pressed:button.getAttribute('aria-pressed'), stageAction:getComputedStyle(document.querySelector('.globe-stage')).touchAction, canvasAction:getComputedStyle(document.querySelector('.globe-canvas')).touchAction, buttonContrast:(${renderedTextContrast.toString()})(button), instructionContrast:(${renderedTextContrast.toString()})(instruction) };
+        })(),
         targets: [...document.querySelectorAll('.globe-controls button')].filter((node) => getComputedStyle(node).display !== 'none').map((node) => ({id:node.id,width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height})),
         sections: ['.about-rwn', '.source-band', '.principle-grid'].map((selector) => ({selector,...rect(selector)})),
         guidance: {
           sourceBeforeClosing: Boolean(document.querySelector('.source-band').compareDocumentPosition(document.querySelector('.about-rwn')) & Node.DOCUMENT_POSITION_FOLLOWING),
           sourceHeading: document.querySelector('.source-band h2').textContent.trim(),
           closingHeading: document.querySelector('.about-rwn h2').textContent.trim(),
-          sourceLabels: [...document.querySelectorAll('.principle-grid h3')].map(node => node.textContent.trim()),
+          sourceNote: document.querySelector('.principle-grid p').textContent.trim(),
+          sourceLinks: [...document.querySelectorAll('.principle-grid nav a')].map(node => node.getAttribute('href')),
           contributorHref: document.querySelector('.about-rwn .contributor-invitation')?.getAttribute('href'),
           contributorLabel: document.querySelector('.about-rwn .contributor-invitation')?.textContent.trim(),
           repeatedSteps: Boolean(document.querySelector('.mission-steps'))
@@ -89,14 +97,14 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
         }
       };
     })()`);
-    designEvidence.push({width, ...view});
+    designEvidence.push({...view, width, clientWidth:view.width});
     if (width <= 390 && (view.search.bottom > 380 || view.primaryAction.bottom > 560)) {
       throw new Error(`Phone search or main action is buried below the useful first screen at ${width}px: ${JSON.stringify(view)}`);
     }
-    if (!view.openSurface || !view.introAboveWorkspace || !/Arial|Helvetica|sans-serif/.test(view.titleFont) || view.titleWeight < 600 || !Number.isFinite(view.titleContrast) || view.titleContrast < 4.5 || view.formOrder[0] !== 'finder-search-label' || !view.formOrder.includes('jumpResults')) {
+    if (!view.openSurface || !view.introAboveWorkspace || !/Georgia/.test(view.titleFont) || view.titleWeight !== 400 || !Number.isFinite(view.titleContrast) || view.titleContrast < 4.5 || view.formOrder[0] !== 'finder-search-label' || !view.formOrder.includes('jumpResults')) {
       throw new Error(`Homepage surface or grouping inherited the wrong theme at ${width}px: ${JSON.stringify(view)}`);
     }
-    if (!view.guidance.sourceBeforeClosing || view.guidance.sourceHeading !== 'Check the source before you go.' || view.guidance.closingHeading !== 'Everyone deserves a clear next step.' || view.guidance.sourceLabels.join('|') !== 'Source|Review date|Provider authority' || view.guidance.contributorHref !== '/join' || !view.guidance.contributorLabel?.startsWith('Help keep the directory useful') || view.guidance.repeatedSteps) {
+    if (!view.guidance.sourceBeforeClosing || view.guidance.sourceHeading !== 'Before you visit' || view.guidance.closingHeading !== 'About Real World Needs' || !view.guidance.sourceNote.includes('Check the source and review date.') || !view.guidance.sourceNote.includes('The provider confirms current details') || view.guidance.sourceLinks.join('|') !== '/editorial-policy|/sources' || view.guidance.contributorHref !== '/join' || !view.guidance.contributorLabel?.startsWith('Help improve the directory') || view.guidance.repeatedSteps) {
       throw new Error(`Source guidance or contributor closing is incomplete at ${width}px: ${JSON.stringify(view.guidance)}`);
     }
     if (!view.flow.searchBeforeResults || !view.flow.mapBeforePanel || view.flow.resultsBeforeMap || !view.flow.mapParent.includes('finder__grid')) {
@@ -114,6 +122,11 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       throw new Error(`Finder or explanation section overflows at ${width}px: ${JSON.stringify(view)}`);
     }
     if (!view.webgl) throw new Error(`Real WebGL is required for finder visual QA at ${width}px.`);
+    if (!view.touch || (width <= 900 && !view.touch.visible)) throw new Error(`Mobile map exploration control is missing at ${width}px.`);
+    if (view.touch.visible && (view.touch.button.width < 44 || view.touch.button.height < 44 || view.touch.button.bottom > view.canvas.y || view.touch.toolbar.bottom > view.canvas.y || view.touch.pressed !== 'false' || view.touch.label !== 'Explore globe' || view.touch.canvasAction !== 'pan-y pinch-zoom' || view.touch.stageAction !== 'pan-y pinch-zoom' || view.touch.buttonContrast < 4.5 || view.touch.instructionContrast < 4.5)) {
+      throw new Error(`Map exploration toolbar is crowded, unreadable or captures page scrolling at ${width}px: ${JSON.stringify(view.touch)}`);
+    }
+
     if (!['x', 'y', 'width', 'height'].every((key) => close(view.canvas[key], view.pins[key]))) {
       throw new Error(`Globe canvas and marker coordinate systems differ at ${width}px: ${JSON.stringify(view)}`);
     }
@@ -124,6 +137,17 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
       await capture(client, `finder-presentation-${width}.png`);
       await evaluate(client, `document.querySelector('.globe-stage').scrollIntoView({block:'center'})`);
       await capture(client, `finder-map-${width}.png`);
+      if (view.touch.visible) {
+        await evaluate(client, `document.getElementById('toggleGlobeExplore').click()`);
+        const exploring = await evaluate(client, `(() => {
+          const button=document.getElementById('toggleGlobeExplore');
+          return { pressed:button.getAttribute('aria-pressed'), label:button.textContent.trim(), contrast:(${renderedTextContrast.toString()})(button), canvas:getComputedStyle(document.getElementById('globeCanvas')).touchAction, stage:getComputedStyle(document.querySelector('.globe-stage')).touchAction, class:document.querySelector('.globe-stage').classList.contains('is-touch-exploring') };
+        })()`);
+        if (!exploring.class || exploring.pressed !== 'true' || exploring.label !== 'Done' || exploring.canvas !== 'none' || exploring.stage !== 'pan-y pinch-zoom' || exploring.contrast < 4.5) throw new Error(`Active exploration has an unsafe or unclear presentation at ${width}px: ${JSON.stringify(exploring)}`);
+        await capture(client, `finder-map-exploring-${width}.png`);
+        await evaluate(client, `document.getElementById('toggleGlobeExplore').click()`);
+      }
+
       for (const section of ['results', 'about', 'standards']) {
         await evaluate(client, `document.getElementById('${section}').scrollIntoView({block:'start'})`);
         await capture(client, `finder-${section}-${width}.png`);
@@ -258,13 +282,43 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
   await writeFile('qa-screenshots/homepage-responsive-readiness.json', JSON.stringify(focusReadiness, null, 2));
   await writeFile('qa-screenshots/homepage-responsive-focus.json', JSON.stringify(focusEvidence, null, 2));
   await writeFile('qa-screenshots/homepage-design-geometry.json', JSON.stringify(designEvidence, null, 2));
+  await verifyFinderExploreFraming({client,host,navigate,evaluate,capture});
   await verifyFinderMapNavigation({client,host,navigate,evaluate,capture});
+  await verifyFinderSearchSubmit({client,host,navigate,evaluate,capture});
   console.log('Finder presentation QA passed: 11 widths, real globe framing, aligned marker layers, compact controls, and no page overflow.');
 }
 
 // Hold background preparation only, leaving the application's matcher, input,
 // blur, anchor, and history handlers untouched. This is a functional fixture,
 // not a search-performance measurement.
+async function installFinderPreparationHold(client,pending) {
+  return client.call('Page.addScriptToEvaluateOnNewDocument',{source:`
+        (()=>{
+          const idle=window.requestIdleCallback?.bind(window),Channel=window.MessageChannel;
+          const queued=[];let held=${pending};
+          window.__rwnMapNavigation={activation:null,release(){
+            held=false;if(idle)window.requestIdleCallback=idle;window.MessageChannel=Channel;
+            for(const run of queued.splice(0))run();
+          }};
+          if(held){
+            if(idle)window.requestIdleCallback=(callback,options)=>idle(deadline=>held?queued.push(()=>idle(callback,options)):callback(deadline),options);
+            window.MessageChannel=function(...args){
+              const channel=new Channel(...args),post=channel.port2.postMessage.bind(channel.port2);
+              channel.port2.postMessage=(...messages)=>held?queued.push(()=>post(...messages)):post(...messages);
+              return channel;
+            };
+            window.MessageChannel.prototype=Channel.prototype;
+          }
+          document.addEventListener('keydown',event=>{
+            if(event.key==='Enter'&&event.target.matches?.('.finder-map-link,#resourceSearch'))window.__rwnMapNavigation.activation={
+              trusted:event.isTrusted,target:event.target.id||'map-shortcut',held,value:document.getElementById('resourceSearch').value,
+              historyQuery:history.state?.rwnFinder?.query,count:document.getElementById('resultCount').textContent
+            };
+          },true);
+        })();
+      `});
+}
+
 export async function verifyFinderMapNavigation({client,host,navigate,evaluate,capture}) {
   const pause = ms => new Promise(resolve => setTimeout(resolve,ms));
   const press = async (key, code) => {
@@ -289,31 +343,7 @@ export async function verifyFinderMapNavigation({client,host,navigate,evaluate,c
   for(const pending of [true,false]) {
     let instrumentation;
     try {
-      instrumentation=await client.call('Page.addScriptToEvaluateOnNewDocument',{source:`
-        (()=>{
-          const idle=window.requestIdleCallback?.bind(window),Channel=window.MessageChannel;
-          const queued=[];let held=${pending};
-          window.__rwnMapNavigation={activation:null,release(){
-            held=false;if(idle)window.requestIdleCallback=idle;window.MessageChannel=Channel;
-            for(const run of queued.splice(0))run();
-          }};
-          if(held){
-            if(idle)window.requestIdleCallback=(callback,options)=>idle(deadline=>held?queued.push(()=>idle(callback,options)):callback(deadline),options);
-            window.MessageChannel=function(...args){
-              const channel=new Channel(...args),post=channel.port2.postMessage.bind(channel.port2);
-              channel.port2.postMessage=(...messages)=>held?queued.push(()=>post(...messages)):post(...messages);
-              return channel;
-            };
-            window.MessageChannel.prototype=Channel.prototype;
-          }
-          document.addEventListener('keydown',event=>{
-            if(event.key==='Enter'&&event.target.matches?.('.finder-map-link'))window.__rwnMapNavigation.activation={
-              trusted:event.isTrusted,held,value:document.getElementById('resourceSearch').value,
-              historyQuery:history.state?.rwnFinder?.query,count:document.getElementById('resultCount').textContent
-            };
-          },true);
-        })();
-      `});
+      instrumentation=await installFinderPreparationHold(client,pending);
       await client.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false,screenWidth:390,screenHeight:844});
       await navigate(client,'about:blank');
       await navigate(client,`${host}/`);
@@ -359,4 +389,89 @@ export async function verifyFinderMapNavigation({client,host,navigate,evaluate,c
   if(JSON.stringify(evidence[0].after.ids)!==JSON.stringify(evidence[1].after.ids))throw new Error('Pending and settled map journeys returned different Boston results');
   await writeFile('qa-screenshots/mobile-map-shortcut-native.json',JSON.stringify(evidence,null,2));
   console.log('Map shortcut QA passed: pending and settled trusted input, native Enter/Tab, Back/Forward, and private query preservation.');
+}
+
+
+/** A trusted Search/Enter hands focus to results only while that request owns it. */
+export async function verifyFinderSearchSubmit({client,host,navigate,evaluate,capture}) {
+  const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  const sample=()=>evaluate(client,`(() => ({
+    href:location.href,hash:location.hash,query:document.getElementById('resourceSearch')?.value,
+    historyQuery:history.state?.rwnFinder?.query,count:document.getElementById('resultCount')?.textContent||'',
+    ids:[...document.querySelectorAll('.resource-card[data-result-resource-id]')].map(node=>node.dataset.resultResourceId),
+    startup:document.documentElement.dataset.finderStartup,focus:document.activeElement?.id,
+    resultsTop:document.getElementById('results')?.getBoundingClientRect().top,headerBottom:document.querySelector('.site-header')?.getBoundingClientRect().bottom,
+    activation:window.__rwnMapNavigation?.activation
+  }))()`);
+  const until=async(label,predicate)=>{
+    const started=performance.now();let last;
+    while(performance.now()-started<12000){last=await sample();if(predicate(last))return last;await pause(25);}
+    throw new Error(`Search submit ${label} did not settle: ${JSON.stringify(last)}`);
+  };
+  const evidence=[];
+  for(const scenario of [{pending:true,cancel:false},{pending:false,cancel:false},{pending:true,cancel:true}]) {
+    const {pending,cancel}=scenario;let instrumentation;
+    try {
+      instrumentation=await installFinderPreparationHold(client,pending);
+      await client.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false,screenWidth:390,screenHeight:844});
+      await navigate(client,'about:blank');await navigate(client,`${host}/`);
+      await until('startup',view=>view.startup==='ready'&&view.ids.length>0);
+      await evaluate(client,"document.getElementById('resourceSearch').focus();document.getElementById('resourceSearch').select()");
+      await client.call('Input.insertText',{text:'Boston'});
+      const before=await until(pending?'preparation held':'query settled',view=>view.query==='Boston'&&(pending?/preparing/i.test(view.count):view.historyQuery==='Boston'&&!/preparing/i.test(view.count)&&view.ids.length>0));
+      await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      const activated=await sample();
+      if(!activated.activation?.trusted||activated.activation.target!=='resourceSearch'||activated.activation.value!=='Boston'||activated.activation.held!==pending||(pending&&!/preparing/i.test(activated.activation.count)))throw new Error(`Search submit skipped its native pending-state precondition: ${JSON.stringify({scenario,before,activated})}`);
+      if(cancel)await evaluate(client,"document.getElementById('locateMe').focus({preventScroll:true})");
+      await evaluate(client,'window.__rwnMapNavigation.release()');
+      const after=await until(cancel?'cancelled destination':'result destination',view=>view.query==='Boston'&&view.historyQuery==='Boston'&&!/preparing/i.test(view.count)&&view.ids.length>0&&(cancel?view.hash!== '#results'&&view.focus==='locateMe':view.hash==='#results'&&view.focus==='results'&&view.resultsTop>=view.headerBottom-1&&view.resultsTop<=view.headerBottom+48));
+      await pause(150);
+      const stable=await sample();
+      if(stable.hash!==after.hash||stable.focus!==after.focus||new URL(stable.href).search||stable.href.toLowerCase().includes('boston'))throw new Error(`Search submit stole focus after cancellation or exposed the query: ${JSON.stringify({scenario,after,stable})}`);
+      if(!cancel){
+        const visible=await evaluate(client,`(() => {const box=document.getElementById('results').getBoundingClientRect();return {top:box.top,header:document.querySelector('.site-header').getBoundingClientRect().bottom};})()`);
+        if(visible.top<visible.header-1||visible.top>visible.header+48)throw new Error(`Search results are hidden after Enter: ${JSON.stringify(visible)}`);
+        await capture(client,`search-enter-${pending?'pending':'settled'}.png`);
+      }
+      evidence.push({scenario,before,activated,after,stable});
+    } finally {
+      try{await evaluate(client,'window.__rwnMapNavigation?.release()');}
+      finally{if(instrumentation?.identifier)await client.call('Page.removeScriptToEvaluateOnNewDocument',{identifier:instrumentation.identifier});}
+    }
+  }
+  if(JSON.stringify(evidence[0].after.ids)!==JSON.stringify(evidence[1].after.ids))throw new Error('Pending and settled Search Enter returned different Boston results');
+  await writeFile('qa-screenshots/mobile-search-submit-native.json',JSON.stringify(evidence,null,2));
+  console.log('Search Enter QA passed: native pending/settled submission, results focus, private query, and no late jump after blur.');
+}
+
+
+/** Short portrait must keep its reserved toolbar; landscape has a compact mode. */
+export async function verifyFinderExploreFraming({client,host,navigate,evaluate,capture}) {
+  const evidence=[];
+  for(const [width,height] of [[320,422],[844,390],[844,320]]) {
+    await client.call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false,screenWidth:width,screenHeight:height});
+    await navigate(client,`${host}/`);
+    const started=performance.now();let ready;
+    do {
+      ready=await evaluate(client,`(() => {const stage=document.querySelector('.globe-stage'),canvas=document.getElementById('globeCanvas'),startup=document.documentElement.dataset.finderStartup;if(startup==='ready'&&stage?.classList.contains('is-globe-unavailable'))throw new Error('Short viewport requires a working globe');const gl=canvas&&(canvas.getContext('webgl2')||canvas.getContext('webgl'));return startup==='ready'&&!!gl&&!gl.isContextLost()&&/[0-9]+(?:[.][0-9]+)?×/.test(document.getElementById('globeReadout')?.textContent||'');})()`);
+      if(ready)break;await new Promise(resolve=>setTimeout(resolve,50));
+    } while(performance.now()-started<12000);
+    if(!ready)throw new Error(`Short viewport globe did not become ready at ${width}×${height}`);
+    await evaluate(client,`document.getElementById('service-map').scrollIntoView({block:'start',behavior:'instant'});document.getElementById('toggleGlobeExplore').click()`);
+    await evaluate(client,'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const active=await evaluate(client,`(() => {
+      const box=node=>{const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height};};
+      const toolbar=box(document.getElementById('globeTouchControls')),button=box(document.getElementById('toggleGlobeExplore')),canvas=box(document.getElementById('globeCanvas')),pins=box(document.getElementById('pinLayer')),stage=box(document.getElementById('service-map')),header=box(document.querySelector('.site-header'));
+      return {toolbar,button,canvas,pins,stage,header,pressed:document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed'),usableCanvas:Math.min(canvas.bottom,innerHeight)-Math.max(canvas.top,toolbar.bottom,header.bottom),region:document.getElementById('regionFocus').value,regionVisible:!!document.getElementById('regionFocus').getClientRects().length,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1};
+    })()`);
+    if(active.pressed!=='true'||active.overflow||active.button.width<44||active.button.height<44||active.button.top<active.header.bottom||active.button.bottom>height||active.button.left<0||active.button.right>width||active.usableCanvas<(height<=320?120:160)||!['top','left','width','height'].every(key=>Math.abs(active.canvas[key]-active.pins[key])<=1))throw new Error(`Active short-viewport map has hidden controls, an obstructed canvas or misaligned pins at ${width}×${height}: ${JSON.stringify(active)}`);
+    if(width<height&&!active.regionVisible)throw new Error('Compact landscape treatment incorrectly hides portrait region controls');
+    await capture(client,`finder-map-active-${width}x${height}.png`);
+    await evaluate(client,"document.getElementById('toggleGlobeExplore').click()");
+    const restored=await evaluate(client,`({pressed:document.getElementById('toggleGlobeExplore').getAttribute('aria-pressed'),region:document.getElementById('regionFocus').value,regionVisible:!!document.getElementById('regionFocus').getClientRects().length})`);
+    if(restored.pressed!=='false'||!restored.regionVisible||restored.region!==active.region)throw new Error(`Done did not restore region controls at ${width}×${height}: ${JSON.stringify(restored)}`);
+    evidence.push({width,height,active,restored});
+  }
+  await writeFile('qa-screenshots/mobile-globe-short-viewport.json',JSON.stringify(evidence,null,2));
 }

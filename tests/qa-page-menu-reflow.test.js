@@ -178,7 +178,7 @@ test('snapshot handles a missing document without converting it to a usable page
 function contributorReflowFixture() {
   const nodes = new Map([
     ['h1', { textContent: 'Contribute to Real World Needs' }],
-    ['header.contributor-header', {}], ['form#accountForm', {}],
+    ['header.rwn-unified-header a[href="/join"][aria-current="page"]', {}], ['form#accountForm', {}],
     ['#accountForm input[name="email"][type="email"]', {}],
     ['#accountForm input[name="password"][type="password"]', {}],
     ['#accountForm button#accountSubmit[type="submit"]', {}]

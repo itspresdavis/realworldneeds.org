@@ -15,7 +15,7 @@ test("production globe starts calm, zooms deeply, and preserves ordinary page sc
   assert.match(app, /minimumCameraDistance/);
   assert.match(app, /new THREE\.SphereGeometry\(1, window\.innerWidth <= 600 \? 160 : 288, window\.innerWidth <= 600 \? 112 : 180\)/);
   assert.match(app, /pointPickThresholdWorld/);
-  assert.match(app, /classifyGlobeDragIntent/);
+  assert.match(app, /if \(!touchExploring\) return/);
 
   // Wheel ownership is resolved per gesture by classifyWheelIntent. The
   // invariant that matters is that the listener returns without calling
@@ -54,9 +54,9 @@ test("homepage uses one final presentation system and plain organizational langu
   assert.match(html, /\/src\/clarity\.css\?v=/);
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(presentation, /href=\"\/src\/professional\.css/);
-  assert.match(copy, /Find essential services near you\./);
-  assert.match(copy, /Practical help, with contact details and sources you can check\./);
-  assert.match(copy, /Everyone deserves a clear next step\./);
+  assert.match(copy, /Find essential services\./);
+  assert.match(copy, /Food, water, shelter and other support\. Search by place or explore the map\./);
+  assert.match(copy, /About Real World Needs/);
   assert.doesNotMatch(refinement, /No account|No paywall|Original sources/);
 });
 
@@ -68,6 +68,6 @@ test("generated public pages use the same official mark and compact shared prese
   assert.match(directory, /\/professional-pages\.[a-f0-9]{12}\.css\?v=/);
   assert.match(directory, /<h1>Service directory<\/h1>/);
   assert.doesNotMatch(directory, /Text directory/);
-  assert.match(pages, /--page-blue: #24583e/);
-  assert.match(pages, /font-size:\s*clamp\(2\.35rem,4\.3vw,3\.8rem\)/);
+  assert.match(pages, /--page-blue:\s*#24583e/);
+  assert.match(pages, /font-size:\s*clamp\(2rem,\s*3\.4vw,\s*2\.75rem\)/);
 });

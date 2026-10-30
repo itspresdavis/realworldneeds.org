@@ -14,15 +14,18 @@ function section(start, end) {
 const inputSource = section('  const canvas = document.getElementById("globeCanvas");', '  const siteMenu =');
 
 class ElementStub {
-  constructor(kind = "") { this.kind = kind; this.listeners = new Map(); this.captured = new Set(); this.classList = { add() {}, remove() {}, toggle() {} }; }
+  constructor(kind = "") { this.kind = kind; this.listeners = new Map(); this.captured = new Set(); this.attributes = new Map(); this.classes = new Set(); this.classList = { add: name => this.classes.add(name), remove: name => this.classes.delete(name), contains: name => this.classes.has(name), toggle: (name, value) => value ? this.classes.add(name) : this.classes.delete(name) }; }
   addEventListener(type, listener) { const list = this.listeners.get(type) || []; list.push(listener); this.listeners.set(type, list); }
   dispatch(type, values = {}) { const event = { target: this, currentTarget: this, cancelable: true, timeStamp: 100, pointerType: "touch", pointerId: 1, button: 0, clientX: 100, clientY: 100, touches: [], changedTouches: [], defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {}, ...values }; for (const listener of this.listeners.get(type) || []) listener(event); return event; }
   closest(selector) { if (selector === ".globe-stage") return this.stage; if (this.kind === "chrome") return this; if (this.kind === "pin" && selector.includes(".globe-pin")) return this; return null; }
-  contains(target) { return target.stage === this || target === this; }
+  contains(target) { return target?.stage === this || target === this; }
   setPointerCapture(id) { this.captured.add(id); }
   releasePointerCapture(id) { this.captured.delete(id); }
   hasPointerCapture(id) { return this.captured.has(id); }
-  setAttribute() {}
+  setAttribute(name, value) { this.attributes.set(name, value); }
+  getAttribute(name) { return this.attributes.get(name); }
+  getBoundingClientRect() { return { top: 150, bottom: 200, height: 50 }; }
+  focus() { this.ownerDocument.activeElement = this; }
 }
 function fixture() {
   const stage = new ElementStub("stage");
@@ -30,23 +33,27 @@ function fixture() {
   const pin = new ElementStub("pin"); pin.stage = stage;
   const chrome = new ElementStub("chrome"); chrome.stage = stage;
   const nodes = new Map([["globeCanvas", canvas]]);
-  const window = new ElementStub(); Object.assign(window, { innerWidth: 390, innerHeight: 844, scrollY: 100 });
-  const document = new ElementStub(); Object.assign(document, { hidden: false, documentElement: { scrollHeight: 2000 }, getElementById: id => { if (!nodes.has(id)) nodes.set(id, new ElementStub()); return nodes.get(id); } });
+  const window = new ElementStub(); Object.assign(window, { innerWidth: 390, innerHeight: 844, scrollY: 100, scrollTo() {} });
+  const coarsePointer = new ElementStub(); coarsePointer.matches = false;
+  window.matchMedia = () => coarsePointer;
+  const document = new ElementStub(); Object.assign(document, { hidden: false, querySelector: () => null, documentElement: { scrollHeight: 2000 }, getElementById: id => { if (!nodes.has(id)) { const node = new ElementStub(id === "toggleGlobeExplore" ? "chrome" : ""); node.ownerDocument = document; node.stage = stage; nodes.set(id, node); } return nodes.get(id); } });
+  canvas.ownerDocument = document;
   const calls = { selected: [], wake: 0 };
   const motionPreference = new ElementStub();
   const state = { zoom: 1, targetZoom: 1, rotationLon: 0, rotationLat: 0, targetLon: null, targetLat: null, velocityLon: 0, velocityLat: 0, dragging: false, pinching: false, clusterIds: [], pointerMoved: false };
-  const context = vm.createContext({ Element: ElementStub, document, window, performance: { now: () => 100 }, Math, state, activeGlobePointers: new Map(), pinchStartDistance: 0, pinchStartZoom: 1, globeGestureHadMultiplePointers: false, globeEngaged: false, globeContextLost: false, globeContextRecoveryExtension: null, MIN_GLOBE_ZOOM: 0.82, reduceMotion: false, motionPreference,
+  const context = vm.createContext({ Element: ElementStub, document, window, navigator: { maxTouchPoints: 0 }, performance: { now: () => 100 }, Math, state, activeGlobePointers: new Map(), pinchStartDistance: 0, pinchStartZoom: 1, globeGestureHadMultiplePointers: false, globeEngaged: false, globeContextLost: false, globeContextRecoveryExtension: null, MIN_GLOBE_ZOOM: 0.82, reduceMotion: false, motionPreference,
     classifyGlobeDragIntent, pinchZoom, pointerDistance, classifyWheelIntent, wheelZoomFactor,
     wakeGlobe() { calls.wake++; }, pauseGlobe() {}, markGlobeEngaged() {}, renderClusterTray() {}, setCountryHighlight() {}, maxGlobeZoom: () => 8, normalizeLongitude: value => ((value + 540) % 360) - 180, clampGlobeLatitude: value => Math.max(-82, Math.min(82, value)), selectCountryFromPointer: event => calls.selected.push(event), zoomTowardPointer() {}, focusRegion() {}, recoverGlobeContext() {}, icon: { pause: "", play: "" } });
   vm.runInContext(inputSource, context);
   const point = (x = 100, y = 100, identifier = 1, target = canvas) => ({ clientX: x, clientY: y, identifier, target });
   const touch = (type, touches, changedTouches = [], target = canvas) => stage.dispatch(type, { target, touches, changedTouches });
   const pointer = (type, props = {}) => stage.dispatch(type, { target: canvas, ...props });
-  return { stage, canvas, pin, chrome, context, calls, state, window, document, motionPreference, point, touch, pointer };
+  const explore = () => document.getElementById("toggleGlobeExplore").dispatch("click");
+  return { stage, canvas, pin, chrome, context, calls, state, window, document, motionPreference, coarsePointer, explore, point, touch, pointer };
 }
 
 test("a stationary touch on the canvas selects once, including browsers that also emit pointer events", () => {
-  const f = fixture(); const point = f.point();
+  const f = fixture(); f.explore(); const point = f.point();
   f.pointer("pointerdown"); f.touch("touchstart", [point], [point]);
   f.pointer("pointerup"); f.touch("touchend", [], [point]);
   assert.equal(f.calls.selected.length, 1);
@@ -54,7 +61,7 @@ test("a stationary touch on the canvas selects once, including browsers that als
 });
 
 test("touch streams have one owner when pointer and touch events both arrive", () => {
-  const f = fixture();
+  const f = fixture(); f.explore();
   f.pointer("pointerdown"); f.touch("touchstart", [f.point()], [f.point()]);
   for (const x of [120, 150, 180]) { f.pointer("pointermove", { clientX: x }); f.touch("touchmove", [f.point(x)]); }
   assert.equal(f.context.activeGlobePointers.size, 0);
@@ -62,7 +69,7 @@ test("touch streams have one owner when pointer and touch events both arrive", (
 });
 
 test("a pinch can continue as a one-finger drag without a stuck pinch or phantom tap", () => {
-  const f = fixture();
+  const f = fixture(); f.explore();
   f.touch("touchstart", [f.point(80), f.point(140, 100, 2)], [f.point(80), f.point(140, 100, 2)]);
   f.touch("touchmove", [f.point(60), f.point(160, 100, 2)]);
   const zoom = f.state.targetZoom;
@@ -101,19 +108,21 @@ test("app interruption clears both input streams before the next gesture", () =>
   f.window.dispatch("blur");
   assert.equal(f.context.activeGlobePointers.size, 0); assert.equal(f.state.dragging, false);
   assert.equal(f.state.velocityLon, 0);
+  assert.equal(f.document.getElementById("toggleGlobeExplore").getAttribute("aria-pressed"), "false");
+  f.explore();
   f.touch("touchstart", [f.point()], [f.point()]); f.touch("touchend", [], [f.point()]);
   assert.equal(f.calls.selected.length, 1);
 });
 
 test("touch cancellation cannot leave the renderer in a permanent gesture state", () => {
-  const f = fixture(); f.touch("touchstart", [f.point()], [f.point()]);
+  const f = fixture(); f.explore(); f.touch("touchstart", [f.point()], [f.point()]);
   f.touch("touchmove", [f.point(140)]); f.touch("touchcancel", [], [f.point(140)]);
   assert.equal(f.state.dragging, false); assert.equal(f.state.pinching, false);
   assert.equal(f.state.velocityLon, 0); assert.equal(f.calls.selected.length, 0);
 });
 
 test("a native marker tap keeps its button click and does not also pick the canvas", () => {
-  const f = fixture(); const point = f.point(100, 100, 1, f.pin);
+  const f = fixture(); f.explore(); const point = f.point(100, 100, 1, f.pin);
   const start = f.touch("touchstart", [point], [point], f.pin);
   f.touch("touchend", [], [point], f.pin);
   assert.equal(start.defaultPrevented, false);
@@ -121,7 +130,7 @@ test("a native marker tap keeps its button click and does not also pick the canv
 });
 
 test("touches on map controls never become a pinch or intercept their scrolling", () => {
-  const f = fixture();
+  const f = fixture(); f.explore();
   const first = f.point(); const second = f.point(140, 100, 2, f.chrome);
   f.touch("touchstart", [first], [first]);
   f.touch("touchstart", [first, second], [second], f.chrome);
@@ -299,4 +308,141 @@ test("returning to normal motion never resumes rotation or inertia without anoth
   assert.equal(f.state.velocityLon, 0); assert.equal(f.state.velocityLat, 0);
   assert.equal(f.calls.wake, wakes, "normal preference must not restart the idle loop");
   assert.equal(f.document.getElementById("toggleMotion").title, "Resume globe rotation");
+});
+
+
+test("Explore is explicit, does not start rotation, and owns both drag axes immediately after the deadzone", () => {
+  const f = fixture(); f.state.autoRotate = false;
+  f.explore();
+  const button = f.document.getElementById("toggleGlobeExplore");
+  assert.equal(button.getAttribute("aria-pressed"), "true");
+  assert.equal(button.textContent, "Done");
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), true);
+  assert.equal(f.state.autoRotate, false);
+  f.touch("touchstart", [f.point()]);
+  const vertical = f.touch("touchmove", [f.point(100, 130)]);
+  assert.equal(vertical.defaultPrevented, true);
+  assert.equal(f.state.rotationLat, 6.6);
+  const diagonal = f.touch("touchmove", [f.point(140, 150)]);
+  assert.equal(diagonal.defaultPrevented, true);
+  assert.ok(f.state.rotationLon < 0);
+  f.touch("touchend", [], [f.point(140, 150)]);
+  assert.equal(f.state.touching, false); assert.equal(f.state.dragging, false);
+  assert.equal(f.calls.selected.length, 0);
+});
+
+test("inactive horizontal swipes, taps and native page pinches never manipulate the globe", () => {
+  const f = fixture();
+  for (const points of [[f.point()], [f.point(), f.point(160, 100, 2)]]) {
+    assert.equal(f.touch("touchstart", points).defaultPrevented, false);
+    assert.equal(f.touch("touchmove", points.map(p => ({ ...p, clientX: p.clientX + 60 }))).defaultPrevented, false);
+    assert.equal(f.stage.dispatch("gesturechange").defaultPrevented, false);
+    f.touch("touchend", [], points);
+  }
+  assert.equal(f.state.touching, false);
+  assert.equal(f.state.rotationLon, 0); assert.equal(f.state.targetZoom, 1);
+  assert.equal(f.calls.selected.length, 0);
+});
+
+test("Done clears active touch and captured mouse streams without starting animation", () => {
+  const f = fixture(); f.explore();
+  f.touch("touchstart", [f.point()]); f.touch("touchmove", [f.point(140)]);
+  f.pointer("pointerdown", { pointerType: "mouse" });
+  f.explore();
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), false);
+  assert.equal(f.context.activeGlobePointers.size, 0);
+  for (const key of ["dragging", "pinching", "touching", "pointerMoved"]) assert.equal(f.state[key], false);
+  assert.equal(f.state.velocityLon, 0); assert.equal(f.state.velocityLat, 0);
+  assert.equal(f.document.getElementById("toggleGlobeExplore").textContent, "Explore globe");
+  assert.equal(f.touch("touchmove", [f.point(180)]).defaultPrevented, false);
+});
+
+test("Escape exits and restores in-map focus without taking focus from outside", () => {
+  const f = fixture(); f.explore(); f.canvas.focus();
+  const escape = f.window.dispatch("keydown", { key: "Escape" });
+  assert.equal(escape.defaultPrevented, true);
+  assert.equal(f.document.activeElement, f.document.getElementById("toggleGlobeExplore"));
+  f.explore(); const outside = {}; f.document.activeElement = outside;
+  f.window.dispatch("keydown", { key: "Escape" });
+  assert.equal(f.document.activeElement, outside);
+});
+
+test("width changes and live touch capability changes cannot leave hidden active controls", () => {
+  const f = fixture(); f.explore();
+  const button = f.document.getElementById("toggleGlobeExplore");
+  f.document.getElementById("globeTouchControls").contains = target => target === button;
+  button.focus();
+  f.touch("touchstart", [f.point()]); f.touch("touchmove", [f.point(130)]);
+  f.window.innerWidth = 1000; f.window.dispatch("resize");
+  assert.equal(f.document.getElementById("globeTouchControls").hidden, true);
+  assert.equal(f.document.activeElement, f.canvas);
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), false);
+  assert.equal(f.state.dragging, false);
+  f.coarsePointer.matches = true; f.coarsePointer.dispatch("change");
+  assert.equal(f.document.getElementById("globeTouchControls").hidden, false);
+  f.explore(); assert.equal(f.stage.classList.contains("is-touch-exploring"), true);
+  f.context.navigator.maxTouchPoints = 1; f.coarsePointer.matches = false; f.coarsePointer.dispatch("change");
+  assert.equal(f.document.getElementById("globeTouchControls").hidden, false);
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), true);
+});
+
+test("height-only resize cancels the gesture but keeps the visible exploration choice", () => {
+  const f = fixture(); f.explore();
+  f.touch("touchstart", [f.point()]); f.touch("touchmove", [f.point(130)]);
+  f.window.innerHeight = 740; f.window.dispatch("resize");
+  assert.equal(f.state.dragging, false); assert.equal(f.state.touching, false);
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), true);
+  f.touch("touchstart", [f.point()]); assert.equal(f.touch("touchmove", [f.point(100, 140)]).defaultPrevented, true);
+});
+
+test("cancelled active gestures can restart, including with reduced motion", () => {
+  const f = fixture(); f.explore();
+  f.touch("touchstart", [f.point(), f.point(150, 100, 2)]);
+  f.touch("touchcancel", []);
+  f.motionPreference.dispatch("change", { matches: true });
+  f.touch("touchstart", [f.point()]); f.touch("touchmove", [f.point(120, 150)]);
+  assert.equal(f.state.dragging, true); assert.ok(f.state.rotationLat > 0);
+  f.touch("touchend", [], [f.point(120, 150)]);
+  assert.equal(f.state.velocityLon, 0); assert.equal(f.state.velocityLat, 0);
+  assert.equal(f.calls.selected.length, 0);
+});
+
+test("a second touch outside the canvas cancels rather than taking over page or controls", () => {
+  const f = fixture(); f.explore();
+  f.touch("touchstart", [f.point()]); f.touch("touchmove", [f.point(130)]);
+  const rotation = f.state.rotationLon;
+  const outside = f.point(350, 700, 2, new ElementStub());
+  const mixed = f.touch("touchmove", [f.point(160), outside]);
+  assert.equal(mixed.defaultPrevented, false);
+  assert.equal(f.state.dragging, false); assert.equal(f.state.pinching, false);
+  assert.equal(f.state.rotationLon, rotation);
+});
+
+test("empty results never disable the exploration exit", () => {
+  const f = fixture(); f.explore();
+  f.stage.classList.add("is-empty"); f.explore();
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), false);
+  assert.equal(f.document.getElementById("toggleGlobeExplore").disabled, undefined);
+});
+
+
+test("an outside touchstart cancels the canvas owner through the real document event route", () => {
+  const f = fixture(); f.explore();
+  f.touch("touchstart", [f.point()]); f.touch("touchmove", [f.point(130)]);
+  const outside = f.point(350, 700, 2, new ElementStub());
+  const event = f.document.dispatch("touchstart", { target: outside.target, touches: [f.point(130), outside] });
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(f.state.dragging, false); assert.equal(f.state.touching, false);
+  assert.equal(f.stage.classList.contains("is-touch-exploring"), true);
+});
+
+test("context loss repairs focus before the Explore control becomes unavailable", () => {
+  const f = fixture();
+  const controls = f.document.getElementById("globeTouchControls");
+  const button = f.document.getElementById("toggleGlobeExplore"); button.focus();
+  controls.contains = target => target === button;
+  Object.assign(f.context, { globeUnavailableReported: false, globeStageElement: f.stage });
+  vm.runInContext(functionSource("reportGlobeUnavailable", "resetGlobeContextResources") + 'reportGlobeUnavailable("Context lost", true);', f.context);
+  assert.equal(f.document.activeElement, f.document.getElementById("retryGlobe"));
+  assert.equal(f.document.activeElement.hidden, false);
 });
