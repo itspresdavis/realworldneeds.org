@@ -24,6 +24,6 @@ test("directory text stays readable and long names do not depend on Saved stylin
   assert.match(css, /\.directory-global-result strong\{[^}]*white-space:normal;overflow-wrap:anywhere/);
   assert.match(css, /\.directory-global-result small\{color:#52666e;font-size:\.8125rem;/);
   assert.match(pages, /\.directory-search-field input\s*\{[^}]*font-size:1rem;/);
-  assert.match(pages, /#directory \.directory-global-result-actions a \{ min-height:44px;/);
-  assert.match(pages, /@media \(min-width:651px\) and \(max-width:900px\)[\s\S]*#directory \.directory-global-result-wrap \{ grid-template-columns:minmax\(0,1fr\); \}/);
+  assert.match(pages, /#directory \.directory-global-result-actions a\s*\{\s*min-height:\s*44px;/);
+  assert.match(pages, /@media\s*\(min-width:\s*651px\)\s*and\s*\(max-width:\s*900px\)[\s\S]*#directory \.directory-global-result-wrap\s*\{\s*grid-template-columns:\s*minmax\(0,1fr\);\s*\}/);
 });

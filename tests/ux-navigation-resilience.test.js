@@ -16,7 +16,7 @@ test("finder input is bounded and history stores only non-sensitive finder state
   assert.doesNotMatch(app, /rwnFinder[^\n]*lng/);
   assert.match(app, /writeFinderHistory\("push"\)/);
   assert.match(app, /const scheduleSearchHistory/);
-  assert.match(app, /searchInput\.addEventListener\("blur", commitPendingSearch\)/);
+  assert.match(app, /searchInput\.addEventListener\("blur", \(\) => \{\s*searchNavigationRevision \+= 1;\s*return commitPendingSearch\(\);\s*\}\)/);
 });
 
 test("off-screen and hidden globe rendering can pause and resume without changing globe interaction contracts", () => {

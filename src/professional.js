@@ -160,7 +160,7 @@ export function installProfessionalPresentation() {
     const key = document.createElement('div');
     key.className = 'atlas-key';
     key.setAttribute('aria-label', 'Map marker key');
-    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small><span class="atlas-key__gesture">Drag to rotate; use + / − to zoom. </span>Select a point to see the provider, address and source.</small>';
+    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small><span class="atlas-key__gesture">Drag to rotate; use + / − to zoom.</span> Select a point to see the provider, address and source.</small>';
     globe.append(key);
   }
   const intro = document.querySelector('.finder-intro');

@@ -222,11 +222,11 @@ function enhanceActionOrientation(html) {
 
 function refineEditorialPage(html, path) {
   const documents = {
-    "/sources": ["Sources", "The public sources behind the directory, with review dates and details of how RWN uses them."],
+    "/sources": ["Sources", "The public sources behind the directory, with review dates and details of how RWN uses them. Inclusion does not imply sponsorship, endorsement, or a partnership with RWN."],
     "/editorial-policy": ["How we check listings", "What we check before a listing is published, and how we review corrections."],
     "/privacy": ["Privacy", "What information RWN uses, what stays in your browser, and the choices available to you."],
     "/terms": ["Terms of use", "How to use the directory and what to expect from the information it contains."],
-    "/accessibility": ["Accessibility", "Using the directory with a keyboard, assistive technology, or a small screen."],
+    "/accessibility": ["Accessibility", "Browse the reviewed directory without using the globe or sharing your location."],
     "/transparency": ["About Real World Needs", "How the directory works, where its information comes from, and what it can and cannot tell you."]
   };
   if (documents[path]) {

@@ -14,7 +14,7 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   const css = await text("src/clarity.css");
 
   assert.match(refinement, /input\.placeholder = "Search by service or place"/);
-  assert.match(refinement, /Search by need, service, place, ZIP or postcode, or organization/);
+  assert.match(refinement, /Search the directory by need, service, place, ZIP or postcode, or organization/);
   assert.match(refinement, /Need, service, city, ZIP or postcode, or organization name/);
   assert.doesNotMatch(refinement, /scrollIntoView/);
   assert.doesNotMatch(refinement, /globe-guide|Tap a glow for details|has-used-globe|No account|No paywall/);

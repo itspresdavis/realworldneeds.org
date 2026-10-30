@@ -113,7 +113,7 @@ test("already visible, hash-targeted, focused and jumped-past content does not a
 test("no-JS content and control states have no hidden entrance prerequisite", async () => {
   const css = await readFile("src/clarity.css", "utf8");
   assert.doesNotMatch(source, /style\.(?:opacity|visibility)|preventDefault\(|requestAnimationFrame\(|addEventListener\("scroll"/);
-  assert.match(css, /scroll-padding-top:\s*var\(--rwn-header-clearance, 5rem\)/);
+  assert.match(css, /scroll-padding-top:\s*var\(--rwn-header-clearance,\s*5rem\)/);
   assert.match(css, /:where\(#finder,\s*#results,\s*#about,\s*#standards\)\s*\{\s*scroll-margin-top:\s*0\s*;?\s*\}/);
   assert.match(css, /prefers-reduced-motion:\s*no-preference/);
   const skipStack = Number(css.match(/\.rwn-professional \.skip-link\s*\{\s*z-index:\s*(\d+)\s*;?\s*\}/)?.[1]);
