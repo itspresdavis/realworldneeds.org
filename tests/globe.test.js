@@ -96,11 +96,11 @@ test("expanded catalog preserves location precision and minimum coverage", () =>
   const expansionIds = new Set(reviewedSourceExpansion.map((resource) => resource.id));
   const reviewedWithheldIds = new Set(["breakthrough-daytime-support", "father-joes-day-center"]);
   const reviewedExpansion = resources.filter((resource) => expansionIds.has(resource.id));
-  assert.ok(resources.length >= 1900);
-  assert.ok(resources.filter(isExactServiceSite).length >= 1800);
-  assert.ok(new Set(resources.map((resource) => resource.country)).size >= 109);
-  assert.equal(reviewedSourceExpansion.length, 112);
-  assert.equal(expansionIds.size, 112);
+  assert.equal(resources.length, 515);
+  assert.equal(resources.filter(isExactServiceSite).length, 442);
+  assert.equal(new Set(resources.map((resource) => resource.country)).size, 19);
+  assert.equal(reviewedSourceExpansion.length, 49);
+  assert.equal(expansionIds.size, 49);
   assert.deepEqual(
     reviewedExpansion.map((resource) => resource.id).sort(),
     [...expansionIds].filter((id) => !reviewedWithheldIds.has(id)).sort()
@@ -109,7 +109,9 @@ test("expanded catalog preserves location precision and minimum coverage", () =>
   assert.ok(reviewedExpansion.every((resource) => resource.sourceUrl.startsWith("https://")));
   assert.equal(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").length, 101);
   assert.equal(resources.filter((resource) => resource.datasetId === "new-york-wic-sites").length, 293);
-  assert.equal(resources.filter((resource) => resource.datasetId === "trussell-food-bank-centres").length, 1373);
+  assert.deepEqual(resources.filter((resource) => resource.datasetId === "trussell-food-bank-centres").map((resource) => resource.id), ["trussell-food-bank-finder"]);
+  assert.equal(resources.filter((resource) => resource.id.startsWith("unhcr-help-") && resource.id !== "unhcr-help-country-directory").length, 0);
+  assert.equal(resources.some((resource) => resource.id === "unhcr-help-country-directory" && resource.sourceUrl === "https://help.unhcr.org/countries/"), true);
   assert.ok(resources.filter((resource) => resource.datasetId === "massachusetts-wic-locations").every((resource) => resource.hours));
 });
 

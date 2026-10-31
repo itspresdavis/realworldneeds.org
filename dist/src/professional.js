@@ -18,7 +18,7 @@ function rewriteNavigation() {
     <a href="/directory">Directory</a>
     <a href="/editorial-policy">How listings are checked</a>
     <a href="/sources">Sources</a>
-    <a href="/transparency">Transparency</a>
+    <a href="/join">Contribute</a>
   `;
   if (desktop) desktop.innerHTML = links;
   if (mobile) mobile.innerHTML = links;
@@ -32,10 +32,10 @@ function rewriteNavigation() {
 
   const action = document.querySelector(".header-action");
   if (action) {
-    action.textContent = "Browse directory";
-    action.href = "/directory";
+    action.textContent = "Saved";
+    action.href = "/directory#saved";
     action.removeAttribute("data-section-link");
-    action.setAttribute("aria-label", "Browse the full Real World Needs directory");
+    action.setAttribute("aria-label", "Open saved services");
   }
 }
 
@@ -52,7 +52,7 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it."
+    "Practical help, with contact details and sources you can check."
   );
 
   const status = document.getElementById("locationStatus");
@@ -62,18 +62,26 @@ function rewriteFinderCopy() {
   if (live) live.textContent = "In the United States, location search can also load current USDA summer meal sites.";
 
   const privacy = document.querySelector(".location-privacy");
-  if (privacy) privacy.innerHTML = `Your exact location stays in your browser. <a href="/privacy#location">Read how location works</a>.`;
+  if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Read how location works</a>.`;
 
   const safety = document.querySelector(".finder-safety");
   if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not an emergency service.`;
 }
 
 function rewriteMethodSections() {
-  setText(".about-rwn__heading h2", "What Real World Needs does.");
+  setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
   setText(
     ".about-rwn__heading p",
-    "RWN organizes public information about essential services and helps you reach the organization providing them. We do not decide eligibility, reserve services, or provide the listed services ourselves."
+    "Find practical support. Review the details. Reach the people who can help. The provider confirms eligibility and availability."
   );
+
+  const heading = document.querySelector('.about-rwn__heading');
+  if (heading && !heading.querySelector('.mission-drawing')) {
+    const drawing = document.createElement('img');
+    drawing.className = 'mission-drawing'; drawing.src = '/care-drawing.svg'; drawing.alt = ''; drawing.width = 420; drawing.height = 150; drawing.loading = 'lazy';
+    heading.append(drawing);
+    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
+  }
 
   const stepCopy = [
     ["Search", "Look by need or place. Use location only if you want nearby services sorted first."],
@@ -113,10 +121,10 @@ function simplifyStructure() {
   if (!footer) return;
 
   const explore = footer.querySelector('nav[aria-label="Footer explore"]');
-  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a>`;
+  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a>`;
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {
@@ -140,7 +148,16 @@ function simplifyStructure() {
 export function installProfessionalPresentation() {
   if (!document.querySelector(".finder-intro")) return false;
   document.documentElement.classList.add("rwn-professional");
-  document.body.classList.add("rwn-professional");
+  document.body.classList.add("rwn-professional", "rwn-atlas");
+  const globe = document.querySelector('.globe-stage');
+  setText(".globe-meta > div:first-child strong", "Explore the map");
+  if (globe && !globe.querySelector('.atlas-key')) {
+    const key = document.createElement('div');
+    key.className = 'atlas-key';
+    key.setAttribute('aria-label', 'Map marker key');
+    key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Select a point to check its address and source.</small>';
+    globe.append(key);
+  }
   installBrandMarks();
   rewriteBrandText();
   rewriteNavigation();

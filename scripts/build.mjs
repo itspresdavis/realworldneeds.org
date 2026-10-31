@@ -381,7 +381,11 @@ const release = await releaseHash(three.release);
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
 await cp("index.html", "dist/index.html");
-await cp("src", "dist/src", { recursive: true });
+await cp("src", "dist/src", {
+  recursive: true,
+  // The local Trussell centre snapshot is withheld from the public site until licensing is cleared.
+  filter: (source) => !source.endsWith("trussell-foodbanks.js")
+});
 await cp("public", "dist", { recursive: true });
 
 let builtIndex = await readFile("dist/index.html", "utf8");

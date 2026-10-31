@@ -25,9 +25,9 @@ test("data-only removal rotates finder, directory-index and offline URLs across 
       await cp(path, join(root, path), { recursive: true });
     }
     await symlink(resolve("node_modules"), join(root, "node_modules"), "dir");
-    const generatedPath = "src/data/generated/trussell-foodbanks.js";
+    const generatedPath = "src/data/generated/massachusetts-wic.js";
     const original = await read(root, generatedPath);
-    await writeFile(join(root, generatedPath), `${original}\ntrussellFoodbankResources.push({ ...trussellFoodbankResources[0], id: "${fixtureId}", name: "Synthetic cache removal fixture", address: "Invented test address", sourceUrl: "https://example.org/fixture", phone: null, lat: 51, lng: 0 });\n`);
+    await writeFile(join(root, generatedPath), `${original}\nmassachusettsWicResources.push({ ...massachusettsWicResources[0], id: "${fixtureId}", name: "Synthetic cache removal fixture", address: "Invented test address", sourceUrl: "https://example.org/fixture", phone: null, lat: 42, lng: -71 });\n`);
     await build(root);
     const before = JSON.parse(await read(root, "dist/data/release.json"));
     assert.ok((await read(root, "dist/data/search-index.json")).includes(fixtureId));
@@ -45,7 +45,9 @@ test("data-only removal rotates finder, directory-index and offline URLs across 
     assert.ok((await read(root, "dist/index.html")).includes(`/src/bootstrap.js?v=${after.release}`));
     assert.ok((await read(root, "dist/src/bootstrap.js")).includes(`./app.js?v=${after.release}`));
     assert.ok((await read(root, "dist/src/app.js")).includes(`./data/resources.js?v=${after.release}`));
-    assert.ok((await read(root, "dist/src/data/resources.js")).includes(`./generated/trussell-foodbanks.js?v=${after.release}`));
+    const resourcesSource = await read(root, "dist/src/data/resources.js");
+    assert.ok(resourcesSource.includes(`./generated/massachusetts-wic.js?v=${after.release}`));
+    assert.equal(resourcesSource.includes("trussell-foodbanks.js"), false);
     assert.ok((await read(root, "dist/directory/index.html")).includes(`${after.offlineAssets["/directory.js"]}?v=${after.directoryRelease}`));
     assert.ok((await read(root, "dist/sw.js")).includes(`rwn-offline-${after.offlineRelease}`));
     for (const path of [generatedPath, "data/search-index.json", "data/resources.json", "directory.csv", "sitemap.xml"]) {

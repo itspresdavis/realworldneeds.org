@@ -24,54 +24,33 @@
     <meta name="twitter:title" content="Find Essential Services Near You | Real World Needs" />
     <meta name="twitter:description" content="Search food, shelter, health care, hygiene, clothing, water and other essential services. Review provider contact details, the original source and the date RWN checked each listing." />
     <meta name="twitter:image" content="https://www.realworldneeds.org/media/earth-blue-marble.jpg" />
-    <link rel="stylesheet" href="/src/styles.css?v=93bf6b9efaa9" />
+    <link rel="stylesheet" href="/src/styles.css?v=32eafdd55a02" />
     <style>
       @media screen {
         .globe-stage { contain: paint; }
         .globe-cluster-tray { overscroll-behavior: contain; }
-        .quick-need { min-height:44px!important; }
-        .finder-intro { padding-left:0!important; border-left:0!important; }
-        .finder-intro h1 { max-width:13ch!important; font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif!important; font-size:clamp(2.2rem,3.45vw,3.35rem)!important; font-weight:680!important; line-height:1.01!important; letter-spacing:-.047em!important; }
-        .finder-safety { padding-left:0!important; border-left:0!important; background:transparent!important; }
-        .jump-results { display:inline-flex; min-height:44px; align-items:center; gap:.3rem; margin:.05rem 0 .15rem; color:#07538d; font-size:.7rem; font-weight:700; text-decoration:none; }
-        .jump-results::after { content:"↓"; font-size:.8rem; }
-        .jump-results:hover,.jump-results:focus-visible { text-decoration:underline; text-underline-offset:3px; }
-        .preboot-finder { min-height:68vh; padding:clamp(3.5rem,7vw,5.5rem) max(1rem,5vw); background:#f6f8f7; color:#14262e; border-bottom:1px solid #d8e0dd; }
+        .preboot-finder { min-height:68vh; padding:clamp(3.5rem,7vw,5.5rem) max(1rem,5vw); background:#102f27; color:#f9f8ef; border-bottom:1px solid #335246; }
         .preboot-finder__inner { width:min(64rem,100%); margin:0 auto; }
-        .preboot-finder h1 { max-width:13ch; margin:0; color:#081a22; font:680 clamp(2.2rem,4.6vw,3.6rem)/1.01 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; letter-spacing:-.047em; }
-        .preboot-finder p { max-width:44rem; margin:.9rem 0 0; color:#5f7077; font:500 clamp(.93rem,1.4vw,1.02rem)/1.6 system-ui,sans-serif; }
+        .preboot-finder h1 { max-width:13ch; margin:0; color:#f9f8ef; font:400 clamp(2.2rem,4.6vw,3.6rem)/1.06 Georgia,"Times New Roman",serif; letter-spacing:-.047em; }
+        .preboot-finder p { max-width:44rem; margin:.9rem 0 0; color:#c6d7cc; font:500 clamp(.93rem,1.4vw,1.02rem)/1.6 system-ui,sans-serif; }
         .preboot-finder nav { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:1.25rem; }
         .preboot-finder a { display:inline-flex; min-height:2.75rem; align-items:center; padding:.58rem .7rem; border:1px solid #cdd7d3; border-radius:6px; background:#fff; color:#294149; font:650 .75rem/1 system-ui,sans-serif; text-decoration:none; }
         .preboot-finder__directory { margin-top:1.15rem!important; }
-        .preboot-finder__directory a, .preboot-finder__trust a { min-height:auto; border:0; padding:0; background:transparent; color:#07538d; text-decoration:underline; text-underline-offset:3px; }
+        .preboot-finder__directory a, .preboot-finder__trust a { min-height:auto; border:0; padding:0; background:transparent; color:#d3e2d8; text-decoration:underline; text-underline-offset:3px; }
+        .preboot-finder__status { margin-top:1rem!important; color:#c6d7cc!important; font-size:.72rem!important; }
         .preboot-finder__trust { font-size:.74rem!important; }
       }
       @media (max-width:600px) {
-        .finder-intro h1 { max-width:17ch!important; font-size:clamp(1.9rem,7.7vw,2.25rem)!important; line-height:1.03!important; }
-        .finder-intro p { margin-top:.55rem!important; font-size:.82rem!important; line-height:1.48!important; }
-        .finder-search { margin-top:.85rem!important; }
-        .search-helper { display:none!important; }
-        .quick-needs { margin-top:.65rem!important; }
-        .quick-need { min-height:44px!important; }
-        .location-actions { margin-top:.65rem!important; }
-        .location-status { display:none!important; }
-        .finder-location-notes { margin-top:.25rem!important; }
-        .finder-location-notes > summary, .filter-disclosure > summary { min-height:40px!important; }
-        .finder-safety { margin-top:.35rem!important; padding-top:.5rem!important; font-size:.61rem!important; line-height:1.42!important; }
-        .filter-disclosure { margin-top:.35rem!important; }
-        .jump-results { display:flex!important; width:100%!important; min-height:44px; margin:.85rem 0 0!important; justify-content:center; }
         .preboot-finder { min-height:auto; padding:2rem .9rem 2.4rem; }
         .preboot-finder h1 { max-width:17ch; font-size:clamp(1.9rem,8vw,2.35rem); line-height:1.03; }
         .preboot-finder p { margin-top:.6rem; font-size:.84rem; line-height:1.5; }
-        .preboot-finder nav { flex-wrap:nowrap; overflow-x:auto; margin-top:.85rem; scrollbar-width:none; }
-        .preboot-finder nav::-webkit-scrollbar { display:none; }
-        .preboot-finder nav a { flex:0 0 auto; }
+        .preboot-finder nav { flex-wrap:wrap; margin-top:.85rem; }
       }
       @media (prefers-reduced-transparency: reduce) {
         .site-header, .globe-cluster-tray { -webkit-backdrop-filter:none; backdrop-filter:none; }
       }
     </style>
-    <link rel="modulepreload" href="/src/app.js?v=93bf6b9efaa9" />
+    <link rel="modulepreload" href="/src/app.js?v=32eafdd55a02" />
     <link rel="modulepreload" href="/vendor/three.module.js" />
     <link rel="preload" as="image" href="/media/earth-blue-marble.jpg" type="image/jpeg" fetchpriority="high" />
     <link rel="canonical" href="https://www.realworldneeds.org/" />
@@ -118,8 +97,8 @@
       }
     </script>
     <title>Find Essential Services Near You | Real World Needs</title>
-    <link rel="stylesheet" href="/src/clarity.css?v=93bf6b9efaa9" />
-  <link rel="stylesheet" href="/navigation-actions.css?v=93bf6b9efaa9" />
+    <link rel="stylesheet" href="/src/clarity.css?v=32eafdd55a02" />
+  <link rel="stylesheet" href="/navigation-actions.css?v=32eafdd55a02" />
   <style data-rwn-critical-shell>
 .directory-strip,.accountability,#openInspector{display:none!important}
 .globe-canvas{touch-action:none;overscroll-behavior:contain}
@@ -131,21 +110,23 @@
 </style>
   <meta name="twitter:image:alt" content="Real World Needs essential services directory" />
   <link rel="sitemap" href="/sitemap.xml" type="application/xml" />
+<meta name="rwn-offline-assets" content="575f16af3a90" />
 </head>
   <body>
     <div id="root">
       <main class="preboot-finder" id="preboot-finder">
         <div class="preboot-finder__inner">
           <h1>Find essential services near you.</h1>
-          <p>Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>
+          <p>Practical help, with contact details and sources you can check.</p>
           <nav aria-label="Browse help by need">
             <a href="/directory/help/food">Food</a>
-            <a href="/directory/help/shelter">Shelter</a>
-            <a href="/directory/help/health">Health care</a>
-            <a href="/directory/help/hygiene">Hygiene</a>
-            <a href="/directory/help/clothing">Clothing</a>
             <a href="/directory/help/water">Water</a>
+            <a href="/directory/help/shelter">Shelter</a>
+            <a href="/directory/help/clothing">Clothing</a>
+            <a href="/directory/help/hygiene">Hygiene</a>
+            <a href="/directory/help/health">Health care</a>
           </nav>
+          <p class="preboot-finder__status" role="status">Preparing the interactive finder. Browse by need while it loads.</p>
           <p class="preboot-finder__directory"><a href="/directory">Browse the full directory</a></p>
           <p class="preboot-finder__trust"><a href="/editorial-policy">How listings are checked</a> · <a href="/transparency">Transparency</a> · <a href="/accessibility">Accessibility</a></p>
         </div>
@@ -157,6 +138,6 @@
         <a href="/directory">Use the directory</a> to browse listings, contact details, sources, and map locations.
       </div>
     </noscript>
-    <script type="module" src="/src/bootstrap.js?v=93bf6b9efaa9"></script>
+    <script type="module" src="/src/bootstrap.js?v=32eafdd55a02"></script>
   </body>
 </html>

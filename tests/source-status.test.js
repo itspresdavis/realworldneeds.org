@@ -3,7 +3,7 @@ import { makeNewYorkWicResource } from "../scripts/refresh-new-york-wic.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { sourceClosureNotice, sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
@@ -11,7 +11,7 @@ import { trussellFoodbankMetadata, trussellFoodbankResources } from "../src/data
 import { resources } from "../src/data/resources.js";
 
 const read = (path) => readFile(path, "utf8");
-const closed = resources.find((resource) => resource.collectionStatus === "Closed");
+const closed = trussellFoodbankResources.find((resource) => resource.collectionStatus === "Closed");
 const flagged = resources.filter(sourceClosureNotice);
 
 for (const status of ["Closed", "Temporarily closed"]) {
@@ -47,8 +47,8 @@ test("generated records expose source labels without changing the underlying col
     assert.equal(resource.collectionStatusCheckedOn, trussellFoodbankMetadata.checkedOn);
     counts.set(resource.collectionStatus, (counts.get(resource.collectionStatus) || 0) + 1);
   }
-  assert.ok(flagged.length > 0, "snapshot must exercise real closure rendering");
-  assert.equal(flagged.length, (counts.get("Closed") || 0) + (counts.get("Temporarily closed") || 0));
+  assert.equal(flagged.length, 0, "withheld Trussell centre statuses are not in the public catalog");
+  assert.equal((counts.get("Closed") || 0) + (counts.get("Temporarily closed") || 0), 49);
 });
 
 test("presentation removes only the exact closure prefix and preserves the original source note", () => {
@@ -112,8 +112,9 @@ test("every static directory card, including local pages, puts the warning outsi
       if (path.includes("/local/")) localCards += 1;
     }
   }
-  assert.equal(seen.size, flagged.length);
-  assert.ok(localCards > 0);
+  assert.equal(seen.size, 0);
+  assert.equal(flagged.length, 0);
+  assert.equal(localCards, 0);
 });
 
 test("search export contains matching status notices for all affected records and none for unflagged records", async () => {
@@ -164,11 +165,11 @@ test("finder warnings stay outside collapsed panel details and before enhanced r
 });
 
 test("affected records are not suggested as related alternatives and copied details retain the warning", async () => {
-  const ids = new Set(flagged.map((resource) => resource.id));
-  const html = await read(`dist/service/${closed.id}/index.html`);
-  const related = html.match(/<section class="related-services"[\s\S]*?<\/section>/)?.[0];
-  assert.ok(related);
-  for (const link of related.matchAll(/href="\/service\/([^"]+)"/g)) assert.ok(!ids.has(link[1]));
+  await assert.rejects(access(`dist/service/${closed.id}/index.html`));
+  assert.equal(flagged.length, 0);
+  const html = await read("dist/service/whitechapel-mission/index.html");
+  const related = html.match(/<section class="related-services"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.doesNotMatch(related, /\/service\/trussell-[0-9a-f-]{36}/i);
   const script = await read("public/service-actions.js");
   const start = script.indexOf("  const publicDetails = () => {");
   const end = script.indexOf("\n  const fallbackCopy", start);
@@ -242,6 +243,8 @@ test("finder URLs change with generated snapshot content, including collection s
   assert.equal(release.release, expected);
   assert.notEqual(changedSnapshot.digest("hex").slice(0, 12), expected);
   assert.ok((await read("dist/index.html")).includes(`/src/bootstrap.js?v=${expected}`));
-  assert.ok((await read("dist/src/data/resources.js")).includes(`./generated/trussell-foodbanks.js?v=${expected}`));
+  const resourcesSource = await read("dist/src/data/resources.js");
+  assert.ok(resourcesSource.includes(`./generated/massachusetts-wic.js?v=${expected}`));
+  assert.equal(resourcesSource.includes("trussell-foodbanks.js"), false);
   assert.ok((await read("dist/src/app.js")).includes(`./utils/source-status.js?v=${expected}`));
 });

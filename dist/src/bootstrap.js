@@ -1,8 +1,8 @@
-const appReady = import("./app.js?v=93bf6b9efaa9");
-const refinementReady = import("./refinement.js?v=93bf6b9efaa9");
-const professionalReady = import("./professional.js?v=93bf6b9efaa9");
-const accessibilityReady = import("./accessibility.js?v=93bf6b9efaa9");
-const resultActionsReady = import("./result-actions.js?v=93bf6b9efaa9");
+const appReady = import("./app.js?v=32eafdd55a02");
+const refinementReady = import("./refinement.js?v=32eafdd55a02");
+const professionalReady = import("./professional.js?v=32eafdd55a02");
+const accessibilityReady = import("./accessibility.js?v=32eafdd55a02");
+const resultActionsReady = import("./result-actions.js?v=32eafdd55a02");
 
 // The application owns its DOM and state. Presentation and accessibility
 // install only after app initialization so startup is deterministic.
@@ -33,16 +33,24 @@ const clearOfflineData = async () => {
   navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_RWN_OFFLINE" });
 };
 
+const reportOfflineUnavailable = () => {
+  document.documentElement.dataset.offlineSaving = "unavailable";
+  window.dispatchEvent(new CustomEvent("rwn:offline-unavailable"));
+};
+
 document.getElementById("clearBrowserData")?.addEventListener("click", () => {
-  clearOfflineData().catch(() => {});
+  clearOfflineData().catch(reportOfflineUnavailable);
 });
 
-import("./telemetry.js?v=93bf6b9efaa9")
+import("./telemetry.js?v=32eafdd55a02")
   .then(({ startTelemetry }) => startTelemetry())
   .catch(() => {});
 
 if ("serviceWorker" in navigator && window.isSecureContext) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
-  }, { once: true });
+  const register = () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(reportOfflineUnavailable);
+  };
+  // Dynamic imports can finish after the document's one-shot load event.
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }

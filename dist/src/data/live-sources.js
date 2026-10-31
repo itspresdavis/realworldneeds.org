@@ -53,18 +53,15 @@ export const sourceRegistry = [
   },
   {
     id: "trussell-food-bank-centres",
-    title: "Trussell food-bank centres",
+    title: "Trussell food-bank locator",
     owner: "Trussell",
     sourceUrl: "https://www.trussell.org.uk/emergency-food/get-a-food-voucher/choose-a-foodbank",
-    mode: "reviewed-official-network-snapshot",
-    updateFrequency: "Refreshable from the current official Trussell finder; RWN's generator fails closed if the source becomes materially incomplete or changes format.",
-    recordCount: 1398,
-    sourceReportedRecordsAtAudit: 1408,
-    sourceParsedRecordsAtAudit: 1406,
-    excludedForPublicationAtAudit: 8,
-    auditedAt: "2026-08-07",
-    fields: ["Trussell-published coordinates", "public address", "town and postcode", "phone and email when supplied", "referral route", "collection or delivery status", "provider page"],
-    reuseBasis: "Official Trussell finder snapshot with record-level UUIDs and attribution. RWN excludes hidden-address records and records that fail exact-location or publication checks."
+    mode: "official-public-locator",
+    updateFrequency: "RWN links to Trussell's current public food-bank locator. Individual centre records are not republished while reuse licensing is unresolved.",
+    recordCount: 1,
+    auditedAt: "2026-10-20",
+    fields: ["link to the official Trussell food-bank locator"],
+    reuseBasis: "Official public locator only. The centre-level snapshot is withheld from the public directory, CSV, and JSON exports pending a licensing decision."
   }
 ];
 
@@ -125,6 +122,7 @@ export function buildUsdaNearbyUrl(location, date = new Date()) {
 }
 
 function clean(value) {
+  if (typeof value !== "string" && typeof value !== "number") return "";
   return String(value || "")
     .replaceAll("&", " and ")
     .replace(/[<>"']/g, " ")
@@ -139,15 +137,19 @@ function sourceId(attributes) {
     .replace(/^-|-$/g, "");
 }
 
+// ArcGIS date fields are numeric Unix milliseconds. Absent dates stay unknown;
+// supplied values must be finite and representable before formatting.
+function validSourceDate(value) {
+  return typeof value === "number" && Number.isFinite(value) && Number.isFinite(new Date(value).getTime());
+}
+
 function displayDate(value) {
-  if (!Number.isFinite(Number(value))) return "";
   return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })
-    .format(new Date(Number(value)));
+    .format(new Date(value));
 }
 
 function sourceDate(value) {
-  if (!Number.isFinite(Number(value))) return null;
-  return new Date(Number(value)).toISOString().slice(0, 10);
+  return value == null ? null : new Date(value).toISOString().split("T")[0];
 }
 
 function daysLabel(value) {
@@ -170,15 +172,17 @@ function mealTimes(attributes) {
 
 export function usdaFeatureToResource(feature, checkedAt = new Date()) {
   const attributes = feature?.attributes || {};
-  const lat = Number(feature?.geometry?.y);
-  const lng = Number(feature?.geometry?.x);
+  const lat = feature?.geometry?.y;
+  const lng = feature?.geometry?.x;
   const id = sourceId(attributes);
   const name = clean(attributes.Site_Name);
   const city = clean(attributes.Site_City);
   const state = clean(attributes.Site_State);
   const zip = clean(attributes.Site_Zip);
   const street = [attributes.Site_Address1, attributes.Site_Address2].map(clean).filter(Boolean).join(", ");
-  if (!id || !name || !city || !state || !street || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!id || !name || !city || !state || !street || !Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) return null;
+  const start = attributes.Start_date, end = attributes.End_date;
+  if ((start != null && !validSourceDate(start)) || (end != null && !validSourceDate(end)) || (start != null && end != null && start > end)) return null;
 
   const times = mealTimes(attributes);
   const days = daysLabel(attributes.Days_of_operation);
@@ -220,13 +224,37 @@ export function usdaFeatureToResource(feature, checkedAt = new Date()) {
     ...(validFrom ? { validFrom } : {}),
     ...(validThrough ? { validThrough } : {}),
     verificationMethod: "live-official-feed",
-    coordinateNote: `The point is published in USDA's official 2026 layer and passed its public map's geocoding-quality threshold${attributes.Score ? ` (score ${Number(attributes.Score).toFixed(0)})` : ""}. Confirm the written address before travel.`,
+    coordinateNote: `The point is published in USDA's official 2026 layer and passed its public map's geocoding-quality threshold${Number.isFinite(attributes.Score) ? ` (score ${attributes.Score.toFixed(0)})` : ""}. Confirm the written address before travel.`,
     lastChecked: isoDay(checkedAt)
   };
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function abortReason(signal) {
+  return signal.reason || new DOMException("Aborted", "AbortError");
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+function sleep(ms, signal) {
+  throwIfAborted(signal);
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); };
+    const abort = () => { cleanup(); reject(abortReason(signal)); };
+    const timer = setTimeout(() => { cleanup(); resolve(); }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+function payloadError(message) {
+  const error = new Error(message);
+  error.retryable = false;
+  return error;
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function isRetryableStatus(status) {
@@ -256,71 +284,102 @@ export function resetUsdaCircuitForTests() {
   usdaCircuit.openUntil = 0;
 }
 
-async function fetchAttempt(url, fetchImpl, signal) {
+// The same seven-second deadline covers headers, body and validation. Racing
+// explicitly also bounds transports/mocks that ignore their AbortSignal. Three
+// attempts plus 250/750 ms backoff take at most 22 seconds, subject to scheduling.
+async function fetchAttempt(url, fetchImpl, signal, validate) {
+  throwIfAborted(signal);
   const controller = new AbortController();
-  const abortFromCaller = () => controller.abort(signal?.reason);
-  if (signal?.aborted) controller.abort(signal.reason);
-  else signal?.addEventListener("abort", abortFromCaller, { once: true });
-
-  const timeout = setTimeout(() => controller.abort(), SOURCE_TIMEOUT_MS);
+  let timeout, abortFromCaller;
+  const interruption = new Promise((_, reject) => {
+    const interrupt = reason => { controller.abort(reason); reject(reason); };
+    abortFromCaller = () => interrupt(abortReason(signal));
+    signal?.addEventListener("abort", abortFromCaller, { once: true });
+    timeout = setTimeout(() => {
+      const error = new Error("The official USDA source request timed out.");
+      error.name = "TimeoutError";
+      interrupt(error);
+    }, SOURCE_TIMEOUT_MS);
+  });
+  const work = async () => {
+    const response = await fetchImpl(url, { signal: controller.signal, referrerPolicy: "no-referrer" });
+    throwIfAborted(controller.signal);
+    if (!response.ok) {
+      // No denied response body needs to be read, retained or retried.
+      controller.abort();
+      const error = new Error(`Official source returned ${response.status || "an error"}.`);
+      error.status = Number(response.status || 0);
+      throw error;
+    }
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      if (error?.name === "SyntaxError") throw payloadError("USDA returned malformed JSON.");
+      throw error;
+    }
+    throwIfAborted(controller.signal);
+    if (!isObject(data)) throw payloadError("USDA did not return a valid response object.");
+    if (Object.hasOwn(data, "error")) {
+      if (!isObject(data.error) || !Number.isSafeInteger(data.error.code)) throw payloadError("USDA returned an invalid error response.");
+      const message = typeof data.error.message === "string" && data.error.message ? data.error.message : "Official source query failed.";
+      const error = new Error(message);
+      error.status = data.error.code;
+      throw error;
+    }
+    return validate(data);
+  };
   try {
-    return await fetchImpl(url, { signal: controller.signal, referrerPolicy: "no-referrer" });
+    return await Promise.race([work(), interruption]);
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
-async function jsonResponse(url, fetchImpl, signal) {
+async function jsonResponse(url, fetchImpl, signal, validate) {
+  throwIfAborted(signal);
   if (Date.now() < usdaCircuit.openUntil) throw circuitError();
 
   let finalError = null;
   for (let attempt = 0; attempt <= SOURCE_RETRY_DELAYS_MS.length; attempt += 1) {
-    if (signal?.aborted) throw signal.reason || new DOMException("Aborted", "AbortError");
-
+    throwIfAborted(signal);
     try {
-      const response = await fetchAttempt(url, fetchImpl, signal);
-      if (!response.ok) {
-        const status = Number(response.status || 0);
-        const error = new Error(`Official source returned ${status || "an error"}.`);
-        error.status = status;
-        if (!isRetryableStatus(status) || attempt === SOURCE_RETRY_DELAYS_MS.length) throw error;
-        finalError = error;
-      } else {
-        const data = await response.json();
-        if (data.error) {
-          const error = new Error(data.error.message || "Official source query failed.");
-          error.status = Number(data.error.code || 500);
-          if (!isRetryableStatus(error.status) || attempt === SOURCE_RETRY_DELAYS_MS.length) throw error;
-          finalError = error;
-        } else {
-          registerSourceSuccess();
-          return data;
-        }
-      }
+      const result = await fetchAttempt(url, fetchImpl, signal, validate);
+      throwIfAborted(signal);
+      registerSourceSuccess();
+      return result;
     } catch (error) {
-      if (signal?.aborted) throw signal.reason || error;
+      throwIfAborted(signal);
       finalError = error;
-      const status = Number(error?.status || 0);
-      const retryable = !status || isRetryableStatus(status) || error?.name === "AbortError";
+      const status = error?.status;
+      const retryable = error?.retryable !== false && (status === undefined || isRetryableStatus(status));
       if (!retryable || attempt === SOURCE_RETRY_DELAYS_MS.length) break;
     }
-
-    await sleep(SOURCE_RETRY_DELAYS_MS[attempt]);
+    await sleep(SOURCE_RETRY_DELAYS_MS[attempt], signal);
   }
 
+  throwIfAborted(signal);
   registerSourceFailure();
   throw finalError || new Error("Official source query failed.");
 }
 
 export async function fetchUsdaActiveCount({ date = new Date(), fetchImpl = fetch, signal } = {}) {
-  const data = await jsonResponse(buildUsdaActiveCountUrl(date), fetchImpl, signal);
-  const count = Number(data.count);
-  if (!Number.isFinite(count)) throw new Error("USDA did not return a valid active-site count.");
-  return count;
+  return jsonResponse(buildUsdaActiveCountUrl(date), fetchImpl, signal, data => {
+    if (!Number.isSafeInteger(data.count) || data.count < 0) throw payloadError("USDA did not return a valid active-site count.");
+    return data.count;
+  });
 }
 
 export async function fetchNearbyUsdaSites(location, { date = new Date(), fetchImpl = fetch, signal } = {}) {
-  const data = await jsonResponse(buildUsdaNearbyUrl(location, date), fetchImpl, signal);
-  return (data.features || []).map((feature) => usdaFeatureToResource(feature, date)).filter(Boolean);
+  return jsonResponse(buildUsdaNearbyUrl(location, date), fetchImpl, signal, data => {
+    if (!Array.isArray(data.features)) throw payloadError("USDA did not return a valid nearby-site list.");
+    if (Object.hasOwn(data, "exceededTransferLimit") && data.exceededTransferLimit !== false) throw payloadError("USDA did not return a complete nearby-site list.");
+    const resources = data.features.map(feature => usdaFeatureToResource(feature, date)).filter(Boolean);
+    // Keep the existing exclusion of malformed records, but a nonempty source
+    // with no usable records cannot establish that no nearby services exist.
+    if (data.features.length && !resources.length) throw payloadError("USDA did not return usable nearby-site records.");
+    if (new Set(resources.map(resource => resource.id)).size !== resources.length) throw payloadError("USDA returned duplicate nearby-site identities.");
+    return resources;
+  });
 }

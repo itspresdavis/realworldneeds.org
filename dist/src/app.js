@@ -1,9 +1,14 @@
+import { isContactOnly, hasMapCoordinates, contactOnlyLabel, contactOnlyNotice } from "./utils/resource-location.js?v=32eafdd55a02";
+import { warmSearchIndex } from "./utils/search-warmup.js?v=32eafdd55a02";
+import { phoneMarkup } from "./utils/phone.js?v=32eafdd55a02";
 import * as THREE from "/vendor/three.module.js";
-import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js?v=93bf6b9efaa9";
-import { clusterProjectedEntries } from "./utils/globe-clustering.js?v=93bf6b9efaa9";
-import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js?v=93bf6b9efaa9";
-import { freeAccessLabel, freeAccessModels } from "./data/free-access.js?v=93bf6b9efaa9";
-import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js?v=93bf6b9efaa9";
+import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js?v=32eafdd55a02";
+import { globeHasMotion, globePointVisible, frameBufferMatches } from "./utils/globe-rendering.js?v=32eafdd55a02";
+import { clusterProjectedEntries } from "./utils/globe-clustering.js?v=32eafdd55a02";
+import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js?v=32eafdd55a02";
+import { freeAccessLabel, freeAccessModels } from "./data/free-access.js?v=32eafdd55a02";
+import { sourceClosureMarkup, availabilityInstructions } from "./utils/source-status.js?v=32eafdd55a02";
+import { fetchNearbyUsdaSites, fetchUsdaActiveCount } from "./data/live-sources.js?v=32eafdd55a02";
 import {
   cameraDistanceForSphere,
   createInitialTypeSet,
@@ -18,21 +23,23 @@ import {
   resourceSearchScore,
   THREE_SPHERE_TEXTURE_OFFSET,
   toRad
-} from "./utils/geo.js?v=93bf6b9efaa9";
+} from "./utils/geo.js?v=32eafdd55a02";
 import {
   classifyGlobeDragIntent,
   globeViewProfile,
   pinchZoom,
-  pointPickThresholdWorld,
-  pointerDistance
-} from "./utils/gesture.js?v=93bf6b9efaa9";
-import { classifyWheelIntent, wheelZoomFactor } from "./utils/globe-zoom.js?v=93bf6b9efaa9";
+  pointPickThresholdWorld
+} from "./utils/gesture.js?v=32eafdd55a02";
+import { classifyWheelIntent, wheelZoomFactor } from "./utils/globe-zoom.js?v=32eafdd55a02";
 import {
   clearResourceFromUrl,
   privateResourceUrl,
   resourceIdFromUrl,
-  SAVED_RESOURCES_KEY
-} from "./utils/privacy.js?v=93bf6b9efaa9";
+  SAVED_RESOURCES_KEY,
+  readSavedResources,
+  setResourceSaved,
+  clearSavedResources
+} from "./utils/privacy.js?v=32eafdd55a02";
 
 const DEFAULT_RESOURCE = null;
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -47,19 +54,22 @@ let globeEngaged = false;
 function markGlobeEngaged() {
   globeEngaged = true;
   globeStageElement?.classList.add("is-engaged");
+  wakeGlobe();
 }
 
 // Zooming toward the pointer keeps the place under the cursor pinned, which is
 // what makes deep zoom feel like a map rather than a slideshow of scales.
 function zoomTowardPointer(factor, clientX, clientY) {
+  wakeGlobe();
   const maximum = maxGlobeZoom();
-  const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, state.targetZoom * factor));
+  const previousTargetZoom = state.targetZoom;
+  const nextZoom = Math.max(MIN_GLOBE_ZOOM, Math.min(maximum, previousTargetZoom * factor));
   const anchor = clientX === undefined ? null : globeCoordinateAtClientPoint(clientX, clientY);
   state.targetZoom = nextZoom;
   if (!anchor) return;
   // Nudge the rotation so the anchored coordinate drifts toward the centre in
   // proportion to how much closer the camera moved.
-  const pull = Math.max(0, Math.min(0.62, (nextZoom / Math.max(0.0001, state.zoom) - 1) * 1.35));
+  const pull = Math.max(0, Math.min(0.62, (nextZoom / Math.max(0.0001, previousTargetZoom) - 1) * 1.35));
   if (pull <= 0.001) return;
   const lonGap = normalizeLongitude(anchor.lng - state.rotationLon);
   const latGap = anchor.lat - state.rotationLat;
@@ -113,26 +123,51 @@ function initialResultCount() {
 
 function loadSavedResources() {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(SAVED_RESOURCES_KEY) || "[]");
-    return new Set(saved.filter((id) => resources.some((resource) => resource.id === id)));
+    const ids = new Set([...readSavedResources()].filter((id) => resources.some((resource) => resource.id === id)));
+    state.savedStorageUnavailable = false;
+    return ids;
   } catch {
-    return new Set();
+    state.savedStorageUnavailable = true;
+    // Keep only the last successfully read in-memory list. Never rewrite a
+    // failed read as an empty persisted list or claim this snapshot is current.
+    return new Set(state.savedIds);
   }
 }
 
 const requestedResource = resourceIdFromUrl(window.location.href);
 const initialResource = resources.some((resource) => resource.id === requestedResource) ? requestedResource : null;
+const FINDER_HISTORY_KEY = "rwnFinder";
+const FINDER_QUERY_LIMIT = 180;
+const initialFinderHistory = window.history.state?.[FINDER_HISTORY_KEY] || null;
+
+function sanitizeFinderQuery(value) {
+  return String(value || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, FINDER_QUERY_LIMIT);
+}
+
+function finderTypesFromHistory(value) {
+  if (!Array.isArray(value)) return createInitialTypeSet();
+  const types = value.filter((type) => resourceTypes.includes(type));
+  return new Set(types);
+}
+
+function finderAccessFromHistory(value) {
+  return ["all", "direct", "discovery"].includes(value) ? value : "all";
+}
 
 if (requestedResource && new URL(window.location.href).searchParams.has("resource")) {
   window.history.replaceState({}, "", privateResourceUrl(window.location.href, requestedResource));
 }
 
+let cancelPendingSearch = () => {};
+let hasPendingSearch = () => false;
+let refreshSearchPreparation = () => {};
+
 const state = {
-  query: "",
+  query: sanitizeFinderQuery(initialFinderHistory?.query),
   viewMode: "aid",
-  accessMode: "all",
-  activeTypes: createInitialTypeSet(),
-  selectedId: initialResource,
+  accessMode: finderAccessFromHistory(initialFinderHistory?.accessMode),
+  activeTypes: finderTypesFromHistory(initialFinderHistory?.activeTypes),
+  selectedId: initialResource || (resources.some((resource) => resource.id === initialFinderHistory?.selectedId) ? initialFinderHistory.selectedId : null),
   filtered: resources,
   liveResources: [],
   liveSourceStatus: "idle",
@@ -142,6 +177,8 @@ const state = {
   userLocation: null,
   userLocationAccuracy: null,
   userCountry: null,
+  locationRecovery: "",
+  locationRetryAvailable: false,
   rotationLon: -8,
   rotationLat: 12,
   targetLon: null,
@@ -149,6 +186,7 @@ const state = {
   zoom: 1,
   targetZoom: 1,
   dragging: false,
+  touching: false,
   pointerX: 0,
   pointerY: 0,
   pointerStartX: 0,
@@ -171,16 +209,15 @@ const state = {
   visibleResults: initialResultCount(),
   globeVisible: true,
   ambientZoom: 1,
-  savedIds: loadSavedResources(),
-  savedOnly: false,
-  inspectorOpen: Boolean(initialResource),
+  savedIds: new Set(),
+  savedStorageUnavailable: false,
+  savedOnly: Boolean(initialFinderHistory?.savedOnly),
+  inspectorOpen: Boolean(initialResource || initialFinderHistory?.selectedId),
   clusterIds: []
 };
+state.savedIds = loadSavedResources();
 
 const activeGlobePointers = new Map();
-let pinchStartDistance = 0;
-let pinchStartZoom = 1;
-let globeGestureHadMultiplePointers = false;
 
 const root = document.getElementById("root");
 let pinSignature = "";
@@ -191,6 +228,7 @@ let globeScene = null;
 let globeCamera = null;
 let globeWorld = null;
 let globeSurface = null;
+const globeLandMask = { value: null };
 let globeBorders = null;
 let globeCountryHighlight = null;
 let globeGraticule = null;
@@ -202,10 +240,13 @@ let earthTextureImage = null;
 let earthDetailTextureImage = null;
 let earthDetailTextureRequested = false;
 let earthDetailTextureReady = false;
+let pendingDetailGeometry = null;
+let pendingDetailImage = null;
 let connectionGroup = null;
 let connectionSignature = "";
 let connectionParticles = [];
 let liveSourceController = null;
+let locationRequestGeneration = 0;
 let globeCanvasElement = null;
 let globeStageElement = null;
 let globePinLayerElement = null;
@@ -218,6 +259,10 @@ let globeLastReadoutUpdate = 0;
 let globeCloseViewActive = false;
 let globeServicePoints = null;
 let globePointSignature = "";
+let globeContextLost = false;
+let globeContextRecoveryExtension = null;
+let globeFrameHandle = null;
+let globeResizeObserver = null;
 const globeRaycaster = new THREE.Raycaster();
 const globePointerNdc = new THREE.Vector2();
 const globeProjectionVector = new THREE.Vector3();
@@ -319,6 +364,7 @@ function distanceLabel(resource) {
 }
 
 function locationResultLabel(resource) {
+  if (isContactOnly(resource)) return `${contactOnlyLabel} · check coverage`;
   if (!state.userLocation) return resource.accessType;
   if (isExactServiceSite(resource)) return distanceLabel(resource);
   if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Worldwide resource finder";
@@ -378,7 +424,7 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find free help near you.</h1>
+              <h1>Find essential services near you.</h1>
               <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
             </div>
 
@@ -386,19 +432,21 @@ function shell() {
               <label class="search-box">
                 ${icon.search}
                 <span class="sr-only">Search resources</span>
-                <input id="resourceSearch" type="search" placeholder="Search a place or service" autocomplete="off">
+                <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by service or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </label>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
             </div>
+            <a class="jump-results" id="jumpResults" href="#results" aria-label="Skip the map and see matching services"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
 
             <div class="location-actions">
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
               <button class="location-clear" id="clearLocation" type="button" hidden>Clear</button>
             </div>
             <p class="location-status" id="locationStatus" aria-live="polite">Nearby service locations appear first. Regional resource finders appear after them.</p>
-            <p class="live-source-status" id="liveSourceStatus">In the United States, location search also includes current USDA summer meal sites.</p>
-            <p class="location-privacy">Your exact location stays on your device. For U.S. meal searches, the USDA receives only an approximate area. <a href="/privacy#location">How location works</a></p>
+            <p class="location-recovery" id="locationRecovery" role="status" aria-live="polite" hidden></p>
+            <p class="live-source-status" id="liveSourceStatus" role="status" aria-live="polite" aria-atomic="true">In the United States, location search also includes current USDA summer meal sites.</p>
+            <p class="location-privacy">Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">How location works</a></p>
             <p class="finder-safety"><strong>Immediate danger?</strong> Contact local emergency services. RWN does not provide emergency response. <a href="/terms#urgent-help">Safety notice</a></p>
 
             <details class="filter-disclosure">
@@ -428,7 +476,7 @@ function shell() {
                 <label class="region-menu">
                   <span class="sr-only">Focus globe region</span>
                   <select id="regionFocus" aria-label="Focus globe region">
-                    <option value="focus" hidden>Focused view</option>
+                    <option value="focus" hidden>This area</option>
                     <option value="world" selected>World view</option>
                     <option value="americas">Americas</option>
                     <option value="europeAfrica">Europe &amp; Africa</option>
@@ -444,9 +492,9 @@ function shell() {
             <div class="globe-cluster-tray" id="globeClusterTray" hidden></div>
             <div class="globe-empty" id="globeEmpty" hidden></div>
             <div class="globe-fallback" id="globeFallback" hidden>
-              <p><strong>The interactive map needs WebGL,</strong> which this browser or device has turned off.</p>
+              <p id="globeFallbackMessage"><strong>The interactive map needs WebGL,</strong> which this browser or device has turned off.</p>
               <p>Every listing is still available as text, with the same contact details, sources and review dates.</p>
-              <a class="globe-fallback__action" href="/directory">Open the text directory</a>
+              <div class="globe-fallback__actions"><a class="globe-fallback__action" href="/directory">Open the text directory</a><button class="globe-fallback__retry" id="retryGlobe" type="button" hidden>Try the interactive map again</button></div>
             </div>
             <div class="globe-controls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
@@ -464,18 +512,20 @@ function shell() {
         </div>
 
         <div class="directory-strip">
-          <p id="catalogReach"><strong>${resources.length}</strong> listings checked against original sources <span>${directCount()} service locations</span> <span>17,442 active USDA summer meal sites in the latest data review</span> <a href="/directory">Use the text directory</a></p>
+          <p id="catalogReach"><strong>${resources.length}</strong> listings checked against original sources <span>${directCount()} service locations</span> <span id="liveSourceReach">USDA meal-site counts checked with a U.S. location search</span> <a href="/directory">Use the text directory</a></p>
           <p role="note">${icon.info}<span>If someone is in immediate danger, contact local emergency services. RWN does not provide emergency response.</span></p>
         </div>
 
-        <div class="results-section">
+        <div class="results-section" id="results">
           <div class="results-heading">
             <div><span class="section-kicker">Search results</span><h2 id="resultTitle">Find a service</h2><p id="resultCount" aria-live="polite"></p></div>
             <div class="results-tools">
               <button class="directory-tool" type="button" id="toggleSaved" aria-pressed="false">${icon.bookmark}<span>Saved</span><b id="savedCount">0</b></button>
+              <button class="directory-tool" type="button" id="retrySavedServices" aria-describedby="savedStorageStatus" hidden>Retry saved services</button>
               <button class="directory-tool" type="button" id="downloadDirectory">${icon.download}<span>Download CSV</span></button>
             </div>
           </div>
+          <p id="savedStorageStatus" role="status" hidden></p>
           <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Help offered</span><span>Access</span><span>Checked</span><span></span></div>
           <div class="resource-grid resource-list" id="resourceGrid" aria-label="Available aid directory"></div>
           <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
@@ -539,6 +589,49 @@ function notify(message) {
   notify.timeoutId = window.setTimeout(() => toast.classList.remove("is-visible"), 3200);
 }
 
+function finderHistorySnapshot() {
+  return {
+    query: state.query,
+    accessMode: state.accessMode,
+    activeTypes: [...state.activeTypes],
+    savedOnly: state.savedOnly,
+    selectedId: state.selectedId || null,
+    inspectorOpen: Boolean(state.inspectorOpen && state.selectedId)
+  };
+}
+
+function writeFinderHistory(mode = "replace") {
+  const snapshot = finderHistorySnapshot();
+  const signature = JSON.stringify(snapshot);
+  if (mode === "push" && signature === writeFinderHistory.lastSignature) return;
+  const url = state.selectedId
+    ? privateResourceUrl(window.location.href, state.selectedId)
+    : clearResourceFromUrl(window.location.href);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...(window.history.state || {}), [FINDER_HISTORY_KEY]: snapshot }, "", url);
+  writeFinderHistory.lastSignature = signature;
+}
+
+function restoreFinderHistory(historyState) {
+  const snapshot = historyState?.[FINDER_HISTORY_KEY];
+  // Native in-page links create history entries without our finder snapshot.
+  // Keep the current search and attach it to the new entry so Back/Forward
+  // can restore it, while leaving the section fragment and scroll untouched.
+  if (!snapshot) {
+    window.history.replaceState({ ...(historyState || {}), [FINDER_HISTORY_KEY]: finderHistorySnapshot() }, "", window.location.href);
+    return;
+  }
+  state.query = sanitizeFinderQuery(snapshot?.query);
+  state.accessMode = finderAccessFromHistory(snapshot?.accessMode);
+  state.activeTypes = finderTypesFromHistory(snapshot?.activeTypes);
+  state.savedOnly = Boolean(snapshot?.savedOnly);
+  state.selectedId = resources.some((resource) => resource.id === snapshot?.selectedId) ? snapshot.selectedId : null;
+  state.inspectorOpen = Boolean(snapshot?.inspectorOpen && state.selectedId);
+  const input = document.getElementById("resourceSearch");
+  if (input) input.value = state.query;
+  updateFilters();
+  writeFinderHistory.lastSignature = JSON.stringify(finderHistorySnapshot());
+}
+
 function renderStatic() {
   document.getElementById("layerList").innerHTML = resourceTypes.map((type) => {
     const category = categories[type];
@@ -556,12 +649,14 @@ function renderStatic() {
 }
 
 function kindLabel(resource) {
+  if (isContactOnly(resource)) return contactOnlyLabel;
   if (resource.kind === "direct") return "Service location";
   if (resource.kind === "locator") return "Resource finder";
   return "Service network";
 }
 
 function updateFilters() {
+  wakeGlobe();
   const base = state.viewMode === "aid"
     ? availableResources().filter((resource) => matchesResource(resource, state.query, state.activeTypes))
     : [];
@@ -591,6 +686,7 @@ function updateFilters() {
   renderResults();
   renderClusterTray();
   pinSignature = "";
+  document.dispatchEvent(new CustomEvent("rwn:filters-updated"));
 }
 
 function nearbyExactCount(maximumKm = 250) {
@@ -605,6 +701,7 @@ function renderLocationState() {
   const button = document.getElementById("locateMe");
   const clear = document.getElementById("clearLocation");
   const status = document.getElementById("locationStatus");
+  const recovery = document.getElementById("locationRecovery");
   if (!button || !clear || !status) return;
   const active = Boolean(state.userLocation);
   button.classList.toggle("has-location", active);
@@ -613,7 +710,27 @@ function renderLocationState() {
   clear.hidden = !active;
   if (!active) {
     status.textContent = "Nearby service locations appear first. Regional resource finders appear after them.";
+    if (recovery) {
+      recovery.hidden = !state.locationRecovery;
+      recovery.replaceChildren();
+      if (state.locationRecovery) {
+        recovery.append(document.createTextNode(state.locationRecovery));
+        if (state.locationRetryAvailable) {
+          const retry = document.createElement("button");
+          retry.id = "retryLocation";
+          retry.type = "button";
+          retry.textContent = "Try again";
+          recovery.append(" ", retry);
+        }
+      }
+    }
     return;
+  }
+  state.locationRecovery = "";
+  state.locationRetryAvailable = false;
+  if (recovery) {
+    recovery.hidden = true;
+    recovery.textContent = "";
   }
   const accuracy = state.userLocationAccuracy ? `Location accuracy about ${Math.round(state.userLocationAccuracy).toLocaleString()} m.` : "";
   const country = state.userCountry ? ` Resource finders for ${state.userCountry} appear after nearby locations.` : "";
@@ -622,27 +739,40 @@ function renderLocationState() {
 
 function renderLiveSourceState() {
   const status = document.getElementById("liveSourceStatus");
-  const reach = document.getElementById("catalogReach");
-  if (!status) return;
+  const reach = document.getElementById("liveSourceReach");
+  const inUnitedStates = state.userLocation && state.userCountry === "United States";
+  const settled = state.liveSourceStatus === "loaded" || state.liveSourceStatus === "unavailable";
+  const hasNationalCount = inUnitedStates && settled && Number.isSafeInteger(state.liveNationalCount) && state.liveNationalCount >= 0;
+  const national = hasNationalCount ? ` · USDA lists ${state.liveNationalCount.toLocaleString()} meal ${state.liveNationalCount === 1 ? "site" : "sites"} as active nationally today` : " · National count unavailable";
+  let message;
   if (state.liveSourceStatus === "loading") {
-    status.textContent = "Checking USDA for current summer meal sites in an approximate 160 km search area…";
+    message = "Checking USDA for current summer meal sites in an approximate 160 km search area…";
   } else if (state.liveSourceStatus === "loaded") {
     const visible = state.liveResources.length;
     const available = state.liveNearbyAvailable;
-    const national = state.liveNationalCount ? ` · ${state.liveNationalCount.toLocaleString()} active nationally today` : "";
-    status.textContent = available > visible
-      ? `Showing the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
-      : `Showing ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
+    message = visible === 0
+      ? `No current USDA meal sites were returned for this search area${national}. Other services and resource finders remain available.`
+      : available > visible
+        ? `Loaded the closest ${visible.toLocaleString()} of ${available.toLocaleString()} current USDA meal sites nearby${national}.`
+        : `Loaded ${visible.toLocaleString()} current USDA meal ${visible === 1 ? "site" : "sites"} nearby${national}.`;
   } else if (state.liveSourceStatus === "unavailable") {
-    status.textContent = state.liveSourceError || "USDA meal-site information is temporarily unavailable. The rest of the directory is still available.";
+    message = `${state.liveSourceError || "Nearby USDA meal-site information is temporarily unavailable. The rest of the directory is still available."} ${national.slice(3)}.`;
   } else if (state.userLocation && state.userCountry !== "United States") {
-    status.textContent = "USDA meal-site information covers the United States. Other services and resource finders remain available.";
+    message = "USDA meal-site information covers the United States. Other services and resource finders remain available.";
   } else {
-    status.textContent = "In the United States, location search also includes current USDA summer meal sites, dates, and meal times.";
+    message = "In the United States, location search also includes current USDA summer meal sites, dates, and meal times.";
   }
-  if (reach && state.liveNationalCount) {
-    reach.innerHTML = `<strong>${resources.length.toLocaleString()}</strong> listings checked against original sources <span>${directCount().toLocaleString()} service locations</span> <span>${state.liveNationalCount.toLocaleString()} USDA meal sites active today</span> <a href="/directory">Use the text directory</a>`;
-  }
+  // Avoid repeating the live announcement during unrelated filter updates.
+  if (status && status.textContent !== message) status.textContent = message;
+  const reachMessage = hasNationalCount
+    ? `${state.liveNationalCount.toLocaleString()} USDA meal ${state.liveNationalCount === 1 ? "site" : "sites"} listed as active nationally today`
+    : inUnitedStates && state.liveSourceStatus === "loading"
+      ? "Checking current USDA meal-site counts…"
+      : inUnitedStates && settled
+        ? "Current national USDA meal-site count unavailable"
+        : "USDA meal-site counts checked with a U.S. location search";
+  // Update only the source count, preserving catalog totals and the directory link.
+  if (reach && reach.textContent !== reachMessage) reach.textContent = reachMessage;
 }
 
 function renderControls() {
@@ -664,8 +794,10 @@ function renderControls() {
     button.setAttribute("aria-pressed", String(active));
     button.disabled = !aidMode;
   });
-  document.getElementById("resourceSearch").disabled = !aidMode;
-  document.getElementById("clearSearch").hidden = !state.query;
+  const search = document.getElementById("resourceSearch");
+  search.disabled = !aidMode;
+  if (document.activeElement !== search && !hasPendingSearch() && search.value !== state.query) search.value = state.query;
+  document.getElementById("clearSearch").hidden = !search.value;
   document.getElementById("locateMe").disabled = !aidMode;
   renderLocationState();
   document.getElementById("toggleAll").disabled = !aidMode;
@@ -674,12 +806,28 @@ function renderControls() {
   document.getElementById("filterSummary").textContent = typeCount === resourceTypes.length
     ? `All ${resourceTypes.length} types of help`
     : `${typeCount} of ${resourceTypes.length} types of help`;
-  document.getElementById("globeCount").textContent = aidMode ? `${state.filtered.length} listings` : "0 listings";
-  document.getElementById("searchStatus").textContent = aidMode ? `${state.filtered.length} matching services` : "No public requests are listed";
+  const mappedCount = state.filtered.filter(hasMapCoordinates).length;
+  document.getElementById("globeCount").textContent = aidMode && state.savedOnly && state.savedStorageUnavailable ? "Saved unavailable" : aidMode ? (mappedCount === state.filtered.length ? `${mappedCount} listings` : `${mappedCount} mapped · ${state.filtered.length - mappedCount} phone/online`) : "0 listings";
+  document.getElementById("searchStatus").textContent = aidMode && state.savedOnly && state.savedStorageUnavailable ? "Saved list unavailable" : aidMode ? `${state.filtered.length} matching services` : "No public requests are listed";
   const savedToggle = document.getElementById("toggleSaved");
   savedToggle.classList.toggle("is-active", state.savedOnly);
   savedToggle.setAttribute("aria-pressed", String(state.savedOnly));
-  document.getElementById("savedCount").textContent = String(state.savedIds.size);
+  document.getElementById("savedCount").textContent = state.savedStorageUnavailable ? "Unavailable" : String(state.savedIds.size);
+  const savedResultCount = document.getElementById("matchingResultCount");
+  if (savedResultCount && state.savedOnly && state.savedStorageUnavailable) savedResultCount.textContent = "Saved unavailable";
+  const savedStatus = document.getElementById("savedStorageStatus");
+  const savedRetry = document.getElementById("retrySavedServices");
+  if (savedStatus) {
+    savedStatus.hidden = !state.savedStorageUnavailable;
+    savedStatus.textContent = state.savedStorageUnavailable
+      ? "Your saved list could not be read. Check this browser’s storage settings, then retry. Previously loaded saved listings may be out of date."
+      : "";
+  }
+  if (savedRetry) {
+    const focusedRetry = document.activeElement === savedRetry;
+    savedRetry.hidden = !state.savedStorageUnavailable;
+    if (focusedRetry && savedRetry.hidden) savedToggle.focus({ preventScroll: true });
+  }
   renderLiveSourceState();
 
   document.getElementById("globeLegend").innerHTML = aidMode
@@ -687,9 +835,13 @@ function renderControls() {
     : `<span><i></i>Public requests</span>`;
 
   const empty = document.getElementById("globeEmpty");
-  empty.hidden = state.filtered.length > 0;
+  empty.hidden = state.filtered.some(hasMapCoordinates);
   empty.innerHTML = state.viewMode === "needs"
     ? `<strong>No public requests are listed</strong><p>RWN does not guess where help is needed or publish requests that have not been reviewed.</p>`
+    : state.filtered.length
+      ? `<strong>Phone or online help</strong><p>Matching listings have no map location. Read their coverage and contact details in the results below.</p>`
+    : state.savedOnly && state.savedStorageUnavailable
+      ? `<strong>Saved services are unavailable</strong><p>Check this browser’s storage settings, then use Retry saved services below. You can turn off Saved to browse all services.</p>`
     : state.savedOnly
       ? `<strong>No saved services match</strong><p>Turn off Saved or adjust the current filters.</p>`
       : `<strong>No matching services</strong><p>Adjust the search, layers, or resource type.</p>`;
@@ -703,6 +855,8 @@ function renderResourcePanel() {
   const panel = document.getElementById("resourcePanel");
   const grid = document.querySelector(".finder__grid");
   const inspectorToggle = document.getElementById("openInspector");
+  const focused = document.activeElement;
+  const focusInPanel = panel.contains(focused);
   const resource = selectedResource();
   const inspectorVisible = Boolean(resource && state.inspectorOpen);
   panel.hidden = !inspectorVisible;
@@ -710,10 +864,16 @@ function renderResourcePanel() {
   if (inspectorToggle) inspectorToggle.hidden = !resource || inspectorVisible;
   if (!resource) {
     panel.innerHTML = "";
+    if (focusInPanel || focused === inspectorToggle) document.getElementById("resourceSearch")?.focus();
     return;
   }
   if (!inspectorVisible) {
     panel.innerHTML = "";
+    if (focusInPanel) {
+      // The text-first map fallback hides the globe chrome and its opener.
+      const target = inspectorToggle?.getClientRects().length ? inspectorToggle : document.getElementById("resourceSearch");
+      target?.focus();
+    }
     return;
   }
 
@@ -725,14 +885,16 @@ function renderResourcePanel() {
   const next = resourceIndex >= 0 ? state.filtered[resourceIndex + 1] : null;
   const live = resource.verificationMethod === "live-official-feed";
   const freeModel = freeAccessModels[resource.costModel];
-  const actionUrl = resource.providerUrl || resource.sourceUrl;
-  const sourceAction = resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
+  const contactOnly = isContactOnly(resource);
+  const actionUrl = resource.accessUrl || resource.providerUrl || resource.sourceUrl;
+  const sourceAction = contactOnly ? "Open contact website" : resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
     <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
-    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2>${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
-    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
+    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
+    ${sourceClosureMarkup(resource)}
+    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
@@ -743,32 +905,37 @@ function renderResourcePanel() {
           <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${resource.costNote}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
           <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
-          ${resource.phone ? `<div><dt>Phone</dt><dd><a href="tel:${resource.phone.replace(/[^+\d]/g, "")}">${resource.phone}</a></dd></div>` : ""}
+          ${resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : ""}
+          ${contactOnly && resource.phoneAccess ? `<div><dt>Dialing scope</dt><dd>${resource.phoneAccess}</dd></div>` : ""}
           ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${resource.eligibility}</dd></div>` : ""}
           ${resource.validFrom && resource.validThrough ? `<div><dt>Active dates</dt><dd>${checkedDate(resource.validFrom)}–${checkedDate(resource.validThrough)}</dd></div>` : ""}
           ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
-          ${!exact && resource.coverageNote ? `<div><dt>Map note</dt><dd>${resource.coverageNote}</dd></div>` : ""}
+          ${!exact && resource.coverageNote ? `<div><dt>${contactOnly ? "Coverage limits" : "Map note"}</dt><dd>${resource.coverageNote}</dd></div>` : ""}
         </dl>
         <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
       </div>
     </details>
-    <div class="availability-note"><span>${icon.info}</span><p><strong>Confirm before you go</strong>${resource.availabilityNote}</p></div>
-    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
+    <div class="availability-note"><span>${icon.info}</span><p><strong>${contactOnly ? "Check before contacting" : "Confirm before you go"}</strong>${availabilityInstructions(resource)}</p></div>
+    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${!contactOnly && resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
       ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
       <a class="secondary-button" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
     </div>
     ${exact ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
-      ${live ? "" : `<button type="button" id="saveResource" aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}">${icon.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>`}
+      ${live ? "" : `<button type="button" id="saveResource" ${state.savedStorageUnavailable ? 'disabled aria-label="Saving unavailable" aria-describedby="savedStorageStatus"' : `aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}"`}>${icon.bookmark}<span>${state.savedStorageUnavailable ? "Save unavailable" : saved ? "Saved" : "Save"}</span></button>`}
       <button type="button" id="shareResource" aria-label="Share service">${icon.share}<span>Share</span></button>
       <button type="button" id="copyAddress" aria-label="${exact ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
     </div>
   `;
 
   document.getElementById("copyAddress")?.addEventListener("click", async () => {
-    await copyText(resource.address);
-    notify("Address copied");
+    try {
+      await copyText(resource.address);
+      notify(exact ? "Address copied" : "Coverage copied");
+    } catch {
+      notify(`${exact ? "The address" : "The coverage"} could not be copied. Select and copy it from Service details.`);
+    }
   });
   document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
   document.getElementById("shareResource")?.addEventListener("click", () => shareResource(resource));
@@ -778,93 +945,146 @@ function renderResourcePanel() {
     state.inspectorOpen = false;
     renderResourcePanel();
   });
+  // Replacing the inspector removes its focused controls. Keep the matching
+  // action usable, or orient the visitor at the new service at a list boundary.
+  if (focusInPanel || focused === inspectorToggle) {
+    const replacement = focused?.id ? document.getElementById(focused.id) : null;
+    const target = replacement && panel.contains(replacement) && !replacement.disabled
+      ? replacement : document.getElementById("resourcePanelHeading");
+    target?.focus({ preventScroll: true });
+  }
 }
 
 function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
-  const aidDots = allTypes(resource).map((type) => `<i style="--dot:${categories[type].color}" title="${categories[type].label}"></i>`).join("");
+  const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
+  const listingType = isContactOnly(resource) ? contactOnlyLabel : isExactServiceSite(resource) ? "Service location" : "Resource finder";
+  const sourcePrefix = resource.sourceName === resource.name ? "" : `${resource.sourceName} · `;
+  const costLabel = freeAccessLabel(resource, true);
+  const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
   const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${resource.sourceName} · ${isExactServiceSite(resource) ? "Service location" : "Resource finder"} · <b>${freeAccessLabel(resource, true)}</b>${openAccess}</small></span></span>
+        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${sourcePrefix}${listingType}${costSuffix}${openAccess}</small></span></span>
         <span class="resource-row__place">${formatResourcePlace(resource)}</span>
-        <span class="resource-row__aid">${aidDots}</span>
+        <span class="resource-row__aid">${aidLabels}</span>
         <span class="resource-row__access">${locationResultLabel(resource)}</span>
         <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${reviewLabel(resource)}</time>
         <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
+      ${sourceClosureMarkup(resource)}
     </article>
   `;
+}
+
+function emptyResultsCopy({ viewMode, savedOnly, savedCount, savedStorageUnavailable }) {
+  if (viewMode === "needs") return { title: "No public requests are listed.", detail: "RWN does not accept or publish personal requests through this website.", action: "" };
+  if (savedOnly && savedStorageUnavailable) return { title: "Saved services are unavailable.", detail: "This browser’s saved list could not be read. Check its storage settings and use Retry saved services, or turn off Saved to browse all services.", action: "" };
+  if (savedOnly && !savedCount) return { title: "No saved services yet.", detail: "Open a service listing and choose Save to keep it in this browser.", action: "Browse all services" };
+  if (savedOnly) return { title: "No saved services match these filters.", detail: "Change your search or browse all services. Your saved list stays on this browser.", action: "Browse all services" };
+  return { title: "No services match these filters.", detail: "Try another place, service, or listing type. RWN may not have every service.", action: "Clear search and filters" };
 }
 
 function renderResults() {
   const count = document.getElementById("resultCount");
   const grid = document.getElementById("resourceGrid");
   const showMore = document.getElementById("showMoreResults");
+  const matchingResultCount = document.getElementById("matchingResultCount");
   const visibleResources = state.filtered.slice(0, state.visibleResults);
   document.getElementById("resultTitle").textContent = state.viewMode === "needs" ? "Public requests" : state.savedOnly ? "Saved services" : state.userLocation ? "Help near you" : "Find a service";
   count.textContent = state.viewMode === "aid"
     ? `${state.userLocation ? `${nearbyExactCount()} service locations within 250 km · ` : ""}Showing ${visibleResources.length} of ${state.filtered.length} listings`
     : "No public requests are listed";
+  const empty = emptyResultsCopy({ viewMode: state.viewMode, savedOnly: state.savedOnly, savedCount: state.savedIds.size, savedStorageUnavailable: state.savedStorageUnavailable });
+  if (state.savedOnly && state.savedStorageUnavailable) count.textContent = state.filtered.length ? "Showing previously loaded saved listings. Your current saved list is unavailable." : "Your saved list is unavailable.";
   grid.innerHTML = state.filtered.length
     ? visibleResources.map(resourceCard).join("")
-    : `<div class="results-empty"><strong>${state.viewMode === "needs" ? "No public requests are listed." : "No services match these filters."}</strong><p>${state.viewMode === "needs" ? "RWN does not accept or publish personal requests through this website." : "Try another place, service, or listing type."}</p></div>`;
+    : `<div class="results-empty"><strong>${empty.title}</strong><p>${empty.detail}</p>${empty.action ? `<button class="results-empty__reset" id="clearFinderFilters" type="button">${empty.action}</button>` : ""}</div>`;
+  if (matchingResultCount) matchingResultCount.textContent = state.savedOnly && state.savedStorageUnavailable ? "Saved unavailable" : `${state.filtered.length.toLocaleString()} ${state.filtered.length === 1 ? "match" : "matches"}`;
   showMore.hidden = state.visibleResults >= state.filtered.length;
+  refreshSearchPreparation();
 }
 
-function setSelected(id, focus = true, reveal = "panel") {
+function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
   state.selectedId = id;
   state.inspectorOpen = true;
   state.clusterIds = [];
   const resource = selectedResource();
+  if (resource && !hasMapCoordinates(resource) && reveal === "map") reveal = "panel";
   if (focus && resource) focusGlobeOn(resource, reveal === "map");
   renderResourcePanel();
   renderResults();
   renderClusterTray();
   pinSignature = "";
-  window.history.replaceState({}, "", privateResourceUrl(window.location.href, id));
+  writeFinderHistory(historyMode);
   if (reveal) {
     const target = reveal === "map" ? document.querySelector(".globe-stage") : document.getElementById("resourcePanel");
     const bounds = target?.getBoundingClientRect();
     const headerOffset = document.querySelector(".site-header")?.getBoundingClientRect().height || 0;
     if (target && bounds && (bounds.top < headerOffset || bounds.bottom > window.innerHeight)) {
-      if (reveal === "map") state.globeVisible = true;
+      if (reveal === "map") {
+        state.globeVisible = true;
+        wakeGlobe();
+      }
       target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
     }
   }
 }
 
-function persistSavedResources() {
-  try {
-    window.localStorage.setItem(SAVED_RESOURCES_KEY, JSON.stringify([...state.savedIds]));
-  } catch {
-    notify("Saved services are unavailable in this browser");
-  }
-}
-
 function toggleSavedResource(id) {
-  if (state.savedIds.has(id)) state.savedIds.delete(id);
-  else state.savedIds.add(id);
-  persistSavedResources();
+  try {
+    const saved = readSavedResources().has(id);
+    const ids = setResourceSaved(id, !saved);
+    state.savedIds = new Set([...ids].filter((savedId) => resources.some((resource) => resource.id === savedId)));
+    state.savedStorageUnavailable = false;
+  } catch {
+    refreshSavedResources({ preserveView: true });
+    notify("Your saved list could not be changed. Check this browser’s storage settings and try again.");
+    return;
+  }
   if (state.savedOnly) updateFilters();
   else {
     renderControls();
     renderResourcePanel();
     renderResults();
   }
-  notify(state.savedIds.has(id) ? "Service saved in this browser" : "Service removed from saved");
+  notify(state.savedIds.has(id) ? "Service saved only in this browser" : "Service removed from saved");
+}
+
+function refreshSavedResources({ preserveView = false } = {}) {
+  const previousIds = state.savedIds;
+  state.savedIds = loadSavedResources();
+  const unchanged = previousIds.size === state.savedIds.size && [...previousIds].every(id => state.savedIds.has(id));
+  if (state.savedOnly && !state.savedStorageUnavailable && !(preserveView && unchanged)) updateFilters();
+  else {
+    renderControls();
+    renderResourcePanel();
+    // A failed read leaves the last loaded rows and current selection intact.
+    // Only replace empty guidance, where unavailable must not look like empty.
+    if (state.savedOnly && !state.filtered.length) renderResults();
+    else if (state.savedOnly && state.savedStorageUnavailable) document.getElementById("resultCount").textContent = "Showing previously loaded saved listings. Your current saved list is unavailable.";
+  }
 }
 
 async function copyText(value) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const focused = document.activeElement;
   const input = document.createElement("textarea");
   input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
   document.body.append(input);
-  input.select();
-  document.execCommand("copy");
-  input.remove();
+  try {
+    input.select();
+    if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+  } finally {
+    const restoreFocus = document.activeElement === input;
+    input.remove();
+    if (restoreFocus && focused?.isConnected) focused.focus({ preventScroll: true });
+  }
 }
 
 async function shareResource(resource) {
@@ -878,12 +1098,18 @@ async function shareResource(resource) {
       if (error.name === "AbortError") return;
     }
   }
-  await copyText(data.url);
-  notify("Service link copied");
+  try {
+    await copyText(data.url);
+    notify("Service link copied");
+  } catch {
+    notify("The service link could not be copied. Please try again.");
+  }
 }
 
 function downloadDirectory() {
   const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source"];
+  const includeContact = state.filtered.some(isContactOnly);
+  if (includeContact) fields.push("Location precision", "Coverage details", "Eligibility", "Phone", "Phone dialing scope", "Online access");
   const rows = state.filtered.map((resource) => [
     resource.name,
     resource.city,
@@ -894,9 +1120,10 @@ function downloadDirectory() {
     resource.costNote,
     resource.address,
     resource.lastChecked,
-    resource.sourceUrl
+    resource.sourceUrl,
+    ...(includeContact ? [resource.locationPrecision, resource.coverageNote, resource.eligibility, resource.phone, resource.phoneAccess, resource.accessUrl] : [])
   ]);
-  const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+  const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -907,6 +1134,14 @@ function downloadDirectory() {
 }
 
 function focusGlobeOn(resource, immediate = false) {
+  wakeGlobe();
+  if (!hasMapCoordinates(resource)) {
+    state.focusPoint = null;
+    state.targetLat = null;
+    state.targetLon = null;
+    setCountryHighlight(null);
+    return;
+  }
   const exact = isExactServiceSite(resource);
   const view = exact
     ? { lat: resource.lat, lng: resource.lng, zoom: window.innerWidth <= 600 ? 3.8 : 4.8 }
@@ -948,6 +1183,7 @@ function focusGlobeNearUser() {
 }
 
 function clearUserLocation() {
+  locationRequestGeneration += 1;
   liveSourceController?.abort();
   liveSourceController = null;
   state.userLocation = null;
@@ -958,30 +1194,50 @@ function clearUserLocation() {
   state.liveNationalCount = null;
   state.liveSourceStatus = "idle";
   state.liveSourceError = "";
+  state.locationRecovery = "";
+  state.locationRetryAvailable = false;
   document.getElementById("locateMe")?.classList.remove("has-location", "is-loading");
   updateFilters();
+}
+
+function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
+  cancelPendingSearch();
+  clearUserLocation();
+  state.query = "";
+  state.accessMode = "all";
+  state.activeTypes = createInitialTypeSet();
+  state.savedOnly = false;
+  state.selectedId = null;
+  state.inspectorOpen = false;
+  const input = document.getElementById("resourceSearch");
+  if (input) input.value = "";
+  updateFilters();
+  writeFinderHistory(historyMode);
+  if (focus) input?.focus();
 }
 
 async function loadLiveResourcesNearUser() {
   if (!state.userLocation || state.userCountry !== "United States") return;
   liveSourceController?.abort();
-  liveSourceController = new AbortController();
+  const controller = new AbortController();
+  liveSourceController = controller;
   state.liveSourceStatus = "loading";
   state.liveSourceError = "";
+  state.liveNationalCount = null;
   renderLiveSourceState();
-  const options = { signal: liveSourceController.signal };
+  const options = { signal: controller.signal };
   const [nearbyResult, countResult] = await Promise.allSettled([
     fetchNearbyUsdaSites(state.userLocation, options),
     fetchUsdaActiveCount(options)
   ]);
-  if (liveSourceController?.signal.aborted) return;
+  if (controller.signal.aborted || liveSourceController !== controller) return;
 
-  if (countResult.status === "fulfilled") state.liveNationalCount = countResult.value;
+  state.liveNationalCount = countResult.status === "fulfilled" ? countResult.value : null;
   if (nearbyResult.status === "rejected") {
     state.liveResources = [];
     state.liveNearbyAvailable = 0;
     state.liveSourceStatus = "unavailable";
-    state.liveSourceError = "USDA meal-site information could not be loaded. The rest of the directory is still available.";
+    state.liveSourceError = "Nearby USDA meal-site information could not be loaded. The rest of the directory is still available.";
     updateFilters();
     return;
   }
@@ -1016,7 +1272,7 @@ function cachedResourceVector(resource) {
 }
 
 function projectResourceGlobePoint(resource, width, height) {
-  if (!globeWorld || !globeCamera) return OFFSCREEN_POINT;
+  if (!globeWorld || !globeCamera || !hasMapCoordinates(resource)) return OFFSCREEN_POINT;
   globeProjectionVector.copy(cachedResourceVector(resource)).applyMatrix4(globeWorld.matrixWorld);
   const scale = globeWorld.scale.x || 1;
   const depth = globeProjectionVector.z / scale;
@@ -1030,9 +1286,10 @@ function projectResourceGlobePoint(resource, width, height) {
 
 function syncGlobePointLayer() {
   if (!globeWorld || !globeRenderer) return;
-  const nextSignature = state.filtered.map((resource) => resource.id).join("|");
+  const mapped = state.filtered.filter(hasMapCoordinates);
+  const nextSignature = mapped.map((resource) => resource.id).join("|");
   if (!globeServicePoints) {
-    globeServicePoints = createGlobePointLayer(state.filtered, categories, {
+    globeServicePoints = createGlobePointLayer(mapped, categories, {
       pixelRatio: globeRenderer.getPixelRatio?.() || 1
     });
     globePointSignature = nextSignature;
@@ -1041,7 +1298,7 @@ function syncGlobePointLayer() {
     return;
   }
   if (nextSignature === globePointSignature) return;
-  replaceGlobePointResources(globeServicePoints, state.filtered, categories);
+  replaceGlobePointResources(globeServicePoints, mapped, categories);
   globePointSignature = nextSignature;
 }
 
@@ -1057,6 +1314,15 @@ function createGlobeTexture() {
     ? Math.min(preferredWidth, maximumTextureSize, activeEarthImage.naturalWidth)
     : 2048;
   canvas.height = Math.round(canvas.width / 2);
+  if (hasEarthImagery && activeEarthImage.naturalWidth === canvas.width) {
+    const texture = new THREE.Texture(activeEarthImage);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.offset.x = THREE_SPHERE_TEXTURE_OFFSET;
+    texture.anisotropy = Math.min(8, globeRenderer?.capabilities.getMaxAnisotropy() || 1);
+    texture.needsUpdate = true;
+    return texture;
+  }
   const ctx = canvas.getContext("2d");
 
   if (hasEarthImagery) {
@@ -1090,7 +1356,7 @@ function loadEarthImagery() {
     earthTextureImage = image;
     if (globeSurface) {
       globeSurface.material.emissive.setHex(0xffffff);
-      globeSurface.material.emissiveIntensity = 0.2;
+      globeSurface.material.emissiveIntensity = 0.42;
       globeSurface.material.roughness = 0.94;
     }
     refreshGlobeSurface();
@@ -1105,20 +1371,22 @@ function loadDetailEarthImagery() {
   if ((globeRenderer?.capabilities.maxTextureSize || 0) < 4096) return;
   earthDetailTextureRequested = true;
   const status = document.getElementById("globeDetailStatus");
-  if (status && state.detailGeometryReady) status.textContent = "1:10m · loading HD surface…";
+  if (status && state.detailGeometryReady) status.textContent = "detailed · loading HD surface…";
   const image = new Image();
   image.decoding = "async";
   image.onload = () => {
-    earthDetailTextureImage = image;
-    earthDetailTextureReady = true;
-    refreshGlobeSurface();
-    if (status) status.textContent = state.detailGeometryReady ? "1:10m · HD NASA" : "HD NASA surface";
-    updateGlobeReadout();
+    pendingDetailImage = image;
+    wakeGlobe();
   };
   image.onerror = () => {
-    if (status && state.detailGeometryReady) status.textContent = "1:10m boundaries";
+    if (status && state.detailGeometryReady) status.textContent = "detailed boundaries";
   };
-  image.src = "/media/earth-blue-marble-detail.jpg";
+  // A 4K file avoids decoding a 128 MiB 8K bitmap only to downsample it on
+  // mobile. Desktop retains the original 8K close-view surface.
+  image.src = window.innerWidth <= 600 || window.matchMedia("(pointer: coarse)").matches
+    || (globeRenderer?.capabilities.maxTextureSize || 0) < 8192
+    ? "/media/earth-blue-marble-mobile.jpg"
+    : "/media/earth-blue-marble-detail.jpg";
 }
 
 function createStarField() {
@@ -1172,6 +1440,46 @@ function createGraticule() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xa8c9c5, transparent: true, opacity: 0.045 }));
+}
+
+function updateGlobeLandMask() {
+  const features = state.detailGeometryReady ? state.detailCountryFeatures : state.countryFeatures;
+  const canvas = document.createElement("canvas");
+  const width = state.detailGeometryReady && window.innerWidth > 600 ? 4096 : 2048;
+  canvas.width = width; canvas.height = width / 2;
+  const ctx = canvas.getContext("2d");
+  // Before boundaries arrive, preserve the original imagery rather than guess.
+  ctx.fillStyle = features.length ? "#000" : "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  for (const feature of features) {
+    const polygons = feature.geometry?.type === "Polygon" ? [feature.geometry.coordinates]
+      : feature.geometry?.type === "MultiPolygon" ? feature.geometry.coordinates : [];
+    for (const polygon of polygons) {
+      for (const shift of [-width, 0, width]) {
+        ctx.beginPath();
+        for (const ring of polygon) {
+          let previousX = null;
+          ring.forEach(([lng, lat], index) => {
+            let x = (lng + 180) / 360 * width;
+            if (previousX !== null) {
+              while (x - previousX > width / 2) x -= width;
+              while (x - previousX < -width / 2) x += width;
+            }
+            previousX = x;
+            const y = (90 - lat) / 180 * canvas.height;
+            if (index === 0) ctx.moveTo(x + shift, y); else ctx.lineTo(x + shift, y);
+          });
+          ctx.closePath();
+        }
+        ctx.fill("evenodd");
+      }
+    }
+  }
+  const previous = globeLandMask.value;
+  globeLandMask.value = new THREE.CanvasTexture(canvas);
+  globeLandMask.value.wrapS = THREE.RepeatWrapping;
+  previous?.dispose();
 }
 
 function rebuildCountryBorders() {
@@ -1260,7 +1568,7 @@ function updateGlobeTexture() {
 function refreshGlobeSurface() {
   if (!globeSurface) return;
   updateGlobeTexture();
-  rebuildCountryBorders();
+  wakeGlobe();
 }
 
 function initThreeGlobe() {
@@ -1269,6 +1577,19 @@ function initThreeGlobe() {
   globeStageElement = canvas?.closest(".globe-stage") || null;
   globePinLayerElement = document.getElementById("pinLayer");
   globeReadoutElement = document.getElementById("globeReadout");
+  if (canvas && !canvas.dataset.rwnContextRecovery) {
+    canvas.dataset.rwnContextRecovery = "true";
+    canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      globeContextLost = true;
+      state.autoRotate = false;
+      pauseGlobe();
+      reportGlobeUnavailable("The interactive map paused because this device lost its graphics context. You can keep using text results or try the map again.", true);
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      recoverGlobeContext();
+    });
+  }
   const updateGlobeViewport = () => {
     const rect = canvas?.getBoundingClientRect();
     if (!rect) return;
@@ -1276,14 +1597,16 @@ function initThreeGlobe() {
     globeViewportHeight = Math.max(1, rect.height);
   };
   updateGlobeViewport();
-  if ("ResizeObserver" in window && canvas) {
-    const observer = new ResizeObserver((entries) => {
+  if ("ResizeObserver" in window && canvas && !globeResizeObserver) {
+    globeResizeObserver = new ResizeObserver((entries) => {
       const box = entries[0]?.contentRect;
       if (!box) return;
       globeViewportWidth = Math.max(1, box.width);
       globeViewportHeight = Math.max(1, box.height);
+      state.targetZoom = Math.min(maxGlobeZoom(), state.targetZoom);
+      wakeGlobe();
     });
-    observer.observe(canvas);
+    globeResizeObserver.observe(canvas);
   }
   try {
     globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
@@ -1291,8 +1614,9 @@ function initThreeGlobe() {
     console.error("WebGL globe could not be initialized.", error);
     globeRenderer = null;
     reportGlobeUnavailable();
-    return;
+    return false;
   }
+  globeContextRecoveryExtension = globeRenderer.getContext().getExtension("WEBGL_lose_context");
   globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   globeRenderer.outputColorSpace = THREE.SRGBColorSpace;
   globeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1316,11 +1640,23 @@ function initThreeGlobe() {
       emissiveMap: surfaceTexture,
       color: 0xffffff,
       emissive: 0xffffff,
-      emissiveIntensity: 0.2,
+      emissiveIntensity: 0.42,
       metalness: 0,
       roughness: 0.94
     })
   );
+  // Coastline geometry identifies water; image darkness is not a land mask.
+  globeSurface.material.onBeforeCompile = (shader) => {
+    shader.uniforms.uLandMask = globeLandMask;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uLandMask;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
+      #include <map_fragment>
+      float land = texture2D(uLandMask, vMapUv).r;
+      float ocean = 1.0 - smoothstep(0.1, 0.9, land);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.105, 0.17), ocean * 0.9);
+    `);
+  };
+  updateGlobeLandMask();
   globeWorld.add(globeSurface);
   syncGlobePointLayer();
   globeGraticule = createGraticule();
@@ -1354,6 +1690,7 @@ function initThreeGlobe() {
 
   connectionGroup = new THREE.Group();
   globeWorld.add(connectionGroup);
+  return true;
 }
 
 function slerpVector(start, end, progress) {
@@ -1382,7 +1719,7 @@ function rebuildConnections() {
   if (signature === connectionSignature) return;
   connectionSignature = signature;
   clearConnections();
-  if (!selected || !state.focusPoint || state.viewMode !== "aid") return;
+  if (!hasMapCoordinates(selected) || !state.focusPoint || state.viewMode !== "aid") return;
 
   const start = latLngVector(selected.lat, selected.lng);
   connectionDestinations(selected).forEach((resource, index) => {
@@ -1414,15 +1751,85 @@ function rebuildConnections() {
 // replaced with a direct route into the text directory rather than a
 // lower-fidelity drawing, so every visitor still reaches the listings.
 let globeUnavailableReported = false;
-function reportGlobeUnavailable() {
-  if (globeUnavailableReported) return;
+function reportGlobeUnavailable(message = "Interactive map unavailable on this device", retry = false) {
+  if (globeUnavailableReported && !retry) return;
   globeUnavailableReported = true;
   const stage = globeStageElement || document.querySelector(".globe-stage");
   if (stage) stage.classList.add("is-globe-unavailable");
   const status = document.getElementById("globeReadout");
-  if (status) status.textContent = "Interactive map unavailable on this device";
+  if (status) status.textContent = message;
   const fallback = document.getElementById("globeFallback");
   if (fallback) fallback.hidden = false;
+  const fallbackMessage = document.getElementById("globeFallbackMessage");
+  if (fallbackMessage) fallbackMessage.textContent = message;
+  const retryButton = document.getElementById("retryGlobe");
+  if (retryButton) retryButton.hidden = !retry;
+}
+
+function resetGlobeContextResources() {
+  pauseGlobe();
+  // Renderer disposal alone does not release the geometries and textures that
+  // the old scene owned. Deduplicate shared map/emissive textures.
+  const geometries = new Set();
+  const materials = new Set();
+  const textures = new Set();
+  globeScene?.traverse((object) => {
+    if (object.geometry) geometries.add(object.geometry);
+    for (const material of [object.material].flat().filter(Boolean)) {
+      materials.add(material);
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+    }
+  });
+  if (globeLandMask.value) textures.add(globeLandMask.value);
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
+  for (const texture of textures) texture.dispose();
+  globeLandMask.value = null;
+  globeRenderer?.dispose();
+  globeRenderer = null;
+  globeScene = null;
+  globeCamera = null;
+  globeWorld = null;
+  globeSurface = null;
+  globeBorders = null;
+  globeCountryHighlight = null;
+  globeGraticule = null;
+  globeAtmosphere = null;
+  globeLight = null;
+  globeFocusLight = null;
+  connectionGroup = null;
+  connectionParticles = [];
+  connectionSignature = "";
+  globeServicePoints = null;
+  globePointSignature = "";
+  pinSignature = "";
+  lastPinClusters = [];
+}
+
+function recoverGlobeContext() {
+  if (!globeCanvasElement) return;
+  resetGlobeContextResources();
+  globeContextLost = false;
+  globeUnavailableReported = false;
+  globeStageElement?.classList.remove("is-globe-unavailable");
+  const fallback = document.getElementById("globeFallback");
+  if (fallback) fallback.hidden = true;
+  const retryButton = document.getElementById("retryGlobe");
+  if (retryButton) retryButton.hidden = true;
+  try {
+    if (!initThreeGlobe() || globeRenderer.getContext().isContextLost()) {
+      globeContextLost = true;
+      reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
+      return;
+    }
+    rebuildCountryBorders();
+    syncGlobePointLayer();
+    wakeGlobe();
+    notify("Interactive map restored");
+  } catch {
+    globeContextLost = true;
+    reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
+  }
 }
 
 function renderThreeGlobe(width, height, now) {
@@ -1431,7 +1838,7 @@ function renderThreeGlobe(width, height, now) {
   const dprCap = width < 720 ? (state.zoom > 2.5 ? 1.6 : 1.4) : (state.zoom > 2.5 ? 2 : 1.75);
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   updateGlobePointLayer(globeServicePoints, { zoom: state.zoom, pixelRatio: dpr, opacity: 0.96 });
-  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+  if (!frameBufferMatches(canvas, width, height, dpr)) {
     globeRenderer.setPixelRatio(dpr);
     globeRenderer.setSize(width, height, false);
     globeCamera.aspect = width / height;
@@ -1463,9 +1870,8 @@ function renderThreeGlobe(width, height, now) {
     globeAtmosphere.scale.setScalar(atmosphereScale);
   }
 
-  const sun = subsolarPoint(new Date());
-  const sunPosition = latLngVector(sun.lat, sun.lng, 5).applyEuler(globeWorld.rotation);
-  globeLight.position.copy(sunPosition);
+  // An atlas must remain readable everywhere, independent of the time of day.
+  globeLight.position.set(-3, 3, 5);
   globeLight.target.position.set(0, 0, 0);
   globeLight.target.updateMatrixWorld();
 
@@ -1498,19 +1904,9 @@ function projectGlobePoint(lat, lng, width, height) {
 
 function connectionDestinations(selected) {
   return state.filtered
-    .filter((resource) => resource.id !== selected.id && resource.category === selected.category)
+    .filter((resource) => hasMapCoordinates(resource) && resource.id !== selected.id && resource.category === selected.category)
     .sort((a, b) => distanceKm(selected.lat, selected.lng, a.lat, a.lng) - distanceKm(selected.lat, selected.lng, b.lat, b.lng))
     .slice(0, 3);
-}
-
-function subsolarPoint(date) {
-  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
-  const dayOfYear = (date.getTime() - startOfYear) / 86400000;
-  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
-  return {
-    lat: -23.44 * Math.cos(toRad((360 / 365.24) * (dayOfYear + 10))),
-    lng: normalizeLongitude(180 - utcHours * 15)
-  };
 }
 
 function clusterVisibleResources(width, height) {
@@ -1522,7 +1918,7 @@ function clusterVisibleResources(width, height) {
 
   for (const resource of state.filtered) {
     const point = projectResourceGlobePoint(resource, width, height);
-    if (point.z <= 0.03 || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
+    if (!globePointVisible(point.z, globeCamera.position.z) || point.x <= 12 || point.x >= width - 12 || point.y <= 12 || point.y >= height - 12) continue;
     const entry = { resource, point };
     if (resource.id === selected?.id) selectedEntry = entry;
     else entries.push(entry);
@@ -1541,7 +1937,10 @@ function renderPins(width, height, now = performance.now()) {
   // Clustering is the expensive half, so it is recomputed less often during
   // motion while positions still update every frame.
   const minInterval = moving ? (gpuPointsActive ? 120 : 60) : 70;
-  const positionsOnly = now - globeLastPinUpdate < minInterval;
+  // Keep the same hit targets mounted until release. Replacing innerHTML
+  // during a touch that started on a marker detaches its event target.
+  const positionsOnly = state.dragging || state.pinching || state.touching
+    || (pinSignature && globeHasMotion(state) && now - globeLastPinUpdate < minInterval);
   if (positionsOnly) {
     repositionPins(width, height);
     return;
@@ -1565,7 +1964,7 @@ function renderPins(width, height, now = performance.now()) {
         return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped listings"><span aria-hidden="true"></span><strong>${cluster.members.length} listings in this area<small>${kinds}</small></strong></button>`;
       }
       const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
-      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : kindLabel(resource)}</small></strong></button>`;
+      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Listed service location" : kindLabel(resource)}</small></strong></button>`;
     }).join("");
     pinElements = new Map([...layer.querySelectorAll("[data-globe-key]")].map((button) => [button.dataset.globeKey, button]));
     pinSignature = signature;
@@ -1582,7 +1981,9 @@ function placePins(clusters, selectedId) {
     if (!button) continue;
     button.style.transform = `translate3d(${cluster.x}px, ${cluster.y}px, 0) scale(${0.74 + Math.max(0, cluster.z) * 0.28})`;
     button.style.opacity = String(0.5 + cluster.z * 0.5);
-    button.style.pointerEvents = "auto";
+    const visible = globePointVisible(cluster.z, globeCamera.position.z);
+    button.style.visibility = visible ? "visible" : "hidden";
+    button.style.pointerEvents = visible ? "auto" : "none";
     button.style.zIndex = String(cluster.members.some((resource) => resource.id === selectedId) ? 1000 : Math.round(cluster.z * 100));
   }
 }
@@ -1592,18 +1993,21 @@ function placePins(clusters, selectedId) {
 function repositionPins(width, height) {
   if (!lastPinClusters.length || !pinElements.size) return;
   for (const cluster of lastPinClusters) {
-    const anchor = cluster.members[0];
-    if (!anchor) continue;
-    const point = projectResourceGlobePoint(anchor, width, height);
-    cluster.x = point.x;
-    cluster.y = point.y;
-    cluster.z = point.z;
+    let x = 0, y = 0, count = 0, depth = -1;
+    for (const resource of cluster.members) {
+      const point = projectResourceGlobePoint(resource, width, height);
+      if (!globePointVisible(point.z, globeCamera.position.z)) continue;
+      x += point.x; y += point.y; count += 1; depth = Math.max(depth, point.z);
+    }
+    cluster.x = count ? x / count : -1e6;
+    cluster.y = count ? y / count : -1e6;
+    cluster.z = depth;
   }
   placePins(lastPinClusters, state.selectedId);
 }
 
 function formatCoordinate(value, positive, negative) {
-  return `${Math.abs(value).toFixed(2)}°${value >= 0 ? positive : negative}`;
+  return `${Math.abs(value).toFixed(5)}°${value >= 0 ? positive : negative}`;
 }
 
 function updateGlobeReadout(now = performance.now()) {
@@ -1614,15 +2018,15 @@ function updateGlobeReadout(now = performance.now()) {
   if (!readout) return;
   const zoomLabel = `${state.zoom.toFixed(state.zoom < 2 ? 1 : 2)}×`;
   const detailLabel = earthDetailTextureReady
-    ? "1:10m + HD NASA"
+    ? "detailed + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
-    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`
-    : resource && state.focusPoint
+    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`
+    : hasMapCoordinates(resource) && state.focusPoint
     ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
     : state.focusedCountry && state.focusPoint
       ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
-    : `<strong>World view</strong><span>${state.filtered.length} visible · ${zoomLabel} · ${detailLabel}</span>`;
+    : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
 
@@ -1631,16 +2035,20 @@ function shortestLongitude(from, to) {
 }
 
 function advanceGlobe(now) {
-  const dt = Math.min(0.04, (now - lastFrame) / 1000);
+  const elapsed = Math.max(0, (now - lastFrame) / 1000);
+  // Bound free-motion travel after a stalled frame, but let camera easing and
+  // velocity decay follow elapsed time. Capping easing to 40ms made a slow
+  // renderer replay seconds of camera motion long after the fingers released.
+  const dt = Math.min(0.04, elapsed);
   lastFrame = now;
   let isIdle = false;
   if (state.targetLon !== null) {
     const lonGap = shortestLongitude(state.rotationLon, state.targetLon);
     const latGap = state.targetLat - state.rotationLat;
-    const focusEase = 1 - Math.exp(-dt * 6.2);
+    const focusEase = reduceMotion ? 1 : 1 - Math.exp(-elapsed * 6.2);
     state.rotationLon = normalizeLongitude(state.rotationLon + lonGap * focusEase);
     state.rotationLat += latGap * focusEase;
-    if (Math.abs(lonGap) < 0.08 && Math.abs(latGap) < 0.08) {
+    if (Math.abs(lonGap) * (1 - focusEase) < 0.08 && Math.abs(latGap) * (1 - focusEase) < 0.08) {
       state.rotationLon = state.targetLon;
       state.rotationLat = state.targetLat;
       state.targetLon = null;
@@ -1649,7 +2057,7 @@ function advanceGlobe(now) {
   } else if (!state.dragging && !state.pinching) {
     state.rotationLon = normalizeLongitude(state.rotationLon + state.velocityLon * dt);
     state.rotationLat = clampGlobeLatitude(state.rotationLat + state.velocityLat * dt);
-    const friction = Math.pow(0.055, dt);
+    const friction = Math.pow(0.055, elapsed);
     state.velocityLon *= friction;
     state.velocityLat *= friction;
     isIdle = state.autoRotate && now > state.interactionUntil && Math.abs(state.velocityLon) < 0.12;
@@ -1659,14 +2067,53 @@ function advanceGlobe(now) {
       state.ambientZoom = 1;
     }
   }
-  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-dt * 4));
-  state.zoom += (state.targetZoom - state.zoom) * (1 - Math.exp(-dt * 8));
+  if (!isIdle) state.ambientZoom += (1 - state.ambientZoom) * (1 - Math.exp(-elapsed * 4));
+  state.zoom += (state.targetZoom - state.zoom) * (reduceMotion ? 1 : 1 - Math.exp(-elapsed * 8));
+}
+
+function pauseGlobe() {
+  if (globeFrameHandle === null) return;
+  window.cancelAnimationFrame(globeFrameHandle);
+  globeFrameHandle = null;
+}
+
+function wakeGlobe(resetClock = true) {
+  if (globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
+  // Reset only when waking from rest; moving frames include rendering time.
+  if (resetClock) lastFrame = performance.now();
+  globeFrameHandle = window.requestAnimationFrame((now) => {
+    globeFrameHandle = null;
+    animateGlobe(now);
+  });
+}
+
+function applyPendingGlobeDetail() {
+  if (!globeRenderer || (!pendingDetailGeometry && !pendingDetailImage)) return;
+  if (pendingDetailGeometry) {
+    state.detailCountryFeatures = pendingDetailGeometry;
+    state.detailLandRings = pendingDetailGeometry.flatMap((feature) => extractRings(feature.geometry));
+    pendingDetailGeometry = null;
+    state.detailGeometryReady = true;
+    rebuildCountryBorders();
+    updateGlobeLandMask();
+    if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
+  }
+  if (pendingDetailImage) {
+    earthDetailTextureImage = pendingDetailImage;
+    pendingDetailImage = null;
+    earthDetailTextureReady = true;
+    refreshGlobeSurface();
+  }
+  const status = document.getElementById("globeDetailStatus");
+  if (status && (state.detailGeometryReady || earthDetailTextureReady)) {
+    status.textContent = earthDetailTextureReady ? "detailed · HD NASA" : "detailed boundaries";
+  }
 }
 
 function animateGlobe(now) {
+  if (globeContextLost) return;
   if (!state.globeVisible || document.hidden) {
     lastFrame = now;
-    requestAnimationFrame(animateGlobe);
     return;
   }
   const canvas = globeCanvasElement || document.getElementById("globeCanvas");
@@ -1680,11 +2127,10 @@ function animateGlobe(now) {
     && Math.abs(state.velocityLat) < 0.22
     && Math.abs(state.targetZoom - state.zoom) < 0.025
     && state.targetLon === null;
-  const deepBoundaryIntent = state.targetZoom > (window.innerWidth <= 600 ? 3.4 : 3.0);
-  if ((interactionSettled || deepBoundaryIntent) && (state.zoom > 1.35 || state.targetZoom > 1.35)) loadDetailGeometry();
+  if (interactionSettled) applyPendingGlobeDetail();
+  if (interactionSettled && state.zoom > 1.35) loadDetailGeometry();
   const detailTextureZoom = window.innerWidth <= 600 ? 2.7 : 2.15;
-  const deepTextureIntent = state.targetZoom > (window.innerWidth <= 600 ? 4.2 : 3.6);
-  if ((interactionSettled || deepTextureIntent) && (state.zoom > detailTextureZoom || state.targetZoom > detailTextureZoom)) loadDetailEarthImagery();
+  if (interactionSettled && state.zoom > detailTextureZoom) loadDetailEarthImagery();
 
   const closeView = state.zoom > 1.9;
   if (closeView !== globeCloseViewActive) {
@@ -1698,10 +2144,15 @@ function animateGlobe(now) {
   }
   renderPins(width, height, now);
   updateGlobeReadout(now);
-  requestAnimationFrame(animateGlobe);
+  if (globeHasMotion(state)) wakeGlobe(false);
+  else {
+    state.velocityLon = 0; state.velocityLat = 0; state.zoom = state.targetZoom;
+    globeStageElement?.classList.remove("is-globe-moving");
+  }
 }
 
 function focusRegion(key, selectMatching = false) {
+  wakeGlobe();
   const view = regionViews[key] || regionViews.world;
   state.targetLon = view.lon;
   state.targetLat = view.lat;
@@ -1747,7 +2198,8 @@ function renderClusterTray() {
 }
 
 function focusCluster(ids) {
-  const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(Boolean);
+  wakeGlobe();
+  const members = ids.map((id) => state.filtered.find((resource) => resource.id === id)).filter(hasMapCoordinates);
   if (!members.length) return;
   state.clusterIds = members.map((resource) => resource.id);
   const centroid = members.reduce(
@@ -1781,8 +2233,10 @@ function extractRings(geometry) {
 function ringContainsCoordinate(ring, lat, lng) {
   let inside = false;
   for (let current = 0, previous = ring.length - 1; current < ring.length; previous = current, current += 1) {
-    const currentLng = lng + normalizeLongitude(ring[current][0] - lng);
-    const previousLng = lng + normalizeLongitude(ring[previous][0] - lng);
+    // Bundled GeoJSON already splits polygons at the antimeridian. Wrapping
+    // vertices around the query invents edges on the opposite side of Earth.
+    const currentLng = ring[current][0];
+    const previousLng = ring[previous][0];
     const currentLat = ring[current][1];
     const previousLat = ring[previous][1];
     const crossesLatitude = (currentLat > lat) !== (previousLat > lat);
@@ -1793,6 +2247,8 @@ function ringContainsCoordinate(ring, lat, lng) {
 }
 
 function geometryContainsCoordinate(geometry, lat, lng) {
+  // Normalize only the query; preserve the source edges and half-open ray rule.
+  lng = normalizeLongitude(lng);
   const polygons = geometry?.type === "Polygon" ? [geometry.coordinates] : geometry?.coordinates || [];
   return polygons.some((polygon) => {
     if (!polygon.length || !ringContainsCoordinate(polygon[0], lat, lng)) return false;
@@ -1823,9 +2279,18 @@ function selectCountryFromPointer(event) {
   });
   globeRaycaster.setFromCamera(globePointerNdc, globeCamera);
   const surfaceHit = globeRaycaster.intersectObject(globeSurface, false)[0];
-  const pointHit = globeServicePoints ? globeRaycaster.intersectObject(globeServicePoints, false)[0] : null;
+  const hits = globeServicePoints ? globeRaycaster.intersectObject(globeServicePoints, false) : [];
+  // Choose the nearest visible screen point, not whichever candidate happens
+  // to sit closest to the camera along a broad picking ray.
+  const pointHit = hits.map((hit) => {
+    const resource = globeServicePoints.userData.resources?.[hit.index];
+    const point = resource && projectResourceGlobePoint(resource, rect.width, rect.height);
+    if (!point || !globePointVisible(point.z, globeCamera.position.z)) return null;
+    if (surfaceHit && hit.distance > surfaceHit.distance + 0.018) return null;
+    return { ...hit, screenDistance: Math.hypot(point.x - (event.clientX - rect.left), point.y - (event.clientY - rect.top)) };
+  }).filter(Boolean).sort((a, b) => a.screenDistance - b.screenDistance)[0];
 
-  if (pointHit && (!surfaceHit || pointHit.distance <= surfaceHit.distance + 0.06)) {
+  if (pointHit && (!surfaceHit || pointHit.distance <= surfaceHit.distance + 0.018)) {
     const resource = globeServicePoints.userData.resources?.[pointHit.index];
     if (resource) {
       const cluster = clusterVisibleResources(globeViewportWidth, globeViewportHeight)
@@ -1888,18 +2353,13 @@ async function loadDetailGeometry() {
     if (status) status.textContent = "Standard boundaries · Data Saver";
     return;
   }
-  if (status) status.textContent = "Loading 1:10m boundaries…";
+  if (status) status.textContent = "Loading detailed boundaries…";
   try {
     const response = await fetch("/data/countries-detail.geojson", { cache: "force-cache" });
     if (!response.ok) throw new Error(`Detailed map data returned ${response.status}`);
     const data = await response.json();
-    state.detailCountryFeatures = data.features;
-    state.detailLandRings = data.features.flatMap((feature) => extractRings(feature.geometry));
-    state.detailGeometryReady = true;
-    rebuildCountryBorders();
-    if (state.focusedCountry) setCountryHighlight(state.focusedCountry);
-    if (status) status.textContent = earthDetailTextureReady ? "1:10m · HD NASA" : "1:10m boundaries";
-    updateGlobeReadout();
+    pendingDetailGeometry = data.features;
+    wakeGlobe();
   } catch (error) {
     console.warn("High-detail Natural Earth geometry could not be loaded.", error);
     if (status) status.textContent = "Standard boundaries";
@@ -1913,7 +2373,9 @@ async function loadLandGeometry() {
     const data = await response.json();
     state.countryFeatures = data.features;
     state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
-    refreshGlobeSurface();
+    rebuildCountryBorders();
+    updateGlobeLandMask();
+    wakeGlobe();
     if (state.userLocation && !state.userCountry) {
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
       state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
@@ -1930,38 +2392,143 @@ async function loadLandGeometry() {
 function bindEvents() {
   const searchInput = document.getElementById("resourceSearch");
   let pendingSearchValue = state.query;
-  let searchFilterFrame = null;
-  const flushSearchFilter = () => {
-    searchFilterFrame = null;
+  let composingSearch = false;
+  hasPendingSearch = () => composingSearch || pendingSearchValue !== state.query;
+  let searchRevision = 0;
+  let searchFilterTimer = null;
+  let searchHistoryTimer = null;
+  let preparationNoticeTimer = null;
+  const showSearchPreparation = (revision) => {
+    if (searchPreparation.prepared || !pendingSearchValue || pendingSearchValue === state.query) return;
+    const count = document.getElementById("resultCount");
+    const status = document.getElementById("searchStatus");
+    const badge = document.getElementById("matchingResultCount");
+    count.textContent = status.textContent = "Preparing search…";
+    if (badge) badge.textContent = "Preparing…";
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = window.setTimeout(() => {
+      if (revision === searchRevision && !searchPreparation.prepared) {
+        count.textContent = status.textContent = "Search is still preparing. You can keep typing or browse the directory.";
+        if (badge) badge.textContent = "Still preparing…";
+      }
+    }, 3000);
+  };
+  refreshSearchPreparation = () => showSearchPreparation(searchRevision);
+  cancelPendingSearch = () => {
+    composingSearch = false;
+    searchRevision += 1;
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchFilterTimer = searchHistoryTimer = null;
+    pendingSearchValue = "";
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
+  };
+  const commitSearchHistory = () => {
+    searchHistoryTimer = null;
+    writeFinderHistory("push");
+  };
+  const scheduleSearchHistory = () => {
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchHistoryTimer = window.setTimeout(commitSearchHistory, 640);
+  };
+  const commitPendingSearch = async () => {
+    if (composingSearch) return;
+    if (searchFilterTimer !== null) {
+      window.clearTimeout(searchFilterTimer);
+      searchFilterTimer = null;
+    }
+    searchPreparation.prioritize();
+    const revision = searchRevision;
+    showSearchPreparation(revision);
+    await searchPreparation.ready;
+    if (revision !== searchRevision) return;
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
+    if (pendingSearchValue !== state.query) {
+      state.query = pendingSearchValue;
+      updateFilters();
+    }
+    if (searchHistoryTimer !== null) window.clearTimeout(searchHistoryTimer);
+    searchHistoryTimer = null;
+    writeFinderHistory("push");
+  };
+  const flushSearchFilter = async () => {
+    searchFilterTimer = null;
+    searchPreparation.prioritize();
+    const revision = searchRevision;
+    showSearchPreparation(revision);
+    await searchPreparation.ready;
+    if (revision !== searchRevision) return;
+    if (preparationNoticeTimer !== null) window.clearTimeout(preparationNoticeTimer);
+    preparationNoticeTimer = null;
     if (pendingSearchValue === state.query) return;
     state.query = pendingSearchValue;
     updateFilters();
+    scheduleSearchHistory();
   };
   const scheduleSearchFilter = (value) => {
+    if (value === state.query && preparationNoticeTimer !== null) {
+      cancelPendingSearch();
+      pendingSearchValue = value;
+      updateFilters();
+      return;
+    }
+    searchPreparation.prioritize();
+    searchRevision += 1;
     pendingSearchValue = value;
-    if (searchFilterFrame !== null) return;
-    searchFilterFrame = requestAnimationFrame(flushSearchFilter);
+    if (searchFilterTimer !== null) window.clearTimeout(searchFilterTimer);
+    searchFilterTimer = window.setTimeout(flushSearchFilter, 48);
   };
+  const queueSearchInput = () => {
+    // Leave the draft and caret alone: trimming each keystroke removes the
+    // space needed to type a second word. Only matching/history normalize it.
+    if (searchInput.value.length > FINDER_QUERY_LIMIT) {
+      const { selectionStart, selectionEnd } = searchInput;
+      searchInput.value = searchInput.value.slice(0, FINDER_QUERY_LIMIT);
+      searchInput.setSelectionRange(Math.min(selectionStart, FINDER_QUERY_LIMIT), Math.min(selectionEnd, FINDER_QUERY_LIMIT));
+    }
+    document.getElementById("clearSearch").hidden = !searchInput.value;
+    scheduleSearchFilter(sanitizeFinderQuery(searchInput.value));
+  };
+  searchInput.addEventListener("compositionstart", () => {
+    const wasPreparing = preparationNoticeTimer !== null;
+    cancelPendingSearch();
+    pendingSearchValue = state.query;
+    composingSearch = true;
+    if (wasPreparing) updateFilters();
+  });
+  searchInput.addEventListener("compositionend", () => {
+    composingSearch = false;
+    queueSearchInput();
+  });
   searchInput.addEventListener("input", (event) => {
-    scheduleSearchFilter(event.target.value);
+    // The IME owns the draft until compositionend, including its Enter/Escape.
+    document.getElementById("clearSearch").hidden = !searchInput.value;
+    if (event.isComposing || composingSearch) return;
+    queueSearchInput();
   });
   searchInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || (!state.query && !pendingSearchValue)) return;
-    if (searchFilterFrame !== null) cancelAnimationFrame(searchFilterFrame);
-    searchFilterFrame = null;
-    pendingSearchValue = "";
+    if (event.isComposing || composingSearch || event.keyCode === 229) return;
+    if (event.key === "Enter") {
+      commitPendingSearch();
+      return;
+    }
+    if (event.key !== "Escape" || (!state.query && !pendingSearchValue && !searchInput.value)) return;
+    cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
     updateFilters();
+    writeFinderHistory("push");
   });
+  searchInput.addEventListener("blur", commitPendingSearch);
   document.getElementById("clearSearch").addEventListener("click", () => {
-    if (searchFilterFrame !== null) cancelAnimationFrame(searchFilterFrame);
-    searchFilterFrame = null;
-    pendingSearchValue = "";
+    cancelPendingSearch();
     state.query = "";
     searchInput.value = "";
     searchInput.focus();
     updateFilters();
+    writeFinderHistory("push");
   });
 
   let catalogFilterFrame = null;
@@ -1970,8 +2537,16 @@ function bindEvents() {
     catalogFilterFrame = requestAnimationFrame(() => {
       catalogFilterFrame = null;
       updateFilters();
+      writeFinderHistory("push");
     });
   };
+
+  document.getElementById("layerList").addEventListener("rwn:select-need", (event) => {
+    const type = event.detail?.type;
+    if (type !== "all" && !resourceTypes.includes(type)) return;
+    state.activeTypes = type === "all" ? createInitialTypeSet() : new Set([type]);
+    scheduleCatalogFilterUpdate();
+  });
 
   document.getElementById("layerList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-type]");
@@ -2003,6 +2578,7 @@ function bindEvents() {
   document.getElementById("resourceGrid").addEventListener("click", (event) => {
     const button = event.target.closest("[data-resource-id]");
     if (button) setSelected(button.dataset.resourceId, true, "map");
+    if (event.target.closest("#clearFinderFilters")) clearFinderFilters();
   });
 
   document.getElementById("pinLayer").addEventListener("click", (event) => {
@@ -2030,22 +2606,40 @@ function bindEvents() {
     renderResults();
   });
 
+  window.addEventListener("pageshow", refreshSavedResources);
+  window.addEventListener("storage", (event) => {
+    if (event.key === SAVED_RESOURCES_KEY || event.key === null) refreshSavedResources();
+  });
   document.getElementById("toggleSaved").addEventListener("click", () => {
     state.savedOnly = !state.savedOnly;
+    if (state.savedOnly) state.savedIds = loadSavedResources();
     updateFilters();
+    writeFinderHistory("push");
   });
+  document.getElementById("retrySavedServices").addEventListener("click", refreshSavedResources);
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
   document.getElementById("clearBrowserData").addEventListener("click", () => {
-    window.localStorage.removeItem(SAVED_RESOURCES_KEY);
+    try { clearSavedResources(); } catch {
+      notify("Saved services could not be cleared. Check this browser’s storage settings and try again.");
+      return;
+    }
     state.savedIds.clear();
+    state.savedIds = loadSavedResources();
     state.savedOnly = false;
     clearUserLocation();
     notify("Saved services and location sorting cleared");
+  });
+  window.addEventListener("rwn:offline-unavailable", () => {
+    notify("Offline saving is unavailable. The directory still works online.");
   });
 
   document.getElementById("clearLocation").addEventListener("click", () => {
     clearUserLocation();
     notify("Location sorting cleared");
+  });
+
+  document.getElementById("locationRecovery").addEventListener("click", (event) => {
+    if (event.target.closest("#retryLocation")) document.getElementById("locateMe")?.click();
   });
 
   document.getElementById("locateMe").addEventListener("click", () => {
@@ -2057,12 +2651,19 @@ function bindEvents() {
       return;
     }
     if (!navigator.geolocation) {
+      state.locationRecovery = "Location is not available in this browser. Search by city, ZIP or postcode instead.";
+      state.locationRetryAvailable = false;
+      renderLocationState();
       notify("Location is not available in this browser");
       return;
     }
+    state.locationRecovery = "";
+    state.locationRetryAvailable = false;
+    const requestGeneration = ++locationRequestGeneration;
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
+      if (requestGeneration !== locationRequestGeneration) return;
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
       const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
@@ -2073,6 +2674,7 @@ function bindEvents() {
         button.innerHTML = `${icon.locate}<span>Loading current services…</span>`;
         await loadLiveResourcesNearUser();
       }
+      if (requestGeneration !== locationRequestGeneration) return;
       button.classList.remove("is-loading");
       renderLocationState();
       const nearest = state.filtered.find((resource) => {
@@ -2084,17 +2686,23 @@ function bindEvents() {
       const nearby = nearbyExactCount();
       notify(nearby ? `Found ${nearby.toLocaleString()} service ${nearby === 1 ? "location" : "locations"} within 250 km` : "No service location is listed nearby yet. Showing regional resource finders next.");
     }, (error) => {
+      if (requestGeneration !== locationRequestGeneration) return;
       button.classList.remove("is-loading");
+      state.locationRecovery = error.code === 1
+        ? "Location permission was not granted. Search by city, ZIP or postcode instead, or change this site’s location permission in your browser settings."
+        : "We could not get a nearby location. Try again, check browser settings, or search by city, ZIP or postcode instead.";
+      state.locationRetryAvailable = Boolean(navigator.geolocation);
       renderLocationState();
-      notify(error.code === 1 ? "Location permission was not granted" : "A precise location was not available; try again or check browser settings");
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+      notify(error.code === 1 ? "Location permission was not granted" : "A nearby location was not available; try again or search by place");
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   });
 
   const canvas = document.getElementById("globeCanvas");
   const globeStage = canvas.closest(".globe-stage");
-  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .globe-cluster-tray"));
+  const isGlobeChrome = (target) => target instanceof Element && Boolean(target.closest(".globe-meta, .globe-controls, .globe-readout, .globe-legend, .atlas-key, .globe-cluster-tray, .globe-fallback, .globe-empty, #globeHelp"));
 
   const prepareGlobeInteraction = () => {
+    wakeGlobe();
     state.clusterIds = [];
     renderClusterTray();
     state.targetLon = null;
@@ -2108,280 +2716,183 @@ function bindEvents() {
     state.interactionUntil = performance.now() + 6000;
   };
 
-  const beginPinch = () => {
-    if (activeGlobePointers.size < 2) return;
-    state.dragging = false;
-    state.pinching = true;
-    state.pointerMoved = true;
-    globeGestureHadMultiplePointers = true;
-    for (const pointerId of activeGlobePointers.keys()) {
-      try { globeStage.setPointerCapture(pointerId); } catch {}
-    }
-    pinchStartDistance = pointerDistance(activeGlobePointers.values());
-    pinchStartZoom = state.targetZoom;
-    prepareGlobeInteraction();
-  };
-
+  // Touch Events own touch input on both Safari and browsers that also emit
+  // Pointer Events. Running both streams caused competing pinch baselines and
+  // release state. Pointer Events here own only mouse and pen input.
   globeStage.addEventListener("pointerdown", (event) => {
-    const startedOnCanvas = event.target === canvas;
-    const startedOnMap = event.pointerType === "touch" ? !isGlobeChrome(event.target) : startedOnCanvas;
-    if (!startedOnMap) return;
-
-    activeGlobePointers.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-      startedOnCanvas,
-      startedOnMap,
-      pointerType: event.pointerType,
-      handledRotation: false
-    });
-    if (event.pointerType !== "touch") {
-      try { globeStage.setPointerCapture(event.pointerId); } catch {}
-    }
-
-    if (activeGlobePointers.size >= 2) {
-      beginPinch();
-      event.preventDefault();
-      return;
-    }
-
-    if (!startedOnMap) return;
-    state.dragging = event.pointerType !== "touch";
+    if (event.pointerType === "touch" || event.button !== 0 || event.target !== canvas || activeGlobePointers.size) return;
+    activeGlobePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    try { globeStage.setPointerCapture(event.pointerId); } catch {}
+    state.dragging = true;
     state.pinching = false;
-    state.pointerX = event.clientX;
-    state.pointerY = event.clientY;
-    state.pointerStartX = event.clientX;
-    state.pointerStartY = event.clientY;
+    state.pointerX = state.pointerStartX = event.clientX;
+    state.pointerY = state.pointerStartY = event.clientY;
     state.pointerMoved = false;
     state.pointerTime = event.timeStamp || performance.now();
-    globeGestureHadMultiplePointers = false;
     markGlobeEngaged();
     prepareGlobeInteraction();
   });
 
   globeStage.addEventListener("pointermove", (event) => {
-    const pointer = activeGlobePointers.get(event.pointerId);
-    if (!pointer) return;
-    pointer.x = event.clientX;
-    pointer.y = event.clientY;
-
-    if (activeGlobePointers.size >= 2) {
-      if (!state.pinching) beginPinch();
-      state.targetZoom = pinchZoom(
-        pinchStartZoom,
-        pinchStartDistance,
-        pointerDistance(activeGlobePointers.values()),
-        MIN_GLOBE_ZOOM,
-        maxGlobeZoom()
-      );
-      state.velocityLon = 0;
-      state.velocityLat = 0;
-      state.interactionUntil = performance.now() + 5000;
-      event.preventDefault();
-      return;
-    }
-
-    if (!state.dragging && pointer.pointerType === "touch") {
-      const intent = classifyGlobeDragIntent(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY);
-      if (intent === "scroll") {
-        activeGlobePointers.delete(event.pointerId);
-        return;
-      }
-      if (intent !== "rotate") return;
-      state.dragging = true;
-      try { globeStage.setPointerCapture(event.pointerId); } catch {}
-      event.preventDefault();
-      state.pointerX = event.clientX;
-      state.pointerY = event.clientY;
-      state.pointerTime = event.timeStamp || performance.now();
-    }
-    if (!state.dragging) return;
+    if (!activeGlobePointers.has(event.pointerId) || !state.dragging) return;
     if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 6) state.pointerMoved = true;
-    const dx = event.clientX - state.pointerX;
-    const dy = event.clientY - state.pointerY;
     const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
-    const lonDelta = -dx * 0.30 * interactionScale;
-    const latDelta = dy * 0.22 * interactionScale;
+    const lonDelta = -(event.clientX - state.pointerX) * 0.30 * interactionScale;
+    const latDelta = (event.clientY - state.pointerY) * 0.22 * interactionScale;
     state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
     state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
     const pointerNow = event.timeStamp || performance.now();
     const pointerDt = Math.max(8, Math.min(40, pointerNow - (state.pointerTime || pointerNow - 16))) / 1000;
-    const sampledVelocityLon = lonDelta / pointerDt;
-    const sampledVelocityLat = latDelta / pointerDt;
-    state.velocityLon = state.velocityLon * 0.58 + sampledVelocityLon * 0.42;
-    state.velocityLat = state.velocityLat * 0.58 + sampledVelocityLat * 0.42;
+    state.velocityLon = reduceMotion ? 0 : state.velocityLon * 0.58 + lonDelta / pointerDt * 0.42;
+    state.velocityLat = reduceMotion ? 0 : state.velocityLat * 0.58 + latDelta / pointerDt * 0.42;
     state.pointerTime = pointerNow;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
-    pointer.handledRotation = true;
-    if (event.pointerType === "touch") event.preventDefault();
+    wakeGlobe();
   });
 
   const finishGlobePointer = (event, cancelled = false) => {
-    const pointer = activeGlobePointers.get(event.pointerId);
-    const shouldSelectCountry = !cancelled
-      && activeGlobePointers.size === 1
-      && state.dragging
-      && !state.pointerMoved
-      && pointer?.startedOnCanvas
-      && !globeGestureHadMultiplePointers;
-
+    if (!activeGlobePointers.has(event.pointerId)) return;
+    const shouldSelect = !cancelled && !state.pointerMoved;
     activeGlobePointers.delete(event.pointerId);
     try { globeStage.releasePointerCapture(event.pointerId); } catch {}
-
-    if (activeGlobePointers.size >= 2) {
-      beginPinch();
-      return;
-    }
-
-    state.pinching = false;
-    if (activeGlobePointers.size === 1) {
-      const remaining = activeGlobePointers.values().next().value;
-      state.dragging = Boolean(remaining?.startedOnMap && remaining?.pointerType !== "touch");
-      state.pointerX = remaining?.x || 0;
-      state.pointerY = remaining?.y || 0;
-      state.pointerStartX = state.pointerX;
-      state.pointerStartY = state.pointerY;
-      state.pointerMoved = true;
-      return;
-    }
-
     state.dragging = false;
     state.pointerMoved = false;
-    globeGestureHadMultiplePointers = false;
-    if (shouldSelectCountry) selectCountryFromPointer(event);
+    if (cancelled || (event.timeStamp || performance.now()) - state.pointerTime > 100) {
+      state.velocityLon = 0;
+      state.velocityLat = 0;
+    }
+    if (shouldSelect) selectCountryFromPointer(event);
+    wakeGlobe();
   };
-
   globeStage.addEventListener("pointerup", (event) => finishGlobePointer(event));
   globeStage.addEventListener("pointercancel", (event) => finishGlobePointer(event, true));
+  globeStage.addEventListener("lostpointercapture", (event) => finishGlobePointer(event, true));
 
+  let touchState = null;
+  const mapTouches = (touches) => Array.from(touches).filter((touch) => globeStage.contains(touch.target) && !isGlobeChrome(touch.target));
+  const touchListDistance = (touches) => Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
+  const beginTouch = (touch, hadMultiple = false) => ({
+    identifier: touch.identifier,
+    startX: touch.clientX, startY: touch.clientY,
+    lastX: touch.clientX, lastY: touch.clientY,
+    startedOnCanvas: touch.target === canvas,
+    intent: "pending", moved: hadMultiple, hadMultiple
+  });
+  const beginTouchPinch = (touches) => {
+    touchState = { intent: "pinch", moved: true, hadMultiple: true,
+      pinchStartDistance: touchListDistance(touches), pinchStartZoom: state.targetZoom };
+    state.pinching = true;
+    state.dragging = false;
+    state.pointerMoved = true;
+    markGlobeEngaged();
+    prepareGlobeInteraction();
+  };
   const preventNativePagePinch = (event) => {
-    if (!isGlobeChrome(event.target)) event.preventDefault();
+    if (touchState?.intent === "pinch") event.preventDefault();
   };
   globeStage.addEventListener("gesturestart", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gesturechange", preventNativePagePinch, { passive: false });
   globeStage.addEventListener("gestureend", preventNativePagePinch, { passive: false });
-  let touchFallbackState = null;
-  const touchListDistance = (touches) => {
-    if (touches.length < 2) return 0;
-    return Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
-  };
-  const resetTouchFallback = () => { touchFallbackState = null; };
+
   globeStage.addEventListener("touchstart", (event) => {
     if (isGlobeChrome(event.target)) return;
-    if (event.touches.length > 1) {
-      touchFallbackState = {
-        intent: "pinch",
-        pinchStartDistance: touchListDistance(event.touches),
-        pinchStartZoom: state.targetZoom
-      };
-      state.pinching = true;
-      state.dragging = false;
-      state.pointerMoved = true;
-      globeGestureHadMultiplePointers = true;
-      markGlobeEngaged();
-      prepareGlobeInteraction();
+    const touches = mapTouches(event.touches);
+    state.touching = touches.length > 0;
+    if (touches.length > 1) {
+      beginTouchPinch(touches);
       event.preventDefault();
-      return;
+    } else if (touches.length === 1 && !touchState) {
+      touchState = beginTouch(touches[0]);
     }
-    const touch = event.touches[0];
-    if (!touch) return;
-    touchFallbackState = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      lastX: touch.clientX,
-      lastY: touch.clientY,
-      lastTime: event.timeStamp || performance.now(),
-      intent: "pending"
-    };
   }, { passive: false });
   globeStage.addEventListener("touchmove", (event) => {
-    if (isGlobeChrome(event.target)) return;
-    if (event.touches.length > 1) {
-      if (!touchFallbackState || touchFallbackState.intent !== "pinch") {
-        touchFallbackState = {
-          intent: "pinch",
-          pinchStartDistance: touchListDistance(event.touches),
-          pinchStartZoom: state.targetZoom
-        };
-        state.pinching = true;
-        state.dragging = false;
-        state.pointerMoved = true;
-        globeGestureHadMultiplePointers = true;
-        prepareGlobeInteraction();
-      }
-      state.targetZoom = pinchZoom(
-        touchFallbackState.pinchStartZoom,
-        touchFallbackState.pinchStartDistance,
-        touchListDistance(event.touches),
-        MIN_GLOBE_ZOOM,
-        maxGlobeZoom()
-      );
-      state.velocityLon = 0;
-      state.velocityLat = 0;
+    if (!touchState) return;
+    const touches = mapTouches(event.touches);
+    if (touches.length > 1) {
+      if (touchState.intent !== "pinch") beginTouchPinch(touches);
+      state.targetZoom = pinchZoom(touchState.pinchStartZoom, touchState.pinchStartDistance,
+        touchListDistance(touches), MIN_GLOBE_ZOOM, maxGlobeZoom());
       state.interactionUntil = performance.now() + 5000;
+      wakeGlobe();
       event.preventDefault();
       return;
     }
-    const touch = event.touches[0];
-    const fallback = touchFallbackState;
-    if (!touch || !fallback || fallback.intent === "pinch") return;
-    if (fallback.intent === "pending") {
-      fallback.intent = classifyGlobeDragIntent(touch.clientX - fallback.startX, touch.clientY - fallback.startY);
-      if (fallback.intent === "scroll") return;
-      if (fallback.intent !== "rotate") return;
-      if (!state.dragging) {
-        state.dragging = true;
-        state.pinching = false;
-        state.pointerMoved = true;
-        prepareGlobeInteraction();
-      }
-      fallback.lastX = touch.clientX;
-      fallback.lastY = touch.clientY;
-      fallback.lastTime = event.timeStamp || performance.now();
-      event.preventDefault();
-      return;
+    const touch = touches[0];
+    if (!touch) return;
+    if (touchState.intent === "pinch") {
+      state.pinching = false;
+      touchState = beginTouch(touch, true);
     }
-    if (fallback.intent !== "rotate") return;
-    const pointerPath = activeGlobePointers.size === 1 ? activeGlobePointers.values().next().value : null;
-    if (pointerPath?.handledRotation) {
-      event.preventDefault();
-      return;
+    if (Math.hypot(touch.clientX - touchState.startX, touch.clientY - touchState.startY) > 6) touchState.moved = true;
+    if (touchState.intent === "pending") {
+      const intent = classifyGlobeDragIntent(touch.clientX - touchState.startX, touch.clientY - touchState.startY);
+      touchState.intent = intent;
+      if (intent !== "rotate") return;
+      state.dragging = true;
+      state.pinching = false;
+      markGlobeEngaged();
+      prepareGlobeInteraction();
+      touchState.lastX = touch.clientX;
+      touchState.lastY = touch.clientY;
     }
-    const dx = touch.clientX - fallback.lastX;
-    const dy = touch.clientY - fallback.lastY;
+    if (touchState.intent !== "rotate") return;
     const interactionScale = 1 / Math.pow(Math.max(1, state.zoom), 0.72);
-    const lonDelta = -dx * 0.30 * interactionScale;
-    const latDelta = dy * 0.22 * interactionScale;
-    state.rotationLon = normalizeLongitude(state.rotationLon + lonDelta);
-    state.rotationLat = clampGlobeLatitude(state.rotationLat + latDelta);
-    state.targetLon = null;
-    state.targetLat = null;
+    state.rotationLon = normalizeLongitude(state.rotationLon - (touch.clientX - touchState.lastX) * 0.30 * interactionScale);
+    state.rotationLat = clampGlobeLatitude(state.rotationLat + (touch.clientY - touchState.lastY) * 0.22 * interactionScale);
     state.pointerMoved = true;
     state.interactionUntil = performance.now() + 5000;
-    fallback.lastX = touch.clientX;
-    fallback.lastY = touch.clientY;
-    fallback.lastTime = event.timeStamp || performance.now();
+    touchState.lastX = touch.clientX;
+    touchState.lastY = touch.clientY;
+    wakeGlobe();
     event.preventDefault();
   }, { passive: false });
   globeStage.addEventListener("touchend", (event) => {
-    if (event.touches.length === 0) {
-      state.dragging = false;
-      state.pinching = false;
-      state.velocityLon = 0;
-      state.velocityLat = 0;
-      pinchStartDistance = 0;
-      resetTouchFallback();
-    }
-  }, { passive: true });
-  globeStage.addEventListener("touchcancel", () => {
+    if (!touchState) return;
+    const touches = mapTouches(event.touches);
+    state.touching = touches.length > 0;
+    if (touches.length > 1) { beginTouchPinch(touches); return; }
     state.dragging = false;
     state.pinching = false;
     state.velocityLon = 0;
     state.velocityLat = 0;
-    pinchStartDistance = 0;
-    resetTouchFallback();
+    if (touches.length === 1) {
+      touchState = beginTouch(touches[0], true);
+    } else {
+      const released = Array.from(event.changedTouches).find((touch) => touch.identifier === touchState.identifier);
+      const tap = released && touchState.startedOnCanvas && !touchState.moved && !touchState.hadMultiple;
+      touchState = null;
+      if (tap) {
+        markGlobeEngaged();
+        prepareGlobeInteraction();
+        selectCountryFromPointer({ clientX: released.clientX, clientY: released.clientY, pointerType: "touch" });
+      }
+    }
+    state.pointerMoved = false;
+    wakeGlobe();
   }, { passive: true });
+
+  const resetGlobeInput = () => {
+    const captured = [...activeGlobePointers.keys()];
+    activeGlobePointers.clear();
+    for (const id of captured) { try { globeStage.releasePointerCapture(id); } catch {} }
+    touchState = null;
+    state.touching = false;
+    state.dragging = false;
+    state.pinching = false;
+    state.pointerMoved = false;
+    state.velocityLon = 0;
+    state.velocityLat = 0;
+    wheelOwner = null;
+    lastWheelTime = 0;
+    wakeGlobe();
+  };
+  globeStage.addEventListener("touchcancel", resetGlobeInput, { passive: true });
+  canvas.addEventListener("webglcontextlost", resetGlobeInput);
+  window.addEventListener("blur", resetGlobeInput);
+  window.addEventListener("pagehide", resetGlobeInput);
+  window.addEventListener("popstate", resetGlobeInput);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) resetGlobeInput(); });
 
   // Wheel ownership is decided per gesture from its shape, so the page keeps
   // scrolling normally and the map only claims the wheel when the visitor
@@ -2473,26 +2984,62 @@ function bindEvents() {
     focusRegion("world");
   });
   document.getElementById("northGlobe").addEventListener("click", () => {
+    wakeGlobe();
+    state.targetLon = state.rotationLon;
     state.targetLat = 0;
     state.velocityLat = 0;
     state.interactionUntil = performance.now() + 5000;
   });
   document.getElementById("regionFocus").addEventListener("change", (event) => focusRegion(event.target.value, true));
   document.getElementById("toggleMotion").addEventListener("click", (event) => {
+    wakeGlobe();
     state.autoRotate = !state.autoRotate;
     event.currentTarget.innerHTML = state.autoRotate ? icon.pause : icon.play;
     event.currentTarget.title = state.autoRotate ? "Pause globe rotation" : "Resume globe rotation";
     event.currentTarget.setAttribute("aria-label", event.currentTarget.title);
     state.interactionUntil = 0;
   });
+  document.getElementById("retryGlobe")?.addEventListener("click", () => {
+    const context = globeRenderer?.getContext();
+    if (context?.isContextLost()) {
+      // Wait for the browser's restored event before rebuilding or claiming
+      // recovery; constructing a renderer cannot revive a lost context.
+      globeContextRecoveryExtension?.restoreContext();
+      return;
+    }
+    recoverGlobeContext();
+  });
 
   const siteMenu = document.querySelector(".site-menu");
-  siteMenu.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => siteMenu.removeAttribute("open")));
+  const siteMenuSummary = siteMenu?.querySelector("summary");
+  const closeSiteMenu = ({ restoreFocus = false } = {}) => {
+    if (!siteMenu?.open) return;
+    siteMenu.removeAttribute("open");
+    if (restoreFocus) siteMenuSummary?.focus();
+  };
+  siteMenu?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () => closeSiteMenu()));
   document.addEventListener("click", (event) => {
-    if (siteMenu.open && !siteMenu.contains(event.target)) siteMenu.removeAttribute("open");
+    if (siteMenu?.open && !siteMenu.contains(event.target)) {
+      closeSiteMenu({ restoreFocus: siteMenu.contains(document.activeElement) });
+    }
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") siteMenu.removeAttribute("open");
+    if (event.key === "Escape" && siteMenu?.open) {
+      event.preventDefault();
+      closeSiteMenu({ restoreFocus: true });
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900) closeSiteMenu();
+  }, { passive: true });
+  window.addEventListener("popstate", (event) => {
+    const wasPreparing = preparationNoticeTimer !== null;
+    cancelPendingSearch();
+    restoreFinderHistory(event.state);
+    if (wasPreparing && !event.state?.[FINDER_HISTORY_KEY]) updateFilters();
+    pendingSearchValue = state.query;
+    searchInput.value = state.query;
+    document.getElementById("clearSearch").hidden = !state.query;
   });
 
   const sectionLinks = [...document.querySelectorAll("[data-section-link]")];
@@ -2515,16 +3062,24 @@ function bindEvents() {
   if ("IntersectionObserver" in window) {
     const globeObserver = new IntersectionObserver(([entry]) => {
       state.globeVisible = entry.isIntersecting;
-    }, { rootMargin: "160px" });
+      if (state.globeVisible) wakeGlobe();
+      else pauseGlobe();
+    }, { rootMargin: "0px" });
     globeObserver.observe(document.querySelector(".globe-stage"));
   }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) pauseGlobe();
+    else wakeGlobe();
+  });
 
 }
 
 shell();
 renderStatic();
 updateFilters();
+const searchPreparation = warmSearchIndex(resources);
 bindEvents();
+writeFinderHistory();
 initThreeGlobe();
 loadEarthImagery();
 loadLandGeometry();
@@ -2532,4 +3087,4 @@ if (requestedResource && requestedResource === initialResource) {
   const resource = resources.find((item) => item.id === requestedResource);
   if (resource) focusGlobeOn(resource);
 }
-requestAnimationFrame(animateGlobe);
+wakeGlobe();

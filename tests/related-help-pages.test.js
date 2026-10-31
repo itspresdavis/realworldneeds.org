@@ -16,7 +16,7 @@ const readRelated = async (resource) => {
   return { section, ids };
 };
 
-for (const id of ["capuchin-day-centre", "third-space-brisbane"]) {
+for (const id of ["whitechapel-mission", "third-space-brisbane"]) {
   test(`${id} recommends only listings in its declared country`, async () => {
     const resource = byId.get(id);
     const { section, ids } = await readRelated(resource);
@@ -61,13 +61,9 @@ test("every generated service page keeps related-card geography and scope truthf
 
 test("sparse, no-match and Global pages expose honest useful browse paths", async () => {
   const capuchin = await readRelated(byId.get("capuchin-day-centre"));
-  assert.deepEqual(capuchin.ids, ["unhcr-help-ireland"]);
-  assert.match(capuchin.section, /Resource finder/);
-  assert.match(capuchin.section, /<span>Ireland<\/span>/);
-  assert.doesNotMatch(capuchin.section, /Dublin/);
-  const noMatch = await readRelated(byId.get("unhcr-help-austria"));
-  assert.deepEqual(noMatch.ids, []);
-  assert.match(noMatch.section, /A missing listing does not mean help is unavailable/);
+  assert.deepEqual(capuchin.ids, []);
+  assert.match(capuchin.section, /A missing listing does not mean help is unavailable/);
+  assert.doesNotMatch(capuchin.section, /unhcr-help-/);
   const global = await readRelated(byId.get("global-foodbanking-network"));
   assert.ok(global.ids.length > 0);
   assert.doesNotMatch(global.section, /Related help in Global|near |km away/);

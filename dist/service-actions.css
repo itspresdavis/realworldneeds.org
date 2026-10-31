@@ -1,6 +1,6 @@
 .service-utility-actions {
   display: grid;
-  grid-template-columns: minmax(12rem, .85fr) minmax(18rem, 1.15fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: .8rem 1.2rem;
   align-items: center;
   margin: 0 0 1.25rem;
@@ -118,8 +118,7 @@
   .service-utility-actions,
   .legal-header,
   .legal-footer,
-  .directory-downloads,
-  .related-services {
+  .directory-downloads {
     display: none !important;
   }
 
@@ -128,10 +127,56 @@
     box-shadow: none !important;
   }
 
-  #service a[href^="http"]::after {
-    content: " (" attr(href) ")";
-    overflow-wrap: anywhere;
-    font-size: .85em;
-    font-weight: 400;
+  #service .related-services {
+    display: block !important;
+    margin-top: 1.5rem;
+    break-inside: avoid;
   }
+}
+
+.service-save-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1rem;
+}
+.service-save-actions [data-service-save] {
+  min-width: 8rem;
+  border-color: #24583e;
+  background: #24583e;
+  color: #fff;
+}
+.service-save-actions [data-service-save][aria-pressed="true"] {
+  background: #edf7ef;
+  color: #24583e;
+}
+.service-save-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: #24583e;
+  font-size: .86rem;
+  font-weight: 650;
+  text-underline-offset: 3px;
+}
+.service-save-actions small {
+  flex-basis: 100%;
+  color: #405a50;
+  font-size: .8rem;
+  line-height: 1.5;
+}
+.service-save-actions button:disabled { opacity: .6; cursor: not-allowed; }
+.service-save-actions a:focus-visible { outline: 3px solid #24583e; outline-offset: 3px; }
+
+/* Keep optional tools compact and easy to return to after reading the facts. */
+.service-utility-actions { scroll-margin-top: 6rem; }
+.service-utility-actions__intro > strong { font-size: 1rem; }
+.service-utility-actions__intro > span { font-size: .75rem; }
+.service-utility-actions__status:empty { min-height: 0; margin: 0; }
+@media (min-width: 761px) {
+  .service-utility-actions { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); padding-block: 1.2rem; }
+  .service-utility-actions__intro { grid-column: 1; }
+  .service-save-actions { grid-column: 2; grid-row: 1 / 3; align-content: center; }
+  .service-utility-actions__buttons { grid-column: 1; }
 }
