@@ -1,3 +1,5 @@
+import { secretClient } from "../server/optional-secret-client.js"
+
 const ALLOWED_TYPES = new Set([
   "performance",
   "client_error",
@@ -87,5 +89,47 @@ export default function handler(req, res) {
 
   console.log(JSON.stringify(event));
   res.setHeader("Cache-Control", "no-store, max-age=0");
-  return res.status(204).end();
+  let client = null;
+  try {
+    client = secretClient();
+  } catch {
+    client = null;
+  }
+  if (!client) return res.status(204).end();
+
+  return client.from("rum_events").insert(telemetryRow(event)).then(({ error }) => {
+    if (error) console.error("rum insert failed:", error.code || "", error.message || "");
+    return res.status(204).end();
+  }, (error) => {
+    console.error("rum insert failed:", "", error?.message || "");
+    return res.status(204).end();
+  });
+}
+
+function telemetryRow(event) {
+  const environments = new Set(["production", "preview", "development"]);
+  return {
+    schema_version: integer(event.schema, 10) ?? 2,
+    event_type: event.type,
+    route: event.route,
+    viewport_class: event.viewportClass,
+    lcp_ms: integer(event.lcp, 120000),
+    inp_ms: integer(event.inp, 120000),
+    fcp_ms: integer(event.fcp, 120000),
+    ttfb_ms: integer(event.ttfb, 120000),
+    dom_ready_ms: integer(event.domReady, 120000),
+    long_tasks: integer(event.longTasks, 10000),
+    cls: event.cls,
+    error_name: event.errorName,
+    error_file: event.file,
+    error_line: integer(event.line, 1000000),
+    error_column: integer(event.column, 1000000),
+    release: (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 12) || null,
+    vercel_env: environments.has(process.env.VERCEL_ENV) ? process.env.VERCEL_ENV : null
+  };
+}
+
+function integer(value, max) {
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(max, Math.round(value)));
 }
