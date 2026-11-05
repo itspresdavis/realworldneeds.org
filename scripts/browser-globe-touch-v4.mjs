@@ -1,4 +1,5 @@
 import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
+import { verifyGlobeInterruptions } from "./qa-globe-interruptions.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -316,6 +317,9 @@ async function run() {
     if (horizontalEnd.moving || horizontalEnd.pinOpacity < .85) throw new Error(`Touch release did not promptly stabilize service targets: ${JSON.stringify(horizontalEnd)}`);
 
     observations.horizontal = horizontalEnd;
+    phase = "native-gesture-interruptions";
+    await verifyGlobeInterruptions({ client, evaluate, canvasGeometry, sleep, observations });
+
     phase = "pinch";
     const pinch = await canvasGeometry(client);
     const zoomBefore = await evaluate(client, `Number((document.getElementById('globeReadout')?.innerText.match(/([0-9.]+)×/) || [0,0])[1])`);
