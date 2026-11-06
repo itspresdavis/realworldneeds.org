@@ -18,11 +18,30 @@
     "api/workspace.js": {
       "maxDuration": 30,
       "includeFiles": "server/workspace.html"
+    },
+    "api/corrections.js": {
+      "maxDuration": 30
+    },
+    "api/correction-review.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
     {
       "source": "/(join|workspace)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/corrections(.*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -80,6 +99,19 @@
         {
           "key": "Cache-Control",
           "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/api/correction(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
         }
       ]
     },
@@ -189,6 +221,39 @@
         }
       ],
       "destination": "https://www.realworldneeds.org/api/workspace",
+      "permanent": true
+    },
+    {
+      "source": "/corrections",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/corrections",
+      "permanent": true
+    },
+    {
+      "source": "/api/corrections",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/corrections",
+      "permanent": true
+    },
+    {
+      "source": "/api/correction-review",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/correction-review",
       "permanent": true
     }
   ]

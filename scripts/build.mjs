@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { categories, resources } from "../src/data/resources.js";
+import { platformStatus } from "../src/data/platform.js";
 import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
 import { sourceRegistry } from "../src/data/live-sources.js";
@@ -324,6 +325,8 @@ function resourcePage(resource) {
   const mapLinks = !resource.serviceAccess && direct && hasMapCoordinates(resource) ? `<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Apple Maps</a><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Google Maps</a>` : "";
   const globeLink = hasMapCoordinates(resource) ? `<a href="/#resource=${encodeURIComponent(resource.id)}">Show on interactive globe</a>` : "";
   const accessLink = contactOnly && resource.accessUrl ? `<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>` : "";
+  const correctionLink = platformStatus.publicCorrectionLinksEnabled
+    ? `<a href="/corrections?resourceId=${encodeURIComponent(resource.id)}">Report a correction</a>` : "";
   const categoryLinks = aidTypes(resource).map((type) => `<a href="/directory/help/${slugify(type)}">${escapeHtml(categories[type]?.label || type)}</a>`).join("");
   const title = `${resource.name} — ${place}`;
   const description = resourceDescription(resource, `${resource.summary} ${freeAccessLabel(resource)}. Source checked ${resource.lastChecked}.`);
@@ -376,7 +379,7 @@ function resourcePage(resource) {
         <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
         <p>${escapeHtml(resource.sourceDetail)}</p>
         ${!contactOnly && resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
-        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}</div>
+        <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}${correctionLink}</div>
       </article>
       <div class="directory-downloads"><strong>Browse related help</strong>${categoryLinks}<a href="/directory/${slugify(resource.country)}">More in ${escapeHtml(resource.country)}</a></div>
     </div>

@@ -7,7 +7,7 @@ import {
 // This project uses a server-only auth client. Tokens never enter browser JS.
 export const projectUrl =
   process.env.SUPABASE_URL || "https://cytfrxldixdapjaxcqzf.supabase.co";
-const publishableKey =
+export const publishableKey =
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_QcjZr9DWdhMW42P8HK33mQ_cvu1S0ut";
 const canonicalOrigin = "https://www.realworldneeds.org";

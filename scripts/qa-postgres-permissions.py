@@ -5,6 +5,7 @@ import json
 import subprocess
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,6 +74,32 @@ try:
         print("Applied candidate:", path.name)
     sql((ROOT / "supabase/tests/permissions.sql").read_text())
     print("PASS: real RLS permissions, contributor isolation, editor history and concurrency")
+    sql((ROOT / "supabase/tests/corrections.sql").read_text())
+    # Genuine competing connections: a shared durable quota permits exactly one.
+    sql("update rwn_private.correction_config set enabled=true, "
+        "capability_sha256=encode(sha256(convert_to('synthetic-test-capability-never-configured-remotely-123456','UTF8')),'hex'), "
+        "approval_ref='fixture-concurrency',retention_days=2,actor_hour_limit=1,global_hour_limit=10 where singleton;")
+    competing = """begin;
+    do $$ begin perform set_config('request.headers',jsonb_build_object(
+      'x-rwn-correction-key','synthetic-test-capability-never-configured-remotely-123456',
+      'x-rwn-correction-approval','fixture-concurrency')::text,true); end $$;
+    set local role anon;
+    select public.rwn_submit_correction('qa-fixture-1','wrong-hours','Concurrent fixture.',gen_random_uuid(),repeat('e',64));
+    commit;"""
+    def compete(_):
+        return run("docker", "exec", "-i", NAME, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1",
+                   "-h", "127.0.0.1", "-U", "postgres", "-d", "rwn_qa", input=competing, check=False)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        contenders = list(pool.map(compete, range(2)))
+    if sum(result.returncode == 0 for result in contenders) != 1 or not any("Correction limit reached" in result.stderr for result in contenders):
+        raise RuntimeError("Concurrent correction quota did not permit exactly one report")
+    sql("do $$ begin if (select count(*) from rwn_private.corrections)<>1 or "
+        "(select count(*) from rwn_private.correction_receipts)<>1 then raise exception 'Concurrent correction receipts incorrect'; end if; end $$; "
+        "delete from rwn_private.correction_receipts; delete from rwn_private.correction_events; "
+        "delete from rwn_private.corrections; delete from rwn_private.correction_limits; "
+        "update rwn_private.correction_config set enabled=false,capability_sha256=null,approval_ref=null,retention_days=null,actor_hour_limit=null,global_hour_limit=null;")
+    print("PASS: concurrent anonymous requests respect one durable quota and receipt")
+
     actual = run("node", "--input-type=module", "-e",
         "import {resources} from './src/data/resources.js';process.stdout.write(JSON.stringify(resources.find(r=>r.id==='centro-pop-carapicuiba')));",
         check=True).stdout
@@ -82,6 +109,17 @@ try:
         "has_column_privilege('authenticated','public.rwn_locations','editorial_note','SELECT') as contributor_private_column; " +
         "select count(*) as fixture_users_after_rollback from auth.users;")
     print("PASS: all candidate migrations; simulated auth only, no live Supabase verification")
+    # Also install every migration into a genuinely empty database on the same
+    # isolated instance. This never connects to or drops a hosted database.
+    run("docker", "exec", "-i", NAME, "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-U", "postgres", "-d", "postgres",
+        input="drop database rwn_qa; drop role anon, authenticated, service_role; create database rwn_qa;")
+    sql((ROOT / "supabase/tests/local-auth-fixture.sql").read_text())
+    for path in migrations:
+        sql(path.read_text())
+    sql("do $$ begin if exists(select 1 from public.rwn_locations) or exists(select 1 from rwn_private.corrections) or "
+        "(select enabled from rwn_private.correction_config where singleton) then raise exception 'Clean install not empty and disabled'; end if; end $$;")
+    print("PASS: clean installation of all migrations, empty catalog/queue, intake disabled")
+
 finally:
     if started:
         run("docker", "rm", "-f", NAME)
