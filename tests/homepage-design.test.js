@@ -83,11 +83,11 @@ test('location and clear controls can share the narrower grouped phone surface',
   assert.match(css, /\.finder-surface \.location-button \{ flex-basis:\s*10rem; \}/);
 });
 
-test('all needs is first and compact rows wrap enlarged labels without smaller targets', () => {
+test('all needs is first and balanced compact rows retain intrinsic enlarged labels', () => {
   const markup = refinement.slice(refinement.indexOf('container.innerHTML ='), refinement.indexOf('search.insertAdjacentElement'));
   assert.ok(markup.indexOf('data-quick-type="all"') < markup.indexOf('QUICK_TYPES.map'));
   assert.match(css, /@container\s*\(max-width:31rem\)\s*\{[^}]*\.quick-needs\s*\{[^}]*display:flex;flex-wrap:wrap;/);
-  assert.match(css, /\.quick-need\s*\{\s*flex:1 1 auto;/);
+  assert.match(css, /\.quick-need\s*\{\s*flex:1 1 20%;min-width:min-content;/);
   assert.match(css, /\.quick-need\s*\{[^}]*min-height:\s*44px;/);
 });
 
