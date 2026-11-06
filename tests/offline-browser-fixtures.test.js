@@ -83,3 +83,18 @@ test('production worker really installs against the browser cache fixture asset 
   assert.equal(installed.size, corePaths.length);
   assert.equal(await installed.get(`${origin}/page-menu.js`).text(), await readFile('dist/page-menu.js', 'utf8'));
 });
+
+test('cache-upgrade fixture retains the actual directory live status and Retry control', async () => {
+  const production = await readFile('scripts/enhance-generated-pages.mjs', 'utf8');
+  for (const html of [fixtureHtml, production]) {
+    const retry = html.match(/<button\b[^>]*data-directory-retry[^>]*>([^<]+)<\/button>/)?.[0];
+    assert.ok(retry, 'Upgrade fixture must offer the production recovery action');
+    assert.match(retry, /type="button"/);
+    assert.match(retry, /aria-disabled="false"/);
+    assert.match(retry, /\bhidden\b/);
+    assert.match(retry, />Retry search</);
+    const status = html.match(/<(?:span|p)\b[^>]*data-directory-count[^>]*>/)?.[0];
+    assert.match(status, /role="status"/);
+    assert.match(status, /aria-live="polite"/);
+  }
+});
