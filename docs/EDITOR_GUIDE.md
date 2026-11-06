@@ -6,7 +6,21 @@ Every published listing has one durable row in `public.rwn_locations`. The same 
 
 Open [RWN locations in Supabase](https://supabase.com/dashboard/project/cytfrxldixdapjaxcqzf/editor/25704). Search for a listing ID or name. Open its `record` field to inspect every original service fact. The separate name, country, coordinates, source URL, and review-date columns are generated from that record, so they cannot drift apart.
 
-The [editor queue](https://supabase.com/dashboard/project/cytfrxldixdapjaxcqzf/editor/25811) provides a sortable worklist, a review-due label after 180 days, and links to the public listing and globe. A review-due label signals age; it does not claim a service has closed.
+The existing hosted [editor queue](https://supabase.com/dashboard/project/cytfrxldixdapjaxcqzf/editor/25811) uses a legacy 180-day review label. Its hosted replacement is pending database recovery and an approved operational cadence. A review-due label signals age; it does not claim a service has closed.
+
+The workspace record inspector and `npm run catalog:health` now provide a separate **proposed** risk schedule: 14 days for shelter access, 30 days for changing food/hygiene/water access and other records, and 90 days only for records explicitly reviewed as `freshnessRisk: "stable-official-dataset"`. Shelter risk always takes priority. These are planning proposals awaiting the operations owner's approval, not staffing or provider commitments. No current catalog record receives a new freshness classification automatically.
+
+To produce a deterministic candidate worklist without network requests:
+
+```sh
+node scripts/catalog-health.mjs --date 2026-11-06 --output /tmp/rwn-review-candidates.json
+```
+
+An optional `--review-policy /path/to/policy.json` accepts `{"intervals":{"shelter":7,"changingAccess":30,"stableOfficialDataset":90,"other":30}}`; omitted intervals retain defaults. Intervals must be integers from 1 to 365 days. The output remains labeled proposed. `reviewQueue.candidates` contains stable listing identity, due date, risk priority, reasons and source evidence. Expired seasonal dates and sampled broken/redirected source links also generate candidates; an HTTP success never confirms service facts. Link sampling remains an explicit separate operation, outside builds.
+
+New structured evidence can be retained in a record's `reviewEvidence` object as separate `sourcePublishedAt`, `sourceFetchedAt`, `reviewedAt`, `providerConfirmedAt`, `nextReviewDue`, `verificationMethod`, and `evidenceReference` fields. Dates use `YYYY-MM-DD`. Do not populate provider confirmation without an actual confirmation or reviewed-at from a fetch. Legacy `lastChecked` remains unchanged and is explicitly described as a source check that may have recorded retrieval. Missing/invalid review evidence creates work, not a fabricated fresh date. An explicit earlier due date accelerates the schedule; it cannot extend the risk interval.
+
+Candidates are unassigned and do not change publication status. Use existing private review notes and editor changes to record evidence and a reason, preserving the immutable catalog history and separate publication gate. Persistent assignment, a richer decision workflow, hosted schedule migration, and alert ownership remain prerequisites for a staffed review queue. Never mass-withhold records solely because the proposed cadence makes them overdue.
 
 Use the website's `/workspace` for a readable listing inspector and validated editing form. Database dashboard access and website editor access are separate permissions. A website contributor account does not grant Supabase project administration.
 

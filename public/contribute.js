@@ -1,3 +1,5 @@
+import { reviewSchedule } from "/src/utils/review-schedule.js";
+
 const $ = (selector) => document.querySelector(selector);
 async function request(path, body, method = "POST") {
   const response = await fetch(path, {
@@ -152,6 +154,17 @@ if (document.body.dataset.page === "workspace") {
       if (data.isEditor)
         links.append(safeLink("Open Supabase table ↗", data.databaseUrl));
       panel.append(links, node("p", `Record ID: ${r.id}`, "record-id"));
+      const schedule = reviewSchedule(r);
+      panel.append(
+        node("h3", "Review planning"),
+        node("p", schedule.nextReviewDue
+          ? `Proposed next review: ${schedule.nextReviewDue} (${schedule.state}; ${schedule.intervalDays}-day ${schedule.risk === "shelter" ? "shelter access" : "source"} cadence).`
+          : "Review evidence needs attention before a next review date can be calculated."),
+        node("p", schedule.anchorKind === "legacy-source-check"
+          ? "This proposal uses the legacy source-check date, which may record a retrieval rather than a substantive review. A successful fetch is not provider confirmation."
+          : "This proposal uses the recorded substantive review date. Source fetches do not advance it."),
+        node("p", "Cadences require operations approval. Age alone does not mean a service has closed. Record evidence and a reason in a review note; published changes still require review and release."),
+      );
       const facts = node("dl", null, "record-facts");
       for (const [key, value] of Object.entries(r)) {
         facts.append(

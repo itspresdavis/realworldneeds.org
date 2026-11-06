@@ -16,6 +16,17 @@ test('health reports preserve review evidence and count primary and secondary co
   assert.deepEqual(r.contact.withoutDirectContact, ['fixture']);
   assert.deepEqual(r.contact.withoutSourceOrContact, []);
   assert.equal(r.links.status, 'not-checked');
+  assert.equal(r.reviewQueue.policyStatus, 'proposed');
+  assert.deepEqual(r.reviewQueue.candidates.map(candidate => candidate.resourceId), ['fixture']);
+  assert.equal(r.reviewQueue.candidates[0].nextReviewDue, '2026-09-03');
+});
+
+test('health review planning accepts explicit cadence configuration without altering evidence', () => {
+  const r = createCatalogHealth([fixture({ category: 'shelter', lastChecked: '2026-10-20' })], {
+    asOf: '2026-11-05', reviewPolicy: { intervals: { shelter: 7 } },
+  });
+  assert.equal(r.reviewQueue.candidates[0].nextReviewDue, '2026-10-27');
+  assert.equal(r.reviewQueue.candidates[0].evidence.reviewedAt, null);
 });
 
 test('impossible, absent and future dates are reported rather than normalized into verification', () => {
