@@ -7,6 +7,7 @@ import {
   requireUser,
   sameOrigin,
 } from "../server/supabase.js";
+import { exportNotes, ExportLimitError } from "../server/account-export.js";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "private, no-store");
@@ -33,16 +34,17 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const user = await requireUser(client, res);
       if (user && url.searchParams.get("action") === "export") {
-        const { data: notes, error } = await client
-          .from("rwn_reviews")
-          .select("id,location_id,note,created_at")
-          .eq("author_id", user.id)
-          .order("created_at")
-          .limit(10000);
-        if (error)
-          return json(res, 503, {
-            error: "Your data could not be exported. Please try again.",
+        let notes;
+        try {
+          notes = await exportNotes(client, user.id);
+        } catch (error) {
+          return json(res, error instanceof ExportLimitError ? 413 : 503, {
+            error:
+              error instanceof ExportLimitError
+                ? "Your account has more than 10,000 notes. Contact the project administrator for a complete export."
+                : "Your complete data could not be exported. Please try again.",
           });
+        }
         res.setHeader(
           "Content-Disposition",
           'attachment; filename="rwn-contributor-data.json"',
@@ -50,7 +52,8 @@ export default async function handler(req, res) {
         return json(res, 200, {
           account: { email: user.email, id: user.id },
           notes,
-          note: "Up to 10,000 notes. Contact the project administrator for larger exports.",
+          total: notes.length,
+          complete: true,
         });
       }
       if (user) json(res, 200, { user: { email: user.email, id: user.id } });

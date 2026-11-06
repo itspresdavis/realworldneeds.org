@@ -4,11 +4,17 @@ insert into auth.users(id,email,email_confirmed_at) values
 ('b0de7236-ea12-42d2-9201-555500000001','rwn-policy-editor@example.invalid',now()),
 ('b0de7236-ea12-42d2-9201-555500000002','rwn-policy-contributor@example.invalid',now());
 insert into public.rwn_members(user_id,role) values ('b0de7236-ea12-42d2-9201-555500000001','editor');
+insert into public.rwn_reviews(location_id,author_id,note)
+select id,'b0de7236-ea12-42d2-9201-555500000001','Another contributor private note; must stay private.' from public.rwn_locations limit 1;
+-- New columns do not inherit public visibility from a table-wide grant.
+alter table public.rwn_locations add column qa_private_future text default 'Private future fixture';
 select set_config('request.jwt.claims','{"sub":"b0de7236-ea12-42d2-9201-555500000002","role":"authenticated","is_anonymous":false}',true);
 set local role authenticated;
 do $$ declare affected integer; begin
   if (select count(*) from public.rwn_locations) = 0 then raise exception 'Contributor cannot read published records'; end if;
   if (select count(*) from public.rwn_members) <> 0 then raise exception 'Membership leaked'; end if;
+  if exists(select 1 from public.rwn_reviews) then raise exception 'Another author note leaked'; end if;
+  if exists(select 1 from public.rwn_location_history) then raise exception 'Contributor can read audit history'; end if;
   if has_table_privilege('authenticated', 'public.rwn_locations', 'SELECT')
     or has_column_privilege('authenticated', 'public.rwn_locations', 'editorial_note', 'SELECT') then
     raise exception 'Contributor can read internal editorial reasons';
@@ -16,6 +22,14 @@ do $$ declare affected integer; begin
   begin
     perform editorial_note from public.rwn_locations limit 1;
     raise exception 'Contributor selected editorial reasons';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform * from public.rwn_locations limit 1;
+    raise exception 'Contributor wildcard exposes private columns';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform qa_private_future from public.rwn_locations limit 1;
+    raise exception 'Contributor can read a newly added private column';
   exception when insufficient_privilege then null; end;
   update public.rwn_locations set editorial_note='Unauthorized contributor change';
   get diagnostics affected = row_count;
@@ -47,6 +61,25 @@ do $$ declare target text; revision timestamptz; affected integer; begin
   update public.rwn_locations set editorial_note='Stale version must not write.' where id=target and updated_at=revision;
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'Optimistic concurrency failed'; end if;
+  begin
+    update public.rwn_location_history set actor_id=null;
+    raise exception 'Editor can rewrite immutable history';
+  exception when insufficient_privilege then null; end;
+  begin
+    delete from public.rwn_location_history;
+    raise exception 'Editor can delete immutable history';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+-- Membership revocation takes effect immediately, without a JWT refresh.
+delete from public.rwn_members where user_id='b0de7236-ea12-42d2-9201-555500000001';
+set local role authenticated;
+do $$ declare affected integer; begin
+  if rwn_private.is_editor() then raise exception 'Revoked membership remains an editor'; end if;
+  if exists(select 1 from public.rwn_location_history) then raise exception 'Revoked editor can read history'; end if;
+  update public.rwn_locations set editorial_note='Revoked editor write';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'Revoked editor can still update'; end if;
 end $$;
 reset role;
 select set_config('request.jwt.claims','{"role":"anon"}',true);
@@ -63,6 +96,14 @@ do $$ begin
   begin
     perform editorial_note from public.rwn_locations limit 1;
     raise exception 'Internal editorial reason could be selected';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform * from public.rwn_locations limit 1;
+    raise exception 'Anonymous wildcard exposes private columns';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform qa_private_future from public.rwn_locations limit 1;
+    raise exception 'Anonymous can read a newly added private column';
   exception when insufficient_privilege then null; end;
   if exists(select 1 from public.rwn_locations where not published) then raise exception 'Withheld listing leaked'; end if;
   -- Either no grant or RLS may deny visibility. Both are valid safeguards;
