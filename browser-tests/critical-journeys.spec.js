@@ -216,6 +216,62 @@ test('keyboard can reach search and dismiss mobile navigation', async ({page}) =
   await expect(page.locator('.site-menu > summary')).toBeFocused();
 });
 
+test('short viewport navigation keeps every keyboard link fully reachable', async ({page},info) => {
+  await noGraphics(page);
+  const evidence=[];
+  const frame=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  for(const height of [250,189]) {
+    await page.setViewportSize({width:320,height});
+    await page.goto('/');await homeReady(page);await noOverflow(page);
+    const menu=page.locator('.site-menu');
+    const summary=menu.locator(':scope > summary');
+    const links=menu.locator('nav a');
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(menu).toHaveAttribute('open','');
+    await expect(links).toHaveCount(5);
+    await frame();
+    const bounds=await menu.locator('nav').evaluate(nav=>{
+      const box=nav.getBoundingClientRect();
+      return {left:box.left,right:box.right,top:box.top,bottom:box.bottom,
+        clientWidth:document.documentElement.clientWidth,height:innerHeight,
+        overflowY:getComputedStyle(nav).overflowY};
+    });
+    expect(bounds.left).toBeGreaterThanOrEqual(-1);
+    expect(bounds.right).toBeLessThanOrEqual(bounds.clientWidth+1);
+    expect(bounds.top).toBeGreaterThanOrEqual(-1);
+    expect(bounds.bottom).toBeLessThanOrEqual(bounds.height+1);
+    expect(bounds.overflowY).toBe('auto');
+    const focused=[];
+    for(let index=0;index<5;index++) {
+      await page.keyboard.press('Tab');
+      await expect(links.nth(index)).toBeFocused();
+      await frame();
+      const box=await links.nth(index).evaluate(link=>{
+        const box=link.getBoundingClientRect(),panel=link.closest('nav').getBoundingClientRect();
+        return {text:link.textContent.trim(),left:box.left,right:box.right,top:box.top,bottom:box.bottom,
+          width:box.width,height:box.height,panelLeft:panel.left,panelRight:panel.right,
+          panelTop:panel.top,panelBottom:panel.bottom,viewportHeight:innerHeight,
+          clientWidth:document.documentElement.clientWidth,scrollTop:link.closest('nav').scrollTop};
+      });
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.left).toBeGreaterThanOrEqual(Math.max(0,box.panelLeft)-1);
+      expect(box.right).toBeLessThanOrEqual(Math.min(box.clientWidth,box.panelRight)+1);
+      expect(box.top).toBeGreaterThanOrEqual(Math.max(0,box.panelTop)-1);
+      expect(box.bottom).toBeLessThanOrEqual(Math.min(box.viewportHeight,box.panelBottom)+1);
+      focused.push(box);
+    }
+    expect(focused.at(-1).scrollTop,'keyboard focus scrolls to the final short-menu link').toBeGreaterThan(0);
+    await info.attach(`short-menu-320x${height}`,{body:await page.screenshot(),contentType:'image/png'});
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open','');
+    await expect(summary).toBeFocused();
+    evidence.push({height,bounds,focused});
+  }
+  await info.attach('short-menu-keyboard-bounds',{body:JSON.stringify(evidence),contentType:'application/json'});
+});
+
 for(const path of ['/','/directory','/service/womens-lunch-place','/transparency','/404','/join']) {
   test(`accessibility ${path}`,async({page},info)=>{
     await noGraphics(page);await page.setViewportSize({width:390,height:844});
