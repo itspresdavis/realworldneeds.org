@@ -84,7 +84,9 @@ jobs:
 
   cross-browser:
     name: Cross-browser / ${{ matrix.browser }}
-    runs-on: ubuntu-latest
+    # Keep the supported LTS fixed while ubuntu-latest migrates; versions and gates stay unchanged.
+    # https://github.com/actions/runner-images/issues/14748
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
