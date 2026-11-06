@@ -685,7 +685,9 @@ function updateFilters() {
   if (geographyHint) {
     const choices = searchGeographyChoices(state.filtered, state.query);
     geographyHint.hidden = choices.length < 2;
-    geographyHint.textContent = choices.length < 2 ? "" : `${choices[0].city} has listings in ${choices.map(choice => choice.country).join(" and ")}. Add a country or region to narrow the results.`;
+    geographyHint.textContent = choices.length < 2 ? "" : choices.some(choice => choice.countryMatch)
+      ? `This place name may mean ${choices.map(choice => choice.countryMatch ? `the country ${choice.country}` : `${choice.city}, ${choice.country}`).join(" or ")}. Add a country or region to narrow the results.`
+      : `${choices[0].city} has listings in ${choices.map(choice => choice.country).join(" and ")}. Add a country or region to narrow the results.`;
   }
   state.visibleResults = initialResultCount();
   state.clusterIds = [];
