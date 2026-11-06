@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { makeResource, renderTrussellSnapshot } from "../scripts/refresh-trussell-foodbanks.mjs";
 import { makeNewYorkWicResource } from "../scripts/refresh-new-york-wic.mjs";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -118,7 +119,7 @@ test("every static directory card, including local pages, puts the warning outsi
 
 test("search export contains matching status notices for all affected records and none for unflagged records", async () => {
   const index = JSON.parse(await read("dist/data/search-index.json"));
-  assert.equal(index.schemaVersion, "1.6");
+  assert.equal(index.schemaVersion, SEARCH_CATALOG_SCHEMA);
   const byId = new Map(resources.map((resource) => [resource.id, resource]));
   for (const record of index.records) {
     assert.deepEqual(record.sourceStatus || null, sourceClosureNotice(byId.get(record.id)));

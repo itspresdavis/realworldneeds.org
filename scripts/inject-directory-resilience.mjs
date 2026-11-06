@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const source = await readFile("dist/offline-status.js");
+// Keep the fallback self-contained for cached pages while sharing the loader's
+// exact schema guard and bounded request/retry behavior with directory and Saved.
+const helper = (await readFile("public/catalog-request.js", "utf8")).replaceAll("export ", "");
+const entry = (await readFile("public/offline-status.js", "utf8")).replace('import { createCatalogLoader } from "./catalog-request.js";', "");
+const source = `${helper}\n${entry}`;
+await writeFile("dist/offline-status.js", source);
 const release = createHash("sha256").update(source).digest("hex").slice(0, 12);
 
 async function walk(directory) {

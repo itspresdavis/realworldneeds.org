@@ -1,3 +1,7 @@
+// Exact compatibility gate: 2.0 requires service-specific actions and removes
+// generic coordinates from those records. Older catalogs cannot supply safe routes.
+export const SEARCH_CATALOG_SCHEMA = "2.0";
+
 // Bound the entire request, including JSON parsing. Abort alone is insufficient:
 // a worker or stalled body can ignore it, so callers also race a rejection.
 export function createCatalogLoader(url, requireScopes = false) {
@@ -34,7 +38,7 @@ export function createCatalogLoader(url, requireScopes = false) {
         });
         if (!response.ok) throw new Error("Directory unavailable");
         const payload = await response.json();
-        if (!Array.isArray(payload?.records) || requireScopes && !payload.scopes) throw new Error("Invalid directory");
+        if (payload?.schemaVersion !== SEARCH_CATALOG_SCHEMA || !Array.isArray(payload.records) || requireScopes && !payload.scopes) throw new Error("Invalid directory");
         if (request === pending && !controller.signal.aborted) reportCacheStatus(response.headers?.get("X-RWN-Catalog-Cache") === "stale");
         return payload;
       })(),

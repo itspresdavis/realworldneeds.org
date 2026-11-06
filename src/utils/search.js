@@ -27,7 +27,7 @@ for (const group of [
   "clothing clothes coat coats shoes blanket blankets ropa roupas vetement vetements clohtes",
   "health doctor doctors clinic clinics dental dentist medical mental healthcare salud saude sante medico medica clinica clinique",
   "referral directory directories locator navigation benefits advice casework",
-  "diaper diapers",
+  "diaper diapers panales",
   "charging chargers charger",
 ]) {
   const [need, ...words] = group.split(" ");
@@ -58,7 +58,7 @@ const multiwordAliases = /* @__PURE__ */ (() => [...new Set(aliases.values())].f
   alias.includes(" "),
 ))();
 const noise = new Set(
-  "a an the for to of please find finding need needs help free near nearby me my local around ayuda gratis cerca mi aide gratuit gratuite pres ajuda gratuito gratuita perto".split(
+  "a an the for to of please find finding need needs help assistance free near nearby me my local around ayuda gratis cerca mi aide gratuit gratuite pres ajuda gratuito gratuita perto".split(
     " ",
   ),
 );
@@ -70,6 +70,8 @@ const whole = (text, token) => ` ${text} `.includes(` ${token} `);
 // Keep broad aliases above for category exploration and unfinished prefixes.
 const specificNeeds = new Map();
 for (const group of [
+  "meal meals",
+  "water agua eau watre",
   "dental dentist dentists dentistry",
   "pantry pantries foodbank foodbanks",
   "mental",
@@ -105,6 +107,7 @@ export function resourceSearchText(resource) {
     resource.country,
     resource.region,
     resource.address,
+    ...(resource.serviceAccess || []).flatMap(route => [route.label, route.address, route.instructions]),
     resource.sourceName,
     resource.summary,
     ...(resource.services || []),
@@ -133,7 +136,7 @@ export function resourceSearchText(resource) {
   // A compact, derived ranking hint, never a provider claim. Keep contextual
   // mentions searchable; no/not/without contexts do not receive a service boost.
   // This is lexical evidence, not availability or general negation inference.
-  const evidence = words([resource.summary, ...(resource.services || [])]
+  const evidence = words([...(types.includes("water") ? ["water"] : []), resource.summary, ...(resource.services || [])]
     .filter((text) => !/\b(no(?![- ]cost\b)|not|without)\b/i.test(text))
     .join(" "));
   const needs = [...new Set(evidence.flatMap((term) => specificNeeds.get(term)?.[0] || []))].join(" ");
@@ -177,6 +180,9 @@ function resourceSearchScore(resource, query) {
   entry[10] = tokens;
   const [address, regions, phrases, needs, name, city, resourceCountry, primary, types, searchText] = entry;
   let score = 0;
+  const phrase = tokens.map(([literal]) => literal).join(" ");
+  // Completed water/meal needs require positive service evidence. Keep a
+  // literal multiword provider or street phrase searchable as written.
   for (const [literal, alias] of tokens) {
     const specific = specificNeeds.get(literal);
     const country = countryQualifier(literal);
@@ -184,6 +190,7 @@ function resourceSearchScore(resource, query) {
     const regionMatch = tokens.length > 1 && regions.includes(literal);
     const match = /^(wic|health|hygiene)$/.test(alias) ? whole : prefix;
     if (
+      (specific && /^(water|meal)$/.test(specific[0]) && !whole(needs, specific[0]) && !(tokens.length > 1 && (prefix(name, phrase) || prefix(address, phrase)))) || (
       country
         ? resourceCountry !== country
         : region
@@ -196,7 +203,7 @@ function resourceSearchScore(resource, query) {
         : !match(searchText, literal) &&
           !(alias.includes(" ")
             ? whole(phrases ?? searchText, alias)
-            : match(searchText, alias))
+            : match(searchText, alias)))
     ) {
       return entry[11] = -1;
     }
@@ -218,7 +225,6 @@ function resourceSearchScore(resource, query) {
                   ? 8
                   : 2;
   }
-  const phrase = tokens.map(([literal]) => literal).join(" ");
   // Whole multiword names and places beat coincidental combinations of words.
   score += name === phrase ? 88 : whole(name, phrase) ? 8 : 0;
   if (
@@ -277,8 +283,8 @@ function geographyChoicesForSource(resourceList, query) {
   const places = new Map();
   for (const resource of resourceList) {
     const entry = sourceMatcher.prepare(resource);
-    if (entry[5] !== city || !entry[6] || sourceMatcher.score(resource, tokens) < 0) continue;
-    places.set(entry[6], { city: resource.city || resource.place?.slice(0, -(String(resource.country).length + 2)), country: resource.country });
+    if ((entry[5] !== city && entry[6] !== city) || !entry[6] || sourceMatcher.score(resource, tokens) < 0) continue;
+    places.set(entry[6], entry[6] === city ? { city: resource.country, country: resource.country, countryMatch: true } : { city: resource.city || resource.place?.slice(0, -(String(resource.country).length + 2)), country: resource.country });
   }
   return places.size < 2 ? [] : [...places.values()].sort((a, b) => a.country.localeCompare(b.country));
 }

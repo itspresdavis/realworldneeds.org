@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -248,7 +249,7 @@ async function assertCaches(client, release, { allowLegacy = false } = {}) {
 }
 
 const record = (id, label) => ({ id, name: `Fixture ${id} (${label})`, place: "Synthetic test place", category: "food", categoryLabels: ["Food"], kind: "coverage", checked: "2026-10-10", search: `fixture ${id} food` });
-const catalog = (label) => ({ records: [record("survivor", label), ...(label === "legacy" ? [record("removed", label)] : [])], scopes: {} });
+const catalog = (label) => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [record("survivor", label), ...(label === "legacy" ? [record("removed", label)] : [])], scopes: {} });
 
 function html(release, baseline = false) {
   const asset = (canonical) => baseline ? canonical : release.assets[canonical] || canonical;

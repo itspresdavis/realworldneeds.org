@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
@@ -53,7 +54,7 @@ test("every directory scope gets honest, initially hidden guidance and scope-pre
   const record = { country: "United States", categoryLabels: ["Food"] };
   const scopes = ["/directory", "/directory/help/food", "/directory/united-states/new-york"];
   const context = vm.createContext({
-    searchIndex: { records: [record], scopes: Object.fromEntries(scopes.map((scope) => [scope, [0]])) },
+    searchIndex: { schemaVersion: SEARCH_CATALOG_SCHEMA, records: [record], scopes: Object.fromEntries(scopes.map((scope) => [scope, [0]])) },
     escapeHtml: (value) => String(value),
   });
   vm.runInContext(generator.slice(first, last), context);

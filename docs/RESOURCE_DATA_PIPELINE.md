@@ -58,3 +58,29 @@ Before an importer is published:
 6. Label missing fields honestly, suppress expired records by default, and withhold records when free access cannot be supported by the source.
 7. Test nearby ranking, mobile density, keyboard use, source links, and map links.
 8. Publish the source manifest and keep a correction/removal audit trail.
+
+## Search catalog compatibility and service access
+
+`public/catalog-request.js` exports the exact supported compact search schema,
+`SEARCH_CATALOG_SCHEMA` (`2.0`). The index generator and the self-contained
+Directory, Saved and offline fallback entries share that value and loader.
+A missing, older or unknown schema is rejected before any records become usable;
+connection recovery and explicit retry can load a compatible replacement. This
+failure preserves Saved IDs and keeps the existing unavailable/retry controls.
+The offline action fallback states “Listing actions are unavailable. Reconnect
+and retry.” even if the separate availability probe succeeds.
+
+This compatibility break is required by service-specific access routes. Compact
+records with an explicit `serviceAccess` contract carry `serviceActions` and
+`serviceAccessSummary`, with `lat` and `lng` set to `null`. Older renderers that
+ignore the new fields therefore cannot manufacture generic map actions. Stable
+IDs, source facts and raw/map reference coordinates remain unchanged. Older
+renderers may treat a direct record’s compact coordinates as a destination;
+reference coordinates alone do not establish the right entrance for each service.
+Never lower the supported schema to make an old cached payload pass. A future
+incompatible contract needs a new explicit version and matching loader/tests.
+
+Cached HTML and scripts can outlive a deployment. These checks cover current
+entries receiving an older index and historical renderers receiving the new
+index. A disconnected device retaining only old code and old data cannot receive
+an immediate correction or revocation; it must reconnect to obtain the release.

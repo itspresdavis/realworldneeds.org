@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-const source = await readFile(new URL("../public/offline-status.js", import.meta.url), "utf8");
+const loader = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replaceAll("export ", "");
+const entry = await readFile(new URL("../public/offline-status.js", import.meta.url), "utf8");
+const source = loader + "\n" + entry.replace('import { createCatalogLoader } from "./catalog-request.js";', "");
 const directory = await readFile(new URL("../public/directory.js", import.meta.url), "utf8");
 const fallback = directory.slice(directory.indexOf("const showConnectivityState="), directory.indexOf("const scopedRecords="));
 const flush = () => new Promise(setImmediate);

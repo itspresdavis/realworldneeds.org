@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -47,7 +48,7 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
 test("whole-catalog directory search uses a static privacy-preserving contextual index", async () => {
   const client = await text("public/directory.js");
   const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(searchIndex.schemaVersion, "1.6");
+  assert.equal(searchIndex.schemaVersion, SEARCH_CATALOG_SCHEMA);
   assert.equal(searchIndex.resourceCount, resources.length);
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);

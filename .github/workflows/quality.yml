@@ -104,6 +104,29 @@ jobs:
         run: npm ci
       - name: Build generated site
         run: npm run build
+      - name: Bound browser dependency downloads
+        # The Azure Ubuntu mirror stalled before Firefox tests in run 42225938015.
+        # Use Ubuntu's signed packages over its official HTTPS mirror; keep all
+        # browser checks, dependency validation and job deadlines unchanged.
+        run: |
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          directory = Path('/etc/apt/sources.list.d')
+          for path in [Path('/etc/apt/sources.list'), *directory.glob('*.list'), *directory.glob('*.sources')]:
+              if not path.is_file():
+                  continue
+              original = path.read_text()
+              # Current runner images use a mirror-list URI rather than a
+              # literal Azure URL; handle that and older source formats.
+              updated = original.replace('mirror+file:/etc/apt/apt-mirrors.txt', 'https://archive.ubuntu.com/ubuntu')
+              for scheme in ['http', 'https']:
+                  updated = updated.replace(scheme + '://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+              if updated != original:
+                  path.write_text(updated)
+          Path('/etc/apt/apt.conf.d/99rwn-browser-network').write_text(
+              'Acquire::Retries "1";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n'
+          )
+          PY
       - name: Install browser and system dependencies
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Verify assistance journeys and accessibility

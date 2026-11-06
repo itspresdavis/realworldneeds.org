@@ -7,7 +7,7 @@ export function geographyChoices(records, tokens, normalize) {
   for (const record of records) {
     const country = String(record.country || '').trim(), suffix = `, ${country}`;
     const place = String(record.city ?? (country && String(record.place || '').toLowerCase().endsWith(suffix.toLowerCase()) ? record.place.slice(0, -suffix.length) : ''));
-    if (country && normalize(place) === city) choices.set(country, { city: place, country });
+    if (country && (normalize(place) === city || normalize(country) === city)) choices.set(country, normalize(country) === city ? { city: country, country, countryMatch: true } : { city: place, country });
   }
   return choices.size < 2 ? [] : [...choices.values()].sort((a, b) => a.country.localeCompare(b.country));
 }
@@ -23,5 +23,7 @@ export function renderGeographyHint(root, records, tokens, normalize) {
     root.prepend(hint);
   }
   hint.hidden = false;
-  hint.textContent = `${choices[0].city} has listings in ${choices.map(choice => choice.country).join(' and ')}. Add a country or region to narrow the results.`;
+  hint.textContent = choices.some(choice => choice.countryMatch)
+    ? `This place name may mean ${choices.map(choice => choice.countryMatch ? `the country ${choice.country}` : `${choice.city}, ${choice.country}`).join(" or ")}. Add a country or region to narrow the results.`
+    : `${choices[0].city} has listings in ${choices.map(choice => choice.country).join(' and ')}. Add a country or region to narrow the results.`;
 }
