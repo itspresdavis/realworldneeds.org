@@ -112,7 +112,7 @@ function directoryRecordActions(resource, coordinate) {
 
 function serviceLocationFacts(resource) {
   if (!resource.serviceAccess) return escapeHtml(resource.address);
-  return `<ul>${resource.serviceAccess.map(route => `<li><strong>${escapeHtml(route.label)}</strong>${route.address ? ` — ${escapeHtml(route.address)}` : ""}<p>${escapeHtml(route.instructions)}</p><p><a href="${escapeHtml(route.sourceUrl)}" rel="noopener noreferrer">Official ${escapeHtml(route.label.toLowerCase())} details</a> · Source reviewed ${escapeHtml(route.reviewedAt)}</p></li>`).join("")}</ul>`;
+  return `<ul>${resource.serviceAccess.map(route => `<li><strong>${escapeHtml(route.label)}</strong>${route.address ? ` — ${escapeHtml(route.address)}` : ""} <p>${escapeHtml(route.instructions)}</p> <p><a href="${escapeHtml(route.sourceUrl)}" rel="noopener noreferrer">Official ${escapeHtml(route.label.toLowerCase())} details</a> · Source reviewed ${escapeHtml(route.reviewedAt)}</p></li>`).join(" ")}</ul>`;
 }
 
 function resourceRecord(resource) {

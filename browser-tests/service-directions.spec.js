@@ -38,6 +38,9 @@ test('Bowery access routes survive detail, copy, print, and Saved on mobile', as
   expect(copied).toContain('227 Bowery');
   expect(copied).toContain('90 Lafayette');
   expect(copied).toContain('Shelter intake');
+  expect(copied).toContain('NY 10002 Meals at');
+  expect(copied).toContain('NY 10013 Overnight shelter');
+  expect(copied).toContain('2026-11-06 Shelter intake');
   await page.locator('[data-service-print]').click();
   expect(await page.evaluate(() => window.__printedListing)).toBe(true);
   await page.emulateMedia({ media: 'print' });
