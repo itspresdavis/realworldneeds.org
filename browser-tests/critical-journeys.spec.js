@@ -243,8 +243,22 @@ test('short viewport navigation keeps every keyboard link fully reachable', asyn
     expect(bounds.bottom).toBeLessThanOrEqual(bounds.height+1);
     expect(bounds.overflowY).toBe('auto');
     const focused=[];
+    let panelStop;
     for(let index=0;index<5;index++) {
       await page.keyboard.press('Tab');
+      if(index===0) {
+        panelStop=await menu.locator('nav').evaluate(nav=>({
+          focused:document.activeElement===nav,
+          scrollable:nav.scrollHeight>nav.clientHeight,
+          tabIndexAttribute:nav.getAttribute('tabindex')
+        }));
+        // Firefox includes the scrollable panel as a native keyboard stop.
+        // Permit only that actual panel, once, before the first ordered link.
+        if(panelStop.focused) {
+          expect(panelStop.scrollable,'native panel stop belongs to the scrollable menu').toBe(true);
+          await page.keyboard.press('Tab');
+        }
+      }
       await expect(links.nth(index)).toBeFocused();
       await frame();
       const box=await links.nth(index).evaluate(link=>{
@@ -267,7 +281,7 @@ test('short viewport navigation keeps every keyboard link fully reachable', asyn
     await page.keyboard.press('Escape');
     await expect(menu).not.toHaveAttribute('open','');
     await expect(summary).toBeFocused();
-    evidence.push({height,bounds,focused});
+    evidence.push({height,bounds,panelStop,focused});
   }
   await info.attach('short-menu-keyboard-bounds',{body:JSON.stringify(evidence),contentType:'application/json'});
 });
