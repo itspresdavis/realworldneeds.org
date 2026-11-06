@@ -152,7 +152,7 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
             const nextActions = [...document.querySelectorAll('.service-next-steps a')].map((link) => {
               const text = [link, ...link.querySelectorAll('strong, span')];
               const box = link.getBoundingClientRect();
-              return {top:box.top,bottom:box.bottom,contact:link.parentElement.matches('.service-contact-buttons'),map:!!link.closest('.service-location-actions'),contrast:Math.min(...text.map(contrastFor))};
+              return {label:link.firstChild?.textContent?.trim(),href:link.href,top:box.top,bottom:box.bottom,contact:link.parentElement.matches('.service-contact-buttons'),map:!!link.closest('.service-location-actions'),contrast:Math.min(...text.map(contrastFor))};
             });
             return {before,toggled,restored,nextActions,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
           })()`);
@@ -163,7 +163,17 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
           const maps = service.nextActions.filter(action => action.map);
           const contactsAligned = width < 901 || contacts.every(action => close(action.top, contacts[0].top));
           const mapsBelow = maps.every(map => contacts.every(contact => map.top >= contact.bottom));
-          if (contacts.length !== 2 || maps.length !== 2 || service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || !contactsAligned || !mapsBelow) {
+          // Bowery's reviewed routes use different entrances and intake steps.
+          // Preserve geometry/contrast checks while proving the actual next steps.
+          const expectedLabels = ['Directions to meal service', 'Shelter intake details', 'Showers and clothing details', 'Mobile medical care details', 'Interactive map'];
+          const accessByLabel = new Map(maps.map(action => [action.label, action]));
+          const mealHref = accessByLabel.get('Directions to meal service')?.href;
+          const mealUrl = mealHref ? new URL(mealHref) : null;
+          const correctMeal = mealUrl?.origin === 'https://www.google.com' && mealUrl.pathname === '/maps/dir/' && mealUrl.searchParams.get('destination') === '227 Bowery, New York, NY 10002';
+          const correctIntake = expectedLabels.slice(1, 4).every(label => accessByLabel.get(label)?.href === 'https://www.bowery.org/get-help/');
+          const correctGlobe = accessByLabel.get('Interactive map')?.href === host + '/#resource=bowery-mission';
+          const correctRoutes = maps.length === expectedLabels.length && accessByLabel.size === expectedLabels.length && expectedLabels.every(label => accessByLabel.has(label)) && correctMeal && correctIntake && correctGlobe;
+          if (contacts.length !== 2 || !correctRoutes || service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || !contactsAligned || !mapsBelow) {
             throw new Error(`Service next-step labels or row alignment failed at ${width}px: ${JSON.stringify(service.nextActions)}`);
           }
         }
