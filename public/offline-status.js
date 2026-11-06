@@ -178,12 +178,20 @@ if (notice) {
         headers: { "X-RWN-Connectivity-Probe": "1" },
         signal: controller.signal
       }).then(async (response) => {
-        if (navigationRecovery && response.ok) {
-          // Keep the deadline alive through the body. This fetch is not a
-          // navigation, so it cannot be satisfied by the worker's saved shell.
-          const html = await response.text();
-          if (response.redirected || !/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(html)
-            || !/<section\b[^>]*\bdata-directory-search(?:[\s=>])/.test(html)) throw new Error("Directory is unavailable");
+        if (!response.ok) {
+          await response.body?.cancel();
+          return response;
+        }
+        // Keep the deadline through the complete body, not just HTTP headers.
+        // A stalled or redirected response is not proof of restored service.
+        const body = await response.text();
+        if (response.redirected) throw new Error("Connection check redirected");
+        if (navigationRecovery) {
+          // This fetch is not a navigation and cannot use the worker's shell.
+          if (!/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(body)
+            || !/<section\b[^>]*\bdata-directory-search(?:[\s=>])/.test(body)) throw new Error("Directory is unavailable");
+        } else if (!/^[a-f0-9]{12}$/.test(JSON.parse(body)?.release)) {
+          throw new Error("Release metadata is unavailable");
         }
         return response;
       }),

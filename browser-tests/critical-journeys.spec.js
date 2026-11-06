@@ -11,11 +11,23 @@ const noGraphics = async page => page.addInitScript(() => {
 const homeReady = page => expect(page.locator('html')).toHaveAttribute('data-finder-startup', 'ready');
 const rows = page => page.locator('.directory-global-result');
 async function noOverflow(page) {
-  expect(await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }))).toEqual(
-    expect.objectContaining({ width: expect.any(Number) }));
-  const size = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
-  expect(size[0], `${new URL(page.url()).pathname} at ${size[1]}px must reflow without horizontal scrolling`).toBeLessThanOrEqual(size[1] + 1);
+  const measure = () => page.evaluate(() => ({
+    viewport: innerWidth, scroll: document.documentElement.scrollWidth,
+    client: document.documentElement.clientWidth,
+    headerPadding: document.querySelector(".site-header") ? getComputedStyle(document.querySelector(".site-header")).padding : null,
+  }));
+  const immediate = await measure();
+  // WebKit can acknowledge a viewport resize before viewport-relative CSS has
+  // reached its next rendering update. Measure the resulting layout, retaining
+  // any transient overflow as evidence instead of adding retries or a delay.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const size = await measure();
+  if (immediate.scroll > immediate.client + 1 || size.scroll > size.client + 1) {
+    await test.info().attach("reflow-measurements", {body: JSON.stringify({path: new URL(page.url()).pathname, immediate, settled: size}), contentType: "application/json"});
+  }
+  expect(size.scroll, `${new URL(page.url()).pathname} at ${size.client}px must reflow without horizontal scrolling`).toBeLessThanOrEqual(size.client + 1);
 }
+
 test.beforeEach(async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

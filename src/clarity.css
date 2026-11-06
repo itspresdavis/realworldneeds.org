@@ -448,7 +448,7 @@ height:auto;min-height:0;max-height:none;align-self:start;border-radius:10px;bac
 .rwn-professional .globe-stage.is-globe-unavailable :is(.globe-meta, .atlas-key, .globe-empty, .globe-cluster-tray, .globe-gesture-hint, #globeHelp) {
 display:none !important;}
 .rwn-professional .globe-stage.is-globe-unavailable .globe-fallback {
-position:static;inset:auto;gap:.85rem;padding:1.35rem;border:0;border-radius:0;background:transparent;color:#405a50;font-size:.94rem;line-height:1.6;}
+position:static;inset:auto;gap:.85rem;padding:1.35rem;border:0;border-radius:0;background:#f8fcf5;color:#405a50;font-size:.94rem;line-height:1.6;}
 .rwn-professional .globe-stage.is-globe-unavailable #globeFallbackMessage {
 color:#153c30;font-weight:700;}
 .rwn-professional .globe-stage.is-globe-unavailable .globe-fallback__action {

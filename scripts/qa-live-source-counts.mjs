@@ -154,6 +154,8 @@ export function liveSourceCountSnapshot() {
   const box = element => { const rect = element?.getBoundingClientRect(); return rect ? { width: rect.width, height: rect.height } : null; };
   return {
     href: location.href, title: document.title,
+    globeStartup: document.documentElement.dataset.globeStartup || null,
+    globeFallbackVisible: Boolean(document.getElementById("globeFallback")?.checkVisibility()),
     status: status?.textContent, reach: reach?.textContent,
     role: status?.getAttribute("role"), live: status?.getAttribute("aria-live"), atomic: status?.getAttribute("aria-atomic"),
     statusBox: box(status), reachBox: box(reach),
@@ -176,6 +178,12 @@ export function liveSourceCountSnapshot() {
     },
     probe: window.__rwnLiveCountQA && { requests: window.__rwnLiveCountQA.requests, clicks: window.__rwnLiveCountQA.clicks, locationCalls: window.__rwnLiveCountQA.locationCalls, geometryLoads: window.__rwnLiveCountQA.geometryLoads, detailReleased: window.__rwnLiveCountQA.detailReleased, countryState: window.__rwnLiveCountQA.countryState },
   };
+}
+
+export function assertLiveSourceGlobeReady(snapshot) {
+  check(snapshot.globeStartup === "ready" && snapshot.globeFallbackVisible === false,
+    "USDA complete-geometry fixture requires initialized WebGL; check the isolated Chrome software-renderer configuration",
+    { globeStartup: snapshot.globeStartup, globeFallbackVisible: snapshot.globeFallbackVisible });
 }
 
 // Runs in the existing GitHub browser suite. No browser is launched here.
@@ -214,6 +222,8 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
       await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
       await navigate(client, `${host}/`);
       await wait("document.querySelector('.finder-location-notes') && !document.getElementById('locateMe')?.disabled", "finder ready");
+      await wait("[\"ready\", \"unavailable\"].includes(document.documentElement.dataset.globeStartup)", "globe capability established");
+      assertLiveSourceGlobeReady(await snapshot());
       await wait("window.__rwnLiveCountQA.countryState?.coarseFeatures > 1", "complete coarse geometry applied");
       const initial = await snapshot();
       check(initial.href === `${host}/` && initial.title && initial.reach === undefined && !initial.disclosureOpen && !initial.statusVisible, "Enhanced finder must retain its collapsed disclosure and removed base reach strip", initial);

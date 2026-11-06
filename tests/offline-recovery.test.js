@@ -12,7 +12,7 @@ const deferred = () => {
   const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
   return { promise, resolve, reject };
 };
-const ok = { ok: true, status: 200 };
+const ok = { ok: true, status: 200, async text() { return '{"release":"0123456789ab"}'; } };
 
 function fixture(responses, { saved = false, noticePresent = true, online = true, cachedNavigation = false } = {}) {
   const listeners = new Map(), windowListeners = new Map(), timers = new Map(), calls = [], focusCalls = [];
@@ -420,4 +420,52 @@ test("a fresh catalog completed before its online probe is not interrupted by du
   await probe;
   assert.deepEqual(f.recovered, []);
   assert.equal(f.notice.dataset.networkState, "online");
+});
+
+
+test("release probe keeps its deadline through a stalled body, aborts, and ignores late completion", async () => {
+  const held = deferred();
+  const f = fixture([new Error("offline"), { ...ok, text: () => held.promise }, ok]);
+  await flush();
+  f.retry.click(); await flush();
+  assert.equal(f.notice.dataset.networkState, "offline", "headers alone cannot restore connectivity");
+  assert.equal(f.retry.getAttribute("aria-disabled"), "true");
+  assert.equal(f.timers.size, 1, "body read retains the same bounded deadline");
+  f.advance(8000); await flush();
+  assert.equal(f.calls[1].options.signal.aborted, true);
+  assert.equal(f.notice.dataset.networkState, "offline");
+  assert.deepEqual(f.recovered, []);
+  f.retry.click(); await flush();
+  assert.equal(f.notice.dataset.networkState, "online");
+  assert.deepEqual(f.recovered, ["rwn-connection-restored"]);
+  held.resolve(await ok.text()); await flush();
+  assert.equal(f.notice.dataset.networkState, "online");
+  assert.deepEqual(f.recovered, ["rwn-connection-restored"], "old body cannot cause duplicate recovery");
+  assert.equal(f.timers.size, 0);
+});
+
+test("release probe completes its body and cancels unsuccessful response bodies", async () => {
+  let reads = 0, cancellations = 0;
+  const f = fixture([
+    { ok: false, status: 503, body: { async cancel() { cancellations++; } } },
+    { ...ok, async text() { reads++; return ok.text(); } }
+  ]);
+  await flush();
+  assert.equal(cancellations, 1);
+  f.retry.click(); await flush();
+  assert.equal(reads, 1);
+  assert.equal(f.notice.dataset.networkState, "online");
+  assert.equal(f.timers.size, 0);
+});
+
+for (const [label, response] of [
+  ["HTML portal", { ...ok, async text() { return "<html>Sign in to Wi-Fi</html>"; } }],
+  ["invalid metadata", { ...ok, async text() { return '{"release":"unknown"}'; } }],
+  ["redirected response", { ...ok, redirected: true }],
+  ["interrupted body", { ...ok, async text() { throw new Error("Interrupted body"); } }]
+]) test(`release probe cannot mistake ${label} for healthy service`, async () => {
+  const f = fixture([response]); await flush();
+  assert.equal(f.notice.dataset.networkState, "offline");
+  assert.deepEqual(f.recovered, []);
+  assert.equal(f.timers.size, 0);
 });

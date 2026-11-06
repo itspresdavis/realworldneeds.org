@@ -89,6 +89,7 @@ async function navigate(client, url) {
 }
 
 async function capture(client, name) {
+  console.log("Capturing browser QA:", name);
   await mkdir(QA_DIR, { recursive: true });
   const { data } = await client.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   await writeFile(join(QA_DIR, name), Buffer.from(data, "base64"));
@@ -123,6 +124,11 @@ async function run() {
       "--headless=new",
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      // This suite exercises complete globe geometry on GPU-less CI runners.
+      // Match the explicit software renderer used by the real globe touch gate.
+      "--ignore-gpu-blocklist",
+      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
       "--disable-background-networking",
       "--disable-default-apps",
       "--disable-extensions",
