@@ -301,6 +301,18 @@ class Decisions(unittest.TestCase):
 
 
 class LocalBoundaries(unittest.TestCase):
+    def setUp(self):
+        platform = patch.object(backend.sys, "platform", "linux")
+        platform.start()
+        self.addCleanup(platform.stop)
+
+    def test_darwin_cannot_silently_replace_configured_ubuntu_fallback(self):
+        with patch.object(backend.sys, "platform", "darwin"), \
+             patch.object(backend.subprocess, "run") as command:
+            with self.assertRaisesRegex(backend.BackendError, "Ubuntu fallback requires Linux"):
+                backend.run_ubuntu(ROOT, SHA, None)
+            command.assert_not_called()
+
     def test_origin_and_branch_reachability_are_required(self):
         good = [str(ROOT), "git@github.com:iamhuvr/RWN-WEB.git", SHA, "refs/heads/main", TREE]
         with patch.object(backend.subprocess, "run", side_effect=[

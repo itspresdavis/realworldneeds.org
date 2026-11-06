@@ -1,3 +1,4 @@
+import { CdpClient } from "./qa-cdp-client.mjs";
 import { verifyLiveSourceCounts } from "./qa-live-source-counts.mjs";
 import { verifyServiceContact } from "./qa-service-contact.mjs";
 import { verifyDirectoryDiscovery } from "./qa-directory-discovery.mjs";
@@ -70,41 +71,6 @@ async function waitFor(url, attempts = 80) {
   throw lastError || new Error(`Timed out waiting for ${url}`);
 }
 
-class CdpClient {
-  constructor(url) {
-    this.url = url;
-    this.nextId = 1;
-    this.pending = new Map();
-  }
-
-  async connect() {
-    this.ws = new WebSocket(this.url);
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Timed out connecting to Chrome DevTools.")), 5000);
-      this.ws.addEventListener("open", () => { clearTimeout(timeout); resolve(); }, { once: true });
-      this.ws.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("Chrome DevTools WebSocket failed.")); }, { once: true });
-    });
-    this.ws.addEventListener("message", (event) => {
-      const message = JSON.parse(String(event.data));
-      if (!message.id) return;
-      const pending = this.pending.get(message.id);
-      if (!pending) return;
-      this.pending.delete(message.id);
-      if (message.error) pending.reject(new Error(`${pending.method}: ${message.error.message}`));
-      else pending.resolve(message.result || {});
-    });
-  }
-
-  call(method, params = {}) {
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
-      this.ws.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  close() { this.ws?.close(); }
-}
 
 async function evaluate(client, expression) {
   const result = await client.call("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture: true });

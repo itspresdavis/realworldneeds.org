@@ -226,6 +226,10 @@ def select_backend(provider, sha, root, evidence_path, now):
 
 
 def run_ubuntu(root, sha, output_root):
+    # Automatic fallback remains the configured Ubuntu host. A Mac validation is
+    # an explicit validator run and verified receipt, never an implicit reroute.
+    if sys.platform != "linux":
+        raise BackendError("Ubuntu fallback requires Linux; run explicit macOS validation separately.")
     args = [sys.executable, str(root / "scripts/ubuntu-quality.py"), "--ref", sha]
     if output_root:
         args += ["--output-root", str(Path(output_root).expanduser())]

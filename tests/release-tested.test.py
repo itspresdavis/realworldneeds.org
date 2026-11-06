@@ -25,14 +25,18 @@ VALIDATOR_HASH = "d" * 64
 NOW = dt.datetime(2026, 10, 29, 16, 0, tzinfo=dt.timezone.utc)
 
 
-def receipt():
+def receipt(system="linux"):
     return {
         "schema_version": 1, "repository": "iamhuvr/RWN-WEB",
+        "platform": {"system": system, "machine": "arm64" if system == "darwin" else "x86_64"},
+        "provider": "macos" if system == "darwin" else "ubuntu",
         "sha": SHA, "source_tree": TREE, "git_archive_sha256": ARCHIVE_HASH,
         "validator_source_sha256": VALIDATOR_HASH, "status": "passed",
         "finished_at": (NOW - dt.timedelta(minutes=3)).isoformat(),
-        "stages": {name: {"status": "passed", "exit_code": 0}
-                   for name in ("install", "check", "touch", "browser")},
+        "stages": {name: {"status": "passed", "exit_code": 0,
+                          "resources": {"platform": system, "affinity_supported": system == "linux",
+                                        "cpus": None if system == "darwin" else [0, 2]}}
+                   for name in ("install", "check", "touch", "browser", "cross-browser")},
     }
 
 
@@ -62,8 +66,42 @@ class ReceiptTests(unittest.TestCase):
     def test_accepts_complete_matching_recent_receipt(self):
         self.assertTrue(self.verify(receipt()))
 
+    def test_macos_receipt_keeps_platform_and_all_source_requirements(self):
+        value = receipt("darwin")
+        self.assertTrue(self.verify(value))
+        self.assertEqual(release.receipt_provider(value), "macos")
+        for field in ("sha", "source_tree", "git_archive_sha256", "validator_source_sha256"):
+            wrong = receipt("darwin")
+            wrong[field] = "mismatch"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.verify(wrong)
+
+    def test_missing_unknown_or_mislabeled_platform_is_rejected(self):
+        for execution, provider in (
+            (None, "ubuntu"), ({"system": "win32", "machine": "x86"}, "ubuntu"),
+            ({"system": "darwin", "machine": "arm64"}, "ubuntu"),
+            ({"system": "linux", "machine": "x86_64"}, "macos"),
+            ({"system": "linux"}, "ubuntu"),
+        ):
+            value = receipt()
+            value.update(platform=execution, provider=provider)
+            with self.subTest(execution=execution), self.assertRaises(ValueError):
+                self.verify(value)
+
+    def test_mixed_platform_or_fabricated_affinity_cannot_pass(self):
+        for system, resources in (
+            ("darwin", {"platform": "linux", "affinity_supported": True, "cpus": [0, 2]}),
+            ("darwin", {"platform": "darwin", "affinity_supported": False, "cpus": [0, 2]}),
+            ("linux", {"platform": "linux", "affinity_supported": False, "cpus": None}),
+            ("linux", {"platform": "linux", "affinity_supported": True, "cpus": []}),
+        ):
+            value = receipt(system)
+            value["stages"]["browser"]["resources"] = resources
+            with self.subTest(system=system, resources=resources), self.assertRaises(ValueError):
+                self.verify(value)
+
     def test_refuses_missing_each_required_stage(self):
-        for stage in ("install", "check", "touch", "browser"):
+        for stage in ("install", "check", "touch", "browser", "cross-browser"):
             with self.subTest(stage=stage):
                 value = receipt()
                 del value["stages"][stage]
@@ -85,7 +123,7 @@ class ReceiptTests(unittest.TestCase):
                     {"status": "skipped", "exit_code": 0},
                     {"status": "passed", "exit_code": 1},
                     {"status": "passed"}, {"exit_code": 0}]
-        for name in ("install", "check", "touch", "browser"):
+        for name in ("install", "check", "touch", "browser", "cross-browser"):
             for failed in failures:
                 with self.subTest(stage=name, result=failed):
                     value = receipt()
@@ -280,6 +318,15 @@ class DeploymentBoundaryTests(unittest.TestCase):
         self.assertNotIn("--prod", argv)
         self.assertNotIn("promote", argv)
         self.assertEqual((Path(argv[2]) / "package.json").read_text(), "{}")
+
+    def test_macos_explicit_receipt_is_verified_and_labeled_honestly(self):
+        darwin = receipt("darwin")
+        darwin.update({key: self.receipt[key] for key in (
+            "finished_at", "git_archive_sha256", "validator_source_sha256")})
+        self.receipt = darwin
+        self.assertEqual(self.execute("--dry-run"), 0)
+        self.assertIn("rwnQualityProvider=macos", self.commands[0])
+        self.assertNotIn("rwnQualityProvider=ubuntu", self.commands[0])
 
     def test_production_stage_always_skips_domain_assignment(self):
         self.assertEqual(self.execute("--target", "production-stage"), 0)
