@@ -13,9 +13,10 @@ test('mobile menu is bounded by the full header instead of the summary control',
   assert.match(nav, /min-width:\s*0/);
 });
 
-test('short mobile menus scroll within the dynamic viewport without hiding links', () => {
-  assert.match(nav, /max-height:\s*calc\(100vh - 6rem\)/);
-  assert.match(nav, /max-height:\s*calc\(100dvh - 6rem\)/);
+test('short menus reserve their actual wrapped header height before scrolling links', () => {
+  assert.match(nav, /max-height:\s*calc\(100vh - 100% - \.9rem\)/);
+  assert.match(nav, /max-height:\s*calc\(100dvh - 100% - \.9rem\)/);
+  assert.match(nav, /top:\s*calc\(100% \+ \.45rem\)/);
   assert.match(nav, /overflow:\s*auto/);
   assert.doesNotMatch(nav, /overflow[^:]*:\s*(hidden|clip)/);
   assert.match(nav, /scroll-padding-block/);
