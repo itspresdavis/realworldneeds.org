@@ -10,7 +10,7 @@ const legacy = await read("tests/fixtures/legacy-query-worker.txt");
 
 test("new HTML cannot request the canonical paths intercepted by the legacy worker", async () => {
   const page = await read("dist/directory/index.html");
-  const urls = [...page.matchAll(/(?:src|href)="(\/(?:directory(?:-enhancements|-startup)?|professional-pages|page-menu|legal|saved-loader|saved-services|offline-status)[^" ]*\.(?:js|css)(?:\?[^" ]*)?)"/g)].map(match => match[1]);
+  const urls = [...page.matchAll(/(?:src|href)="(\/(?:directory(?:-enhancements|-startup)?|professional-pages|navigation-actions|page-menu|legal|saved-loader|saved-services|offline-status)[^" ]*\.(?:js|css)(?:\?[^" ]*)?)"/g)].map(match => match[1]);
   assert.ok(urls.length >= 7);
   const handlers = new Map();
   vm.runInNewContext(legacy, { URL, Request, self: { location: { origin: "https://rwn.test" }, addEventListener: (name, fn) => handlers.set(name, fn) } });
@@ -23,7 +23,7 @@ test("new HTML cannot request the canonical paths intercepted by the legacy work
 });
 
 test("offline manifest and lazy saved entry reference actual byte-addressed artifacts", async () => {
-  assert.equal(Object.keys(release.offlineAssets || {}).length, 10);
+  assert.equal(Object.keys(release.offlineAssets || {}).length, 12);
   const worker = await read("dist/sw.js");
   assert.match(release.offlineAssetRelease, /^[a-f0-9]{12}$/);
   assert.ok(worker.includes(`const RUNTIME_ID = "${release.offlineAssetRelease}"`));
@@ -34,6 +34,10 @@ test("offline manifest and lazy saved entry reference actual byte-addressed arti
     assert.equal(path, canonical.replace(/\.(css|js)$/, `.${hash}.$1`));
     assert.ok(worker.includes(JSON.stringify(path)), path);
   }
+  const directory = await read(`dist${release.offlineAssets["/directory.js"]}`);
+  assert.ok(directory.includes(`.${release.offlineAssets["/directory-geography.js"]}?v=`));
+  assert.ok(Buffer.byteLength(directory) <= 16_000, "actual served directory entry includes its hashed lazy-import path within the budget");
+  assert.ok(Buffer.byteLength(await read(`dist${release.offlineAssets["/directory-geography.js"]}`)) <= 1_500, "optional geographic guidance has a separate explicit transfer budget");
   const loader = await read(`dist${release.offlineAssets["/saved-loader.js"]}`);
   assert.ok(loader.includes(`.${release.offlineAssets["/saved-services.js"]}?v=`));
   assert.ok(loader.includes("&attempt=${attempt++}"));
@@ -49,4 +53,16 @@ test("startup capture is tiny, hash-versioned and runs before editable directory
   assert.ok(page.indexOf(script) < page.indexOf("data-directory-query"));
   assert.ok(page.indexOf(script) < page.indexOf(`<script type="module" src="${release.offlineAssets["/directory.js"]}`));
   assert.ok(Buffer.byteLength(await read(`dist${asset}`)) <= 1_000, "early capture stays below 1 KB");
+});
+
+test("every local stylesheet on the offline directory belongs to its atomic release manifest", async () => {
+  const page = await read("dist/directory/index.html");
+  const styles = [...page.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(match => match[1]);
+  assert.ok(styles.length >= 5, "the rendered directory has its expected stylesheet links");
+  for (const href of styles) {
+    const url = new URL(href, "https://rwn.test");
+    if (url.origin !== "https://rwn.test") continue;
+    assert.ok(Object.values(release.offlineAssets).includes(url.pathname), "Offline stylesheet absent from manifest: " + url.pathname);
+  }
+  assert.ok(styles.some(href => href.startsWith(release.offlineAssets["/navigation-actions.css"] + "?")));
 });

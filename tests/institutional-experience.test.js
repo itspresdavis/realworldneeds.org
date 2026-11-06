@@ -14,13 +14,13 @@ test("finder starts calm without persistent tutorial or forced-scroll clutter", 
   const css = await text("src/clarity.css");
 
   assert.match(refinement, /input\.placeholder = "Search by service or place"/);
-  assert.match(refinement, /Search by need, service, place, ZIP or postcode, or organization/);
+  assert.match(app, /<label class="finder-search-label" for="resourceSearch">What do you need\?/);
   assert.match(refinement, /Need, service, city, ZIP or postcode, or organization name/);
   assert.doesNotMatch(refinement, /scrollIntoView/);
   assert.doesNotMatch(refinement, /globe-guide|Tap a glow for details|has-used-globe|No account|No paywall/);
   assert.doesNotMatch(bootstrap, /click\(\).*toggleMotion|pause globe rotation/i);
-  assert.match(app, /autoRotate: false/);
-  assert.match(app, /inspectorOpen: Boolean\(initialResource \|\| initialFinderHistory\?\.selectedId\)/);
+  assert.match(app, /autoRotate:\s*false/);
+  assert.match(app, /inspectorOpen:\s*Boolean\(initialResource \|\| initialFinderHistory\?\.selectedId\)/);
   assert.match(presentation, /touch-action:pan-y/);
   assert.match(css, /\.mobile-taskbar,\s*\.globe-guide,[\s\S]*display:\s*none !important;/);
 });
@@ -47,7 +47,7 @@ test("institutional presentation is restrained and motion-safe", async () => {
   const css = await text("src/clarity.css");
 
   assert.doesNotMatch(bootstrap, /experience\.js/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.doesNotMatch(css, /\.rwn-reveal/);
   assert.match(css, /scroll-behavior:\s*auto !important/);
 });

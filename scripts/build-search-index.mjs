@@ -88,7 +88,7 @@ const records = resources.map((resource, index) => {
 
 await mkdir("dist/data", { recursive: true });
 await writeFile("dist/data/search-index.json", `${JSON.stringify({
-  schemaVersion: "1.5",
+  schemaVersion: "1.6",
   resourceCount: records.length,
   privacy: "Static search index. Search terms remain in the visitor's browser and are not included in requests.",
   records,

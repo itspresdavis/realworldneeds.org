@@ -1,3 +1,4 @@
+import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -39,10 +40,10 @@ test("contact-only validation rejects coordinate fabrication, missing scope and 
   ]) assert.ok(validateResourceLocation({ ...route, ...changes }), JSON.stringify(changes));
 });
 
-test("legacy coordinates remain mandatory and every current record keeps its map semantics", () => {
+test("mapped records require valid coordinates and contact-only records never invent map positions", () => {
   for (const record of resources) {
     assert.equal(validateResourceLocation(record), null, record.id);
-    assert.equal(hasMapCoordinates(record), true, record.id);
+    assert.equal(hasMapCoordinates(record), !isContactOnly(record), record.id);
   }
   for (const changes of [{ lat: null }, { lng: undefined }, { lat: "0" }, { lat: Infinity }, { lng: -181 }])
     assert.ok(validateResourceLocation({ ...resources[0], ...changes }));
@@ -136,7 +137,7 @@ test("legacy offline result enhancement retains contact websites, eligibility an
   link.before = element => { wrapper = element; };
   const context = vm.createContext({
     document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [indexed] }),
-    resultId: () => indexed.id, setOffline() {}, offline: true,
+    resultId: () => indexed.id, setOffline() {}, networkOffline: true,
   });
   vm.runInContext(`${body}\nglobalThis.enhance = enhanceSearchActions;`, context);
   await context.enhance();
@@ -163,7 +164,7 @@ test("contact inspector shows scope and contact route without stale coordinate n
   const resource = { ...route, coordinateNote: "Legacy office coordinates are not a destination." };
   const panel = { contains: () => false, style: { setProperty() {} } };
   const context = vm.createContext({
-    isContactOnly, contactOnlyNotice, phoneMarkup,
+    isContactOnly, contactOnlyNotice, phoneMarkup, escapeHtml, safeExternalUrl,
     document: { getElementById: id => id === "resourcePanel" ? panel : null, querySelector: () => null },
     selectedResource: () => resource, state: { inspectorOpen: true, savedIds: new Set(), filtered: [resource] },
     categories: { referral: {} }, isExactServiceSite, freeAccessModels: {}, freeAccessLabel: () => "Free navigation",
@@ -171,7 +172,7 @@ test("contact inspector shows scope and contact route without stale coordinate n
     window: { innerWidth: 500 }, availabilityInstructions: () => "Check contact details", kindLabel: () => "Contact route", checkedDate: date => date,
   });
   vm.runInContext(`${functionSource(app, "renderResourcePanel", "resourceCard")}\nrenderResourcePanel();`, context);
-  for (const field of ["accessUrl", "coverageNote", "eligibility", "phoneAccess"]) assert.ok(panel.innerHTML.includes(resource[field]));
+  for (const field of ["accessUrl", "coverageNote", "eligibility", "phoneAccess"]) assert.ok(panel.innerHTML.includes(escapeHtml(resource[field])));
   assert.doesNotMatch(panel.innerHTML, /Legacy office|Directions|maps\.apple|google\.com\/maps|before you go|this marker shows|<dt>Distance<\/dt>/);
 });
 

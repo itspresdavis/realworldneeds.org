@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
-import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";
+import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord, createIndexedSearchMatcher } from "../src/utils/search.js";
 import { readDirectoryState, writeDirectoryState, restoreDirectoryView } from "../public/directory-state.js";
 
 const catalogLoader = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replaceAll("export ", "");
@@ -94,7 +94,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     blur() { if (document.activeElement === this) document.activeElement = document.body; this.dispatch("blur"); }
     insertAdjacentElement(_where, node) { this.parentElement.append(node); }
   }
-  document = new Node("document"); document.title = "Services directory | Real World Needs"; document.body = new Node("body"); document.append(document.body); document.activeElement = document.body;
+  document = new Node("document"); document.documentElement = new Node("html"); document.title = "Services directory | Real World Needs"; document.body = new Node("body"); document.append(document.body); document.activeElement = document.body;
   const shell = new Node("main", [".directory-shell"]), root = new Node("form", ["[data-directory-search]"]);
   const input = new Node("input", ["[data-directory-query]"]), country = new Node("select", ["[data-directory-country]"]);
   const need = new Node("select", ["[data-directory-need]"]);
@@ -110,7 +110,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   let results;
   document.createElement = tag => {
     const node = new Node(tag);
-    if (tag === "section") { results = node; node.append(resultList, summary, more); }
+    if (tag === "section") { results = node; node.append(resultList, summary, more, new Node("p", ["[data-geography-hint]"])); }
     if (tag === "button") {
       const original = node.matches.bind(node);
       node.matches = selector => selector === "[data-directory-category]" ? "directoryCategory" in node.dataset : original(selector);
@@ -128,7 +128,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   const navigator = { onLine: online, serviceWorker: new Node("serviceworker") };
   const storage = new Proxy({}, { get() { assert.fail("Directory search must never read or write web storage"); } });
   const context = vm.createContext({ document, window, history, location, navigator, URL, Intl, AbortController,
-    normalize, queryTokens, scoreRecord, readDirectoryState, writeDirectoryState,
+    normalize, queryTokens, scoreRecord, createIndexedSearchMatcher, readDirectoryState, writeDirectoryState,
     HTMLInputElement: Node, HTMLTextAreaElement: Node,
     Event: class { constructor(type, options) { this.type = type; Object.assign(this, options); } }, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     localStorage: storage, sessionStorage: storage,
@@ -362,7 +362,7 @@ for (const outcome of ["resolve", "reject"]) {
 
 test("an offline startup failure retries the same search when connectivity returns", async () => {
   const f = fixture({ online: false }); f.type(london); f.start(); await f.flush(); await f.reject();
-  assert.match(f.count.textContent, /temporarily unavailable/); assert.equal(f.input.value, london);
+  assert.match(f.count.textContent, /Search unavailable.*retry/); assert.equal(f.input.value, london);
   f.navigator.onLine = true; f.window.dispatch("online"); await f.flush();
   assert.equal(f.requests.length, 2); await f.resolve(); assertLondon(f);
 });

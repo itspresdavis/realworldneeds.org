@@ -1,3 +1,4 @@
+import { searchGeographyChoices } from "../src/utils/search.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -45,7 +46,7 @@ function finderFixture({ denied = "", initial } = {}) {
   const context = vm.createContext({ window: f.window, document, state, resources: records, URL, URLSearchParams,
     renderResourcePanel() { panelRenders++; }, renderClusterTray() {}, wakeGlobe() {}, syncGlobePointLayer() {},
     availableResources: () => records, matchesResource: record => !state.query || record.name === state.query,
-    resourceSearchScore: () => 1, initialResultCount: () => 8, pinSignature: "",
+    searchGeographyChoices, resourceSearchScore: () => 1, initialResultCount: () => 8, pinSignature: "",
     CustomEvent: class { constructor(type) { this.type = type; } },
     resourceCard(record) { resultsRenders++; return `<article>${record.id}</article>`; },
     refreshSearchPreparation() {}, nearbyExactCount: () => 0, notify: message => messages.push(message),

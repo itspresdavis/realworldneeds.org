@@ -17,7 +17,7 @@ function createAction(label, href, ariaLabel, { primary = false, newTab = false 
   anchor.className = `result-direct-action${primary ? " is-primary" : ""}`;
   anchor.href = href;
   anchor.textContent = label;
-  anchor.setAttribute("aria-label", ariaLabel);
+  anchor.setAttribute("aria-label", ariaLabel.toLowerCase().includes(label.toLowerCase()) ? ariaLabel : `${label}: ${ariaLabel}`);
   if (newTab) {
     anchor.target = "_blank";
     anchor.rel = "noopener noreferrer";

@@ -33,7 +33,7 @@ for (const total of [0, 1, 60, 61, 120, 302]) {
     } while (!f.more.hidden);
     assert.equal(appended.length, total);
     assert.deepEqual(appended.map((row) => row.id), Array.from({ length: total }, (_, id) => id));
-    assert.equal(f.resultSummary.textContent, `Showing ${total} of ${total} matches across 2,019 listings`);
+    assert.equal(f.resultSummary.textContent, `${total} of ${total} matches · 2,019 listings`);
   });
 }
 
@@ -68,7 +68,10 @@ test("shipped directory entry stays self-contained for existing offline workers"
   assert.ok(page.includes(`${offlineAssets["/directory.js"]}?v=${directoryRelease}`));
   const worker = await readFile("dist/sw.js", "utf8");
   assert.doesNotMatch(worker, /"\/directory-results\.js"/);
-  assert.match(source, /aria-controls="directory-global-list"/);
+  const template = page.match(/<template data-directory-results>([\s\S]*?)<\/template>/)?.[1];
+  assert.ok(template, "generated results template must be available to the entry");
+  assert.match(template, /aria-controls="directory-global-list"/);
+  assert.match(template, /id="directory-global-list"/);
   assert.match(source, /renderNext\(\)\?\.querySelector\("a"\)\?\.focus\(\)/);
 });
 

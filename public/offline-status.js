@@ -7,10 +7,13 @@ if (notice) {
   const cachedNavigation = document.querySelector('meta[name="rwn-offline-navigation"]');
   let navigationRecovery = Boolean(cachedNavigation);
   let offline = false;
+  let networkOffline = false;
+  let catalogCached = document.documentElement.dataset?.rwnCatalogCached === "true";
   let probeGeneration = 0;
   let pendingProbe;
   let catalogPromise;
   const explanation = notice.querySelector("p");
+  const initialExplanation = explanation?.textContent;
   const retry = document.createElement("button");
   retry.type = "button";
   retry.className = "directory-search-tools__clear directory-connection-retry";
@@ -111,15 +114,21 @@ if (notice) {
       }
       wrapper.append(actions);
     }
-    setOffline(offline);
+    setOffline(networkOffline);
   };
 
   const setOffline = (value) => {
-    offline = Boolean(value);
+    networkOffline = Boolean(value);
+    offline = networkOffline || catalogCached;
     document.documentElement.classList.toggle("rwn-directory-offline", offline);
     // Let someone using Retry keep their focus and read the recovery message.
     notice.hidden = !offline && !notice.contains(document.activeElement);
-    if (explanation) explanation.hidden = !offline;
+    if (explanation) {
+      explanation.hidden = !offline;
+      setText(explanation, catalogCached && !networkOffline
+        ? "Saved directory copy. RWN is reachable, but current listing details could not be refreshed. Retry before traveling or relying on a listing."
+        : initialExplanation);
+    }
     notice.dataset.networkState = offline ? "offline" : "online";
 
     for (const link of document.querySelectorAll(".directory-global-result")) {
@@ -184,7 +193,10 @@ if (notice) {
       setOffline(!response.ok);
       if (response.ok) { navigationRecovery = false; cachedNavigation?.remove(); }
       if (response.ok && recoverCatalog) window.dispatchEvent(new Event("rwn-connection-restored"));
-      setText(status, response.ok ? "Connection restored. Listing details and online links are available." : "Could not reach RWN. Check your connection and try again.");
+      setText(status, response.ok
+        ? catalogCached ? "RWN is reachable, but search is using a saved catalog. Retry to refresh listings before relying on them."
+          : "Connection restored. Listing details and online links are available."
+        : "Could not reach RWN. Check your connection and try again.");
     }).catch(() => {
       if (generation !== probeGeneration) return;
       setOffline(true);
@@ -197,6 +209,13 @@ if (notice) {
     });
     return request.promise;
   };
+
+  window.addEventListener("rwn-catalog-status", event => {
+    catalogCached = event.detail?.cached === true;
+    setOffline(networkOffline);
+    if (catalogCached) setText(status, "Search is using a saved catalog. Current listing details are unverified; retry to refresh.");
+    else if (!networkOffline) setText(status, "The directory has refreshed. Listing details and online links are available.");
+  });
 
   retry.addEventListener("click", probe);
   const hideRecoveredNotice = () => {
@@ -219,7 +238,7 @@ if (notice) {
   }, true);
 
   const observer = new MutationObserver(() => {
-    setOffline(offline);
+    setOffline(networkOffline);
     enhanceSearchActions();
   });
   const results = document.querySelector(".directory-global-results");

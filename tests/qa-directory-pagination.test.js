@@ -14,7 +14,7 @@ const target = extra => ({ tag: 'A', text: '', href: null, label: null, current:
   visible: true, box: box(), hit: true, focused: false, focusVisible: false, ring: box(17, 117, 50, 50), clips: [],
   outline: { width: 3, offset: 0, style: 'solid', color: 'rgb(53, 108, 78)' }, ...extra });
 function fixture(page = 1) {
-  const nav = () => ({ tag: 'NAV', label: 'Directory pages', classes: ['directory-downloads', 'directory-pagination'], visible: true,
+  const nav = () => ({ tag: 'NAV', label: 'Directory pages before listings', classes: ['directory-downloads', 'directory-pagination'], visible: true,
     box: box(16, 90, 288, 200), status: `Page ${page} of 4`, pickerTag: 'DETAILS', open: true,
     summary: target({ tag: 'SUMMARY', text: 'Choose a page' }), listTag: 'OL', listBox: box(16, 150, 288, 100), listClientWidth: 288, listScrollWidth: 288,
     previous: page === 1 ? [] : [target({ text: 'Previous', href: href(page - 1) })],

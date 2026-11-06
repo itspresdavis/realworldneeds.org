@@ -133,7 +133,7 @@ export function pageMenuBaselineStyle(mode, baselineRules) {
     delete globalThis[key]; return restored;
   }
   if (mode !== 'apply' || globalThis[key]) throw new Error('Invalid baseline CSS fixture lifecycle');
-  const sheets = [...document.styleSheets].filter(sheet => sheet.href && new URL(sheet.href).pathname === '/navigation-actions.css');
+  const sheets = [...document.styleSheets].filter(sheet => sheet.href && /^\/navigation-actions(?:\.[a-f0-9]{12})?\.css$/.test(new URL(sheet.href).pathname));
   if (sheets.length !== 1) throw new Error('Expected one real navigation-actions.css stylesheet');
   const candidates = [];
   const visit = (rules, media = null) => {

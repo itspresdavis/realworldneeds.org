@@ -364,3 +364,29 @@ for (const redirected of [false, true]) test(`a ${redirected ? 'redirected direc
   const f = fixture([{ ok: true, redirected, async text() { return body; } }], { cachedNavigation: true });
   await flush(); assert.equal(f.notice.dataset.networkState, 'offline'); assert.equal(f.detailClick(), true);
 });
+
+test("a healthy release probe cannot clear a cached-index warning; only fresh catalog data can", async () => {
+  const f = fixture([ok, ok]);
+  await flush();
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: true } });
+  assert.equal(f.notice.hidden, false);
+  assert.match(f.status.textContent, /saved catalog/);
+  f.retry.click(); await flush();
+  assert.equal(f.notice.dataset.networkState, "offline");
+  assert.equal(f.notice.hidden, false);
+  assert.match(f.status.textContent, /saved catalog/);
+  assert.ok(f.links.slice(1).every(link => link.hidden));
+  f.mutate();
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: false } });
+  assert.equal(f.notice.dataset.networkState, "online");
+  assert.ok(f.links.every(link => !link.hidden));
+  assert.match(f.status.textContent, /directory has refreshed/);
+});
+
+test("fresh catalog data cannot override a real network failure", async () => {
+  const f = fixture([new Error("Offline")]);
+  await flush();
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: false } });
+  assert.equal(f.notice.dataset.networkState, "offline");
+  assert.equal(f.notice.hidden, false);
+});

@@ -16,7 +16,6 @@ import { createThreeAssets, versionThreeReferences } from "./three-assets.mjs";
 // available for every listing.
 const DIRECTORY_PAGE_SIZE = 60;
 const SITE_ORIGIN = "https://www.realworldneeds.org";
-const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
@@ -44,7 +43,7 @@ const mapResources = resources.filter(hasMapCoordinates);
 const hasContactOnlyResources = resources.some(isContactOnly);
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
 const coverageCount = new Set(resources.map((resource) => resource.country)).size;
-const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked || BUILD_DATE;
+const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked;
 const auditedLiveCount = sourceRegistry.reduce((sum, source) => sum + (source.activeRecordsAtAudit || 0), 0);
 
 async function walkFiles(directory) {
@@ -124,7 +123,7 @@ function resourceRecord(resource) {
     ${sourceClosureMarkup(resource)}
     <p class="directory-record__summary">${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
-    <div class="directory-record__facts" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
+    <div class="directory-record__facts" role="group" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
     ${contactOnly ? `<p class="directory-caution">${escapeHtml(contactOnlyNotice(resource))}</p><p class="directory-caution"><strong>Coverage:</strong> ${escapeHtml(resource.coverageNote)} <strong>Eligibility:</strong> ${escapeHtml(resource.eligibility)}${resource.phone ? ` <strong>Phone dialing scope:</strong> ${escapeHtml(resource.phoneAccess)}` : ""}</p>` : ""}
     ${directoryRecordActions(resource, coordinate)}
     <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
@@ -135,7 +134,7 @@ function pageHref(basePath, page) {
   return page === 1 ? basePath : `${basePath}/page/${page}`;
 }
 
-function pagination(basePath, page, totalPages) {
+function pagination(basePath, page, totalPages, position) {
   if (totalPages <= 1) return "";
   const links = [];
   if (page > 1) links.push(`<a rel="prev" href="${pageHref(basePath, page - 1)}">Previous</a>`);
@@ -149,7 +148,7 @@ function pagination(basePath, page, totalPages) {
       ? `<li><span aria-current="page" aria-label="Page ${number}, current page">${number}</span></li>`
       : `<li><a href="${pageHref(basePath, number)}" aria-label="Page ${number}">${number}</a></li>`;
   }).join("");
-  return `<nav class="directory-downloads directory-pagination" aria-label="Directory pages"><strong>Browse pages</strong>${links.join("")}<details class="directory-page-picker"><summary>Choose a page</summary><ol class="directory-page-list">${pages}</ol></details></nav>`;
+  return `<nav class="directory-downloads directory-pagination" aria-label="Directory pages ${position} listings"><strong>Browse pages</strong>${links.join("")}<details class="directory-page-picker"><summary>Choose a page</summary><ol class="directory-page-list">${pages}</ol></details></nav>`;
 }
 
 function directoryPage({ title, heading, lede, canonicalPath, items, page, totalPages, browseMarkup = "", breadcrumbItems = [] }) {
@@ -224,9 +223,9 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
           <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
           ${browseMarkup}
         </div>
-        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
+        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages, "before")}
         <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
-        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages)}
+        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages, "after")}
       </div>
     </main>
     <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>
@@ -540,12 +539,12 @@ for (const type of categoryTypes) {
   await writeFile(`dist/data/resources/by-category/${slugify(type)}.json`, `${JSON.stringify({ schemaVersion: "1.0", category: type, label: categories[type].label, resourceCount: items.length, resources: items })}\n`);
 }
 await writeFile("dist/data/sources.json", `${JSON.stringify({
-  schemaVersion: "1.0",
-  generatedAt: new Date().toISOString(),
+  schemaVersion: "1.1",
+  snapshotReviewedThrough: latestReview,
   note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
-await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, generatedAt: new Date().toISOString() })}\n`);
+await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, snapshotReviewedThrough: latestReview })}\n`);
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
 await writeFile("dist/sitemap.xml", sitemap);

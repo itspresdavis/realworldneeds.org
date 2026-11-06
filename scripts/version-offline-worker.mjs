@@ -18,6 +18,7 @@ const inputs = [
   "public/offline-status.js",
   "public/directory-enhancements.css",
   "public/professional-pages.css",
+  "public/navigation-actions.css",
   "public/legal.css",
   "public/site.webmanifest",
   "scripts/build.mjs",
@@ -35,7 +36,7 @@ const inputs = [
 const releasePath = "dist/data/release.json";
 const releaseInfo = JSON.parse(await readFile(releasePath, "utf8"));
 const assets = releaseInfo.offlineAssets;
-if (!assets || Object.keys(assets).length !== 10) throw new Error("Offline runtime asset manifest is missing.");
+if (!assets || Object.keys(assets).length !== 12) throw new Error("Offline runtime asset manifest is missing.");
 if (!/^[a-f0-9]{12}$/.test(releaseInfo.offlineAssetRelease || "")) throw new Error("Offline runtime manifest identity is missing.");
 const hash = createHash("sha256");
 hash.update(JSON.stringify(assets));

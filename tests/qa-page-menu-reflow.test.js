@@ -114,16 +114,16 @@ test('baseline rule fixture fingerprint preserves the exact reviewed main declar
   assert.ok(PAGE_MENU_BASELINE_RULES.every(rule => !/max-height|scroll-padding|overscroll-behavior/.test(rule.declarations)));
 });
 
-function styleFixture() {
+function styleFixture(path = '/navigation-actions.css') {
   const rules = PAGE_MENU_BASELINE_RULES.map((entry, index) => ({ selectorText: entry.selector, style: { cssText: `fixed-rule-${index};max-height:154px;overflow:auto` } }));
-  const document = { styleSheets: [{ href: 'http://127.0.0.1:4175/navigation-actions.css?v=abc', cssRules: [rules[0], { conditionText: '(max-width: 900px)', cssRules: [rules[1]] }] }] };
+  const document = { styleSheets: [{ href: 'http://127.0.0.1:4175' + path + '?v=abc', cssRules: [rules[0], { conditionText: '(max-width: 900px)', cssRules: [rules[1]] }] }] };
   const context = vm.createContext({ document, URL });
   const run = (mode, fixture = PAGE_MENU_BASELINE_RULES) => vm.runInContext(`(${pageMenuBaselineStyle.toString()})(${JSON.stringify(mode)}, ${JSON.stringify(fixture)})`, context);
   return { rules, document, context, run };
 }
 
-test('baseline fixture replaces exact rules, removes added properties, and restores fixed declarations verbatim', () => {
-  const { rules, run, context } = styleFixture(), before = rules.map(rule => rule.style.cssText);
+for (const path of ['/navigation-actions.css', '/navigation-actions.012345abcdef.css']) test(`baseline fixture ${path} restores fixed declarations verbatim`, () => {
+  const { rules, run, context } = styleFixture(path), before = rules.map(rule => rule.style.cssText);
   const applied = run('apply');
   assert.equal(applied.length, 2);
   assert.deepEqual(rules.map(rule => rule.style.cssText), PAGE_MENU_BASELINE_RULES.map(rule => rule.declarations));

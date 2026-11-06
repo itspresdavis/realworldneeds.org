@@ -135,7 +135,7 @@ function navigationLinks(path) {
 function unifiedHeader(path) {
   const links = navigationLinks(path);
   return `<header class="legal-header rwn-unified-header">
-    <a class="legal-brand" href="/" aria-label="Real World Needs home"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
+    <a class="legal-brand" href="/"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
     <nav class="rwn-page-nav" aria-label="Primary navigation">${links}</nav>
     <details class="rwn-page-menu"><summary aria-label="Navigation menu">Menu</summary><nav aria-label="Mobile navigation">${links}</nav></details>
   </header>`;
