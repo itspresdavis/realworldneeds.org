@@ -270,8 +270,8 @@ async function run() {
       menu.open = false;
 
       const catalog = await fetch("/data/search-index.json").then((response) => response.json());
-      const target = catalog.records.find((record) => record.kind === "direct" && record.phone) || catalog.records.find((record) => record.kind === "direct") || catalog.records[0];
-      if (!target) return { ok: false, reason: "search catalog empty" };
+      const target = catalog.records.find((record) => record.id === "bowery-mission");
+      if (!target) return { ok: false, reason: "reviewed Bowery access fixture missing" };
       input.value = target.name;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       const targetHref = "/service/" + encodeURIComponent(target.id);
@@ -290,6 +290,7 @@ async function run() {
         found,
         actionsReady,
         actionLabels: quickActions.map((link) => link.textContent.trim()),
+        actionLinks: quickActions.map((link) => ({ label: link.textContent.trim(), href: link.href })),
         minimumActionHeight: quickActions.length ? Math.min(...quickActions.map((link) => link.getBoundingClientRect().height)) : 0,
         menuLabels,
         visibleMenuLinks,
@@ -298,11 +299,18 @@ async function run() {
     })()`);
     await capture(client, "directory-mobile.png");
     const expectedMenu = ["Find help", "Directory", "Saved", "How listings are checked", "Sources", "Transparency"];
-    const expectedActions = ["Apple Maps", "Google Maps", "View details"];
+    // Bowery is a source-reviewed multisite organization: generic maps would
+    // incorrectly imply that shelter intake shares the meal entrance.
+    const expectedActions = ["Directions to meal service", "Shelter intake details", "Showers and clothing details", "Mobile medical care details", "View details"];
     const hasCall = directoryMobile.actionLabels?.some((label) => label.startsWith("Call "));
     const hasAllActions = expectedActions.every((label) => directoryMobile.actionLabels?.includes(label));
-    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || directoryMobile.overflow > 8) {
-      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions })}`);
+    const mealAction = directoryMobile.actionLinks?.find(action => action.label === "Directions to meal service");
+    const mealUrl = mealAction ? new URL(mealAction.href) : null;
+    const correctMealDestination = mealUrl?.origin === "https://www.google.com" && mealUrl.pathname === "/maps/dir/" && mealUrl.searchParams.get("destination") === "227 Bowery, New York, NY 10002";
+    const correctIntakeDetails = directoryMobile.actionLinks?.filter(action => expectedActions.slice(1, 4).includes(action.label)).every(action => action.href === "https://www.bowery.org/get-help/");
+    const genericMapsAbsent = !directoryMobile.actionLabels?.some(label => ["Apple Maps", "Google Maps", "Directions"].includes(label));
+    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || !correctMealDestination || !correctIntakeDetails || !genericMapsAbsent || directoryMobile.overflow > 8) {
+      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions, correctMealDestination, correctIntakeDetails, genericMapsAbsent })}`);
     }
 
     // Long names, readable metadata, and action groups must reflow together.
