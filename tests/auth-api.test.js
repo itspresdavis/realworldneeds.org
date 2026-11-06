@@ -579,6 +579,9 @@ test("deployment canonicalizes only the apex hostname and keeps live release met
     "/api/account",
     "/api/catalog",
     "/api/workspace",
+    "/corrections",
+    "/api/corrections",
+    "/api/correction-review",
   ];
   assert.deepEqual(
     config.redirects,
@@ -615,6 +618,14 @@ test("deployment canonicalizes only the apex hostname and keeps live release met
   );
   assert.equal(headers["cache-control"], "no-store, max-age=0");
   assert.equal(headers["vercel-cdn-cache-control"], "no-store");
+  for (const source of ["/corrections(.*)", "/api/correction(.*)"]) {
+    const index = config.headers.findIndex(rule => rule.source === source);
+    assert.ok(index >= 0, `${source} must have explicit private headers`);
+    const privateHeaders = Object.fromEntries(config.headers[index].headers.map(({ key, value }) => [key.toLowerCase(), value]));
+    assert.equal(privateHeaders["cache-control"], "private, no-store");
+    assert.equal(privateHeaders["x-robots-tag"], "noindex, nofollow");
+    if (source.startsWith("/api/")) assert.ok(index > config.headers.findIndex(rule => rule.source === "/api/(.*)"));
+  }
 });
 
 test("service worker leaves account, workspace and release probes outside offline caches", async () => {
@@ -640,6 +651,9 @@ test("service worker leaves account, workspace and release probes outside offlin
     "/api/workspace",
     "/workspace",
     "/join",
+    "/corrections",
+    "/api/corrections",
+    "/api/correction-review",
     "/data/release.json",
   ]) {
     handlers.get("fetch")({

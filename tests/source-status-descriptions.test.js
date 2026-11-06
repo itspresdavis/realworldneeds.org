@@ -5,6 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { resourceDescription } from "../scripts/resource-description.mjs";
 import { categories, resources } from "../src/data/resources.js";
+import { platformStatus } from "../src/data/platform.js";
 import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
@@ -62,20 +63,25 @@ test("contact-only warnings keep contact-route guidance rather than travel advic
   assert.doesNotMatch(description, /before travel/);
 });
 
-test("the actual service template escapes source/name text in metadata and JSON-LD", async () => {
-  const fixture = { ...closed, name: 'Example "centre" & </script><script>alert(1)</script>', sourceName: 'Publisher "quoted" & <unsafe>' };
+async function renderService(fixture, platform = platformStatus) {
   const source = await readFile("scripts/build.mjs", "utf8");
   // Exercise the production template without running its filesystem build.
   const start = source.indexOf("// A page of");
   const end = source.indexOf("const three = createThreeAssets(");
   assert.ok(start >= 0 && end > start, "template extraction must stop before build execution");
   const templates = source.slice(start, end);
-  const html = vm.runInNewContext(`${templates}\nresourcePage(fixture)`, {
+  return vm.runInNewContext(`${templates}\nresourcePage(fixture)`, {
+    platformStatus: platform,
     fixture, resources: [fixture], categories, sourceRegistry: [], serviceActions, serviceAccessSummary, validateServiceAccess,
     freeAccessLabel, freeAccessModels, formatResourcePlace, phoneLinks, phoneMarkup,
     isContactOnly, hasMapCoordinates, contactOnlyNotice,
     sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription
   });
+}
+
+test("the actual service template escapes source/name text in metadata and JSON-LD", async () => {
+  const fixture = { ...closed, name: 'Example "centre" & </script><script>alert(1)</script>', sourceName: 'Publisher "quoted" & <unsafe>' };
+  const html = await renderService(fixture);
   const expected = resourceDescription(fixture);
   assert.equal(metadata(html, "name", "description"), expected);
   assert.equal(metadata(html, "property", "og:description"), expected);
@@ -87,6 +93,18 @@ test("the actual service template escapes source/name text in metadata and JSON-
     assert.equal(Object.hasOwn(node, "availability"), false);
     assert.equal(Object.hasOwn(node, "status"), false);
   }
+});
+
+test("listing correction links stay closed by default and prefill only public identity when approved", async () => {
+  assert.equal(platformStatus.publicCorrectionLinksEnabled, false);
+  const fixture = { ...closed, id: "example-service" };
+  const disabled = await renderService(fixture);
+  assert.doesNotMatch(disabled, /href="\/corrections\?/);
+  const enabled = await renderService(fixture, { ...platformStatus, publicCorrectionLinksEnabled: true });
+  const links = [...enabled.matchAll(/href="(\/corrections\?[^"]*)"/g)];
+  assert.equal(links.length, 1);
+  const url = new URL(links[0][1], "https://www.realworldneeds.org");
+  assert.deepEqual([...url.searchParams], [["resourceId", fixture.id]]);
 });
 
 test("every source-flagged final page carries the full warning in search, share and schema descriptions", async () => {

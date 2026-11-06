@@ -5,6 +5,8 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import accountHandler from '../api/account.js';
 import catalogHandler from '../api/catalog.js';
 import workspaceHandler from '../api/workspace.js';
+import correctionsHandler from '../api/corrections.js';
+import correctionReviewHandler from '../api/correction-review.js';
 
 const root = resolve("dist");
 const port = Number(process.argv[2] || 5173);
@@ -61,7 +63,8 @@ async function existingFile(candidates) {
 
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname;
-  const handler = { '/api/account': accountHandler, '/api/catalog': catalogHandler, '/api/workspace': workspaceHandler, '/workspace': workspaceHandler }[pathname];
+  const handler = { '/api/account': accountHandler, '/api/catalog': catalogHandler, '/api/workspace': workspaceHandler, '/workspace': workspaceHandler,
+    '/api/corrections': correctionsHandler, '/api/correction-review': correctionReviewHandler }[pathname];
   if (handler) return handler(request, response);
   const candidates = candidatePaths(request.url || "/");
   if (!candidates.length) {
@@ -73,7 +76,8 @@ const server = createServer(async (request, response) => {
   const match = await existingFile(candidates);
   if (match) {
     response.writeHead(200, {
-      "Cache-Control": "no-store",
+      "Cache-Control": /^\/corrections(?:\/|\.html)?$/.test(pathname) ? "private, no-store" : "no-store",
+      ...(/^\/corrections(?:\/|\.html)?$/.test(pathname) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
       "Content-Length": match.info.size,
       "Content-Type": contentTypes[extname(match.candidate)] || "application/octet-stream"
     });

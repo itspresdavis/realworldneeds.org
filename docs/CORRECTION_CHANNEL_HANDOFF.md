@@ -1,25 +1,60 @@
-# Listing-Correction Channel Handoff
+# Listing correction workflow and activation handoff
 
-## Current public posture
+## Current state
 
-RWN does **not** publish a correction form, mailbox, or service-provider claim route until the organization has assigned a monitored owner, response process, retention rule, and abuse controls. The public site must not imply that an unmonitored report will be received or acted on.
+**Implemented for review; public intake remains disabled and is not launched.** No operator, monitored destination, retention rule or abuse process has been approved in this work. No hosted migration, test report, notification, or activation has occurred. Missing ownership does not block independent finder fixes.
 
-## Safe future implementation contract
+The public `/corrections` page shows honest unavailable/retry states. Its form becomes usable only after the server reports that both server and database activation gates are satisfied. Service-page links are separately source-controlled by `platformStatus.publicCorrectionLinksEnabled`, currently `false`. There is no live availability request in service handoff actions.
 
-When an approved endpoint and owner exist, every service page can add one restrained **Report a correction** action. It should prefill only public listing context: `resourceId`, listing title, canonical page URL, `sourceUrl`, and `lastChecked`. It must not prefill a visitor’s precise location, search query, saved services, or free-form narrative.
+## Submission and review contract
 
-The reporting interface should offer bounded issue choices: closed service, incorrect hours, incorrect address, disconnected phone, no longer free, eligibility changed, duplicate listing, broken source, and other. The optional note should explicitly instruct visitors not to include health details, identification documents, payment information, or other sensitive personal information.
+- `GET /api/corrections` exposes only availability. With default configuration it returns `{enabled:false}` without contacting the backend.
+- `POST /api/corrections` accepts a published `resourceId`, one category, an optional plain-text note of at most 1,000 characters, a UUID submission ID, and an optional empty bot-trap field. No account, email, exact location, attachments or personal account of hardship is requested. Only public listing identity is prefilled; listing name/source/date are derived from trusted catalog records.
+- Categories are wrong address, wrong hours, closed service, disconnected phone, eligibility change, no longer free, duplicate and broken source. The earlier proposed open-ended “other” category is intentionally excluded.
+- Requests require the approved same origin and bounded JSON. A dedicated server capability authorizes only intake/status RPCs. Daily HMAC actor keys derive from trusted platform client addresses; raw IPs are not stored by this queue. Actor/global quotas and idempotent receipts are atomic in the database. A public success response requires committed acceptance and never exposes a private report ID.
+- Storage uncertainty shows a retry state. Retrying the same submission ID and payload cannot create another report; reusing an ID with changed content is rejected. Equivalent reports within a bounded window share a private review candidate.
+- `GET/PATCH /api/correction-review` requires a remotely verified, confirmed user and current editor/admin database membership. Anonymous users and contributors cannot read reports, decision history, configuration, rate keys or receipts through tables or RPCs.
+- Reviewer assignment is self/unassigned/unchanged; no staff list is invented. Priority and decisions require an expected revision and bounded reason. Ready, rejected and duplicate decisions also require an HTTPS evidence reference. All review text is rendered as text.
+- **Ready means a reviewed candidate, not a published change.** No correction function edits the catalog. A source-backed catalog update must pass the existing editorial/publication gate separately. Role revocation and immutable decision history are checked directly in SQL.
 
-## Required owner decisions before release
+The public page and endpoints are no-store/noindex. The service worker bypasses correction navigations and APIs. Browser form content is not saved to local storage or sent to analytics. Private account and editorial caching restrictions remain in place.
 
-| Decision | Required owner | Why it must be explicit |
-| --- | --- | --- |
-| Monitored endpoint and responsible role | RWN operations owner | A public contact path creates an expectation of receipt and response. |
-| Retention and access control | Privacy/security owner with counsel review | Correction reports can contain personal or sensitive details despite guidance. |
-| Rate limit and abuse handling | Engineering and operations | Public forms attract spam and malicious submissions. |
-| Review SLA and status model | Directory operations owner | Reports must not automatically edit a verified public listing. |
-| Provider verification policy | RWN editorial owner | A provider request or correction is evidence to review, not automatic authorization. |
+## Required decisions and approvals before activation
 
-## Non-negotiable safeguards
+| Requirement | Exact owner action |
+| --- | --- |
+| Responsible operator and monitored destination | Name the responsible operations role/person in the operational record; establish actual monitoring of the workspace queue and acknowledge an authorized end-to-end test report. No notification delivery is claimed by this implementation. |
+| Retention and access | Approve the period, access list and deletion procedure, including decision history and duplicate receipts. Publish matching privacy wording before intake opens. |
+| Abuse handling | Approve actor/global hourly limits, escalation and incident handling. Verify trusted client-address behavior on the actual Vercel deployment. |
+| Review process | Approve statuses, evidence requirements and handling of urgent unsafe destinations. Do not invent staffing or a response deadline. |
+| Hosted recovery and migration | Establish backup/recoverability and pre-restoration API exposure first; obtain separate target/action authorization for restoring `cytfrxldixdapjaxcqzf`. Inventory actual migration history and authorize only missing migrations. Follow `CATALOG_RECOVERY.md`; inactivity is not a security pass. |
+| Hosted acceptance | Verify real Data API persistence, direct grants/RPC denial, concurrent limits, auth/role revocation, failure/retry behavior and operator receipt using approved test data/accounts. Local simulated auth and mocked browser transport are not these checks. |
+| Release activation | Approve the identified source/artifact and target. Update privacy, accessibility/transparency and correction-status wording in that artifact; approve the source-controlled listing-link flag. Revalidate the exact candidate before enabling server/database gates. |
 
-The future endpoint must use rate limiting, a low-friction bot mitigation appropriate to the threat level, server-side validation, audit logging that excludes unnecessary personal data, and a review queue. Reports should create review candidates only; they must never automatically alter a published service record. The public privacy notice, accessibility route, and transparency page must be updated in the same release once a monitored channel is established.
+## Prepared configuration, never committed secrets
+
+Migration: `supabase/migrations/20261106203221_private_correction_queue.sql`, generated with pinned Supabase CLI 3.0.0. It adds private tables and narrowly scoped functions, starts disabled, and does not rewrite migration history or publish catalog facts.
+
+Server variables (see `.env.example`):
+
+- `RWN_CORRECTIONS_ENABLED=false` by default.
+- `RWN_CORRECTIONS_INGEST_TOKEN`: dedicated random 43–128 character base64url capability, configured only through an approved secret store.
+- `RWN_CORRECTIONS_APPROVAL_REF`: operational approval identifier; must match the private database configuration. Do not use personal information in the identifier.
+
+The private singleton `rwn_private.correction_config` starts disabled with the other values NULL. Its approved configuration contains the capability's SHA-256 digest, matching approval reference, retention days, actor/global hourly limits and enabled state. Retention accepts 1–365 days; actor/global limits have bounded ranges. These ranges are implementation limits, not an approved policy. Never put the plaintext capability in source, chat, command output, evidence artifacts or a public client.
+
+Environment activation alone cannot bypass the database gate; database activation alone cannot bypass the server gate. Reviewers cannot enable intake. Configuration changes are hosted mutations and require the identified target/action approval.
+
+## Retention, outage and rollback
+
+The owner-only `rwn_private.purge_corrections()` procedure is prepared; no schedule has been installed. Each call deletes at most 1,000 expired receipts, 1,000 decision events, 1,000 child-free reports and 1,000 expired rate buckets, returning each count separately. Restrictive foreign keys prevent cascading deletion. At most 1,000 expired parent rows are locked while their children are drained; a two-second lock timeout refuses contention. A parent with remaining children survives for another batch. Use the approved retention value, review all aggregate counts and repeat controlled batches only under the approved operating procedure. Set a suitable statement timeout in the operator transaction and inspect actual hosted indexes/volumes before rollout; local fixture timing does not establish hosted lock duration. Decision history cannot be altered by reviewers; deletion under the separately approved retention policy is an owner operation.
+
+If storage is unavailable, public requests must not receive a success receipt. Keep the directory usable and the queue's outage state explicit. Do not copy reports into public logs or issue bodies to work around unavailable storage.
+
+For an authorized emergency stop, disable both server and database intake gates through approved stores, retain the queue for review/retention, and keep service links disabled until recovery is verified. Do not drop tables, erase reports, restore unsafe grants or roll back service-direction safeguards. The additive private migration is compatible with prior source, which ignores these objects; prefer a reviewed forward fix.
+
+## Verification and limits
+
+`tests/corrections-api.test.js` exercises real handlers and the Supabase SDK with intercepted HTTP; UI fixtures test built pages with explicitly mocked transport. `supabase/tests/corrections.sql` and `scripts/qa-postgres-permissions.py` exercise persistent local PostgreSQL state, direct privileges, clean installation and upgrade, competing connections, review concurrency, publication separation and retention. These layers do not establish hosted operation or a monitored channel.
+
+Record the exact candidate SHA, test counts, evidence and operational dependencies in `IMPLEMENTATION_LEDGER_2026-11-06.md` and the external verification receipt. Public submission stays disabled until every activation requirement above has been satisfied and authorized.

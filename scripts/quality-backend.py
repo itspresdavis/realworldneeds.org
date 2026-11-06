@@ -21,6 +21,10 @@ OWNER = "iamhuvr"
 WORKFLOW = ".github/workflows/quality.yml"
 EXACT_SOURCE_EVENTS = {"push", "workflow_dispatch"}
 KNOWN_EVENTS = EXACT_SOURCE_EVENTS | {"pull_request"}
+REQUIRED_JOBS = (
+    "test", "Native browser / offline and globe", "PostgreSQL permission and migration tests",
+    "Cross-browser / chromium", "Cross-browser / firefox", "Cross-browser / webkit",
+)
 BILLING_MARKER = (
     "the job was not started because recent account payments have failed or "
     "your spending limit needs to be increased"
@@ -182,6 +186,38 @@ def recent_billing_run(run, now):
     )
 
 
+def verify_required_jobs(run, sha, root):
+    """Workflow success alone cannot certify missing or skipped required work."""
+    attempt = run["run_attempt"]
+    payload = api(f"repos/{REPOSITORY}/actions/runs/{run['id']}/attempts/{attempt}/jobs?per_page=100", root)
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise BackendError("GitHub did not return a valid required jobs list.")
+    jobs = payload["jobs"]
+    if not jobs or type(payload.get("total_count")) is not int or payload["total_count"] != len(jobs):
+        raise BackendError("GitHub required jobs results are empty or incomplete.")
+    if any(not isinstance(job, dict) or not isinstance(job.get("name"), str) for job in jobs):
+        raise BackendError("GitHub required jobs have an invalid identity.")
+    names = [job["name"] for job in jobs]
+    if len(names) != len(REQUIRED_JOBS) or set(names) != set(REQUIRED_JOBS):
+        raise BackendError("GitHub required jobs are missing, duplicated, or unexpected; current contract requires: "
+                           + ", ".join(REQUIRED_JOBS) + ".")
+    ids = set()
+    for job in jobs:
+        if type(job.get("id")) is not int or job["id"] < 1 or job["id"] in ids:
+            raise BackendError("GitHub required jobs have missing or duplicate job IDs.")
+        ids.add(job["id"])
+        # run_attempt is optional in GitHub's job schema. The trusted request
+        # already selects that attempt; reject a conflicting returned value.
+        if (type(job.get("run_id")) is not int or job["run_id"] != run["id"] or job.get("head_sha") != sha
+                or "run_attempt" in job and (type(job["run_attempt"]) is not int or job["run_attempt"] != attempt)):
+            raise BackendError("GitHub required job identity does not match the selected source/run attempt.")
+        if job.get("status") != "completed" or job.get("conclusion") != "success":
+            raise BackendError(f"GitHub required job {job['name']!r} did not complete successfully.")
+    by_name = {job["name"]: job for job in jobs}
+    return [{"name": name, "id": by_name[name]["id"], "head_sha": sha,
+             "run_id": run["id"], "run_attempt": attempt, "conclusion": "success"} for name in REQUIRED_JOBS]
+
+
 def select_backend(provider, sha, root, evidence_path, now):
     if provider == "ubuntu":
         return {"status": "selected", "provider": "ubuntu", "source": "explicit-machine-verification",
@@ -212,7 +248,9 @@ def select_backend(provider, sha, root, evidence_path, now):
         if run["event"] not in EXACT_SOURCE_EVENTS:
             return {**common, "status": "pending",
                     "reason": "Only pull-request merge-checkout successes are available; they do not prove this exact source commit. Dispatch Quality on the branch containing this commit."}
-        return {**common, "status": "passed", "reason": "The latest eligible push or workflow_dispatch Quality run passed for this exact commit."}
+        jobs = verify_required_jobs(run, sha, root)
+        return {**common, "status": "passed", "github_required_jobs": jobs,
+                "reason": "The latest eligible push or workflow_dispatch Quality run and all six required jobs passed for this exact commit."}
     if provider == "auto" and conclusion == "failure" and billing_blocked(run, root):
         backup = {**common, "status": "selected", "provider": "ubuntu", "source": "github-billing-block",
                   "github_billing_observed_at": run.get("updated_at")}

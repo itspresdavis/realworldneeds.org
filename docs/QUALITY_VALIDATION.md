@@ -2,6 +2,23 @@
 
 The Quality workflow retains the source, catalog, unit, generated-link, static-budget, native-globe and offline suites. It also requires Chromium, Firefox and WebKit and rejects tracked build output/dependencies. Dependencies are locked, and a high-severity dependency audit fails the check instead of being silently ignored.
 
+## Six mandatory GitHub jobs
+
+The exact-source release selector requires every job below to complete successfully in the selected `push` or `workflow_dispatch` run attempt. It verifies job identity, source SHA, complete job-list retrieval and unique names/IDs. Workflow-level success alone is insufficient. Missing, failed, skipped, timed-out, duplicate or unexpected jobs fail closed. Historical five-job successes remain historical evidence; they do not satisfy this current contract.
+
+| Required check name | Workload | Job limit |
+| --- | --- | --- |
+| `test` | Locked installation, dependency audit, complete validation/build/tooling tests, native globe touch, service/directory QA, asset upgrade, Saved and chaos | 24 minutes |
+| `Native browser / offline and globe` | Independent locked installation/build, institutional interactions, deep globe, offline navigation, service actions and cache upgrade | 24 minutes |
+| `PostgreSQL permission and migration tests` | Pinned disposable database fixture | 10 minutes |
+| `Cross-browser / chromium` | Locked Chromium journeys and accessibility | 20 minutes |
+| `Cross-browser / firefox` | Locked Firefox journeys and accessibility | 20 minutes |
+| `Cross-browser / webkit` | Locked WebKit journeys and accessibility | 20 minutes |
+
+The two native jobs run independently. Run `42293453337` exhausted the former single job's 24-minute deadline near its final cache-upgrade script. Its service/Saved/chaos boundary was approximately 16 minutes 40 seconds after job start; the later printed journeys occupied about another 7 minutes 30 seconds. Splitting those existing workloads preserves every script, assertion and deadline. It does not classify the cancelled run as passing. The original full `npm run test:browser:qa` command remains unchanged for local validation; tooling tests check that both CI groups together run those same nine scripts exactly once and in order.
+
+Native evidence is retained for seven days in separate `rwn-visual-qa` and `rwn-native-offline-globe-qa` artifacts. Each job installs from the lockfile and uses the existing pinned actions. This configuration does not purchase capacity or alter account limits. It is a release-tool requirement, not a claim that account-level branch protection has been enabled; configure and verify all six check names where that enforcement is available.
+
 ## Five mandatory local stages
 
 `scripts/ubuntu-quality.py` retains its historical filename and supports explicit Linux and macOS runs. It exports the selected Git commit into a new isolated directory and requires:

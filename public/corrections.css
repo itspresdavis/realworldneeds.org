@@ -1,0 +1,28 @@
+.correction-trap{display:none!important}
+.correction-page{max-width:760px;margin:auto;padding:48px 24px 72px;overflow-wrap:anywhere}
+.correction-page h1{font-size:clamp(32px,5vw,48px);letter-spacing:-1.2px}
+.correction-page [hidden],.correction-review [hidden]{display:none!important}
+.correction-page fieldset,.correction-review fieldset{min-width:0;margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:8px}
+.correction-page legend,.correction-review legend{font-weight:650;max-width:100%;padding:0 6px}
+.correction-page label,.correction-review label{margin-top:16px}
+.correction-page select,.correction-review select{display:block;width:100%;max-width:100%;min-height:48px;padding:12px;margin:8px 0 20px;border:1px solid #a8b9ad;border-radius:7px;font:inherit;background:#fff;color:var(--ink)}
+.correction-page textarea,.correction-review textarea{resize:vertical;min-height:120px}
+.correction-page select:focus-visible,.correction-review select:focus-visible,#correction-status:focus-visible,#correction-availability:focus-visible{outline:3px solid #b07628;outline-offset:4px}
+.correction-page [aria-invalid=true],.correction-review [aria-invalid=true]{border:2px solid #8a2929}
+.correction-page [aria-disabled=true],.correction-review [aria-disabled=true]{cursor:wait}
+.correction-review{margin:36px 0;padding:30px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.correction-review header,.correction-review__tools,.correction-review__pages{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.correction-review__tools label{flex:1 1 180px}
+.correction-review__tools select{margin-bottom:0}
+.correction-review__list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;margin:24px 0}
+.correction-review__card{border:1px solid var(--line);border-radius:8px;background:#fff;padding:20px;min-width:0}
+.correction-review__card h3{margin:0;font-size:18px}
+.correction-review__note{white-space:pre-wrap;overflow-wrap:anywhere}
+.correction-review__detail{max-width:850px;padding-top:26px;scroll-margin-top:20px}
+.correction-review__detail dl{display:grid;grid-template-columns:minmax(80px,150px) minmax(0,1fr);gap:8px 16px}
+.correction-review__detail dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
+.correction-review__detail form{display:grid;gap:12px}
+.correction-review__detail input{margin-top:8px}
+.correction-review__detail button{justify-self:start}
+@media(max-width:600px){.correction-page{padding:32px 16px}.correction-page fieldset,.correction-review fieldset{padding:14px}.correction-review__detail dl{grid-template-columns:1fr}.correction-review__detail dd{margin-bottom:12px}.correction-page .contributor-header{padding:20px 16px}}
+@media(forced-colors:active){.correction-page [aria-invalid=true],.correction-review [aria-invalid=true]{border-color:Highlight}}

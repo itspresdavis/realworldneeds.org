@@ -51,7 +51,11 @@ jobs:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Verify rendered site
         if: ${{ !cancelled() && steps.validate.outcome == 'success' && steps.chrome.outcome == 'success' }}
-        run: npm run test:browser:qa
+        run: |
+          node scripts/browser-service-qa.mjs
+          node scripts/browser-asset-upgrade.mjs
+          node scripts/browser-saved-services.mjs
+          node scripts/browser-chaos.mjs
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Upload visual QA
@@ -59,6 +63,48 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: rwn-visual-qa
+          path: |
+            qa-screenshots/*.png
+            qa-screenshots/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  native-offline-globe:
+    name: Native browser / offline and globe
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    # Run 42293453337 exhausted the original job's 24-minute bound after
+    # service/Saved/chaos and almost all remaining journeys passed. Split the
+    # existing workload; neither deadlines nor assertions are relaxed.
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build generated site
+        run: npm run build
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
+      - name: Verify globe, offline, handoff and cache upgrades
+        run: |
+          node scripts/browser-institutional.mjs
+          node scripts/browser-globe-v2.mjs
+          node scripts/browser-offline.mjs
+          node scripts/browser-service-actions.mjs
+          node scripts/browser-cache-upgrade.mjs
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Upload native offline and globe evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: rwn-native-offline-globe-qa
           path: |
             qa-screenshots/*.png
             qa-screenshots/*.json
