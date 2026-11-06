@@ -53,6 +53,12 @@ Direct parent run `42230740033` on `8318d8a8cf579ad60ae3120502c00216ae2af246` co
 
 The release selector intentionally refuses a PR merge checkout even when its tree equals the branch. Run the existing Quality workflow directly on the final frozen branch and obtain a successful exact-commit GitHub selection before any deployment. A PR check pass alone is not that release receipt. Hosted/release-control blockers above remain unchanged.
 
+## Saved layout follow-up
+
+| ID / classification | Evidence, affected files and fix | Verification / remaining dependency |
+| --- | --- | --- |
+| UX-01 Reproduced; Implemented, Verified locally | A fresh or old-worker-recovered Saved page with Bowery routes let its action column squeeze practical facts to 0px at 1024px and 99.5px at 1440px. The existing rule in `public/navigation-actions.css` now reserves a readable facts column, bounds the action column and aligns both at the top. | Two regression cases fail before the fix. Local Chromium/Firefox Saved matrix and existing service-direction journeys **10 passed / 0 failed / 0 skipped**, covering 320/390/768/1024/1440, native Tab/focus, 44px targets, preserved IDs and ordinary single-site maps. At 1024/1440, facts are 448px wide and the row is 484px tall. Evidence `/tmp/rwn-saved-layout-evidence/`; final exact-source CI remains required. |
+
 ## Local runner ownership limitation
 
 Supplementary native runs encountered owned test servers on fixed ports (4181/4184), including a connection-refused browser page during cleanup. Those failed/split invocations are retained and are **not** a release receipt. The complete GitHub run uses an isolated runner and remains mandatory. Before using the local fallback, harden legacy native startup to prove that its spawned server owns the port; accepting any already-listening server can test the wrong source. No fallback was selected or bypassed in this package. Three older Bowery QA assumptions (generic mobile map buttons, exactly two location links and a generic inspector-map selector) were replaced with exact, independently reviewed service labels/destination assertions while retaining single-site map, contrast, alignment and target-size checks.
