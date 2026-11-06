@@ -182,7 +182,7 @@ test('directory reload and search remain usable offline', async ({page,context,b
 test('all required widths, landscape and enlarged text reflow', async ({page},info) => {
   test.setTimeout(180000);
   await noGraphics(page);
-  for(const path of ['/','/directory','/service/womens-lunch-place','/join']) {
+  for(const path of ['/','/directory','/service/womens-lunch-place','/sources','/join']) {
     await page.goto(path);
     if(path==='/')await homeReady(page);
     for(const width of widths){await page.setViewportSize({width,height:900});await noOverflow(page);}

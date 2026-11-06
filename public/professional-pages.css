@@ -393,9 +393,9 @@ display:inline-flex;flex-wrap:wrap;align-items:center;gap:.25rem .45rem;min-heig
 #directory :is(.directory-country-field, .directory-need-field) select { -webkit-appearance:auto;appearance:auto;background-image:none;}
 }
 
-/* Intrinsic text widths must not expand the directory at enlarged text sizes. */
+/* Reflow long content and enlarged text. */
 .directory-records { grid-template-columns:minmax(0,1fr);}
-.directory-record { min-width:0;}
+.directory-record { min-width:0;overflow-wrap:anywhere;}
 .directory-record > header time { white-space:normal;}
 .directory-record__facts > div,.directory-advanced > summary { min-width:0;overflow-wrap:anywhere;}
 
