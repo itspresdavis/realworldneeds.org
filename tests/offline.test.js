@@ -29,7 +29,7 @@ test("offline directory caches only public same-origin essentials", async () => 
 
 test("offline registration is non-blocking and clear-browser-data removes offline caches", async () => {
   const bootstrap = await read("src/bootstrap.js");
-  const directory = await read("public/directory.js") + await read("public/directory-results.js");
+  const directory = await read("public/directory.js") + await read("public/directory-results.js") + await read("scripts/enhance-generated-pages.mjs");
   assert.match(bootstrap, /serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
   assert.match(directory, /serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
   assert.match(bootstrap, /name\.startsWith\("rwn-offline-"\)/);
@@ -38,7 +38,7 @@ test("offline registration is non-blocking and clear-browser-data removes offlin
 });
 
 test("offline directory clearly warns that availability and service pages require reconnection", async () => {
-  const directory = await read("public/directory.js") + await read("public/directory-results.js");
+  const directory = await read("public/directory.js") + await read("public/directory-results.js") + await read("scripts/enhance-generated-pages.mjs");
   assert.match(directory, /offlineDirectoryNotice/);
   assert.match(directory, /Offline mode\./);
   assert.match(directory, /current availability and service-detail pages require a connection/);
@@ -121,7 +121,7 @@ async function runInstall({ failedPath = null } = {}) {
 }
 
 test("offline installation fails closed and removes a partial cache when a required core asset fails", async () => {
-  for (const failedPath of ["/directory.js", "/directory-startup.js", "/page-menu.js"]) {
+  for (const failedPath of ["/directory.js", "/directory-startup.js", "/page-menu.js", "/navigation-actions.css"]) {
   const result = await runInstall({ failedPath });
   assert.ok(result.error, "a failed required asset must reject installation");
   assert.equal(result.skipped, false, "an incomplete cache must never activate");
@@ -135,7 +135,7 @@ test("offline installation activates only after every required core asset is cac
   assert.equal(result.error, null);
   assert.equal(result.deleted, false);
   assert.equal(result.skipped, true, "a complete cache can activate immediately");
-  assert.equal(result.stored.size, 14, "all required offline assets must be stored");
+  assert.equal(result.stored.size, 15, "all required offline assets must be stored");
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {

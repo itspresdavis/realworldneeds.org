@@ -15,7 +15,7 @@ const LEGACY_RELEASE = "fixture-legacy-query";
 const VARIANT_RELEASE = "fixture-hashed-next";
 const FAILED_RELEASE = "fixture-hashed-failed";
 const SAVED = JSON.stringify(["survivor", "removed"]);
-const RUNTIME_PATTERN = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|directory|directory-startup|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
+const RUNTIME_PATTERN = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|navigation-actions|directory|directory-startup|directory-geography|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -265,7 +265,7 @@ ${baseline ? "" : `<script type="module" src="${asset("/directory.js")}?v=${toke
 
 async function fixtures() {
   const info = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-  assert.equal(Object.keys(info.offlineAssets || {}).length, 10, "Build the contenthashed runtime assets before browser QA");
+  assert.equal(Object.keys(info.offlineAssets || {}).length, 12, "Build the contenthashed runtime assets before browser QA");
   assert.match(info.offlineRelease, /^[a-f0-9]{12}$/);
   assert.equal(info.offlineAssetRelease, sha256(JSON.stringify(info.offlineAssets)).slice(0, 12), "Built HTML/worker manifest identity must match");
   const source = await readFile("dist/sw.js", "utf8");

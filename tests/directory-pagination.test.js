@@ -76,6 +76,6 @@ test("page choices retain native focus behavior, wrap on narrow screens, and sta
   assert.match(css, /\.directory-page-picker\[open\]\s*\{[^}]*flex-basis:100%/, "open choices expand in flow instead of overlaying results");
   assert.match(css, /\.directory-page-list\s*\{[^}]*display:flex;[^}]*flex-wrap:wrap/);
   assert.match(css, /\.directory-page-list \[aria-current="page"\]\s*\{[^}]*min-width:44px;[^}]*min-height:44px/);
-  assert.match(searchCss, /\.directory-shell\.has-global-search nav\[aria-label="Directory pages"\]\{display:none\}/);
+  assert.match(searchCss, /\.directory-shell\.has-global-search nav\.directory-pagination\{display:none\}/);
   assert.match(savedCss, /\.has-saved-view\s*>\s*:not\(\.saved-services\):not\(#offlineDirectoryNotice\):not\(\[aria-label="Breadcrumb"\]\)\s*\{\s*display:\s*none\s*!important;?\s*\}/);
 });

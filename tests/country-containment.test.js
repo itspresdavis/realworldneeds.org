@@ -148,7 +148,7 @@ test("repeated synthetic US location uses the real country lookup before and aft
     navigator: { geolocation: { getCurrentPosition: (success) => callbacks.push(success) } },
     icon: { locate: "" },
     isLikelyUnitedStatesPoint: () => { throw new Error("Real geometry must identify the country without a regional fallback"); },
-    updateFilters() {}, focusGlobeNearUser() {}, renderLocationState() {}, renderLiveSourceState() {}, notify() {},
+    loadLandGeometry: async () => { assert.ok(state.countryFeatures.length, "fixture geometry is already available"); }, updateFilters() {}, focusGlobeNearUser() {}, renderLocationState() {}, renderLiveSourceState() {}, notify() {},
     rebuildCountryBorders() {}, updateGlobeLandMask() {},
     nearbyExactCount: () => 0,
     fetchNearbyUsdaSites: async (location) => { requests.push(["nearby", location.lat, location.lng]); return []; },

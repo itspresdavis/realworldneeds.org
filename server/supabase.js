@@ -10,10 +10,27 @@ export const projectUrl =
 const publishableKey =
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_QcjZr9DWdhMW42P8HK33mQ_cvu1S0ut";
+const canonicalOrigin = "https://www.realworldneeds.org";
 export function requestOrigin(req) {
+  // Only the loopback development server may use an insecure origin. Forwarded
+  // host/protocol headers are deliberately ignored: clients can supply them.
   if (!process.env.VERCEL && /^127\.0\.0\.1:\d+$/.test(req.headers.host || ""))
     return `http://${req.headers.host}`;
-  return process.env.SITE_URL || "https://www.realworldneeds.org";
+  const configured = new URL(process.env.SITE_URL || canonicalOrigin);
+  if (
+    configured.protocol !== "https:" ||
+    configured.username ||
+    configured.password ||
+    configured.pathname !== "/" ||
+    configured.search ||
+    configured.hash
+  )
+    throw new Error("SITE_URL must be an HTTPS origin.");
+  // An old apex SITE_URL must not send confirmation/recovery links away from
+  // the hostname that owns the host-only authentication cookies.
+  if (configured.origin === "https://realworldneeds.org")
+    return canonicalOrigin;
+  return configured.origin;
 }
 export function clientFor(req, res) {
   const cookies = parseCookieHeader(req.headers.cookie || "");
@@ -51,24 +68,61 @@ export function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 export function sameOrigin(req) {
+  const origin = requestOrigin(req);
+  const contentType = req.headers["content-type"];
   return (
-    req.headers.origin === requestOrigin(req) &&
-    req.headers["content-type"]?.split(";")[0] === "application/json"
+    req.headers.origin === origin &&
+    req.headers.host === new URL(origin).host &&
+    typeof contentType === "string" &&
+    contentType.split(";")[0].trim().toLowerCase() === "application/json"
   );
 }
+export class RequestBodyError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
 export async function readBody(req) {
-  if (req.body) {
-    const raw =
-      typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-    if (Buffer.byteLength(raw) > 12000) throw new Error("Request too large");
-    return JSON.parse(raw);
+  let bodyValue;
+  try {
+    // Vercel parses JSON lazily when req.body is read and reports malformed
+    // JSON as ApiError(400). Keep that client error out of the generic 503 path.
+    bodyValue = req.body;
+  } catch (error) {
+    if (error?.statusCode === 400 && error?.message === "Invalid JSON")
+      throw new RequestBodyError(400, "Send a valid JSON object.");
+    throw error;
   }
-  let raw = "";
-  for await (const chunk of req) {
-    raw += chunk;
-    if (Buffer.byteLength(raw) > 12000) throw new Error("Request too large");
+  let raw;
+  if (bodyValue !== undefined) {
+    raw = Buffer.isBuffer(bodyValue)
+      ? bodyValue
+      : Buffer.from(
+          typeof bodyValue === "string" ? bodyValue : JSON.stringify(bodyValue),
+        );
+  } else {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of req) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > 12000) throw new RequestBodyError(413, "Request too large.");
+      chunks.push(bytes);
+    }
+    // Decode after joining chunks so a split UTF-8 character stays intact.
+    raw = Buffer.concat(chunks);
   }
-  return JSON.parse(raw || "{}");
+  if (raw.length > 12000) throw new RequestBodyError(413, "Request too large.");
+  let body;
+  try {
+    body = JSON.parse(raw.toString("utf8") || "{}");
+  } catch {
+    throw new RequestBodyError(400, "Send a valid JSON object.");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw new RequestBodyError(400, "Send a valid JSON object.");
+  return body;
 }
 export async function requireUser(client, res) {
   const { data, error } = await client.auth.getUser();

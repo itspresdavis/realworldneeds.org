@@ -1,3 +1,4 @@
+import { CdpClient } from "./qa-cdp-client.mjs";
 import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -41,42 +42,6 @@ async function stop(child) {
   }
 }
 
-class CdpClient {
-  constructor(url) { this.url = url; this.id = 1; this.pending = new Map(); this.listeners = new Map(); }
-  async connect() {
-    this.ws = new WebSocket(this.url);
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Timed out connecting to DevTools.")), 5000);
-      this.ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-      this.ws.addEventListener("error", reject, { once: true });
-    });
-    this.ws.addEventListener("message", (event) => {
-      const message = JSON.parse(String(event.data));
-      if (message.id) {
-        const pending = this.pending.get(message.id);
-        if (!pending) return;
-        this.pending.delete(message.id);
-        if (message.error) pending.reject(new Error(`${pending.method}: ${message.error.message}`));
-        else pending.resolve(message.result || {});
-        return;
-      }
-      for (const listener of this.listeners.get(message.method) || []) listener(message.params || {});
-    });
-  }
-  call(method, params = {}) {
-    const id = this.id++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
-      this.ws.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  on(method, listener) {
-    const list = this.listeners.get(method) || [];
-    list.push(listener);
-    this.listeners.set(method, list);
-  }
-  close() { this.ws?.close(); }
-}
 
 async function evaluate(client, expression) {
   const result = await client.call("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture: true });

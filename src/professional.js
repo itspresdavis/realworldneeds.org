@@ -154,6 +154,7 @@ export function installProfessionalPresentation() {
   if (globe && !globe.querySelector('.atlas-key')) {
     const key = document.createElement('div');
     key.className = 'atlas-key';
+    key.setAttribute('role', 'group');
     key.setAttribute('aria-label', 'Map marker key');
     key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Area finder / network</span><small>Select a point to check its address and source.</small>';
     globe.append(key);

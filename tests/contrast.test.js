@@ -54,3 +54,17 @@ test("directory/legal core palette retains normal-text AA contrast", async () =>
   assertAa("directory ink on paper", variables["--ink"], variables["--paper"]);
   assertAa("directory soft green on navy", variables["--green-soft"], variables["--navy"]);
 });
+
+test("WebGL fallback owns an opaque background with AA contrast for both paragraphs", async () => {
+  const css = await readFile("src/clarity.css", "utf8");
+  const fallback = css.match(/\.rwn-professional \.globe-stage\.is-globe-unavailable \.globe-fallback\s*\{([^}]+)\}/)?.[1];
+  const message = css.match(/\.rwn-professional \.globe-stage\.is-globe-unavailable #globeFallbackMessage\s*\{([^}]+)\}/)?.[1];
+  assert.ok(fallback && message, "fallback text rules must remain present");
+  // A transparent fallback depended on an ancestor's paint/geometry and axe
+  // in WebKit resolved its text onto the dark finder background (1.18:1).
+  const background = fallback.match(/(?:^|;)\s*background:(#[0-9a-f]{6})(?:;|$)/i)?.[1];
+  assert.ok(background, "fallback must provide its own opaque contrast surface");
+  const color = rule => rule.match(/(?:^|;)\s*color:(#[0-9a-f]{6})(?:;|$)/i)?.[1];
+  assertAa("fallback message", color(message), background);
+  assertAa("fallback explanation", color(fallback), background);
+});

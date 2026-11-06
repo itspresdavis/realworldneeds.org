@@ -43,7 +43,7 @@ async function walkHtml(directory) {
 
 async function directoryAssetRelease() {
   const hash = createHash("sha256");
-  for (const path of ["dist/directory.js", "dist/directory-startup.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
+  for (const path of ["dist/directory.js", "dist/directory-startup.js", "dist/directory-geography.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
     hash.update(path);
     hash.update(await readFile(path));
   }
@@ -137,6 +137,8 @@ function directorySearchMarkup(scope) {
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
     <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
     <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><button class="directory-search-tools__clear" type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button><span><kbd>Alt+/</kbd><span> focuses search · Escape clears</span></span></div>
+    <template data-directory-notice><div class="policy-note warning-note"><p><strong>Offline mode.</strong> Search the saved directory; current availability and service-detail pages require a connection. Reconnect before traveling or relying on a listing.</p></div></template>
+    <template data-directory-results><section><div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" id="directory-global-list" data-global-list></div><button type="button" class="directory-search-tools__clear" data-directory-more aria-controls="directory-global-list" hidden>Show more listings</button></section></template>
     <template data-directory-empty><div class="directory-global-empty"><h2>No matching listings.</h2><p>A missing result does not mean help is unavailable.</p><div class="directory-empty-actions"><button type="button" data-fewer-words>Try without search words</button><button type="button" data-clear-all>Clear all filters</button></div><p>Or ${scope !== "/directory/global" ? '<a href="/directory/global">browse global resource finders</a>' : ""}${scope !== "/directory" ? `${scope !== "/directory/global" ? " or " : ""}<a href="/directory">browse the full directory</a>` : ""}.</p></div></template>
   </section>`;
 }
@@ -202,6 +204,8 @@ const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"))
 // directory.js before it successfully installs a new complete offline release.
 const catalogSource = (await readFile("public/catalog-request.js", "utf8")).replaceAll("export ", "");
 const catalogImport = 'import { createCatalogLoader } from "./catalog-request.js";';
+const { code: geographyCode } = await minify(await readFile("dist/directory-geography.js", "utf8"), { module: true });
+await writeFile("dist/directory-geography.js", `${geographyCode}\n`);
 const directoryEntry = await readFile("dist/directory.js", "utf8");
 if (!directoryEntry.includes(catalogImport)) throw new Error("Directory catalog import was not found.");
 const resultRenderer = await readFile("dist/directory-results.js", "utf8");
@@ -210,14 +214,14 @@ const stateImport = 'import { readDirectoryState, writeDirectoryState, restoreDi
 if (!directoryEntry.includes(stateImport)) throw new Error("Directory history import was not found.");
 const rendererImport = 'import { createResultRow } from "./directory-results.js";';
 if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
-const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";';
+const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, createIndexedSearchMatcher } from "../src/utils/search.js";';
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
-const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
+const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n{\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}\n}`;
 // Keep the complete offline entry under its 16 KB ceiling, without
 // another runtime request. Terser uses its safe defaults (no unsafe transforms),
 // including declaration joining; rendered CI tests exercise the shipped bundle.
-const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow", "root"] } });
+const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow"] } });
 await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search

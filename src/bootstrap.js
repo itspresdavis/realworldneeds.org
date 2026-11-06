@@ -42,6 +42,12 @@ if (app.ok) {
     return installResultActions();
   });
   document.documentElement.dataset.finderStartup = degraded ? "degraded" : "ready";
+  // Give the completed finder an actual paint opportunity before context
+  // creation, shader compilation, texture uploads and boundary geometry work.
+  // Hidden tabs naturally wait for their next animation frame.
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => { void app.module.startGlobe(); }, 0);
+  });
 } else {
   document.documentElement.dataset.finderStartup = "unavailable";
   reportStartupFailure("interactive finder");

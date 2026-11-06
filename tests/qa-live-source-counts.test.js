@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
-import { countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
+import { assertLiveSourceGlobeReady, countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
 
 const host = "http://127.0.0.1:4175";
 const endpoint = "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/Summer_Meals_Site_Finder_2026_(Testing)/FeatureServer/0/query";
@@ -311,4 +311,15 @@ test("ordinary production source and build output contain no CI country observer
     const source = await readFile(new URL(path, import.meta.url), "utf8");
     assert.doesNotMatch(source, /__rwnLiveCountQA|countryStateProbeSource/);
   }
+});
+
+
+test("complete-geometry QA fails explicitly on unsupported, pending, hidden or inconsistent globe startup", () => {
+  assert.doesNotThrow(() => assertLiveSourceGlobeReady({ globeStartup: "ready", globeFallbackVisible: false }));
+  for (const snapshot of [
+    { globeStartup: "unavailable", globeFallbackVisible: true },
+    { globeStartup: "loading", globeFallbackVisible: false },
+    { globeStartup: "ready", globeFallbackVisible: true },
+    {},
+  ]) assert.throws(() => assertLiveSourceGlobeReady(snapshot), /requires initialized WebGL/);
 });

@@ -5,7 +5,7 @@ const RUNTIME_LIMIT = 64;
 const RUNTIME_ASSETS = /* __RWN_RUNTIME_ASSETS__ */ {};
 const RUNTIME_ID = /* __RWN_RUNTIME_ID__ */ "";
 const runtimePaths = Object.values(RUNTIME_ASSETS);
-const runtimePattern = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|directory|directory-startup|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
+const runtimePattern = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|navigation-actions|directory|directory-startup|directory-geography|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
 
 const CORE_ASSETS = [
   "/directory",
@@ -13,6 +13,7 @@ const CORE_ASSETS = [
   "/page-menu.js",
   "/directory-enhancements.css",
   "/professional-pages.css",
+  "/navigation-actions.css",
   "/directory.js",
   "/directory-startup.js",
   "/saved-loader.js",
@@ -245,6 +246,7 @@ async function networkFirstNavigation(request, event) {
 // Explicit reloads from a replaced controller must never fall back to old data.
 let directoryRequest = 0;
 let directoryWrite = Promise.resolve();
+let directoryWithdrawn = false;
 
 async function completeDirectoryResponse(request) {
   const controller = new AbortController();
@@ -304,9 +306,23 @@ async function directoryIndex(request) {
     if (response.ok) {
       if (cache && generation === directoryRequest) {
         directoryWrite = directoryWrite.catch(() => {}).then(async () => {
-          if (generation === directoryRequest) await putIfUsable(cache, request, response);
+          if (generation === directoryRequest) {
+            await putIfUsable(cache, request, response);
+            if (generation === directoryRequest) directoryWithdrawn = false;
+          }
         });
         await directoryWrite.catch(() => {});
+      }
+      return response;
+    }
+    if ([401, 403, 404, 410].includes(response.status)) {
+      if (generation === directoryRequest) {
+        // An access denial or removal wins over earlier in-flight cache writes.
+        directoryWithdrawn = true;
+        if (cache) {
+          directoryWrite = directoryWrite.catch(() => {}).then(() => cache.delete(cacheKeyFor(request)));
+          await directoryWrite.catch(() => {});
+        }
       }
       return response;
     }
@@ -314,8 +330,15 @@ async function directoryIndex(request) {
   } catch (error) {
     if (request.cache === "reload") throw error;
   }
-  const saved = cache ? await cache.match(cacheKeyFor(request)).catch(() => null) : null;
-  return saved || new Response("Directory unavailable", { status: 503 });
+  const saved = cache && !directoryWithdrawn ? await cache.match(cacheKeyFor(request)).catch(() => null) : null;
+  if (!saved) return new Response("Directory unavailable", { status: 503 });
+  // Mark the returned copy, never the stored response. A healthy release probe
+  // alone cannot establish that the catalog itself has refreshed.
+  const fallback = new Response(saved.body, { status: saved.status, statusText: saved.statusText, headers: saved.headers });
+  fallback.headers.set("X-RWN-Catalog-Cache", "stale");
+  fallback.headers.delete("Content-Length");
+  fallback.headers.delete("Content-Encoding");
+  return fallback;
 }
 
 async function staleWhileRevalidate(request, event) {
@@ -382,12 +405,14 @@ self.addEventListener("fetch", (event) => {
 
   const cacheable = url.pathname === "/page-menu.js"
     || url.pathname === "/directory.js"
+    || url.pathname === "/directory-geography.js"
     || url.pathname === "/saved-loader.js"
     || url.pathname === "/saved-services.js"
     || url.pathname === "/saved-services.css"
     || url.pathname === "/offline-status.js"
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/professional-pages.css"
+    || url.pathname === "/navigation-actions.css"
     || url.pathname === "/legal.css"
     || url.pathname === "/brand/rwn-logo-192.png"
     || url.pathname === "/rwn-mark.svg"

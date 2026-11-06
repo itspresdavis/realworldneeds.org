@@ -4,7 +4,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
-  "ignoreCommand": "if [ \"$VERCEL_PROJECT_ID\" = \"prj_HEVILzuiHPxyO49zHlpjftMBlU9u\" ]; then exit 0; else exit 1; fi",
   "functions": {
     "api/rum.js": {
       "maxDuration": 5,
@@ -50,6 +49,19 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/data/release.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store"
         }
       ]
     },
@@ -121,6 +133,63 @@
     {
       "source": "/workspace",
       "destination": "/api/workspace"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/join",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/join",
+      "permanent": true
+    },
+    {
+      "source": "/workspace",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/workspace",
+      "permanent": true
+    },
+    {
+      "source": "/api/account",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/account",
+      "permanent": true
+    },
+    {
+      "source": "/api/catalog",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/catalog",
+      "permanent": true
+    },
+    {
+      "source": "/api/workspace",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/workspace",
+      "permanent": true
     }
   ]
 }

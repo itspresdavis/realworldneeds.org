@@ -12,11 +12,11 @@ const escapeHtml = (value) => String(value ?? "")
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#39;");
 
-const latest = (values) => values.filter(Boolean).sort().at(-1) || new Date().toISOString().slice(0, 10);
+const latest = (values) => values.filter(Boolean).sort().at(-1) || null;
 const registeredIds = new Set(sourceRegistry.map((source) => source.id));
 const structuredLatest = latest(sourceRegistry.flatMap((source) => [source.auditedAt, source.sourceUpdatedAt]));
 const directoryLatest = latest(resources.map((resource) => resource.lastChecked));
-const pageLastmod = [structuredLatest, directoryLatest].sort().at(-1);
+const pageLastmod = latest([structuredLatest, directoryLatest]);
 
 const modeLabel = (mode) => ({
   "live-nearby-query": "Live official query",
@@ -39,12 +39,16 @@ function fieldRow(label, value) {
 function structuredCard(source) {
   const published = sourceRecordCount(source);
   const auditCount = source.activeRecordsAtAudit || source.recordCount || 0;
+  const date = source.auditedAt || source.sourceUpdatedAt;
+  const dateMarkup = date
+    ? `<time datetime="${escapeHtml(date)}">${source.auditedAt ? "Audited" : "Source updated"} ${escapeHtml(date)}</time>`
+    : "<span>Audit date not recorded</span>";
   const countLabel = source.mode === "live-nearby-query"
     ? `${Number(source.activeRecordsAtAudit || 0).toLocaleString()} active records at audit; loaded live only after a location search`
     : `${published.toLocaleString()} records currently published by RWN${source.recordCount && source.recordCount !== published ? ` · registry snapshot count ${Number(source.recordCount).toLocaleString()}` : ""}`;
 
   return `<article class="directory-record source-ledger-card">
-    <header><div><p>${escapeHtml(modeLabel(source.mode))}</p><h2>${escapeHtml(source.title)}</h2><span>${escapeHtml(source.owner)}</span></div><time datetime="${escapeHtml(source.auditedAt || source.sourceUpdatedAt || pageLastmod)}">Audited ${escapeHtml(source.auditedAt || source.sourceUpdatedAt || pageLastmod)}</time></header>
+    <header><div><p>${escapeHtml(modeLabel(source.mode))}</p><h2>${escapeHtml(source.title)}</h2><span>${escapeHtml(source.owner)}</span></div>${dateMarkup}</header>
     <p>${escapeHtml(countLabel)}</p>
     <dl>
       ${fieldRow("Refresh model", source.updateFrequency)}
@@ -190,7 +194,7 @@ if (!transparency.includes('href="/sources"')) {
 const sitemapPath = "dist/sitemap.xml";
 let sitemap = await readFile(sitemapPath, "utf8");
 if (!sitemap.includes(`<loc>${SITE_ORIGIN}/sources</loc>`)) {
-  sitemap = sitemap.replace("</urlset>", `<url><loc>${SITE_ORIGIN}/sources</loc><lastmod>${pageLastmod}</lastmod></url></urlset>`);
+  sitemap = sitemap.replace("</urlset>", `<url><loc>${SITE_ORIGIN}/sources</loc>${pageLastmod ? `<lastmod>${escapeHtml(pageLastmod)}</lastmod>` : ""}</url></urlset>`);
   await writeFile(sitemapPath, sitemap);
 }
 

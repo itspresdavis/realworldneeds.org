@@ -9,7 +9,7 @@ import {
 
 const event = (persisted, timeOrigin = 100, extra = {}) => ({ persisted, trusted: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, timeOrigin, ...extra });
 const source = () => ({ documentPresent: true, ready: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, path: PAGE_MENU_LOCAL,
-  timeOrigin: 100, query: 'library', country: undefined, category: '', count: '1 matching listing', summary: 'Showing 1 of 1 matches across 15 listings',
+  timeOrigin: 100, query: 'library', country: undefined, category: '', count: '1 matching listing', summary: '1 of 1 matches · 15 listings',
   filtered: true, resultsHidden: false, more: false, empty: undefined,
   rows: [{ href: PAGE_MENU_SERVICE, text: 'New York Public Library access · source checked' }], staticRows: [{ href: PAGE_MENU_SERVICE, text: 'New York Public Library access' }],
   history: { path: PAGE_MENU_LOCAL, query: 'library', country: '', category: '', shown: 1, scroll: 240 },
@@ -51,7 +51,7 @@ test('fresh navigation/reload cannot masquerade as BFCache even when its DOM and
 test('exact retained-state oracle catches local/global widening, reordered or stale rows and dropped history', () => {
   assert.equal(pageMenuRetainedState(returned(), source()), true);
   for (const change of [{ href: 'http://127.0.0.1:9999/directory' }, { path: '/directory' }, { query: '' }, { country: '' }, { category: 'Food' },
-    { count: '15 listings on this page' }, { summary: 'Showing 1 of 1 matches across 439 listings' }, { filtered: false }, { resultsHidden: true },
+    { count: '15 listings on this page' }, { summary: '1 of 1 matches · 437 listings' }, { filtered: false }, { resultsHidden: true },
     { more: true }, { empty: 'No matching listings' }, { rows: [] }, { rows: [{ href: PAGE_MENU_SERVICE, text: 'Wrong metadata' }] },
     { staticRows: [] }, { history: null }, { history: { ...source().history, query: '' } }, { history: { ...source().history, shown: 60 } }]) {
     assert.equal(pageMenuRetainedState({ ...returned(), ...change }, source()), false, JSON.stringify(change));

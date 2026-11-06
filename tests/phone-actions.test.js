@@ -1,3 +1,4 @@
+import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { serviceContactMarkup } from "../scripts/service-contact.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import assert from "node:assert/strict";
@@ -8,7 +9,6 @@ import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { resources } from "../src/data/resources.js";
 
 const read = (path) => readFile(path, "utf8");
-const escapeHtml = (text) => String(text ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const targets = (html) => [...html.matchAll(/href="(tel:[^"]*)"/g)].map((match) => match[1]);
 const cases = [
   ["01727 613019 Our phone-line is open Monday-Friday 9:30am-5:30pm", ["tel:01727613019"]],
@@ -78,7 +78,7 @@ test("finder direct actions and inspector use the same safe targets and preserve
     vm.runInContext("enhanceCard(article)", context);
     assert.deepEqual(domTargets(article), expected, "repeated enhancement must not duplicate call links");
     const panel = new Element();
-    const inspector = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice,
+    const inspector = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, escapeHtml, safeExternalUrl,
       phoneMarkup, document: { getElementById: (id) => id === "resourcePanel" ? panel : null, querySelector: () => null },
       selectedResource: () => resource, state: { inspectorOpen: true, savedIds: new Set(), filtered: [resource] },
       categories: { food: {} }, isExactServiceSite: () => false, freeAccessModels: {}, freeAccessLabel: () => "Free",
@@ -122,11 +122,11 @@ test("directory and offline fallback use build-parsed phone targets without new 
   const offline = await read("public/offline-status.js");
   const shipped = await read("dist/directory.js");
   const createRow = (source) => {
-    const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, document, navigator: { onLine: true } });
+    const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true } });
     vm.runInContext(`${source.replace("export const createResultRow", "const createResultRow")}\nglobalThis.row = createResultRow;`, context);
     return context.row;
   };
-  const rows = [createRow(renderer), createRow(shipped.slice(0, shipped.search(/(?:const |,)root=document\.querySelector/)) + ';')];
+  const rows = [createRow(renderer), createRow(shipped.replaceAll("import.meta.url", '"https://fixture.test/directory.js"'))];
   const offlineBody = offline.slice(offline.indexOf("  const actionLink ="), offline.indexOf("  const setOffline ="));
   for (const [phone, expected] of cases) {
     const resource = fixture(phone);
@@ -141,7 +141,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     link.before = (element) => { wrapper = element; };
     const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice,
       document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [resource] }),
-      resultId: () => resource.id, setOffline() {}, offline: false,
+      resultId: () => resource.id, setOffline() {}, networkOffline: false, catalogCached: false,
     });
     vm.runInContext(`${offlineBody}\nglobalThis.enhance = enhanceSearchActions;`, context);
     await context.enhance();

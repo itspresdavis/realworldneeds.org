@@ -1,3 +1,4 @@
+import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -34,7 +35,7 @@ function domFixture() {
     }
     getAttribute(name) { return this.attributes[name] ?? null; }
     removeAttribute(name) { delete this.attributes[name]; }
-    get isConnected() { return this === document.body || Boolean(this.parent?.isConnected); }
+    get isConnected() { return this === document.documentElement || this === document.body || Boolean(this.parent?.isConnected); }
     getClientRects() { return this.isConnected && !this.hidden && (!this.parent || this.parent.getClientRects().length) ? [{}] : []; }
     contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
     matches(selector) {
@@ -74,7 +75,8 @@ function domFixture() {
     addEventListener(event, callback) { this.events[event] = callback; }
     click() { if (!this.disabled) return this.events.click?.({ currentTarget: this, target: this }); }
   }
-  document.body = new Element("body"); document.activeElement = document.body;
+  document.documentElement = new Element("html");
+  document.body = new Element("body"); document.documentElement.append(document.body); document.activeElement = document.body;
   document.getElementById = (id) => id ? document.body.querySelector(`#${id}`) : null;
   document.querySelector = (selector) => document.body.querySelector(selector);
   document.createElement = (tag) => new Element(tag);
@@ -93,7 +95,7 @@ function inspectorFixture({ clipboard, execCommand = () => true, share } = {}) {
   const state = { filtered: records, selectedId: "second", inspectorOpen: true, savedIds: new Set() };
   let stored = new Set();
   const messages = [];
-  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel, escapeHtml, safeExternalUrl,
     document, state, navigator: { clipboard, share }, URL,
     window: { innerWidth: 1440, innerHeight: 1000, location: { href: "https://www.realworldneeds.org/" } },
     categories: { food: { color: "blue" } }, icon: {}, freeAccessModels: {}, reduceMotion: true,
@@ -270,7 +272,11 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
       addEventListener: (name, handler) => { events[name] = handler; },
-      dispatchEvent: (event) => { restores.push(event); return true; },
+      dispatchEvent: (event) => {
+        if (event.type === "rwn-directory-restore") restores.push(event);
+        events[event.type]?.(event);
+        return true;
+      },
     },
     fetch: (...args) => { effects.fetches += 1; requests.push(args); return fetchCatalog ? fetchCatalog(...args) : catalog; },
     readSavedResources: () => { effects.reads += 1; if (storageError) throw new Error("denied"); return new Set(currentIds); },

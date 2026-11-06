@@ -7,10 +7,13 @@ if (notice) {
   const cachedNavigation = document.querySelector('meta[name="rwn-offline-navigation"]');
   let navigationRecovery = Boolean(cachedNavigation);
   let offline = false;
+  let networkOffline = false;
+  let catalogCached = document.documentElement.dataset?.rwnCatalogCached === "true";
   let probeGeneration = 0;
   let pendingProbe;
   let catalogPromise;
   const explanation = notice.querySelector("p");
+  const initialExplanation = explanation?.textContent;
   const retry = document.createElement("button");
   retry.type = "button";
   retry.className = "directory-search-tools__clear directory-connection-retry";
@@ -111,15 +114,21 @@ if (notice) {
       }
       wrapper.append(actions);
     }
-    setOffline(offline);
+    setOffline(networkOffline);
   };
 
   const setOffline = (value) => {
-    offline = Boolean(value);
+    networkOffline = Boolean(value);
+    offline = networkOffline || catalogCached;
     document.documentElement.classList.toggle("rwn-directory-offline", offline);
     // Let someone using Retry keep their focus and read the recovery message.
     notice.hidden = !offline && !notice.contains(document.activeElement);
-    if (explanation) explanation.hidden = !offline;
+    if (explanation) {
+      explanation.hidden = !offline;
+      setText(explanation, catalogCached && !networkOffline
+        ? "Saved directory copy. RWN is reachable, but current listing details could not be refreshed. Retry before traveling or relying on a listing."
+        : initialExplanation);
+    }
     notice.dataset.networkState = offline ? "offline" : "online";
 
     for (const link of document.querySelectorAll(".directory-global-result")) {
@@ -148,9 +157,9 @@ if (notice) {
   const probe = (event) => {
     if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
-    // Online events already retry both catalogs; only explicit recovery needs
-    // an extra notification. A healthy initial probe must not restart a fetch.
-    const recoverCatalog = offline && event?.type !== "online";
+    // The first online retry can race actual network recovery. A healthy probe
+    // retries a still-cached catalog, but never restarts an already-fresh one.
+    const recoverCatalog = offline;
     const controller = new AbortController();
     let timer;
     const request = {};
@@ -169,12 +178,20 @@ if (notice) {
         headers: { "X-RWN-Connectivity-Probe": "1" },
         signal: controller.signal
       }).then(async (response) => {
-        if (navigationRecovery && response.ok) {
-          // Keep the deadline alive through the body. This fetch is not a
-          // navigation, so it cannot be satisfied by the worker's saved shell.
-          const html = await response.text();
-          if (response.redirected || !/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(html)
-            || !/<section\b[^>]*\bdata-directory-search(?:[\s=>])/.test(html)) throw new Error("Directory is unavailable");
+        if (!response.ok) {
+          await response.body?.cancel();
+          return response;
+        }
+        // Keep the deadline through the complete body, not just HTTP headers.
+        // A stalled or redirected response is not proof of restored service.
+        const body = await response.text();
+        if (response.redirected) throw new Error("Connection check redirected");
+        if (navigationRecovery) {
+          // This fetch is not a navigation and cannot use the worker's shell.
+          if (!/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"/.test(body)
+            || !/<section\b[^>]*\bdata-directory-search(?:[\s=>])/.test(body)) throw new Error("Directory is unavailable");
+        } else if (!/^[a-f0-9]{12}$/.test(JSON.parse(body)?.release)) {
+          throw new Error("Release metadata is unavailable");
         }
         return response;
       }),
@@ -183,8 +200,11 @@ if (notice) {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
       if (response.ok) { navigationRecovery = false; cachedNavigation?.remove(); }
-      if (response.ok && recoverCatalog) window.dispatchEvent(new Event("rwn-connection-restored"));
-      setText(status, response.ok ? "Connection restored. Listing details and online links are available." : "Could not reach RWN. Check your connection and try again.");
+      if (response.ok && recoverCatalog && (event?.type !== "online" || catalogCached)) window.dispatchEvent(new Event("rwn-connection-restored"));
+      setText(status, response.ok
+        ? catalogCached ? "RWN is reachable, but search is using a saved catalog. Retry to refresh listings before relying on them."
+          : "Connection restored. Listing details and online links are available."
+        : "Could not reach RWN. Check your connection and try again.");
     }).catch(() => {
       if (generation !== probeGeneration) return;
       setOffline(true);
@@ -197,6 +217,13 @@ if (notice) {
     });
     return request.promise;
   };
+
+  window.addEventListener("rwn-catalog-status", event => {
+    catalogCached = event.detail?.cached === true;
+    setOffline(networkOffline);
+    if (catalogCached) setText(status, "Search is using a saved catalog. Current listing details are unverified; retry to refresh.");
+    else if (!networkOffline) setText(status, "The directory has refreshed. Listing details and online links are available.");
+  });
 
   retry.addEventListener("click", probe);
   const hideRecoveredNotice = () => {
@@ -219,7 +246,7 @@ if (notice) {
   }, true);
 
   const observer = new MutationObserver(() => {
-    setOffline(offline);
+    setOffline(networkOffline);
     enhanceSearchActions();
   });
   const results = document.querySelector(".directory-global-results");

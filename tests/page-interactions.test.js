@@ -113,18 +113,18 @@ test("already visible, hash-targeted, focused and jumped-past content does not a
 test("no-JS content and control states have no hidden entrance prerequisite", async () => {
   const css = await readFile("src/clarity.css", "utf8");
   assert.doesNotMatch(source, /style\.(?:opacity|visibility)|preventDefault\(|requestAnimationFrame\(|addEventListener\("scroll"/);
-  assert.match(css, /scroll-padding-top: var\(--rwn-header-clearance, 5rem\)/);
-  assert.match(css, /:where\(#finder, #results, #about, #standards\) \{ scroll-margin-top: 0;/);
-  assert.match(css, /prefers-reduced-motion: no-preference/);
-  const skipStack = Number(css.match(/\.rwn-professional \.skip-link \{ z-index: (\d+);/)?.[1]);
+  assert.match(css, /scroll-padding-top:\s*var\(--rwn-header-clearance, 5rem\)/);
+  assert.match(css, /:where\(#finder, #results, #about, #standards\) \{ scroll-margin-top:\s*0;/);
+  assert.match(css, /prefers-reduced-motion:\s*no-preference/);
+  const skipStack = Number(css.match(/\.rwn-professional \.skip-link \{ z-index:\s*(\d+);/)?.[1]);
   const headerStack = Number(css.match(/\.rwn-professional \.site-header\s*\{[^}]*z-index:\s*(\d+);/)?.[1]);
   assert.ok(skipStack > headerStack, "the focused skip link paints above the sticky header");
-  assert.match(css, /#resourceSearch::-webkit-search-cancel-button \{ -webkit-appearance: none; display: none; \}/, "native search cancel does not duplicate the accessible Clear button");
-  assert.match(css, /\.filter-heading button \{[^}]*color: var\(--rwn-green-dark\);[^}]*font-size: \.8125rem;/);
-  assert.match(css, /\.resource-panel :is\(p, dd, li, \.cost-scope\) \{ color: var\(--rwn-ink\);/);
+  assert.match(css, /#resourceSearch::-webkit-search-cancel-button \{ -webkit-appearance:\s*none; display:\s*none; \}/, "native search cancel does not duplicate the accessible Clear button");
+  assert.match(css, /\.filter-heading button \{[^}]*color:\s*var\(--rwn-green-dark\);[^}]*font-size:\s*\.8125rem;/);
+  assert.match(css, /\.resource-panel :is\(p, dd, li, \.cost-scope\) \{ color:\s*var\(--rwn-ink\);/);
   assert.match(css, /\.panel-precision strong/);
-  assert.match(css, /\.panel-navigation \{ grid-template-columns: 44px 1fr 44px;/);
-  assert.match(css, /:is\(\.globe-controls,\.panel-utilities,\.panel-map-actions\) :focus-visible \{ outline-offset: -4px !important;/);
-  assert.match(css, /\.site-footer :is\(a, button\):focus-visible \{ outline-color: #c2e5cc/);
+  assert.match(css, /\.panel-navigation \{ grid-template-columns:\s*44px 1fr 44px;/);
+  assert.match(css, /:is\(\.globe-controls,\.panel-utilities,\.panel-map-actions\) :focus-visible \{ outline-offset:\s*-4px !important;/);
+  assert.match(css, /\.site-footer :is\(a, button\):focus-visible \{ outline-color:\s*#c2e5cc/);
   assert.ok((await stat("src/page-interactions.js")).size < 6_000, "optional motion stays dependency-free and bounded");
 });

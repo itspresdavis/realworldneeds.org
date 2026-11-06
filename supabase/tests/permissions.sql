@@ -9,6 +9,14 @@ set local role authenticated;
 do $$ declare affected integer; begin
   if (select count(*) from public.rwn_locations) = 0 then raise exception 'Contributor cannot read published records'; end if;
   if (select count(*) from public.rwn_members) <> 0 then raise exception 'Membership leaked'; end if;
+  if has_table_privilege('authenticated', 'public.rwn_locations', 'SELECT')
+    or has_column_privilege('authenticated', 'public.rwn_locations', 'editorial_note', 'SELECT') then
+    raise exception 'Contributor can read internal editorial reasons';
+  end if;
+  begin
+    perform editorial_note from public.rwn_locations limit 1;
+    raise exception 'Contributor selected editorial reasons';
+  exception when insufficient_privilege then null; end;
   update public.rwn_locations set editorial_note='Unauthorized contributor change';
   get diagnostics affected = row_count;
   if affected <> 0 then raise exception 'Contributor changed catalog'; end if;
@@ -31,6 +39,10 @@ do $$ declare target text; revision timestamptz; affected integer; begin
   get diagnostics affected = row_count;
   if affected <> 1 then raise exception 'Editor update failed'; end if;
   if not exists(select 1 from public.rwn_location_history where location_id=target and actor_id='b0de7236-ea12-42d2-9201-555500000001' and operation='UPDATE') then raise exception 'Audit event missing'; end if;
+  if not exists(select 1 from public.rwn_location_history where location_id=target
+    and after_record->>'editorial_note'='Editor permission verification; rolled back.') then
+    raise exception 'Editor cannot review the internal reason through protected audit history';
+  end if;
   if not exists(select 1 from public.rwn_locations where id=target and not published) then raise exception 'Editor cannot read withheld record'; end if;
   update public.rwn_locations set editorial_note='Stale version must not write.' where id=target and updated_at=revision;
   get diagnostics affected = row_count;
@@ -40,9 +52,30 @@ reset role;
 select set_config('request.jwt.claims','{"role":"anon"}',true);
 set local role anon;
 do $$ begin
+  if has_table_privilege('anon', 'public.rwn_locations', 'SELECT') then
+    raise exception 'Anonymous table-wide SELECT would expose future private columns';
+  end if;
+  if has_column_privilege('anon', 'public.rwn_locations', 'editorial_note', 'SELECT') then
+    raise exception 'Internal editorial reasons are anonymously readable';
+  end if;
+  perform id,record,name,country,kind,source_url,last_checked,latitude,longitude,updated_at,published
+    from public.rwn_locations limit 1;
+  begin
+    perform editorial_note from public.rwn_locations limit 1;
+    raise exception 'Internal editorial reason could be selected';
+  exception when insufficient_privilege then null; end;
   if exists(select 1 from public.rwn_locations where not published) then raise exception 'Withheld listing leaked'; end if;
-  if exists(select 1 from public.rwn_reviews) then raise exception 'Private review leaked'; end if;
-  if exists(select 1 from public.rwn_location_history) then raise exception 'Audit history leaked'; end if;
+  -- Either no grant or RLS may deny visibility. Both are valid safeguards;
+  -- the seeded private rows above must never become visible to anon.
+  begin
+    if exists(select 1 from public.rwn_reviews) then raise exception 'Private review leaked'; end if;
+  exception when insufficient_privilege then null; end;
+  begin
+    if exists(select 1 from public.rwn_location_history) then raise exception 'Audit history leaked'; end if;
+  exception when insufficient_privilege then null; end;
+  begin
+    if exists(select 1 from public.rwn_members) then raise exception 'Membership leaked'; end if;
+  exception when insufficient_privilege then null; end;
 end $$;
 reset role;
 rollback;

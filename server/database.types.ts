@@ -69,8 +69,8 @@ export type Database = {
           id: string
           kind: string
           last_checked: string
-          latitude: number
-          longitude: number
+          latitude: number | null
+          longitude: number | null
           name: string
           published: boolean
           record: Json
@@ -84,8 +84,8 @@ export type Database = {
           id: string
           kind?: string
           last_checked?: string
-          latitude?: number
-          longitude?: number
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           published?: boolean
           record: Json
@@ -99,8 +99,8 @@ export type Database = {
           id?: string
           kind?: string
           last_checked?: string
-          latitude?: number
-          longitude?: number
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           published?: boolean
           record?: Json

@@ -4,15 +4,16 @@ import { join } from "node:path";
 
 // A query alone cannot escape an already-installed worker which deliberately
 // removes queries from cache keys. Put byte identities in the pathname instead.
-const paths = ["/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/directory.js", "/directory-startup.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/saved-loader.js"];
+const paths = ["/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory-geography.js", "/directory.js", "/directory-startup.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/saved-loader.js"];
 const assets = {};
 for (const path of paths) {
   let bytes = await readFile(`dist${path}`);
-  if (path === "/saved-loader.js") {
+  if (path === "/saved-loader.js" || path === "/directory.js") {
     const source = bytes.toString("utf8");
-    const dependency = "./saved-services.js?v=";
-    if (!source.includes(dependency)) throw new Error("Saved-services lazy import was not found.");
-    bytes = Buffer.from(source.replace(dependency, `.${assets["/saved-services.js"]}?v=`));
+    const child = path === "/directory.js" ? "/directory-geography.js" : "/saved-services.js";
+    const dependency = `.${child}?v=`;
+    if (!source.includes(dependency)) throw new Error(`Lazy import for ${child} was not found.`);
+    bytes = Buffer.from(source.replace(dependency, `.${assets[child]}?v=`));
   }
   const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
   assets[path] = path.replace(/\.(css|js)$/, `.${hash}.$1`);

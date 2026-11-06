@@ -22,7 +22,7 @@ test("public pages share one task-first navigation order and an explicit mobile 
     assert.deepEqual(primaryLabels(html), expected);
     assert.match(html, /class="rwn-page-menu"/);
     assert.match(html, /<summary[^>]*>Menu<\/summary>/);
-    assert.match(html, /\/navigation-actions\.css\?v=[a-f0-9]{12}/);
+    assert.match(html, /\/navigation-actions\.[a-f0-9]{12}\.css\?v=[a-f0-9]{12}/);
     assert.match(html, /class="legal-footer rwn-unified-footer"/);
   }
 });
@@ -68,7 +68,7 @@ test("resource-finder service pages do not promise directions and explain their 
 
 test("whole-directory search index carries only the fields needed for immediate actions", async () => {
   const payload = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(payload.schemaVersion, "1.5");
+  assert.equal(payload.schemaVersion, "1.6");
   const direct = payload.records.find((record) => record.kind === "direct");
   assert.ok(direct);
   assert.ok(Object.hasOwn(direct, "phone"));

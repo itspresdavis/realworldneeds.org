@@ -13,7 +13,7 @@ export function directoryWicFixture(shown, category = "Food", catalog = resource
   return {
     query: "WIC", country: "United States", category, rows,
     count: matches.length ? `${format(matches.length)} matching ${matches.length === 1 ? "listing" : "listings"}` : "No matching listings",
-    summary: `Showing ${format(rows)} of ${format(matches.length)} matches across ${format(scoped.length)} listings`
+    summary: `${format(rows)} of ${format(matches.length)} matches · ${format(scoped.length)} listings`
   };
 }
 

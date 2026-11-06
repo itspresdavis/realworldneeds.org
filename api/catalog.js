@@ -2,14 +2,24 @@ import {
   clientFor,
   json,
   readBody,
+  RequestBodyError,
   requestOrigin,
   requireUser,
   sameOrigin,
 } from "../server/supabase.js";
-import { validateEdit, validateLocationEdit } from "../server/catalog-validation.js";
+import {
+  validateEdit,
+  validateLocationEdit,
+} from "../server/catalog-validation.js";
 
 export default async function handler(req, res) {
   try {
+    if (!["GET", "POST", "PATCH"].includes(req.method)) {
+      res.setHeader("Allow", "GET, POST, PATCH");
+      return json(res, 405, { error: "Method not allowed." });
+    }
+    if (req.method !== "GET" && !sameOrigin(req))
+      return json(res, 403, { error: "Request origin was not accepted." });
     const client = clientFor(req, res);
     const user = await requireUser(client, res);
     if (!user) return;
@@ -29,7 +39,7 @@ export default async function handler(req, res) {
         });
       const isEditor = ["editor", "admin"].includes(membership?.role);
       if (req.method === "PATCH") {
-        if (!sameOrigin(req) || !isEditor)
+        if (!isEditor)
           return json(res, 403, {
             error: "Editor access is required to change a listing.",
           });
@@ -49,7 +59,10 @@ export default async function handler(req, res) {
             error:
               "Another editor changed this listing. Reopen it before saving.",
           });
-        const invalidLocation = validateLocationEdit(current.record, body.changes);
+        const invalidLocation = validateLocationEdit(
+          current.record,
+          body.changes,
+        );
         if (invalidLocation) return json(res, 400, { error: invalidLocation });
         const { data: saved, error } = await client
           .from("rwn_locations")
@@ -102,8 +115,6 @@ export default async function handler(req, res) {
       });
     }
     if (req.method === "POST") {
-      if (!sameOrigin(req))
-        return json(res, 403, { error: "Request origin was not accepted." });
       const { locationId, note } = await readBody(req);
       if (
         typeof locationId !== "string" ||
@@ -126,10 +137,6 @@ export default async function handler(req, res) {
           error: "Your note was not saved. Please try again.",
         });
       return json(res, 201, { ok: true });
-    }
-    if (req.method !== "GET") {
-      res.setHeader("Allow", "GET, POST, PATCH");
-      return json(res, 405, { error: "Method not allowed." });
     }
     const page = Math.max(
       0,
@@ -166,7 +173,9 @@ export default async function handler(req, res) {
       page,
       reviews: reviews.data,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError)
+      return json(res, error.status, { error: error.message });
     return json(res, 503, {
       error: "The catalog is temporarily unavailable. Please try again.",
     });

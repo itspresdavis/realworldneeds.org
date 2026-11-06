@@ -1,3 +1,5 @@
+import { waitForGlobeRendererReady } from "./qa-globe-readiness.mjs";
+import { verifyGlobeCoordinates } from "./qa-globe-coordinate-fidelity.mjs";
 import { verifyPageInteractions } from "./qa-page-interactions.mjs";
 import { verifyFinderEditing } from "./qa-search-editing.mjs";
 import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
@@ -331,29 +333,8 @@ async function run() {
     if (Object.values(locationInterruption).some((passed) => !passed)) {
       throw new Error(`Interrupted location recovery failed: ${JSON.stringify(locationInterruption)}`);
     }
-    const coordinateFidelity = await evaluate(client, `(async () => {
-      const version = new URL(document.querySelector('script[src*="bootstrap"]').src).search;
-      const { resources } = await import('/src/data/resources.js' + version);
-      const { createGlobePointLayer, updateGlobePointLayer } = await import('/src/globe-points.js' + version);
-      const points = createGlobePointLayer(resources, {});
-      let maximumError = 0;
-      for (let i = 0; i < resources.length; i++) {
-        const positions = points.geometry.attributes.position;
-        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
-        const lat = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
-        const lng = Math.atan2(x, z) * 180 / Math.PI;
-        maximumError = Math.max(maximumError, Math.abs(lat - resources[i].lat), Math.abs(lng - resources[i].lng));
-      }
-      const counts = [1, 3, 8, 12].map((zoom) => {
-        updateGlobePointLayer(points, { zoom });
-        return points.geometry.attributes.position.count;
-      });
-      points.geometry.dispose(); points.material.dispose();
-      return { catalog: resources.length, counts, maximumError };
-    })()`);
-    if (coordinateFidelity.counts.some((count) => count !== coordinateFidelity.catalog) || coordinateFidelity.maximumError > 0.00001) {
-      throw new Error(`Catalog coordinates changed in the renderer: ${JSON.stringify(coordinateFidelity)}`);
-    }
+    const coordinateFidelity = await verifyGlobeCoordinates({ client, evaluate });
+    console.log("Catalog coordinate fidelity passed: " + JSON.stringify(coordinateFidelity));
     await capture(client, "institutional-desktop.png");
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -451,6 +432,7 @@ async function run() {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: mobileViewport, screenWidth: width, screenHeight: height });
       await navigate(client, `${HOST}/`);
       const fallback = await evaluate(client, `(async () => {
+        await (${waitForGlobeRendererReady.toString()})();
         const stage = document.querySelector(".globe-stage");
         const originalHeight = stage.getBoundingClientRect().height;
         const input = document.getElementById("resourceSearch");
