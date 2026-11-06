@@ -84,12 +84,22 @@ export class RequestBodyError extends Error {
   }
 }
 export async function readBody(req) {
+  let bodyValue;
+  try {
+    // Vercel parses JSON lazily when req.body is read and reports malformed
+    // JSON as ApiError(400). Keep that client error out of the generic 503 path.
+    bodyValue = req.body;
+  } catch (error) {
+    if (error?.statusCode === 400 && error?.message === "Invalid JSON")
+      throw new RequestBodyError(400, "Send a valid JSON object.");
+    throw error;
+  }
   let raw;
-  if (req.body !== undefined) {
-    raw = Buffer.isBuffer(req.body)
-      ? req.body
+  if (bodyValue !== undefined) {
+    raw = Buffer.isBuffer(bodyValue)
+      ? bodyValue
       : Buffer.from(
-          typeof req.body === "string" ? req.body : JSON.stringify(req.body),
+          typeof bodyValue === "string" ? bodyValue : JSON.stringify(bodyValue),
         );
   } else {
     const chunks = [];

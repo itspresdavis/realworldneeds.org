@@ -221,6 +221,97 @@ test("malformed, non-object and oversized JSON produce useful client errors", as
   assert.equal(calls.length, 0);
 });
 
+test("Vercel lazy JSON parser errors remain client errors without masking server failures", async (t) => {
+  environment(t);
+  const calls = fixture(t);
+  for (const [error, status, message] of [
+    [
+      Object.assign(new Error("Invalid JSON"), { statusCode: 400 }),
+      400,
+      "Send a valid JSON object.",
+    ],
+    [
+      Object.assign(new Error("Unexpected internal parser failure"), {
+        statusCode: 500,
+      }),
+      503,
+      "Account services are temporarily unavailable.",
+    ],
+    [
+      Object.assign(new Error("Unexpected internal parser failure"), {
+        statusCode: 400,
+      }),
+      503,
+      "Account services are temporarily unavailable.",
+    ],
+    [
+      new Error("Unknown body accessor failure"),
+      503,
+      "Account services are temporarily unavailable.",
+    ],
+  ]) {
+    const req = request(undefined);
+    let reads = 0;
+    Object.defineProperty(req, "body", {
+      get() {
+        reads += 1;
+        throw error;
+      },
+    });
+    const res = response();
+    await account(req, res);
+    assert.equal(res.statusCode, status);
+    assert.ok(parsed(res).error.startsWith(message));
+    assert.equal(reads, 1);
+    assert.match(res.headers["cache-control"], /private, no-store/);
+    assert.equal(res.headers["set-cookie"], undefined);
+    assert.doesNotMatch(res.body, /Unexpected internal|Unknown body accessor/);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("a valid lazy request body is evaluated once", async (t) => {
+  environment(t);
+  const calls = fixture(t);
+  const req = request(undefined);
+  let reads = 0;
+  Object.defineProperty(req, "body", {
+    get() {
+      reads += 1;
+      return { action: "__fixture_unknown_action__" };
+    },
+  });
+  const res = response();
+  await account(req, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(parsed(res).error, "Unknown account action.");
+  assert.equal(reads, 1);
+  assert.equal(calls.length, 0);
+});
+
+test("origin and method rejection precede lazy body parsing", async (t) => {
+  environment(t);
+  const calls = fixture(t);
+  for (const [method, requestOrigin, status] of [
+    ["POST", "https://foreign.example.invalid", 403],
+    ["PUT", origin, 405],
+  ]) {
+    const req = request(undefined, { method });
+    req.headers.origin = requestOrigin;
+    Object.defineProperty(req, "body", {
+      get() {
+        assert.fail(
+          "Rejected requests must not invoke the platform body parser.",
+        );
+      },
+    });
+    const res = response();
+    await account(req, res);
+    assert.equal(res.statusCode, status);
+  }
+  assert.equal(calls.length, 0);
+});
+
 test("request parsing preserves a multibyte character split across stream chunks and enforces byte limits", async () => {
   const bytes = Buffer.from('{"note":"México"}');
   const split = bytes.indexOf(Buffer.from("é")) + 1;
