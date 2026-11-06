@@ -116,7 +116,9 @@ jobs:
               if not path.is_file():
                   continue
               original = path.read_text()
-              updated = original
+              # Current runner images use a mirror-list URI rather than a
+              # literal Azure URL; handle that and older source formats.
+              updated = original.replace('mirror+file:/etc/apt/apt-mirrors.txt', 'https://archive.ubuntu.com/ubuntu')
               for scheme in ['http', 'https']:
                   updated = updated.replace(scheme + '://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
               if updated != original:
