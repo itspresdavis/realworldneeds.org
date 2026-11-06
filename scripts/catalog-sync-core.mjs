@@ -131,6 +131,13 @@ export async function fetchPublishedCatalog({
 // rows as overrides would undo the refresh and can resurrect withheld listings.
 export function assertFreshExport(records, curatedResources) {
   const local = new Map(curatedResources.map((record) => [record.id, record]));
+  // A record-level review date does not authorize changing a service entrance.
+  // Reconcile reviewed routes explicitly before exporting an older DB snapshot.
+  const changedRoutes = records.filter(record => {
+    const source = local.get(record.id);
+    return source?.serviceAccess && JSON.stringify(canonical(source.serviceAccess)) !== JSON.stringify(canonical(record.serviceAccess));
+  });
+  if (changedRoutes.length) throw new Error(`Refusing to export ${changedRoutes.length} records with unreconciled service access. Review and reconcile the source-backed routes before export.`);
   const datasetDates = new Map();
   for (const record of curatedResources) {
     if (

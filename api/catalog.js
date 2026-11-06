@@ -11,6 +11,7 @@ import {
   validateEdit,
   validateLocationEdit,
 } from "../server/catalog-validation.js";
+import { validateServiceAccess } from "../src/utils/service-access.js";
 
 export default async function handler(req, res) {
   try {
@@ -64,6 +65,15 @@ export default async function handler(req, res) {
           body.changes,
         );
         if (invalidLocation) return json(res, 400, { error: invalidLocation });
+        // Generic facts must not publish a malformed service-specific route.
+        // Withholding remains available even if an existing route needs repair.
+        const invalidAccess =
+          body.published &&
+          validateServiceAccess({
+            ...current.record,
+            ...body.changes,
+          });
+        if (invalidAccess) return json(res, 400, { error: invalidAccess });
         const { data: saved, error } = await client
           .from("rwn_locations")
           .update({

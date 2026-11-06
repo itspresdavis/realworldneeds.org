@@ -77,7 +77,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       for(const node of ancestors)background=blend(rgba(getComputedStyle(node).backgroundColor),background);
       const foreground=blend(rgba(style.color),background),levels=[luminance(foreground),luminance(background)].sort((a,b)=>a-b);
       const box=el.getBoundingClientRect();
-      return {id:el.id,w:box.width,h:box.height,focusVisible:el.matches(':focus-visible'),hovered:el.matches(':hover'),text:el.textContent.trim()||el.getAttribute('aria-label'),color:style.color,background,opacity:style.opacity,outlineOffset:parseFloat(style.outlineOffset),fontSize:parseFloat(style.fontSize),ratio:(levels[1]+.05)/(levels[0]+.05)};
+      return {id:el.id,w:box.width,h:box.height,focusVisible:el.matches(':focus-visible'),hovered:el.matches(':hover'),text:el.textContent.trim()||el.getAttribute('aria-label'),color:style.color,background,opacity:style.opacity,outlineOffset:parseFloat(style.outlineOffset),outlineWidth:parseFloat(style.outlineWidth),fontSize:parseFloat(style.fontSize),ratio:(levels[1]+.05)/(levels[0]+.05)};
     });
   })()`);
   const keyboardFocus = async selector => {
@@ -403,7 +403,13 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       evidence.push({label:'Inspector palette and targets at '+width+'px',contrast,geometry});
       await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
       await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
-      for (const selector of ['.secondary-button','#saveResource','#shareResource','#copyAddress','#closeInspector','.panel-map-actions a']) {
+      const access = await evaluate(client, `({actions:[...document.querySelectorAll('.panel-actions--primary a.primary-button')].map(a=>({label:a.textContent.trim(),href:a.href})),generic:document.querySelectorAll('.panel-map-actions a').length})`);
+      const expectedAccess = ['Directions to meal service','Shelter intake details','Showers and clothing details','Mobile medical care details'];
+      assert(access.generic === 0 && JSON.stringify(access.actions.map(a=>a.label)) === JSON.stringify(expectedAccess), 'Multisite inspector must show differentiated service actions without generic maps', access);
+      const meal = new URL(access.actions[0].href);
+      assert(meal.origin === 'https://www.google.com' && meal.pathname === '/maps/dir/' && meal.searchParams.get('destination') === '227 Bowery, New York, NY 10002' && access.actions.slice(1).every(a=>a.href === 'https://www.bowery.org/get-help/'), 'Inspector service destinations differ from reviewed provider access', access);
+      const serviceActionSelectors = expectedAccess.map((_,index)=>'.panel-actions--primary a.primary-button:nth-child('+(index+1)+')');
+      for (const selector of ['.secondary-button','#saveResource','#shareResource','#copyAddress','#closeInspector',...serviceActionSelectors]) {
         await evaluate(client, `(() => {const item=document.querySelector(${JSON.stringify(selector)});item.scrollIntoView({behavior:'instant',block:'center'});item.blur();})()`);
         const point=await evaluate(client, `(() => {const box=document.querySelector(${JSON.stringify(selector)}).getClientRects()[0];return {x:box.x+box.width/2,y:box.y+box.height/2};})()`);
         await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
@@ -413,7 +419,8 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         await keyboardFocus(selector);
         const keyboardContrast=await controlContrast(selector);
         assert(keyboardContrast.some(item=>item.focusVisible)&&keyboardContrast.every(item=>item.ratio>=4.5),'Keyboard inspector action loses contrast',keyboardContrast);
-        if(['#saveResource','#shareResource','#copyAddress','.panel-map-actions a'].includes(selector))assert(keyboardContrast.filter(item=>item.focusVisible).every(item=>item.outlineOffset<=-3),'Clipped inspector action has no inset focus ring',keyboardContrast);
+        if(['#saveResource','#shareResource','#copyAddress'].includes(selector))assert(keyboardContrast.filter(item=>item.focusVisible).every(item=>item.outlineOffset<=-3),'Clipped inspector action has no inset focus ring',keyboardContrast);
+        if(serviceActionSelectors.includes(selector))assert(keyboardContrast.some(item=>item.focusVisible&&item.outlineWidth>=3), 'Service action needs a visible keyboard focus ring', keyboardContrast);
         evidence.push({label:'Hover and keyboard inspector '+selector+' at '+width+'px',hover:activeContrast,keyboard:keyboardContrast});
       }
       const savedBefore=await evaluate(client, `document.querySelector('#saveResource').getAttribute('aria-pressed')`);
@@ -427,6 +434,23 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       await capture(client,`page-interactions-inspector-facts-${width}.png`);
       await evaluate(client, `document.querySelector('.panel-actions').scrollIntoView({behavior:'instant',block:'center'})`);
       await capture(client,`page-interactions-inspector-actions-${width}.png`);
+      // Retain the original clipped-map focus check on a genuine single-site
+      // listing; Bowery intentionally no longer has this generic map group.
+      const singleSite = resources.find(item=>item.kind==='direct'&&!item.serviceAccess&&Number.isFinite(item.lat)&&Number.isFinite(item.lng));
+      assert(!!singleSite, 'Single-site inspector fixture is required');
+      await navigate(client,'about:blank');
+      await navigate(client,`${host}/#resource=${encodeURIComponent(singleSite.id)}`);
+      for(const selector of ['.panel-map-actions a:first-child','.panel-map-actions a:last-child']) {
+        await evaluate(client, `document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'})`);
+        const point=await evaluate(client, `(() => {const box=document.querySelector(${JSON.stringify(selector)}).getClientRects()[0];return {x:box.x+box.width/2,y:box.y+box.height/2};})()`);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+        const hovered=await controlContrast(selector);
+        assert(hovered.length===1&&hovered[0].hovered&&hovered[0].ratio>=4.5, 'Single-site hovered maps retain readable contrast', hovered);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
+        await keyboardFocus(selector);
+        const focus = await controlContrast(selector);
+        assert(focus.length===1&&focus[0].focusVisible&&focus[0].outlineOffset<=-3&&focus[0].ratio>=4.5, 'Single-site clipped maps retain inset visible focus and contrast', focus);
+      }
     }
 
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'no-preference'}]});

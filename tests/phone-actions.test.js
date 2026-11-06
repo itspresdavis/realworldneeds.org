@@ -1,3 +1,4 @@
+import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "../src/utils/service-access.js";
 import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { serviceContactMarkup } from "../scripts/service-contact.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
@@ -71,14 +72,14 @@ test("finder direct actions and inspector use the same safe targets and preserve
     const resource = fixture(phone);
     const article = new Element();
     article.querySelector = () => ({ dataset: { resourceId: resource.id }, replaceWith() {} });
-    const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
+    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
     const body = actions.slice(actions.indexOf("function directionsUrl("), actions.indexOf("\nfunction enhanceResults("));
     vm.runInContext(`${body}\nenhanceCard(article);`, Object.assign(context, { article }));
     assert.deepEqual(domTargets(article), expected);
     vm.runInContext("enhanceCard(article)", context);
     assert.deepEqual(domTargets(article), expected, "repeated enhancement must not duplicate call links");
     const panel = new Element();
-    const inspector = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, escapeHtml, safeExternalUrl,
+    const inspector = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, escapeHtml, safeExternalUrl,
       phoneMarkup, document: { getElementById: (id) => id === "resourcePanel" ? panel : null, querySelector: () => null },
       selectedResource: () => resource, state: { inspectorOpen: true, savedIds: new Set(), filtered: [resource] },
       categories: { food: {} }, isExactServiceSite: () => false, freeAccessModels: {}, freeAccessLabel: () => "Free",
@@ -103,7 +104,7 @@ test("every static action generator rejects ambiguous phone targets", async () =
   ];
   bodies.push([null, "serviceContactMarkup"]);
   for (const [body, name] of bodies) {
-    const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, phoneLinks, escapeHtml, sourceClosureNotice: () => null });
+    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, phoneLinks, escapeHtml, sourceClosureNotice: () => null });
     if (body) vm.runInContext(body, context);
     else context.serviceContactMarkup = serviceContactMarkup;
     for (const [phone, expected] of cases) {
@@ -122,7 +123,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
   const offline = await read("public/offline-status.js");
   const shipped = await read("dist/directory.js");
   const createRow = (source) => {
-    const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true } });
+    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true } });
     vm.runInContext(`${source.replace("export const createResultRow", "const createResultRow")}\nglobalThis.row = createResultRow;`, context);
     return context.row;
   };
@@ -139,7 +140,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     const link = new Element("a");
     link.closest = () => null;
     link.before = (element) => { wrapper = element; };
-    const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice,
+    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice,
       document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [resource] }),
       resultId: () => resource.id, setOffline() {}, networkOffline: false, catalogCached: false,
     });
@@ -166,7 +167,7 @@ test("built service pages, directory records and search index agree on every pho
   for (const record of index.records) {
     const resource = byId.get(record.id);
     assert.deepEqual(record.phoneLinks, phoneLinks(resource.phone));
-    assert.equal(record.phone, resource.phone || "");
+    assert.equal(record.phone ?? "", resource.phone || "");
     const html = await read(`dist/service/${record.id}/index.html`);
     assert.deepEqual([...new Set(targets(html))].sort(), [...new Set(record.phoneLinks.map(({ href }) => href))].sort(), record.id);
     if (resource.phone) assert.ok(html.includes(`<dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd>`));

@@ -648,3 +648,228 @@ test("service worker leaves account, workspace and release probes outside offlin
     });
   }
 });
+
+test("account export follows capped pages and returns every private note only to its author", async (t) => {
+  environment(t);
+  const notes = Array.from({ length: 5 }, (_, index) => ({
+    id: `note-${index}`,
+    location_id: "fixture-listing",
+    note: `Private fixture note ${index}`,
+    created_at: "2026-01-01T00:00:00Z",
+  }));
+  const calls = fixture(t, {
+    reply(url) {
+      if (url.pathname !== "/rest/v1/rwn_reviews") return;
+      assert.equal(url.searchParams.get("author_id"), `eq.${user.id}`);
+      const offset = Number(url.searchParams.get("offset") || 0);
+      return Response.json(notes.slice(offset, offset + 2), {
+        headers: { "content-range": `${offset}-${Math.min(offset + 1, 4)}/5` },
+      });
+    },
+  });
+  const res = response();
+  await account(
+    authenticated(undefined, {
+      method: "GET",
+      url: "/api/account?action=export",
+    }),
+    res,
+  );
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(parsed(res).notes, notes);
+  assert.equal(parsed(res).complete, true);
+  assert.equal(parsed(res).total, 5);
+  assert.match(res.headers["cache-control"], /private, no-store/);
+  assert.ok(
+    calls
+      .filter(({ url }) => url.pathname === "/rest/v1/rwn_reviews")
+      .every(
+        ({ url }) => url.searchParams.get("order") === "created_at.asc,id.asc",
+      ),
+  );
+});
+
+test("account export rejects incomplete, changing and oversized snapshots without returning partial private data", async (t) => {
+  environment(t);
+  let mode = "missing-count";
+  let reads = 0;
+  fixture(t, {
+    reply(url) {
+      if (url.pathname !== "/rest/v1/rwn_reviews") return;
+      reads += 1;
+      if (mode === "outage")
+        return Response.json({ message: "provider failure" }, { status: 500 });
+      const offset = Number(url.searchParams.get("offset") || 0);
+      const rows =
+        offset && mode === "premature-end"
+          ? []
+          : [
+              {
+                id: mode === "duplicate" ? "same-id" : `note-${offset}`,
+                location_id: "fixture-listing",
+                note: "Private fixture note",
+                created_at: "2026-01-01T00:00:00Z",
+              },
+            ];
+      const count =
+        mode === "too-many"
+          ? 10001
+          : mode === "changed-count" && offset
+            ? 3
+            : 2;
+      if (mode === "changed-content" && reads > 2)
+        rows[0].note = "Changed private fixture note";
+      return Response.json(rows, {
+        headers:
+          mode === "missing-count"
+            ? {}
+            : { "content-range": `${offset}-${offset}/${count}` },
+      });
+    },
+  });
+  for (mode of [
+    "missing-count",
+    "premature-end",
+    "duplicate",
+    "changed-count",
+    "changed-content",
+    "too-many",
+    "outage",
+  ]) {
+    reads = 0;
+    const res = response();
+    await account(
+      authenticated(undefined, {
+        method: "GET",
+        url: "/api/account?action=export",
+      }),
+      res,
+    );
+    assert.equal(res.statusCode, mode === "too-many" ? 413 : 503, mode);
+    assert.equal(parsed(res).notes, undefined, mode);
+    assert.equal(res.headers["content-disposition"], undefined, mode);
+    assert.doesNotMatch(res.body, /Private fixture|provider failure/, mode);
+    assert.match(res.headers["cache-control"], /private, no-store/);
+  }
+});
+
+test("account export returns a complete empty export for an account without notes", async (t) => {
+  environment(t);
+  fixture(t, {
+    reply(url) {
+      if (url.pathname === "/rest/v1/rwn_reviews")
+        return Response.json([], { headers: { "content-range": "*/0" } });
+    },
+  });
+  const res = response();
+  await account(
+    authenticated(undefined, {
+      method: "GET",
+      url: "/api/account?action=export",
+    }),
+    res,
+  );
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(parsed(res).notes, []);
+  assert.equal(parsed(res).total, 0);
+  assert.equal(parsed(res).complete, true);
+});
+
+test("account export aborts a stalled private read at its total deadline", async (t) => {
+  environment(t);
+  const controller = new AbortController();
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", (duration) =>
+    duration === 15000 ? controller.signal : timeout(duration),
+  );
+  fixture(t);
+  const fetchFixture = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", (input, init) => {
+    if (new URL(input).pathname !== "/rest/v1/rwn_reviews")
+      return fetchFixture(input, init);
+    return new Promise((resolve, reject) => {
+      assert.ok(init.signal);
+      if (init.signal.aborted) return reject(init.signal.reason);
+      init.signal.addEventListener("abort", () => reject(init.signal.reason), {
+        once: true,
+      });
+      controller.abort(
+        new DOMException("Synthetic export deadline", "TimeoutError"),
+      );
+    });
+  });
+  const res = response();
+  await account(
+    authenticated(undefined, {
+      method: "GET",
+      url: "/api/account?action=export",
+    }),
+    res,
+  );
+  assert.equal(res.statusCode, 503);
+  assert.equal(parsed(res).notes, undefined);
+  assert.match(parsed(res).error, /complete data could not be exported/);
+  assert.doesNotMatch(res.body, /Synthetic export deadline/);
+});
+
+test("editor cannot publish invalid access routes but can urgently withhold them", async (t) => {
+  environment(t);
+  const updatedAt = "2026-01-01T00:00:00.000Z";
+  const record = {
+    id: "fixture-access",
+    name: "Synthetic fixture",
+    kind: "direct",
+    lat: 42,
+    lng: -71,
+    serviceAccess: [
+      { id: "intake", mode: "confidential", address: "Must not publish" },
+    ],
+  };
+  const calls = fixture(t, {
+    role: "editor",
+    reply(url, method, body) {
+      if (url.pathname !== "/rest/v1/rwn_locations") return;
+      return Response.json(
+        method === "PATCH"
+          ? { ...body, id: record.id }
+          : { record, updated_at: updatedAt },
+      );
+    },
+  });
+  const body = {
+    id: record.id,
+    updatedAt,
+    reason: "Unsafe access route under review.",
+    published: true,
+    changes: { name: "Reviewed fixture name" },
+  };
+  const publish = response();
+  await catalog(
+    authenticated(body, { method: "PATCH", url: "/api/catalog" }),
+    publish,
+  );
+  assert.equal(publish.statusCode, 400);
+  assert.equal(calls.filter((call) => call.method === "PATCH").length, 0);
+  const withhold = response();
+  await catalog(
+    authenticated(
+      { ...body, published: false },
+      { method: "PATCH", url: "/api/catalog" },
+    ),
+    withhold,
+  );
+  assert.equal(withhold.statusCode, 200);
+  const write = calls.find((call) => call.method === "PATCH");
+  assert.equal(write.body.published, false);
+  assert.deepEqual(write.body.record.serviceAccess, record.serviceAccess);
+  const replace = response();
+  await catalog(
+    authenticated(
+      { ...body, changes: { serviceAccess: [] } },
+      { method: "PATCH", url: "/api/catalog" },
+    ),
+    replace,
+  );
+  assert.equal(replace.statusCode, 400);
+  assert.match(parsed(replace).error, /cannot be changed here/);
+});

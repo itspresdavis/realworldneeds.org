@@ -1,3 +1,4 @@
+import { sourceClosureNotice } from "../src/utils/source-status.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
@@ -59,8 +60,24 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.doesNotMatch(client, /input\?\.value.*searchIndexUrl|searchIndexUrl.*input\?\.value/);
   assert.match(client, /BATCH\s*=\s*60/);
   assert.match(client, /Escape/);
-  for (const record of searchIndex.records.slice(0, 10)) {
-    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "phoneLinks", "place", "search"].sort());
+  const byId = new Map(resources.map(resource => [resource.id, resource]));
+  for (const record of searchIndex.records) {
+    const resource = byId.get(record.id);
+    const expected = ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
+    if (resource.phone) expected.push("phone");
+    if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");
+    if (sourceClosureNotice(resource)) expected.push("sourceStatus");
+    if (resource.locationPrecision === "contact-only") {
+      expected.push("locationPrecision", "coverageNote", "eligibility", "locationNotice");
+      if (resource.phone) expected.push("phoneAccess");
+      if (resource.accessUrl) expected.push("accessUrl");
+    }
+    assert.deepEqual(Object.keys(record).sort(), expected.sort());
+    if (resource.serviceAccess) {
+      assert.equal(record.serviceActions.length, resource.serviceAccess.length);
+      assert.ok(record.serviceAccessSummary.includes(resource.serviceAccess[0].label));
+      for (const action of record.serviceActions) assert.deepEqual(Object.keys(action).sort(), ["href", "kind", "label"]);
+    }
   }
   const usIndex = searchIndex.records.findIndex((record) => record.country === "United States");
   assert.ok(usIndex >= 0);

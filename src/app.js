@@ -1,3 +1,4 @@
+import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "./utils/service-access.js";
 import { escapeHtml, safeExternalUrl } from "./utils/html.js";
 import { searchGeographyChoices } from "./utils/search.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyLabel, contactOnlyNotice } from "./utils/resource-location.js";
@@ -369,6 +370,7 @@ function distanceLabel(resource) {
 }
 
 function locationResultLabel(resource) {
+  if (resource.serviceAccess) return "Choose service access";
   if (isContactOnly(resource)) return `${contactOnlyLabel} · check coverage`;
   if (!state.userLocation) return resource.accessType;
   if (isExactServiceSite(resource)) return distanceLabel(resource);
@@ -656,6 +658,7 @@ function renderStatic() {
 
 function kindLabel(resource) {
   if (isContactOnly(resource)) return contactOnlyLabel;
+  if (resource.serviceAccess) return "Service access routes";
   if (resource.kind === "direct") return "Service location";
   if (resource.kind === "locator") return "Resource finder";
   return "Service network";
@@ -900,6 +903,7 @@ function renderResourcePanel() {
   const contactOnly = isContactOnly(resource);
   const actionUrl = safeExternalUrl(resource.accessUrl || resource.providerUrl || resource.sourceUrl);
   const sourceUrl = safeExternalUrl(resource.sourceUrl);
+  const accessActions = resource.serviceAccess ? serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google" }) : null;
   const sourceAction = contactOnly ? "Open contact website" : resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
@@ -907,7 +911,7 @@ function renderResourcePanel() {
     <div role="group" class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${escapeHtml(resource.name)}</h2><p>${escapeHtml(formatResourcePlace(resource))}</p></div></div>
     ${sourceClosureMarkup(resource)}
-    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
+    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${Object.hasOwn(resource, "serviceAccess") ? `${icon.info}<span>${escapeHtml(serviceAccessNotice(resource))}</span>` : contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${escapeHtml(resource.summary)}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
@@ -916,13 +920,14 @@ function renderResourcePanel() {
         <dl class="panel-facts">
           <div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div>
           <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${escapeHtml(resource.costNote)}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
-          <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
+          <div><dt>${resource.serviceAccess ? "Reference address" : exact ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
+          ${resource.serviceAccess ? `<div><dt>Service access</dt><dd>${escapeHtml(serviceAccessSummary(resource))}</dd></div>` : ""}
           ${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : ""}
           ${contactOnly && resource.phoneAccess ? `<div><dt>Dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}
           ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${escapeHtml(resource.eligibility)}</dd></div>` : ""}
           ${resource.validFrom && resource.validThrough ? `<div><dt>Active dates</dt><dd>${checkedDate(resource.validFrom)}–${checkedDate(resource.validThrough)}</dd></div>` : ""}
-          ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${escapeHtml(distanceLabel(resource))}</dd></div>` : ""}
+          ${state.userLocation && exact && !resource.serviceAccess ? `<div><dt>Distance</dt><dd>${escapeHtml(distanceLabel(resource))}</dd></div>` : ""}
           ${!exact && resource.coverageNote ? `<div><dt>${contactOnly ? "Coverage limits" : "Map note"}</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
         </dl>
         <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${escapeHtml(service)}</span></li>`).join("")}</ul></div>
@@ -931,21 +936,21 @@ function renderResourcePanel() {
     <div class="availability-note"><span>${icon.info}</span><p><strong>${contactOnly ? "Check before contacting" : "Confirm before you go"}</strong>${escapeHtml(availabilityInstructions(resource))}</p></div>
     <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)} · ${kindLabel(resource)}</p><p>${escapeHtml(resource.sourceDetail)}</p>${!contactOnly && resource.coordinateNote ? `<p>${escapeHtml(resource.coordinateNote)}</p>` : ""}${resource.providerUrl && sourceUrl ? `<p><a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${escapeHtml(resource.lastChecked)}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
-      ${exact ? `<a class="primary-button" href="${escapeHtml(directionsUrl(resource))}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+      ${Object.hasOwn(resource, "serviceAccess") ? (accessActions || []).map(action => `<a class="primary-button" href="${escapeHtml(action.href)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>${escapeHtml(action.label)}</span></a>`).join("") : exact ? `<a class="primary-button" href="${escapeHtml(directionsUrl(resource))}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
       ${actionUrl ? `<a class="secondary-button" href="${escapeHtml(actionUrl)}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>` : '<span class="secondary-button">Official website unavailable</span>'}
     </div>
-    ${exact ? `<div class="panel-map-actions"><a href="${escapeHtml(appleMapsUrl(resource))}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${escapeHtml(googleMapsUrl(resource))}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
+    ${exact && !Object.hasOwn(resource, "serviceAccess") ? `<div class="panel-map-actions"><a href="${escapeHtml(appleMapsUrl(resource))}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${escapeHtml(googleMapsUrl(resource))}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
       ${live ? "" : `<button type="button" id="saveResource" ${state.savedStorageUnavailable ? 'disabled aria-label="Saving unavailable" aria-describedby="savedStorageStatus"' : `aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}"`}>${icon.bookmark}<span>${state.savedStorageUnavailable ? "Save unavailable" : saved ? "Saved" : "Save"}</span></button>`}
       <button type="button" id="shareResource" aria-label="Share service">${icon.share}<span>Share</span></button>
-      <button type="button" id="copyAddress" aria-label="${exact ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
+      <button type="button" id="copyAddress" aria-label="${resource.serviceAccess ? "Copy service access" : exact ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${resource.serviceAccess ? "Copy service access" : exact ? "Copy address" : "Copy coverage"}</span></button>
     </div>
   `;
 
   document.getElementById("copyAddress")?.addEventListener("click", async () => {
     try {
-      await copyText(resource.address);
-      notify(exact ? "Address copied" : "Coverage copied");
+      await copyText(resource.serviceAccess ? serviceAccessSummary(resource) : resource.address);
+      notify(resource.serviceAccess ? "Service access copied" : exact ? "Address copied" : "Coverage copied");
     } catch {
       notify(`${exact ? "The address" : "The coverage"} could not be copied. Select and copy it from Service details.`);
     }
@@ -972,7 +977,7 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
-  const listingType = isContactOnly(resource) ? contactOnlyLabel : isExactServiceSite(resource) ? "Service location" : "Resource finder";
+  const listingType = resource.serviceAccess ? "Service access routes" : isContactOnly(resource) ? contactOnlyLabel : isExactServiceSite(resource) ? "Service location" : "Resource finder";
   const sourcePrefix = resource.sourceName === resource.name ? "" : `${escapeHtml(resource.sourceName)} · `;
   const costLabel = freeAccessLabel(resource, true);
   const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
@@ -1120,7 +1125,7 @@ async function shareResource(resource) {
 }
 
 function downloadDirectory() {
-  const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source"];
+  const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source", "Service access"];
   const includeContact = state.filtered.some(isContactOnly);
   if (includeContact) fields.push("Location precision", "Coverage details", "Eligibility", "Phone", "Phone dialing scope", "Online access");
   const rows = state.filtered.map((resource) => [
@@ -1134,6 +1139,7 @@ function downloadDirectory() {
     resource.address,
     resource.lastChecked,
     resource.sourceUrl,
+    serviceAccessSummary(resource),
     ...(includeContact ? [resource.locationPrecision, resource.coverageNote, resource.eligibility, resource.phone, resource.phoneAccess, resource.accessUrl] : [])
   ]);
   const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");

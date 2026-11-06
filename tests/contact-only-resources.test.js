@@ -1,3 +1,4 @@
+import { serviceAccessSummary } from "../src/utils/service-access.js";
 import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -149,7 +150,7 @@ test("legacy offline result enhancement retains contact websites, eligibility an
 test("finder download preserves remote contact facts without an undefined city", () => {
   let payload;
   const context = vm.createContext({
-    state: { filtered: [route] }, isContactOnly, kindLabel: () => "Phone or online help", allTypes: r => [r.category], categories: { referral: { label: "Referrals" } },
+    state: { filtered: [route] }, isContactOnly, serviceAccessSummary, kindLabel: () => "Phone or online help", allTypes: r => [r.category], categories: { referral: { label: "Referrals" } },
     URL: { createObjectURL: blob => { payload = blob.parts[0]; return "blob:test"; }, revokeObjectURL() {} },
     Blob: class { constructor(parts) { this.parts = parts; } },
     document: { createElement: () => ({ click() {} }) }, notify() {},

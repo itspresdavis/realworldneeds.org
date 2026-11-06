@@ -1,3 +1,4 @@
+import { serviceActions } from "../src/utils/service-access.js";
 import { serviceContactMarkup } from "./service-contact.mjs";
 import { isContactOnly, hasMapCoordinates } from "../src/utils/resource-location.js";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -151,24 +152,14 @@ function unifiedFooter() {
   </footer>`;
 }
 
-function mapsFor(resource) {
-  const coordinate = `${resource.lat},${resource.lng}`;
-  return {
-    apple: `https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(resource.name)}`,
-    google: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`
-  };
-}
-
 function directoryQuickActions(resource) {
   const links = [];
   const phones = phoneLinks(resource.phone);
   for (const { label, href } of phones) {
     links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
-  if (resource.kind === "direct" && hasMapCoordinates(resource)) {
-    const maps = mapsFor(resource);
-    links.push(`<a href="${escapeHtml(maps.apple)}" rel="noopener noreferrer">Apple Maps</a>`);
-    links.push(`<a href="${escapeHtml(maps.google)}" rel="noopener noreferrer">Google Maps</a>`);
+  for (const action of serviceActions(resource)) {
+    links.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`);
   }
   if (isContactOnly(resource) && resource.accessUrl) {
     links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>`);

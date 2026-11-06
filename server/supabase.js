@@ -43,7 +43,12 @@ export function clientFor(req, res) {
     },
     global: {
       fetch: (url, options) =>
-        fetch(url, { ...options, signal: AbortSignal.timeout(12000) }),
+        fetch(url, {
+          ...options,
+          signal: options?.signal
+            ? AbortSignal.any([options.signal, AbortSignal.timeout(12000)])
+            : AbortSignal.timeout(12000),
+        }),
     },
     cookies: {
       getAll: () => cookies,

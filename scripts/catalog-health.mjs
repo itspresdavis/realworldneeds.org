@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resources } from '../src/data/resources.js';
 import { validateResourceLocation } from '../src/utils/resource-location.js';
+import { createReviewQueue } from '../src/utils/review-schedule.js';
 
 const text = value => String(value || '').trim();
 const normalized = value => text(value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -48,7 +49,7 @@ const bounds = {
   Germany: [5, 16, 47, 56],
 };
 const continents = { 'United Kingdom': 'Europe', 'United States': 'North America', Canada: 'North America', Australia: 'Oceania', Ireland: 'Europe', France: 'Europe', Germany: 'Europe' };
-export function createCatalogHealth(records, { asOf = new Date().toISOString().slice(0, 10), source = 'src/data/resources.js' } = {}) {
+export function createCatalogHealth(records, { asOf = new Date().toISOString().slice(0, 10), source = 'src/data/resources.js', reviewPolicy = {} } = {}) {
   if (!Array.isArray(records)) throw new Error('Catalog resources must be an array.');
   const today = day(asOf);
   if (today === null) throw new Error('asOf must be a real YYYY-MM-DD date.');
@@ -81,7 +82,7 @@ export function createCatalogHealth(records, { asOf = new Date().toISOString().s
   const categoryMembership = records.flatMap(r => [...new Set([r.category, ...(r.secondaryCategories || [])])].map(category => ({ category })));
   const olderThan = threshold => ages.filter(entry => entry.days > threshold).length;
   return {
-    schemaVersion: 1, asOf, source,
+    schemaVersion: 2, asOf, source,
     methodology: 'Operational evidence only. Review dates are read unchanged, never refreshed by this audit. Freshness is elapsed UTC calendar days. Duplicate and location candidates require human review; a reachable source is not verification of its services.',
     totals: {
       listings: records.length, byCountry: countBy(records, r => r.country), primaryCategory: countBy(records, r => r.category),
@@ -101,6 +102,7 @@ export function createCatalogHealth(records, { asOf = new Date().toISOString().s
     },
     structural: { passed: !issues.length && !duplicateIds.length, issues, duplicateIds },
     reviewNeeded, duplicateCandidates,
+    reviewQueue: createReviewQueue(records, { asOf, policy: reviewPolicy }),
     uniqueSourceUrls: [...new Set(records.map(r => r.sourceUrl).filter(validPublicSourceUrl))].length,
     links: { status: 'not-checked', note: 'URL syntax only. Use --check-links for a bounded reachability sample; it never changes review dates.' },
   };
@@ -146,7 +148,7 @@ export async function sampleSourceLinks(records, { limit = 40, concurrency = 4, 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2), value = flag => args[args.indexOf(flag) + 1];
-  const known = new Set(['--input', '--output', '--date', '--source', '--limit', '--check-links']);
+  const known = new Set(['--input', '--output', '--date', '--source', '--limit', '--check-links', '--review-policy']);
   for (let i = 0; i < args.length; i++) {
     if (!known.has(args[i])) throw new Error(`Unknown option: ${args[i]}`);
     if (args[i] !== '--check-links') {
@@ -156,8 +158,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   const payload = args.includes('--input') ? JSON.parse(await readFile(value('--input'), 'utf8')) : resources;
   const records = Array.isArray(payload) ? payload : payload.resources;
-  const report = createCatalogHealth(records, { asOf: args.includes('--date') ? value('--date') : undefined, source: args.includes('--source') ? value('--source') : args.includes('--input') ? value('--input') : undefined });
-  if (args.includes('--check-links')) report.links = await sampleSourceLinks(records, { limit: args.includes('--limit') ? Number(value('--limit')) : 40 });
+  const reviewPolicy = args.includes('--review-policy') ? JSON.parse(await readFile(value('--review-policy'), 'utf8')) : {};
+  const report = createCatalogHealth(records, { asOf: args.includes('--date') ? value('--date') : undefined, source: args.includes('--source') ? value('--source') : args.includes('--input') ? value('--input') : undefined, reviewPolicy });
+  if (args.includes('--check-links')) {
+    report.links = await sampleSourceLinks(records, { limit: args.includes('--limit') ? Number(value('--limit')) : 40 });
+    report.reviewQueue = createReviewQueue(records, { asOf: report.asOf, policy: reviewPolicy, sourceHealth: report.links.results });
+  }
   const json = `${JSON.stringify(report, null, 2)}\n`;
   if (args.includes('--output')) await writeFile(value('--output'), json);
   else process.stdout.write(json);

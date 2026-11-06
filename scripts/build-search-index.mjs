@@ -1,3 +1,4 @@
+import { serviceActions, serviceAccessSummary } from "../src/utils/service-access.js";
 import { isContactOnly, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { resourceSearchText } from "../src/utils/search.js";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -68,11 +69,12 @@ const records = resources.map((resource, index) => {
     categories: types,
     categoryLabels: labels,
     kind: resource.kind,
-    phone: resource.phone || "",
+    ...(resource.phone ? { phone: resource.phone } : {}),
     phoneLinks: phoneLinks(resource.phone),
     lat: !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
     lng: !isContactOnly(resource) && Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,
+    ...(resource.serviceAccess ? { serviceActions: serviceActions(resource).map(({ label, href, kind }) => ({ label, href, kind })), serviceAccessSummary: serviceAccessSummary(resource) } : {}),
     ...(isContactOnly(resource) ? {
       locationPrecision: "contact-only",
       coverageNote: resource.coverageNote,

@@ -1,3 +1,4 @@
+import { serviceActions } from "../src/utils/service-access.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { phoneLinks } from "../src/utils/phone.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
@@ -25,7 +26,6 @@ export function reviewedProviderUrl(resource) {
 export function serviceContactMarkup(resource) {
   const phones = phoneLinks(resource.phone);
   const contactOnly = isContactOnly(resource);
-  const directLocation = resource.kind === "direct" && hasMapCoordinates(resource);
   const finder = resource.kind === "locator";
   const network = resource.kind === "network";
   const hasFinder = finder && /\b(locator|finder|search|directory)\b/i.test(resource.accessType || "");
@@ -50,9 +50,8 @@ export function serviceContactMarkup(resource) {
   }
   links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>${hasFinder && !contactOnly ? "Open resource finder" : "Official source"}</strong><span>${hasFinder && !contactOnly ? "Official source · Check local options" : "Verify current details"}</span></a>`);
   const locations = [];
-  if (directLocation) {
-    const coordinate = `${resource.lat},${resource.lng}`;
-    locations.push(`<a class="is-map is-directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Directions<span class="service-contact-link-note">Google Maps</span></a>`);
+  for (const action of serviceActions(resource)) {
+    locations.push(`<a class="${action.kind === "directions" ? "is-map is-directions" : "is-access-details"}" href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}<span class="service-contact-link-note">${escapeHtml(action.address || "Official access details")}</span></a>`);
   }
   if (hasMapCoordinates(resource)) locations.push(`<a href="/#resource=${encodeURIComponent(resource.id)}">Interactive map<span class="service-contact-link-note">View on RWN</span></a>`);
   const priority = phones.length ? "phone" : contactOnly && resource.accessUrl ? "online" : providerUrl ? "provider" : "source";

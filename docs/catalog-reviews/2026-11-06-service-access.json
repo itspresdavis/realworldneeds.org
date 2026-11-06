@@ -1,0 +1,21 @@
+{
+  "reviewedAt": "2026-11-06",
+  "resourceId": "bowery-mission",
+  "sourceUrl": "https://www.bowery.org/get-help/",
+  "verificationMethod": "substantive official-page review",
+  "providerConfirmation": null,
+  "sourcePublishedAt": null,
+  "evidenceSha256": "8f137ca9bda6173e68daee7b241f02c6ee96a51172a213de41a7c9495ea8e870",
+  "decision": "Retain listing identity and original broad review date; add separately reviewed service-specific access routes.",
+  "facts": [
+    "Meals: Bowery Campus, 227 Bowery. No ID required.",
+    "Overnight shelter: Tribeca Campus, 90 Lafayette Street. Daily intake: women 3 p.m., men 3:45 p.m.; confirm capacity.",
+    "Showers/clothing: 227 Bowery; registration schedules and capacity limits apply.",
+    "Free Project Renewal mobile medical van: outside 227 Bowery; check schedule."
+  ],
+  "limits": [
+    "Official page reviewed, no provider contact or availability guarantee.",
+    "No new coordinates; shelter action opens official intake details.",
+    "No new dataset reuse or licensing conclusion."
+  ]
+}
