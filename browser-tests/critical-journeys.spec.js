@@ -1,3 +1,4 @@
+import { createNetworkGate } from "./network-gate.js";
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 const widths = [320, 360, 375, 390, 430, 600, 768, 1024, 1280, 1440, 1920];
@@ -128,8 +129,10 @@ test('blocked storage gives an honest recovery without breaking service details'
   await expect(page.locator('[data-service-print]')).toBeEnabled();
 });
 
-test('directory reload and search remain usable offline', async ({page,context,browserName}) => {
-  await page.goto('/directory');
+test('directory reload and search remain usable offline', async ({page,context,baseURL}) => {
+  const gate = await createNetworkGate(baseURL);
+  try {
+  await page.goto(gate.url + '/directory');
   const supported=await page.evaluate(()=> 'serviceWorker' in navigator);
   expect(supported,'service worker capability').toBe(true);
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
@@ -137,6 +140,7 @@ test('directory reload and search remain usable offline', async ({page,context,b
   await expect(rows(page).first()).toBeVisible();
   // Read cache completion rather than sleeping through an installation race.
   await expect.poll(()=>page.evaluate(async()=>{for(const name of await caches.keys()){const cache=await caches.open(name);if((await cache.keys()).some(r=>new URL(r.url).pathname==='/data/search-index.json'))return true;}return false;})).toBe(true);
+  gate.setOffline(true);
   await context.setOffline(true);await page.reload();
   await expect(page.locator('[data-directory-query]')).toBeVisible();
   await page.locator('[data-directory-query]').fill('Boston');
@@ -147,11 +151,13 @@ test('directory reload and search remain usable offline', async ({page,context,b
   // Verify reconnection finishes before testing the next navigation. Reloading
   // immediately cancels the online refresh; WebKit reports that cancellation
   // as an access-control console exception despite the handled fetch rejection.
+  gate.setOffline(false);
   await context.setOffline(false);
   await expect(page.locator('html')).toHaveAttribute('data-rwn-catalog-cached','false');
   await expect(rows(page).first()).toBeVisible();
   await expect(page.locator('#offlineDirectoryNotice')).toBeHidden();
   await page.reload();await expect(page.locator('[data-directory-query]')).toBeVisible();
+  } finally { await gate.close(); }
 });
 
 test('all required widths, landscape and enlarged text reflow', async ({page},info) => {

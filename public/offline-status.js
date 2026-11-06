@@ -157,9 +157,9 @@ if (notice) {
   const probe = (event) => {
     if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
-    // Online events already retry both catalogs; only explicit recovery needs
-    // an extra notification. A healthy initial probe must not restart a fetch.
-    const recoverCatalog = offline && event?.type !== "online";
+    // The first online retry can race actual network recovery. A healthy probe
+    // retries a still-cached catalog, but never restarts an already-fresh one.
+    const recoverCatalog = offline;
     const controller = new AbortController();
     let timer;
     const request = {};
@@ -192,7 +192,7 @@ if (notice) {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
       if (response.ok) { navigationRecovery = false; cachedNavigation?.remove(); }
-      if (response.ok && recoverCatalog) window.dispatchEvent(new Event("rwn-connection-restored"));
+      if (response.ok && recoverCatalog && (event?.type !== "online" || catalogCached)) window.dispatchEvent(new Event("rwn-connection-restored"));
       setText(status, response.ok
         ? catalogCached ? "RWN is reachable, but search is using a saved catalog. Retry to refresh listings before relying on them."
           : "Connection restored. Listing details and online links are available."

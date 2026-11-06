@@ -390,3 +390,34 @@ test("fresh catalog data cannot override a real network failure", async () => {
   assert.equal(f.notice.dataset.networkState, "offline");
   assert.equal(f.notice.hidden, false);
 });
+
+test("a healthy online probe retries a catalog that remained cached during the first recovery attempt", async () => {
+  const pending = deferred();
+  const f = fixture([new Error("offline"), pending.promise]);
+  await flush();
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: true } });
+  const probe = f.online();
+  // The direct online catalog request can finish from cache while a worker's
+  // network connection is still recovering, before the page probe succeeds.
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: true } });
+  pending.resolve(ok);
+  await probe;
+  assert.deepEqual(f.recovered, ["rwn-connection-restored"]);
+  assert.equal(f.notice.dataset.networkState, "offline", "successful connectivity alone cannot clear a stale catalog warning");
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: false } });
+  assert.equal(f.notice.dataset.networkState, "online");
+  assert.equal(f.notice.hidden, true);
+});
+
+test("a fresh catalog completed before its online probe is not interrupted by duplicate recovery", async () => {
+  const pending = deferred();
+  const f = fixture([new Error("offline"), pending.promise]);
+  await flush();
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: true } });
+  const probe = f.online();
+  f.windowListeners.get("rwn-catalog-status")({ detail: { cached: false } });
+  pending.resolve(ok);
+  await probe;
+  assert.deepEqual(f.recovered, []);
+  assert.equal(f.notice.dataset.networkState, "online");
+});
