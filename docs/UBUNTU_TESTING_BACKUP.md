@@ -19,7 +19,7 @@ python3 scripts/quality-backend.py --ref HEAD
 
 The default `auto` provider reads GitHub Quality results for the candidate SHA, newest update first:
 
-- A successful `push` or `workflow_dispatch` run passes as evidence for that exact source commit.
+- A successful `push` or `workflow_dispatch` run passes only when its selected attempt contains all six successful required jobs listed in [Quality validation](QUALITY_VALIDATION.md#six-mandatory-github-jobs). Job source/run identity and complete, unique results are required; an older five-job success cannot satisfy the current contract.
 - A successful `pull_request` run tests GitHub's synthetic merge checkout, so it is not exact-source release evidence. It can be skipped to an older eligible result, but never past a failure, pending run, or unknown state. If only PR successes exist, the selector stays pending until Quality is dispatched on the candidate branch.
 - A running/queued run stays pending (exit 2).
 - A real test failure, cancellation, timeout, unknown state, or API/authentication error stops (exit 1).
@@ -47,12 +47,15 @@ When minutes return, keep the normal PR workflow for merge integration checks. F
 
 ## What Ubuntu runs
 
-The validator exports an immutable Git archive into a new run folder, excluding tracked generated `dist` and `node_modules`. It runs the same gates as GitHub:
+The validator exports an immutable Git archive into a new run folder, excluding tracked generated `dist` and `node_modules`. Its five local stages retain the complete native workload now split between two GitHub jobs:
 
 1. `npm ci`
-2. `npm run check` (syntax, data, production build, scale, Node tests)
+2. Tooling tests, dependency audit and `npm run check` (syntax, data, production build, scale, Node tests)
 3. `node scripts/browser-globe-touch-v4.mjs`
 4. `npm run test:browser:qa`
+5. Locked Chromium, Firefox and WebKit installation and the complete cross-browser suite
+
+The mandatory PostgreSQL fixture remains separate; preserve its source/image/log evidence as described in [Quality validation](QUALITY_VALIDATION.md#isolated-database-integration-evidence). The CI scheduling split does not remove work from the local fallback or relax its eligibility policy.
 
 Rendered browser QA still runs after a failed touch test; the overall result remains failed. Validation failures stop before browser testing. Chrome must be present and Node must be version 24.
 
@@ -76,7 +79,7 @@ To reuse a fresh passing Ubuntu receipt and avoid repeating a long suite:
 python3 scripts/release-tested.py --ref FULL_SHA --receipt /absolute/path/to/receipt.json --target preview
 ```
 
-The receipt must be at most 24 hours old; commit, tree, archive hash, validator hash and all four stages must match. Use `--dry-run` to check the gate and inspect deployment input without uploading.
+The receipt must be at most 24 hours old; commit, tree, archive hash, validator hash and all five stages must match. Older four-stage receipts are invalid. Use `--dry-run` to check the gate and inspect deployment input without uploading.
 
 A production build can be staged without moving public domains:
 
