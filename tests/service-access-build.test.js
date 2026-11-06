@@ -10,6 +10,8 @@ test('Bowery keeps meal directions separate from shelter intake on generated pub
     assert.match(content, /Directions to meal service/);
     assert.match(content, /Shelter intake details/);
     assert.match(content, /90 Lafayette/);
+    assert.match(content, /Varies by service; see access details/);
+    assert.match(content, /<li><strong>Shelter intake<\/strong>/);
     assert.doesNotMatch(content, /(?:destination|query|ll|daddr)=40\.7219/);
   }
 });

@@ -1,3 +1,4 @@
+import { renderDirectoryRow } from "./helpers/directory-renderer.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -60,7 +61,9 @@ test("an older pending search cannot replace newer input or reset state", async 
 test("shipped directory entry stays self-contained for existing offline workers", async () => {
   const client = await readFile("dist/directory.js", "utf8");
   const { directoryRelease, offlineAssets } = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-  assert.match(client, /directory-global-result-wrap/);
+  const row = renderDirectoryRow(client, { id: "fixture", name: "Reviewed site", place: "Example", kind: "locator", categoryLabels: ["Food"], checked: "2026-11-06" });
+  assert.equal(row.className, "directory-global-result-wrap");
+  assert.equal(row.children[0].href, "/service/fixture");
   assert.doesNotMatch(client, /from[\s]*["\'].*search\.js/);
   assert.doesNotMatch(client, /\bimport(?!\s*\.)[^;]*directory-results/);
   assert.ok(Buffer.byteLength(client) <= 16_000, "bundled entry must stay inside the directory client budget");

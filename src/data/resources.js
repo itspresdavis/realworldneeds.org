@@ -397,7 +397,7 @@ const reviewedResources = [
     category: "food",
     secondaryCategories: ["shelter", "hygiene", "clothing", "health"],
     kind: "direct",
-    accessType: "Walk-in",
+    accessType: "Varies by service; see access details",
     costNote: "Free services",
     address: "227 Bowery, New York, NY 10002",
     phone: "(212) 226-6214",

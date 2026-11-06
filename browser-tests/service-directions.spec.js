@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const mealLabel = 'Directions to meal service';
 const shelterLabel = 'Shelter intake details';
 const officialHelp = 'https://www.bowery.org/get-help/';
 
 async function assertAccessActions(scope) {
-  const meal = scope.getByRole('link', { name: new RegExp('^' + mealLabel + '(?: for The Bowery Mission)?$') });
-  const shelter = scope.getByRole('link', { name: new RegExp('^' + shelterLabel + '(?: for The Bowery Mission)?$') });
+  const meal = scope.getByRole('link', { name: new RegExp('^' + mealLabel) });
+  const shelter = scope.getByRole('link', { name: new RegExp('^' + shelterLabel) });
   await expect(meal).toBeVisible();
   await expect(shelter).toHaveAttribute('href', officialHelp);
   const destination = new URL(await meal.getAttribute('href'));
@@ -31,6 +32,7 @@ test('Bowery access routes survive detail, copy, print, and Saved on mobile', as
   await page.goto('/service/bowery-mission');
   await assertAccessActions(page.locator('.service-next-steps'));
   await expect(page.locator('.directory-record')).toContainText('90 Lafayette');
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.locator('[data-service-copy]').click();
   const copied = await page.evaluate(() => window.__copiedListing);
   expect(copied).toContain('227 Bowery');
@@ -82,6 +84,7 @@ test('service-specific access is usable with JavaScript disabled', async ({ brow
     await page.goto(baseURL + '/service/bowery-mission');
     await expect(page.getByRole('heading', { name: 'The Bowery Mission', exact: true })).toBeVisible();
     await assertAccessActions(page.locator('.service-next-steps'));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect(page.locator('.directory-record')).toContainText('90 Lafayette');
   } finally { await context.close(); }
 });

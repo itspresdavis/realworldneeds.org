@@ -1,6 +1,6 @@
 # Real World Needs
 
-Real World Needs (RWN) is a privacy-minimizing directory for essential services. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
+Real World Needs (RWN) is a humanitarian organization. This repository implements its current public essential-services directory, one program within the broader mission. Distributions, partnerships, volunteering and future programs must not be presented as operational without evidence. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
 
 The product is deliberately split into two interfaces over the same reviewed catalog:
 

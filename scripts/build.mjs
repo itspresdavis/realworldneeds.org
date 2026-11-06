@@ -34,7 +34,7 @@ const slugify = (value) => String(value || "unknown")
   .replace(/[^a-z0-9]+/g, "-")
   .replace(/^-|-$/g, "") || "unknown";
 
-const kindLabel = (resource) => resource.kind === "direct"
+const kindLabel = (resource) => resource.serviceAccess ? "Service access routes" : resource.kind === "direct"
   ? "Service location"
   : resource.kind === "locator" ? "Help finder or referral" : "Service network";
 
@@ -110,6 +110,11 @@ function directoryRecordActions(resource, coordinate) {
   return `<nav class="directory-record__actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Actions for ${escapeHtml(resource.name)}">${links.join("")}</nav>`;
 }
 
+function serviceLocationFacts(resource) {
+  if (!resource.serviceAccess) return escapeHtml(resource.address);
+  return `<ul>${resource.serviceAccess.map(route => `<li><strong>${escapeHtml(route.label)}</strong>${route.address ? ` — ${escapeHtml(route.address)}` : ""}<p>${escapeHtml(route.instructions)}</p><p><a href="${escapeHtml(route.sourceUrl)}" rel="noopener noreferrer">Official ${escapeHtml(route.label.toLowerCase())} details</a> · Source reviewed ${escapeHtml(route.reviewedAt)}</p></li>`).join("")}</ul>`;
+}
+
 function resourceRecord(resource) {
   const place = formatResourcePlace(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
@@ -131,7 +136,7 @@ function resourceRecord(resource) {
     <div class="directory-record__facts" role="group" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
     ${contactOnly ? `<p class="directory-caution">${escapeHtml(contactOnlyNotice(resource))}</p><p class="directory-caution"><strong>Coverage:</strong> ${escapeHtml(resource.coverageNote)} <strong>Eligibility:</strong> ${escapeHtml(resource.eligibility)}${resource.phone ? ` <strong>Phone dialing scope:</strong> ${escapeHtml(resource.phoneAccess)}` : ""}</p>` : ""}
     ${directoryRecordActions(resource, coordinate)}
-    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${escapeHtml(resource.serviceAccess ? serviceAccessSummary(resource) : resource.address)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
+    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${serviceLocationFacts(resource)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
   </article>`;
 }
 
@@ -353,7 +358,7 @@ function resourcePage(resource) {
       <article class="directory-record" aria-labelledby="service-details-heading">
         <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl class="service-facts">
-          <div><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.serviceAccess ? serviceAccessSummary(resource) : resource.address)}</dd></div>
+          <div><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
           ${contactOnly ? `<div><dt>Coverage details</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
           ${phone}
           ${contactOnly && resource.phone ? `<div><dt>Phone dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}

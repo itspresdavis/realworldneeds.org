@@ -9,7 +9,8 @@ import { categories, resources } from "../src/data/resources.js";
 import { groupLocalities } from "../scripts/locality-groups.mjs";
 
 const execute = promisify(execFile);
-const base = resources.find(resource => resource.kind === "direct" && resource.country === "United States");
+// Synthetic single-site fixtures must not inherit another provider’s access routes.
+const { serviceAccess: originalAccess, ...base } = resources.find(resource => resource.kind === "direct" && resource.country === "United States");
 const mapped = [1, 2, 3].map(number => ({
   ...base, id: `fixture-mapped-${number}`, name: `Reviewed service ${number}`,
   city: "Boston", country: "United States", address: `${number} Main St, MA 02101`,
