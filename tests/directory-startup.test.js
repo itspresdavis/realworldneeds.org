@@ -90,7 +90,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     getAttribute(name) { return this.attrs.get(name) || null; }
     removeAttribute(name) { this.attrs.delete(name); }
     scrollIntoView() { this.scrolled = true; }
-    getBoundingClientRect() { return { top: 120, bottom: 150, height: 30 }; }
+    getBoundingClientRect() { return { top: 120, bottom: 164, left: 100, right: 340, width: 240, height: 44 }; }
     focus() { if (document.activeElement === this) return; document.activeElement = this; this.dispatch("focus"); }
     blur() { if (document.activeElement === this) document.activeElement = document.body; this.dispatch("blur"); }
     insertAdjacentElement(_where, node) { this.parentElement.append(node); }
@@ -98,6 +98,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   document = new Node("document"); document.documentElement = new Node("html"); document.title = "Services directory | Real World Needs"; document.body = new Node("body"); document.append(document.body); document.activeElement = document.body;
   const shell = new Node("main", [".directory-shell"]), root = new Node("form", ["[data-directory-search]"]);
   const input = new Node("input", ["[data-directory-query]"]), country = new Node("select", ["[data-directory-country]"]);
+  document.elementFromPoint = () => input;
   const need = new Node("select", ["[data-directory-need]"]);
   for (const label of ["", ...new Set(catalog.records.flatMap(record => record.categoryLabels))].sort()) {
     const option = new Node("option"); option.value = label; option.textContent = label || "All help"; need.append(option);
@@ -120,12 +121,12 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   };
   document.getElementById = id => document.querySelectorAll("*").find(node => node.id === id) || null;
   document.createDocumentFragment = () => Object.assign(new Node(), { fragment: true });
-  const writes = [], requests = [], timers = new Map(), frames = [], scrolls = [];
+  const writes = [], requests = [], timers = new Map(), frames = [], scrolls = [], scrollCalls = [];
   let timerId = 0;
   const history = { state, replaceState(...args) { writes.push(args); this.state = args[0]; } };
   const location = { pathname: path, hash, href: `https://example.org${path}${hash}` };
-  const window = Object.assign(new Node("window"), { scrollY: 0, innerHeight: 800, isSecureContext: false,
-    scrollTo({ top }) { this.scrollY = top; scrolls.push(top); } });
+  const window = Object.assign(new Node("window"), { scrollX: 0, scrollY: 0, innerWidth: 1280, innerHeight: 800, isSecureContext: false,
+    scrollTo({ top = this.scrollY, left = this.scrollX, behavior }) { this.scrollY = top; this.scrollX = left; scrolls.push(top); scrollCalls.push({ top, left, behavior }); } });
   const navigator = { onLine: online, serviceWorker: new Node("serviceworker") };
   const storage = new Proxy({}, { get() { assert.fail("Directory search must never read or write web storage"); } });
   const context = vm.createContext({ document, window, history, location, navigator, URL, Intl, AbortController,
@@ -157,7 +158,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
  globalThis.savedSync = syncView;
   }`, context);
   return { document, window, navigator, root, input, country, need, clear, count, chips, shell, resultList, more,
-    history, location, writes, requests, timers, scrolls, savedHeading, savedLink, browseLink,
+    history, location, writes, requests, timers, scrolls, scrollCalls, savedHeading, savedLink, browseLink,
     staticSavedBrowse(scroll = 450) {
       window.scrollY = scroll; savedLink.dispatch("click"); location.hash = "#saved"; history.state = null;
       browseLink.dispatch("click"); location.hash = "#directory-results"; history.state = null;
@@ -208,6 +209,39 @@ test("fresh early typing searches the real catalog without another input event o
   assertLondon(f); assert.equal(f.document.activeElement, f.input); assert.equal(f.input.selectionStart, 9);
 });
 
+test("a focused pre-runtime edit cancels pending motion at the visitor's current position", () => {
+  const f = fixture({ state: stale() }); f.window.scrollX = 17; f.window.scrollY = 145; f.input.focus();
+  f.type(london, { isComposing: true });
+  assert.deepEqual(f.scrollCalls, [{ top: 145, left: 17, behavior: "instant" }]);
+  assert.equal(f.window.scrollY, 145); assert.equal(f.window.scrollX, 17);
+  assert.equal(f.document.activeElement, f.input); assert.equal(f.input.value, london);
+  assert.deepEqual(f.history.state, stale());
+});
+
+test("unfocused, country, and post-runtime edits do not cancel unrelated visitor scrolling", () => {
+  const f = fixture(); f.window.scrollY = 145;
+  f.input.focus(); f.input.blur(); f.type(london); f.country.dispatch("change");
+  assert.deepEqual(f.scrollCalls, []);
+  f.start(); f.input.focus(); f.type("WIC");
+  assert.deepEqual(f.scrollCalls, []); assert.equal(f.window.scrollY, 145);
+});
+
+for (const obscured of ["above", "below", "horizontal", "covered top", "covered bottom", "hidden"]) {
+  test(`an early edit preserves necessary focus-reveal motion when the input is ${obscured}`, () => {
+    const f = fixture(); const box = f.input.getBoundingClientRect();
+    if (obscured === "above") Object.assign(box, { top: -4, bottom: 40 });
+    if (obscured === "below") Object.assign(box, { top: 780, bottom: 824 });
+    if (obscured === "horizontal") Object.assign(box, { left: -2, right: 238 });
+    if (obscured === "hidden") Object.assign(box, { width: 0, height: 0 });
+    f.input.getBoundingClientRect = () => box;
+    if (obscured.startsWith("covered")) f.document.elementFromPoint = (_x, y) =>
+      (obscured === "covered top" ? y < box.top + 5 : y > box.bottom - 5) ? f.document.body : f.input;
+    f.input.focus(); f.type(london);
+    assert.deepEqual(f.scrollCalls, [], "do not interrupt motion required to reveal the editor");
+    assert.equal(f.document.activeElement, f.input); assert.equal(f.input.value, london);
+  });
+}
+
 test("untouched empty startup keeps static rows and avoids an unnecessary index request", async () => {
   const f = fixture(); f.start(); await f.flush();
   assertOrdinary(f); assert.equal(f.requests.length, 0); assert.deepEqual(f.scrolls, []);
@@ -230,7 +264,7 @@ test("early new text wins over stale history filters, result focus and scroll", 
   const f = fixture({ state: stale() }); f.input.focus(); f.type(london); f.input.setSelectionRange(7, 7);
   f.start(); await f.flush(); await f.resolve(); f.frames();
   assertLondon(f); assert.equal(f.country.value, ""); assert.equal(f.history.state.rwnDirectory.category, "");
-  assert.equal(f.document.activeElement, f.input); assert.equal(f.input.selectionStart, 7); assert.deepEqual(f.scrolls, []);
+  assert.equal(f.document.activeElement, f.input); assert.equal(f.input.selectionStart, 7); assert.deepEqual(f.scrolls, [0], "cancel motion at the current position, never restore stale 900px history");
   assert.equal(f.history.state.rwnDirectory.query, london); assert.equal(f.history.state.rwnDirectory.focus, "");
   assert.deepEqual(f.history.state.unrelated, { retained: true });
 });
@@ -247,7 +281,7 @@ test("early edits back to blank defeat stale history even after the input loses 
   f.start(); await f.flush(); f.frames();
   assertOrdinary(f); assert.equal(f.requests.length, 0); assert.equal(f.document.activeElement, f.document.body);
   assert.equal(f.history.state.rwnDirectory.query, ""); assert.equal(f.history.state.rwnDirectory.category, "");
-  assert.equal(f.history.state.rwnDirectory.country, ""); assert.equal(f.history.state.rwnDirectory.focus, ""); assert.deepEqual(f.scrolls, []);
+  assert.equal(f.history.state.rwnDirectory.country, ""); assert.equal(f.history.state.rwnDirectory.focus, ""); assert.deepEqual(f.scrolls, [0, 0], "typing and clearing each cancel pending motion without moving the page");
 });
 
 test("browser-restored focus without an edit does not discard valid entry history", async () => {
@@ -292,7 +326,7 @@ for (const withHistory of [false, true]) {
       const savedHeading = f.document.createElement("h2"); f.shell.append(savedHeading);
       f.location.hash = "#saved"; f.shell.classList.add("has-saved-view"); savedHeading.focus();
       f.start(); await f.flush(); f.frames();
-      assert.equal(f.requests.length, 0); assert.equal(f.document.activeElement, savedHeading); assert.deepEqual(f.scrolls, []);
+      assert.equal(f.requests.length, 0); assert.equal(f.document.activeElement, savedHeading); assert.deepEqual(f.scrolls, [0], "only the preceding focused edit cancelled native motion");
       assert.equal(f.input.value, london); assert.equal(f.country.value, "");
       f.location.hash = ""; f.shell.classList.remove("has-saved-view");
       // Back may restore the original pre-Saved entry, including null/stale
@@ -334,10 +368,10 @@ test("ordinary early input precedence expires before later history navigation", 
 test("composition spanning runtime startup waits for the final committed query", async () => {
   const f = fixture({ state: stale() }); f.input.focus(); f.input.dispatch("compositionstart"); f.type("Drinking", { isComposing: true });
   f.start(); await f.flush();
-  assert.equal(f.input.value, "Drinking"); assert.equal(f.requests.length, 0); assert.deepEqual(f.scrolls, []);
+  assert.equal(f.input.value, "Drinking"); assert.equal(f.requests.length, 0); assert.deepEqual(f.scrolls, [0]);
   f.input.value = london; f.input.setSelectionRange(8, 8); f.input.dispatch("compositionend"); f.input.dispatch("input", { isComposing: false });
   await f.flush(); assert.equal(f.requests.length, 1); await f.resolve(); assertLondon(f);
-  assert.equal(f.input.selectionStart, 8); assert.equal(f.document.activeElement, f.input); assert.deepEqual(f.scrolls, []);
+  assert.equal(f.input.selectionStart, 8); assert.equal(f.document.activeElement, f.input); assert.deepEqual(f.scrolls, [0], "runtime retires the pre-handler cancellation listener");
 });
 
 test("post-startup composition and composing input events do not search partial text", async () => {

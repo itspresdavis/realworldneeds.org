@@ -21,6 +21,8 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 5rem; background: var(--paper); }
+/* Native search focus reveals the caret; retain clearance for the whole field. */
+html:has([data-directory-query]:focus) { scroll-padding-top: 6rem; }
 body { min-width: 320px; margin: 0; background: var(--paper); color: var(--ink); font-size: 17px; line-height: 1.68; -webkit-font-smoothing: antialiased; }
 a { color: var(--green-dark); text-underline-offset: .18em; text-decoration-thickness: 1px; }
 a:hover { color: #055f34; }
