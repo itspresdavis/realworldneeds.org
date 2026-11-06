@@ -407,7 +407,13 @@ const reviewedResources = [
     sourceName: "The Bowery Mission",
     sourceKind: "Official provider",
     sourceUrl: "https://www.bowery.org/get-help/",
-    sourceDetail: "The official help page lists free meals at 227 Bowery and shelter intake at 90 Lafayette Street."
+    sourceDetail: "The official help page lists free meals at 227 Bowery and shelter intake at 90 Lafayette Street.",
+    serviceAccess: [
+      { id: "meals", label: "Meal service", categories: ["food"], mode: "walk-in", address: "227 Bowery, New York, NY 10002", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-06", instructions: "Meals at the Bowery Campus. No ID required; check the official page for current meal times." },
+      { id: "shelter", label: "Shelter intake", categories: ["shelter"], mode: "intake", address: "90 Lafayette Street, New York, NY 10013", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-06", instructions: "Overnight shelter intake is at the Tribeca Campus, a different location from meal service. The official page lists daily intake at 3 p.m. for women and 3:45 p.m. for men. Confirm current intake and capacity before travel: (212) 226-6214." },
+      { id: "showers-clothing", label: "Showers and clothing", categories: ["hygiene", "clothing"], mode: "intake", address: "227 Bowery, New York, NY 10002", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-06", instructions: "Registration and capacity limits apply at the Bowery Campus. Check the official program schedule before travel." },
+      { id: "medical", label: "Mobile medical care", categories: ["health"], mode: "intake", address: "227 Bowery, New York, NY 10002", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-06", instructions: "Project Renewal provides free care in a mobile medical van outside the Bowery Campus. Check the official page for service days and times." }
+    ]
   }),
   verified({
     id: "beacon-houston",

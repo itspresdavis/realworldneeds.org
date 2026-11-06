@@ -1,15 +1,12 @@
 import { isContactOnly, hasMapCoordinates } from "./utils/resource-location.js";
+import { serviceActions } from "./utils/service-access.js";
 import { resources } from "./data/resources.js";
 import { phoneLinks } from "./utils/phone.js";
 
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
 
 function directionsUrl(resource) {
-  const coordinate = `${resource.lat},${resource.lng}`;
-  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-    return `https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&dirflg=d`;
-  }
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`;
+  return serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google" })[0]?.href || "";
 }
 
 function createAction(label, href, ariaLabel, { primary = false, newTab = false } = {}) {
@@ -54,8 +51,8 @@ function enhanceCard(article) {
     for (const { label, href } of phones) {
       actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
-    if (resource.kind === "direct" && hasMapCoordinates(resource)) {
-      actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));
+    for (const action of serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google" })) {
+      actions.append(createAction(action.label, action.href, `${action.label} for ${resource.name}`, { newTab: true }));
     }
     if (isContactOnly(resource) && resource.accessUrl) {
       actions.append(createAction("Contact website", resource.accessUrl, `Open the contact website for ${resource.name}`, { newTab: true }));

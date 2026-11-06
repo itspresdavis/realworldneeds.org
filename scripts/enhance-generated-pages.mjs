@@ -1,3 +1,4 @@
+import { serviceActions } from "../src/utils/service-access.js";
 import { relatedResources } from "./related-resources.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { minify } from "terser";
@@ -94,10 +95,8 @@ function serviceNextStepMarkup(resource) {
   for (const { label, href } of phones) {
     links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
   }
-  if (resource.kind === "direct" && hasMapCoordinates(resource)) {
-    const coordinate = `${resource.lat},${resource.lng}`;
-    links.push(`<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open Apple Maps</span></a>`);
-    links.push(`<a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Open location</span></a>`);
+  for (const action of serviceActions(resource)) {
+    links.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer"><strong>${escapeHtml(action.label)}</strong><span>${escapeHtml(action.address || "Check access with the provider")}</span></a>`);
   }
   if (hasMapCoordinates(resource)) links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
   if (isContactOnly(resource) && resource.accessUrl) {

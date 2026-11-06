@@ -1,3 +1,4 @@
+import { validateServiceAccess } from "../src/utils/service-access.js";
 import { validateResourceLocation } from "../src/utils/resource-location.js";
 import { categories, resources } from "../src/data/resources.js";
 import { freeAccessModels } from "../src/data/free-access.js";
@@ -28,6 +29,8 @@ const required = [
 const ids = new Set();
 const datasetRecords = new Set();
 for (const resource of resources) {
+  const accessError = validateServiceAccess(resource);
+  if (accessError) throw new Error(`${resource.id}: ${accessError}`);
   for (const field of required) {
     if (resource[field] === undefined || resource[field] === "") {
       throw new Error(`${resource.id || "Unknown resource"} is missing ${field}.`);
