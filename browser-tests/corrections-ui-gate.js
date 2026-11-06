@@ -46,5 +46,5 @@ export async function correctionUIFixture() {
     }catch{return send(500,'text/plain','UI fixture failed');}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  return {state,url:`http://127.0.0.1:${server.address().port}`,close:()=>new Promise(resolve=>server.close(resolve))};
+  return {state,url:`http://127.0.0.1:${server.address().port}`,close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
 }

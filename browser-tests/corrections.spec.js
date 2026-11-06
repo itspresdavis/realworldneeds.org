@@ -58,15 +58,18 @@ test('private review renders reports safely, reconciles conflict and requires a 
   await expect(page.locator('.correction-review__note').first()).toContainText('<img src=x');
   await expect(page.locator('.correction-review img')).toHaveCount(0);
   await page.getByRole('combobox',{name:'Decision status',exact:true}).selectOption('ready');
-  await page.getByLabel('Reason and source findings',{exact:true}).fill('Reviewed the official provider intake details.');
-  await page.getByLabel('Evidence URL (HTTPS)',{exact:true}).fill('https://www.bowery.org/get-help/');
+  // Playwright#43967: getByLabel scans unrelated ARIA references in Firefox's
+  // isolated world; axe reads them in the page world. Role + exact name keeps
+  // the accessible-label check without triggering that cross-world engine bug.
+  await page.getByRole('textbox',{name:'Reason and source findings',exact:true}).fill('Reviewed the official provider intake details.');
+  await page.getByRole('textbox',{name:'Evidence URL (HTTPS)',exact:true}).fill('https://www.bowery.org/get-help/');
   for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:900});await overflow(page);}
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   fixture.state.conflict=true;
   await page.getByRole('button',{name:'Save review decision',exact:true}).click();
   await expect(page.locator('.correction-review__detail')).toContainText('Another reviewer changed');
   await page.getByRole('button',{name:'Reload report and keep my draft'}).click();
-  await expect(page.getByLabel('Reason and source findings',{exact:true})).toHaveValue('Reviewed the official provider intake details.');
+  await expect(page.getByRole('textbox',{name:'Reason and source findings',exact:true})).toHaveValue('Reviewed the official provider intake details.');
   expect(fixture.state.decisions).toHaveLength(1);
   await page.getByRole('button',{name:'Save review decision',exact:true}).click();
   await expect(page.locator('.correction-review__detail')).toContainText('No public listing was changed or published');
