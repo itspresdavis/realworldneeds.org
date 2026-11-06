@@ -1,3 +1,4 @@
+import { waitForGlobeRendererReady } from "./qa-globe-readiness.mjs";
 import { verifyGlobeCoordinates } from "./qa-globe-coordinate-fidelity.mjs";
 import { verifyPageInteractions } from "./qa-page-interactions.mjs";
 import { verifyFinderEditing } from "./qa-search-editing.mjs";
@@ -431,6 +432,7 @@ async function run() {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: mobileViewport, screenWidth: width, screenHeight: height });
       await navigate(client, `${HOST}/`);
       const fallback = await evaluate(client, `(async () => {
+        await (${waitForGlobeRendererReady.toString()})();
         const stage = document.querySelector(".globe-stage");
         const originalHeight = stage.getBoundingClientRect().height;
         const input = document.getElementById("resourceSearch");
