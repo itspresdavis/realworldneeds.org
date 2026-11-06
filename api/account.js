@@ -2,6 +2,7 @@ import {
   clientFor,
   json,
   readBody,
+  RequestBodyError,
   requestOrigin,
   requireUser,
   sameOrigin,
@@ -10,6 +11,14 @@ import {
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "private, no-store");
   try {
+    if (!["GET", "POST"].includes(req.method)) {
+      res.setHeader("Allow", "GET, POST");
+      return json(res, 405, { error: "Method not allowed." });
+    }
+    if (req.method === "POST" && !sameOrigin(req))
+      return json(res, 403, {
+        error: "Open this form on the RWN website and try again.",
+      });
     const client = clientFor(req, res);
     const url = new URL(req.url, requestOrigin(req));
     if (req.method === "GET" && url.searchParams.get("action") === "callback") {
@@ -47,14 +56,6 @@ export default async function handler(req, res) {
       if (user) json(res, 200, { user: { email: user.email, id: user.id } });
       return;
     }
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "GET, POST");
-      return json(res, 405, { error: "Method not allowed." });
-    }
-    if (!sameOrigin(req))
-      return json(res, 403, {
-        error: "Open this form on the RWN website and try again.",
-      });
     const { action, email, password } = await readBody(req);
     if (action === "delete-request") {
       const user = await requireUser(client, res);
@@ -132,7 +133,9 @@ export default async function handler(req, res) {
           ? "Check your inbox for the next step. Open the link in this browser."
           : "Account updated.",
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError)
+      return json(res, error.status, { error: error.message });
     return json(res, 503, {
       error:
         "Account services are temporarily unavailable. Please try again. The public directory is still available.",
