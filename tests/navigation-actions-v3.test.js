@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -68,7 +69,7 @@ test("resource-finder service pages do not promise directions and explain their 
 
 test("whole-directory search index carries only the fields needed for immediate actions", async () => {
   const payload = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(payload.schemaVersion, "1.6");
+  assert.equal(payload.schemaVersion, SEARCH_CATALOG_SCHEMA);
   const direct = payload.records.find((record) => record.kind === "direct");
   assert.ok(direct);
   assert.ok(Object.hasOwn(direct, "phone"));

@@ -1,9 +1,10 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
-const source = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replace("export ", "");
-const response = cached => new Response(JSON.stringify({ records: [{ id: "fixture" }], scopes: {} }), { headers: cached ? { "X-RWN-Catalog-Cache": "stale" } : {} });
+const source = (await readFile(new URL("../public/catalog-request.js", import.meta.url), "utf8")).replaceAll("export ", "");
+const response = cached => new Response(JSON.stringify({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [{ id: "fixture" }], scopes: {} }), { headers: cached ? { "X-RWN-Catalog-Cache": "stale" } : {} });
 function fixture(fetch) {
   const events = [], document = { documentElement: { dataset: {} } };
   const window = { dispatchEvent(event) { events.push(event.detail); } };

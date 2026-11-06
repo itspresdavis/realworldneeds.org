@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
 import assert from "node:assert/strict";
@@ -262,7 +263,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 }, requests = [];
   const navigator = { onLine: true, serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } };
   const location = { hash }, history = { state: null }, restores = [];
-  const response = { ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) };
+  const response = { ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: ids.map((id) => ({ id, name: id })) }) };
   let resolveCatalog, rejectCatalog;
   const catalog = pendingCatalog ? new Promise((resolve, reject) => { resolveCatalog = resolve; rejectCatalog = reject; }) : Promise.resolve(response);
   const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
@@ -561,7 +562,7 @@ for (const stage of ["headers", "JSON"]) {
     assert.equal(f.retry.getAttribute("aria-disabled"), "true");
     for (let i = 0; i < 5; i++) f.retry.click();
     await settle(); assert.equal(attempts, 2);
-    finish({ ok: true, json: async () => ({ records: [{ id: "service-0", name: "Current listing" }] }) });
+    finish({ ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [{ id: "service-0", name: "Current listing" }] }) });
     await settle();
     assert.equal(f.retry.hidden, true); assert.equal(f.document.activeElement, f.heading);
     assert.equal(f.list.children.length, 2); assert.match(f.summary.textContent, /1 no longer/);
@@ -572,10 +573,10 @@ for (const stage of ["headers", "JSON"]) {
 test("Saved online recovery replaces a stalled request and ignores its late success", async () => {
   let attempts = 0, finishOld;
   const old = new Promise(resolve => { finishOld = resolve; });
-  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : { ok: true, json: async () => ({ records: [] }) } });
+  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : { ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [] }) } });
   f.events["rwn-connection-restored"](); await settle();
   assert.equal(attempts, 2); assert.match(f.summary.textContent, /1 no longer/);
-  finishOld({ ok: true, json: async () => ({ records: [{ id: "service-0", name: "Withdrawn" }] }) });
+  finishOld({ ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [{ id: "service-0", name: "Withdrawn" }] }) });
   await settle();
   assert.match(f.summary.textContent, /1 no longer/); assert.equal(f.effects.writes, 0);
   f.events.offline(); await settle(); assert.equal(attempts, 2, "finished offline snapshot remains cached");
@@ -591,7 +592,7 @@ test("Saved navigation away supersedes timeout without restoring the panel or st
 });
 
 
-const catalogResponse = records => ({ ok: true, json: async () => ({ records: structuredClone(records) }) });
+const catalogResponse = records => ({ ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: structuredClone(records) }) });
 
 test("Saved identical fresh catalog keeps row identity, pagination and focus through controller replacement", async () => {
   const records = Array.from({ length: 61 }, (_, index) => ({ id: `service-${index}`, name: `Service ${index}`, sourceStatus: { title: "Open", detail: "Check with provider" } }));

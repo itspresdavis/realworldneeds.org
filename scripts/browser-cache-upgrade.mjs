@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { assertCatalogFailure } from "./qa-catalog-recovery.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -127,7 +128,7 @@ async function capture(client, name) {
 // Serve only synthetic catalog rows, using the production directory entry and
 // worker. No real record, source-hidden address, or production cache is touched.
 const fixtureRecord = (id) => ({ id, name: `Fixture ${id}`, place: "Synthetic test place", category: "food", categoryLabels: ["Food"], kind: "coverage", checked: "2026-10-10", search: `fixture ${id} food` });
-const fixtureCatalog = (removed) => ({ records: [fixtureRecord("survivor"), ...(removed ? [fixtureRecord("removed")] : [])], scopes: {} });
+const fixtureCatalog = (removed) => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [fixtureRecord("survivor"), ...(removed ? [fixtureRecord("removed")] : [])], scopes: {} });
 const fixtureHtml = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Directory upgrade fixture</title><body>
 <main class="directory-shell"><section data-directory-search><input aria-label="Search" data-directory-query><button data-directory-clear hidden>Clear</button><div data-directory-categories></div><p data-directory-count role="status" aria-live="polite"></p><button type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button></section><section class="directory-records"></section></main>
 <script type="module" src="/directory.js?v=fixture-initial"></script></body></html>`;

@@ -1,3 +1,5 @@
+import { createCatalogLoader } from "./catalog-request.js";
+
 const PROBE_URL = "/data/release.json";
 const notice = document.getElementById("offlineDirectoryNotice");
 
@@ -11,7 +13,9 @@ if (notice) {
   let catalogCached = document.documentElement.dataset?.rwnCatalogCached === "true";
   let probeGeneration = 0;
   let pendingProbe;
-  let catalogPromise;
+  const catalog = createCatalogLoader("/data/search-index.json");
+  let catalogUnavailable = false;
+  const unavailableMessage = "Listing actions are unavailable. Reconnect and retry.";
   const explanation = notice.querySelector("p");
   const initialExplanation = explanation?.textContent;
   const retry = document.createElement("button");
@@ -32,15 +36,6 @@ if (notice) {
 
   const setText = (element, value) => {
     if (element && element.textContent !== value) element.textContent = value;
-  };
-
-  const catalog = () => {
-    catalogPromise ||= fetch("/data/search-index.json", { credentials: "same-origin", cache: "force-cache" })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Search index unavailable (${response.status})`);
-        return response.json();
-      });
-    return catalogPromise;
   };
 
   const resultId = (link) => {
@@ -67,18 +62,43 @@ if (notice) {
     return link;
   };
 
+  // Only invalidate rows this fallback owns; the regular renderer manages its own.
+  let enhancementGeneration = 0;
+  const fallbackRows = new Map();
+  const invalidateFallback = () => {
+    enhancementGeneration += 1;
+    if (fallbackRows.size) catalogUnavailable = true;
+    for (const [link, { wrapper, extras }] of fallbackRows) {
+      extras.forEach(node => node.remove());
+      wrapper.replaceWith(link);
+    }
+    fallbackRows.clear();
+    setOffline(networkOffline);
+  };
+
   const enhanceSearchActions = async () => {
+    for (const [link, { wrapper }] of fallbackRows) {
+      if (wrapper.isConnected === false) fallbackRows.delete(link);
+    }
     const links = [...document.querySelectorAll(".directory-global-result")].filter((link) => !link.closest(".directory-global-result-wrap"));
     if (!links.length) return;
+    const generation = enhancementGeneration;
     let payload;
     try {
       payload = await catalog();
+      if (generation !== enhancementGeneration) return;
+      catalogUnavailable = false;
     } catch {
+      if (generation !== enhancementGeneration) return;
+      catalogUnavailable = true;
+      setText(status, unavailableMessage);
+      setOffline(networkOffline);
       return;
     }
     const byId = new Map((payload.records || []).map((record) => [record.id, record]));
 
     for (const link of links) {
+      if (link.isConnected === false || link.closest(".directory-global-result-wrap")) continue;
       const record = byId.get(resultId(link));
       if (!record) continue;
       const wrapper = document.createElement("article");
@@ -110,20 +130,25 @@ if (notice) {
 
       link.before(wrapper);
       wrapper.append(link);
+      const extras = [];
+      fallbackRows.set(link, { wrapper, extras });
       if (record.phone && (record.phoneLinks?.length !== 1 || record.phoneLinks[0].label !== record.phone)) {
         const phone = document.createElement("small");
         phone.textContent = `Phone: ${record.phone}`;
         link.append(phone);
+        extras.push(phone);
       }
       if (record.locationPrecision === "contact-only") {
         const scope = document.createElement("small");
         scope.textContent = ["Phone or online help; check coverage.", record.coverageNote, record.eligibility ? `Eligibility: ${record.eligibility}` : "", record.phoneAccess ? `Dialing scope: ${record.phoneAccess}` : "", record.accessUrl ? `Website (connection required): ${record.accessUrl}` : ""].filter(Boolean).join(" ");
         link.append(scope);
+        extras.push(scope);
       }
       if (record.serviceAccessSummary) {
         const access = document.createElement("small");
         access.textContent = record.serviceAccessSummary;
         link.append(access);
+        extras.push(access);
       }
       wrapper.append(actions);
     }
@@ -132,13 +157,13 @@ if (notice) {
 
   const setOffline = (value) => {
     networkOffline = Boolean(value);
-    offline = networkOffline || catalogCached;
+    offline = networkOffline || catalogCached || catalogUnavailable;
     document.documentElement.classList.toggle("rwn-directory-offline", offline);
     // Let someone using Retry keep their focus and read the recovery message.
     notice.hidden = !offline && !notice.contains(document.activeElement);
     if (explanation) {
       explanation.hidden = !offline;
-      setText(explanation, catalogCached && !networkOffline
+      setText(explanation, catalogUnavailable ? unavailableMessage : catalogCached && !networkOffline
         ? "Saved directory copy. RWN is reachable, but current listing details could not be refreshed. Retry before traveling or relying on a listing."
         : initialExplanation);
     }
@@ -209,13 +234,19 @@ if (notice) {
         return response;
       }),
       interrupted
-    ]).then((response) => {
+    ]).then(async (response) => {
       if (generation !== probeGeneration) return;
       setOffline(!response.ok);
       if (response.ok) { navigationRecovery = false; cachedNavigation?.remove(); }
-      if (response.ok && recoverCatalog && (event?.type !== "online" || catalogCached)) window.dispatchEvent(new Event("rwn-connection-restored"));
+      if (response.ok && recoverCatalog && (event?.type !== "online" || catalogCached || catalogUnavailable)) {
+        window.dispatchEvent(new Event("rwn-connection-restored"));
+        invalidateFallback();
+        catalog.retry();
+        await enhanceSearchActions();
+        if (generation !== probeGeneration) return;
+      }
       setText(status, response.ok
-        ? catalogCached ? "RWN is reachable, but search is using a saved catalog. Retry to refresh listings before relying on them."
+        ? catalogUnavailable ? unavailableMessage : catalogCached ? "RWN is reachable, but search is using a saved catalog. Retry to refresh listings before relying on them."
           : "Connection restored. Listing details and online links are available."
         : "Could not reach RWN. Check your connection and try again.");
     }).catch(() => {
@@ -235,7 +266,7 @@ if (notice) {
     catalogCached = event.detail?.cached === true;
     setOffline(networkOffline);
     if (catalogCached) setText(status, "Search is using a saved catalog. Current listing details are unverified; retry to refresh.");
-    else if (!networkOffline) setText(status, "The directory has refreshed. Listing details and online links are available.");
+    else if (!networkOffline && !catalogUnavailable) setText(status, "The directory has refreshed. Listing details and online links are available.");
   });
 
   retry.addEventListener("click", probe);
@@ -267,6 +298,11 @@ if (notice) {
   const savedList = document.querySelector("[data-saved-list]");
   if (savedList) observer.observe(savedList, { childList: true, subtree: true });
 
+  navigator.serviceWorker?.addEventListener("controllerchange", () => {
+    invalidateFallback();
+    catalog.reset();
+    enhanceSearchActions();
+  });
   window.addEventListener("online", probe);
   window.addEventListener("offline", () => {
     // A late success from the old connection must not override this event.

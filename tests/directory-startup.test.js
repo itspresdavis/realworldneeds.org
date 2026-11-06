@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import vm from "node:vm";
@@ -694,7 +695,7 @@ for (const outcome of ["success", "failure"]) {
     assert.equal(f.requests[1].options.cache, "reload");
     assert.equal(f.requests[1].url, "/data/search-index.json");
     await f.resolve(1); assertLondon(f);
-    if (outcome === "success") await f.resolve(0, { records: [], scopes: {} });
+    if (outcome === "success") await f.resolve(0, { schemaVersion: SEARCH_CATALOG_SCHEMA, records: [], scopes: {} });
     else await f.reject(0);
     assertLondon(f); assert.equal(f.document.activeElement, f.input);
   });
