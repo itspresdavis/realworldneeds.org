@@ -48,6 +48,29 @@ The allowed cost models are `free`, `free-eligible`, `free-navigation`, and `fre
 
 The validator rejects duplicates, missing provenance, unsafe source URLs, invalid coordinates, repeated or unknown categories, missing no-cost language, unsupported free-access models, reversed active dates, malformed review dates, and unknown source datasets.
 
+## Outstanding source-reuse decisions (November 7, 2026)
+
+Provenance and attribution do not establish a dataset licence. A bounded current
+review found no recorded permission for the existing **1,373 Trussell snapshot
+records**. The official `/terms-and-conditions` link redirects to donation terms;
+its privacy policy does not establish finder-data reuse rights. Before another
+bulk refresh or expansion, RWN's operator must document an applicable licence
+or written permission covering the published fields, JSON/CSV exports, offline
+cache and refresh/removal requirements. No such permission is claimed here.
+
+The **105 UNHCR country locators** use original summaries and official links,
+rather than a copied inventory of country services. Assess that narrower use
+separately. The terms URL linked by the official HELP Mexico footer returned
+HTTP 429 during this review; current conditions remain unverified. Do not
+repeatedly fetch the rate-limited page or infer permission from its public access.
+
+PR #92 is an open withholding proposal, not a reuse agreement or an instruction
+to erase existing records. This release preserves the existing publication and
+withheld IDs while recording these unresolved source-specific decisions. It
+does not refresh either population or label their reuse cleared. The five new
+November 7 records have their own bounded factual-summary evidence and reuse
+scope in the priority review. Full source captures remain outside tracked source.
+
 ## Refresh modes
 
 1. **Reviewed provider record** — a human-readable source is checked and represented in the curated directory.

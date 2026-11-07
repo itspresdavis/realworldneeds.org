@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Implemented for review; public intake remains disabled and is not launched.** No operator, monitored destination, retention rule or abuse process has been approved in this work. No hosted correction migration, test report, notification, or activation has occurred. The backend is now healthy; see DATABASE_VERIFICATION_2026-11-07.md for separately applied catalog permission repairs and exact migration mappings. Missing ownership does not block independent finder fixes.
+**Implemented for review; public intake remains disabled and is not launched.** No operator, monitored destination, retention rule or abuse process has been approved in this work. The hosted queue schema is applied and anonymous/nonmember denial checks are verified; no hosted test report, notification, or activation has occurred. The backend is healthy; see DATABASE_VERIFICATION_2026-11-07.md for catalog reconciliation, permission repairs and exact migration mappings. Missing ownership does not block independent finder fixes.
 
 The public `/corrections` page shows honest unavailable/retry states. Its form becomes usable only after the server reports that both server and database activation gates are satisfied. Service-page links are separately source-controlled by `platformStatus.publicCorrectionLinksEnabled`, currently `false`. There is no live availability request in service handoff actions.
 
