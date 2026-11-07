@@ -1,5 +1,6 @@
 import { serviceActions } from "../src/utils/service-access.js";
 import { relatedResources } from "./related-resources.mjs";
+import { resourceScope } from "../src/utils/resource-scope.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { minify } from "terser";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -56,7 +57,7 @@ function relatedMarkup(resource) {
   const country = String(resource.country || "").trim();
   const isCountry = Boolean(country && country !== "Global");
   const heading = related.length
-    ? isCountry ? `Related help in ${country}` : "Related networks and finders"
+    ? isCountry ? "Related help and wider finders" : "Related networks and finders"
     : "Explore more help";
   const countryHref = isCountry ? `/directory/${slugify(country)}` : "/directory/global";
   const note = related.length
@@ -74,7 +75,7 @@ function relatedMarkup(resource) {
       const label = [kind, categories[candidate.category]?.label || "Essential help"].filter(Boolean).join(" · ");
       const place = candidate.kind === "direct" && isExactServiceSite(candidate)
         ? formatResourcePlace(candidate)
-        : candidate.country === "Global" ? "Check provider coverage" : candidate.country;
+        : resourceScope(candidate).label;
       return `<a href="/service/${encodeURIComponent(candidate.id)}"><strong>${escapeHtml(candidate.name)}</strong><span>${escapeHtml(place)}</span><small>${escapeHtml(label)}</small></a>`;
     }).join("")}</div>` : ""}
     ${broader}
@@ -130,6 +131,7 @@ function directorySearchMarkup(scope) {
   </section><section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
       <label class="directory-search-control"><span>Search this directory</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Service, place, or organization" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="Alt+/ Escape" /></span></label>
+      <label class="directory-place-field"><span>Place (city, region, country or postal code)</span><input type="search" data-directory-place aria-label="Place (city, region, country or postal code)" autocomplete="off" enterkeyhint="search" /></label>
       ${countryControl}
     </div>
     <label class="directory-need-field"><span>Type of help</span><select data-directory-need disabled><option value="">All help</option>${needs.map(need => `<option value="${escapeHtml(need)}">${escapeHtml(need)}</option>`).join("")}</select></label>

@@ -169,6 +169,21 @@
   ],
   "redirects": [
     {
+      "source": "/directory/local/united-states/united-states/:path*",
+      "destination": "/directory/united-states",
+      "permanent": true
+    },
+    {
+      "source": "/directory/local/united-kingdom/united-kingdom/:path*",
+      "destination": "/directory/united-kingdom",
+      "permanent": true
+    },
+    {
+      "source": "/directory/local/united-states/new-york/:path*",
+      "destination": "/directory/local/united-states/new-york-city/:path*",
+      "permanent": true
+    },
+    {
       "source": "/join",
       "has": [
         {
