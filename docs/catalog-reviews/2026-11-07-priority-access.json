@@ -34,6 +34,37 @@
         "tact-mission"
       ],
       "coordinates": "Not verified; address-only direct site"
+    },
+    {
+      "resourceId": "imss-bienestar-tijuana-centro",
+      "action": "add",
+      "sourceIds": [
+        "imss-registro",
+        "imss-clinics",
+        "imss-clinic-postal22"
+      ],
+      "sourceRecordId": "BCIMB001731",
+      "coordinates": "Use source latitud/longitud, not postal ylat/xlong. Operating days remain unknown."
+    },
+    {
+      "resourceId": "imss-bienestar-rosarito-urbano",
+      "action": "add",
+      "sourceIds": [
+        "imss-registro",
+        "imss-clinics",
+        "imss-clinic-postal22"
+      ],
+      "sourceRecordId": "BCIMB001755",
+      "coordinates": "Use source latitud/longitud, not postal ylat/xlong. Operating days remain unknown."
+    },
+    {
+      "resourceId": "imss-bienestar-mexico-finder",
+      "action": "add",
+      "sourceIds": [
+        "imss-registro",
+        "imss-clinics"
+      ],
+      "coordinates": "None; contact-only national finder, not local physical coverage."
     }
   ],
   "sources": [
@@ -121,6 +152,54 @@
         "mode": "bounded factual summary with attribution and source link",
         "limits": "No bulk feed, copyrighted page text, imagery, logos or private data republished. No open-data licence or provider endorsement asserted. Further automated refresh needs a source-specific access/terms review."
       }
+    },
+    {
+      "id": "imss-registro",
+      "url": "https://registro.imssbienestar.gob.mx/",
+      "successfulFetchAt": "2026-11-07T05:48:37.195442+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Free-care eligibility for people without social security coverage; Baja California participation; registration requirements",
+      "verificationMethod": "substantive official-page and bounded clinic-record review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "documentSha256": "20e291492ba9ef674b42fe455a5c57448975c104081f2a93918f67cc4ed25437",
+      "reuse": {
+        "mode": "bounded factual summary with CLUES attribution and official source links",
+        "limits": "Two clinic records only; no full dataset or copyrighted prose republished. The general gob.mx terms endpoint returned 403, so no open-data licence or blanket future scrape permission is asserted. Explicit review is required for every source update."
+      }
+    },
+    {
+      "id": "imss-clinics",
+      "url": "https://www.imssbienestar.gob.mx/02_ubica_clinica.html",
+      "successfulFetchAt": "2026-11-07T05:49:21.044655+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Official clinic finder and its linked bounded postal-prefix source",
+      "verificationMethod": "substantive official-page and bounded clinic-record review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "documentSha256": "ab91bdb906e3194f2bf68efdb9bb6a744fa57cc71f3bcdd2904b475e7969e39d",
+      "reuse": {
+        "mode": "bounded factual summary with CLUES attribution and official source links",
+        "limits": "Two clinic records only; no full dataset or copyrighted prose republished. The general gob.mx terms endpoint returned 403, so no open-data licence or blanket future scrape permission is asserted. Explicit review is required for every source update."
+      }
+    },
+    {
+      "id": "imss-clinic-postal22",
+      "url": "https://www.imssbienestar.gob.mx/assets/json/clinicas_cp/clinicas_cp_22.json",
+      "successfulFetchAt": "2026-11-07T05:50:09.888173+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Two CLUES identities, clinic coordinates (latitud/longitud), addresses, phones and partial time ranges; postal ylat/xlong are not site coordinates",
+      "verificationMethod": "substantive official-page and bounded clinic-record review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "documentSha256": "ee64a6886b73b59851c5d780f473c6a0057f4ecb045daa8237d66d1fd8c5e5a2",
+      "reuse": {
+        "mode": "bounded factual summary with CLUES attribution and official source links",
+        "limits": "Two clinic records only; no full dataset or copyrighted prose republished. The general gob.mx terms endpoint returned 403, so no open-data licence or blanket future scrape permission is asserted. Explicit review is required for every source update."
+      }
     }
   ],
   "excludedCandidates": [
@@ -174,6 +253,7 @@
     "No providers contacted; no live availability, inventory or bed-capacity verification.",
     "Unknown fields remain unknown. Saturday/monthly exceptions remain visible text where the machine schedule is incomplete.",
     "No source refresh runs during builds. Evidence hashes identify downloaded documents; they are not signed attestations.",
-    "This tranche does not establish comprehensive coverage of any city or need."
+    "This tranche does not establish comprehensive coverage of any city or need.",
+    "IMSS official pages disagree on the number of participating states and telephone desk hours; neither aggregate state count nor desk schedule is copied. Baja California inclusion is explicit. No clinic registration or personal-information form was submitted."
   ]
 }

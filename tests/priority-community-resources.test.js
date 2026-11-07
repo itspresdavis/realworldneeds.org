@@ -67,6 +67,7 @@ test('actual priority coverage reports new meals without counting UK Taunton or 
   const report = createCoverageReport(resources, { asOf: '2026-11-07' });
   assert.deepEqual(report.communities.find(place => place.id === 'taunton-ma').matrix.meals.directRecordIds, ['taunton-community-table-meals']);
   assert.deepEqual(report.communities.find(place => place.id === 'providence-ri').matrix.meals.directRecordIds, ['amos-house-providence-meals']);
-  assert.equal(report.communities.find(place => place.id === 'rosarito-bc').directRecords, 0);
+  assert.deepEqual(report.communities.find(place => place.id === 'rosarito-bc').matrix.health.directRecordIds, ['imss-bienestar-rosarito-urbano']);
+  assert.equal(report.communities.find(place => place.id === 'rosarito-bc').matrix.meals.directRecordIds.length, 0);
   assert.equal(report.dynamicFeeds.includedInCounts, false);
 });
