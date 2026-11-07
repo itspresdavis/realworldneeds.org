@@ -111,7 +111,7 @@ function serviceNextStepMarkup(resource) {
 }
 
 function assetLinks(release, includeScript) {
-  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
+  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script><script type="module" src="/src/utils/search-intent-entry.js?v=${releaseInfo.release}"></script>` : ""}`;
 }
 
 function directorySearchMarkup(scope) {
