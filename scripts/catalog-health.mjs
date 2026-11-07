@@ -3,6 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { resources } from '../src/data/resources.js';
 import { validateResourceLocation } from '../src/utils/resource-location.js';
 import { createReviewQueue } from '../src/utils/review-schedule.js';
+import { publicSourceRequest, validPublicSourceUrl, SourceRequestBlocked } from './public-source-request.mjs';
+export { validPublicSourceUrl } from './public-source-request.mjs';
 
 const text = value => String(value || '').trim();
 const normalized = value => text(value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -16,14 +18,6 @@ const day = value => {
   const time = Date.parse(`${value}T00:00:00Z`);
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : null;
 };
-export function validPublicSourceUrl(value) {
-  try {
-    const url = new URL(value);
-    return text(value) === value && url.protocol === 'https:' && !url.username && !url.password
-      && url.hostname.includes('.') && !/^(?:localhost|127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(url.hostname)
-      && !url.hostname.endsWith('.local') && !url.hostname.startsWith('[');
-  } catch { return false; }
-}
 
 function duplicates(records, key, reason) {
   const groups = new Map();
@@ -111,7 +105,7 @@ export function createCatalogHealth(records, { asOf = new Date().toISOString().s
 // Read-only source sampling is deliberately bounded, optional, and explicit.
 // 404/410 are broken-link evidence; blocked, rate-limited, and timed-out URLs
 // remain unknown. It is not a provider or factual verification procedure.
-export async function sampleSourceLinks(records, { limit = 40, concurrency = 4, fetchImpl = fetch } = {}) {
+export async function sampleSourceLinks(records, { limit = 40, concurrency = 4, fetchImpl = publicSourceRequest } = {}) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error('Link limit must be 1–200.');
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) throw new Error('Link concurrency must be 1–4.');
   const unique = [...new Set(records.map(r => r.sourceUrl).filter(validPublicSourceUrl))];
@@ -121,12 +115,13 @@ export async function sampleSourceLinks(records, { limit = 40, concurrency = 4, 
     while (next < selected.length) {
       const url = selected[next++];
       let current = url, result;
+      const deadline = AbortSignal.timeout(10_000);
       try {
         for (let redirects = 0; redirects <= 5; redirects++) {
-          if (!validPublicSourceUrl(current)) throw new Error('Non-public or unsupported redirect target');
-          let response = await fetchImpl(current, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(10_000) });
+          if (!validPublicSourceUrl(current)) throw new SourceRequestBlocked('unsafe-redirect-target');
+          let response = await fetchImpl(current, { method: 'HEAD', redirect: 'manual', signal: deadline });
           if (response.status === 405) {
-            response = await fetchImpl(current, { method: 'GET', headers: { Range: 'bytes=0-0' }, redirect: 'manual', signal: AbortSignal.timeout(10_000) });
+            response = await fetchImpl(current, { method: 'GET', headers: { Range: 'bytes=0-0' }, redirect: 'manual', signal: deadline });
             await response.body?.cancel();
           }
           if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -139,11 +134,11 @@ export async function sampleSourceLinks(records, { limit = 40, concurrency = 4, 
           break;
         }
         if (!result) result = { url, outcome: 'unknown', reason: 'redirect-limit' };
-      } catch (error) { result = { url, outcome: 'unknown', reason: error.name === 'TimeoutError' ? 'timeout' : 'network-or-redirect-error' }; }
+      } catch (error) { result = { url, outcome: error instanceof SourceRequestBlocked ? 'blocked' : 'unknown', reason: error instanceof SourceRequestBlocked ? error.reason : error.name === 'TimeoutError' || error.name === 'AbortError' ? 'timeout' : 'network-or-redirect-error' }; }
       results.push(result);
     }
   }));
-  return { status: 'sampled', selection: 'First unique source URLs in catalog order; not random or exhaustive.', uniqueSourceUrls: unique.length, checked: results.length, unchecked: unique.length - results.length, results: results.sort((a, b) => a.url.localeCompare(b.url)) };
+  return { status: results.length && results.every(result => result.outcome === 'blocked') ? 'blocked' : 'sampled', outcomes: Object.fromEntries(['reachable', 'broken', 'unknown', 'blocked'].map(outcome => [outcome, results.filter(result => result.outcome === outcome).length])), selection: 'First unique source URLs in catalog order; not random or exhaustive.', uniqueSourceUrls: unique.length, checked: results.length, unchecked: unique.length - results.length, results: results.sort((a, b) => a.url.localeCompare(b.url)) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

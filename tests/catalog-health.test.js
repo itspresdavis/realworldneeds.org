@@ -83,6 +83,7 @@ test('sampling handles method restrictions, cancels response bodies and refuses 
   let redirects = 0;
   const rejected = await sampleSourceLinks([fixture()], { fetchImpl: async () => { redirects++; return { status: 302, headers: new Headers({ location: 'https://127.0.0.1/private' }) }; } });
   assert.equal(redirects, 1);
-  assert.equal(rejected.results[0].outcome, 'unknown');
+  assert.equal(rejected.results[0].outcome, 'blocked');
+  assert.equal(rejected.results[0].reason, 'unsafe-redirect-target');
   await assert.rejects(sampleSourceLinks([], { limit: 201 }), /1–200/);
 });

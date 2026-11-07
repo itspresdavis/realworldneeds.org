@@ -120,3 +120,25 @@ substantive provider review. Neither command is a deployed monitoring service;
 an approved operator, schedule and tested notification destination are still
 needed before alert delivery can be claimed. Keep full operational JSON outside
 tracked source and review source failures before accepting a candidate refresh.
+
+
+### Source-link transport boundary
+
+The optional health sample uses HTTPS on port 443, checks every resolved A/AAAA
+answer for public destinations, and pins that answer set into a fresh TLS
+connection. It rejects a different connected address, follows redirects only
+through the same validation, and discards every response body immediately. One
+10-second deadline covers DNS, HEAD, optional GET/Range fallback and all redirect
+hops; DNS queries are cancellable. Concurrency remains at most four and sampling
+at most 200 distinct sources. No credentials or cookies are forwarded.
+
+An HTTP proxy cannot be assumed to honor the locally validated DNS address.
+Where a proxy or unsupported managed network policy is configured, the sampler
+fails closed with `blocked: proxy-pinning-unavailable` before DNS or HTTP; it
+never silently opens a direct connection or honors a bypass exception to evade
+that boundary. `blocked` and `unknown` are distinct from provider `broken`.
+Aggregate outcome counts are included in the report. The current managed
+workspace exercises this blocked path; live-provider reachability is not passed.
+A supported proxy-aware pinned transport would need its own reviewed implementation
+before this environment can run reachability checks. Manual substantive source
+review through an already authorized public-source tool remains separate.
