@@ -11,6 +11,7 @@ export class Element {
   getAttribute(key) { return this.attributes[key] ?? null; }
   removeAttribute(key) { delete this.attributes[key]; }
   querySelector(selector) { return walk(this).find(node => selector.startsWith("#") ? node.id === selector.slice(1) : node.tagName.toLowerCase() === selector) || null; }
+  querySelectorAll(selector) { return ["[data-correction-message]", "[data-correction-aria]"].includes(selector) ? walk(this).filter(node => node.getAttribute(selector.slice(1,-1))) : []; }
   addEventListener(name, handler) { this.events.set(name, handler); }
   dispatch(name) { return this.events.get(name)?.({ preventDefault() {}, currentTarget: this, target: this }); }
   focus() { this.ownerDocument.activeElement = this; }
@@ -22,7 +23,7 @@ export const documentFixture = () => {
 };
 export function publicFixture() {
   const f = documentFixture(), nodes = {};
-  for (const [id, tag] of Object.entries({ "correction-form": "form", "correction-fields": "fieldset", "correction-category": "select", "correction-note": "textarea", "correction-availability": "p", "correction-retry": "button", "correction-submit": "button", "correction-status": "p", "correction-context": "p", "correction-listing-id": "strong", "correction-listing-link": "a" })) {
+  for (const [id, tag] of Object.entries({ "correction-form": "form", "correction-fields": "fieldset", "correction-category": "select", "correction-note": "textarea", "correction-service": "select", "correction-service-field": "div", "correction-proposal": "textarea", "correction-source": "input", "correction-reply": "input", "correction-availability": "p", "correction-retry": "button", "correction-submit": "button", "correction-status": "p", "correction-context": "p", "correction-listing-id": "strong", "correction-listing-link": "a" })) {
     const node = f.document.createElement(tag); node.id = id; nodes[id] = node; f.root.append(node);
   }
   nodes["correction-form"].hidden = true; nodes["correction-fields"].disabled = true; nodes["correction-retry"].hidden = true;

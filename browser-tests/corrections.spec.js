@@ -80,3 +80,52 @@ test('private review renders reports safely, reconciles conflict and requires a 
   await expect(page.locator('[data-correction-review]')).toBeHidden();
   await expect(page.locator('[data-correction-review]')).not.toContainText('The Bowery Mission');
 });
+
+test('optional correction fields and Spanish switching preserve a safe retry without translating provider facts', async ({page}) => {
+  fixture.state.enabled=true;fixture.state.failSubmission=true;
+  await page.goto(fixture.url+'/corrections?resourceId=bowery-mission&serviceId=meals');
+  await expect(page.locator('#correction-service')).toHaveValue('meals');
+  await page.locator('#correction-category').selectOption('wrong-hours');
+  await page.locator('#correction-proposal').fill('Synthetic public fact to check.');
+  await page.locator('#correction-source').fill('https://www.bowery.org/get-help/');
+  await page.locator('#correction-reply').fill('fixture@example.invalid');
+  await page.evaluate(async()=>{const {setLocale}=await import('/src/utils/localization.js');setLocale('es');});
+  await expect(page.locator('#correction-proposal')).toHaveValue('Synthetic public fact to check.');
+  await expect(page.getByRole('button',{name:'Enviar informe',exact:true})).toBeVisible();
+  await page.setViewportSize({width:320,height:740});await overflow(page);
+  await page.getByRole('button',{name:'Enviar informe',exact:true}).click();
+  await expect(page.locator('#correction-status')).toContainText('No pudimos confirmar');
+  await page.getByRole('button',{name:'Volver a enviar el informe',exact:true}).click();
+  await expect(page.locator('#correction-status')).toContainText('Tu informe se guardó');
+  expect(fixture.state.submissions[0]).toEqual(fixture.state.submissions[1]);
+  expect(fixture.state.submissions[0].serviceId).toBe('meals');
+  await expect(page.locator('#correction-reply')).toHaveValue('');
+  expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+  await capture(page,'correction-spanish-confirmed-mobile');
+});
+
+test('reviewed values require separate catalog application and an actual publication verification action', async ({page}) => {
+  fixture.state.report.status='ready';fixture.state.report.proposedCorrection='Unverified public suggestion';
+  fixture.state.currentCatalog={record:{id:'bowery-mission',summary:'Original fixture summary.'},updatedAt:'2026-11-07T05:00:00Z',published:true};
+  fixture.state.publicationPending=true;
+  await page.goto(fixture.url+'/review-fixture');
+  await page.getByRole('button',{name:'Review correction for The Bowery Mission'}).click();
+  await expect(page.getByRole('textbox',{name:'Verified replacement value'})).toHaveValue('');
+  const application=page.locator('form').filter({has:page.locator('[name=catalogValue]')});
+  await application.getByRole('textbox',{name:'Verified replacement value'}).fill('Independently verified fixture facts.');
+  await application.getByRole('textbox',{name:'Reason and source findings',exact:true}).fill('Reviewed official source independently of the report.');
+  await application.getByRole('textbox',{name:'Evidence URL (HTTPS)',exact:true}).fill('https://www.bowery.org/get-help/');
+  await page.evaluate(async()=>{const {setLocale}=await import('/src/utils/localization.js');setLocale('es');});
+  await expect(application.locator('[name=catalogValue]')).toHaveValue('Independently verified fixture facts.');
+  await application.getByRole('button',{name:'Aplicar al catálogo',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Verificar la publicación pública'})).toBeVisible();
+  expect(fixture.state.actions[0].changes).toEqual({summary:'Independently verified fixture facts.'});
+  await page.getByRole('button',{name:'Verificar la publicación pública'}).click();
+  await expect(page.locator('.correction-review__detail')).toContainText('El catálogo público todavía no coincide');
+  expect(fixture.state.report.status).toBe('applied');
+  await page.getByRole('button',{name:'Verificar la publicación pública'}).click();
+  await expect(page.locator('.correction-review__detail')).toContainText('Publicación pública verificada');
+  for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:900});await overflow(page);}
+  expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+  await page.setViewportSize({width:390,height:844});await capture(page,'correction-reviewed-release-mobile');
+});

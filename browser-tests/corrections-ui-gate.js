@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import correctionsHandler from '../api/corrections.js';
-import { correctionConfig } from '../server/corrections.js';
+import { correctionConfig, correctionContext } from '../server/corrections.js';
 
 // Built presentation with isolated UI transport. This does not verify hosted authentication or
 // durable storage; API/PostgreSQL tests verify those independent boundaries.
@@ -16,22 +16,30 @@ export async function correctionUIFixture() {
     const send = (status,type,value) => { res.writeHead(status,{'Content-Type':type,'Cache-Control':'no-store','X-Robots-Tag':'noindex,nofollow'});res.end(value); };
     const json = (status,value) => send(status,'application/json',JSON.stringify(value));
     if (url.pathname==='/api/corrections') {
-      if(req.method==='GET')return state.enabled ? json(200,{enabled:true}) : correctionsHandler(req,res);
+      if(req.method==='GET')return state.enabled ? json(200,{enabled:true,context:correctionContext(url.searchParams.get('resourceId'))}) : correctionsHandler(req,res);
       const chunks=[];for await(const chunk of req)chunks.push(chunk);
       state.submissions.push(JSON.parse(Buffer.concat(chunks)));
       if(state.failSubmission){state.failSubmission=false;return json(503,{error:'Fixture storage unavailable'});}
-      return json(201,{ok:true});
+      return json(201,{ok:true,receipt:state.submissions.at(-1).submissionId});
     }
     if (url.pathname==='/api/catalog')return json(200,{locations:[],reviews:[],page:0,total:0});
     if (url.pathname==='/api/correction-review') {
       if(state.denied)return json(403,{error:'Editor required'});
+      if(req.method==='POST'){
+        const chunks=[];for await(const chunk of req)chunks.push(chunk);
+        const body=JSON.parse(Buffer.concat(chunks));(state.actions ||= []).push(body);
+        if(body.action==='resolve' && state.publicationPending){state.publicationPending=false;return json(409,{error:'Fixture release not published'});}
+        state.report={...state.report,status:body.action==='apply'?'applied':'resolved',revision:state.report.revision+1};
+        if(body.action==='apply')state.currentCatalog={...state.currentCatalog,record:{...state.currentCatalog.record,...body.changes},updatedAt:'2026-11-07T06:00:00Z'};
+        return json(200,{report:state.report});
+      }
       if(req.method==='PATCH'){
         const chunks=[];for await(const chunk of req)chunks.push(chunk);
         const body=JSON.parse(Buffer.concat(chunks));state.decisions.push(body);
         if(state.conflict){state.conflict=false;state.report.revision++;return json(409,{error:'Fixture conflict'});}
         state.report={...state.report,...body,revision:state.report.revision+1};return json(200,{report:state.report});
       }
-      return json(200,url.searchParams.has('id')?{report:state.report,events:[]}:{reports:[state.report],page:0,hasMore:false});
+      return json(200,url.searchParams.has('id')?{report:state.report,events:[],currentCatalog:state.currentCatalog}:{reports:[state.report],page:0,hasMore:false});
     }
     try {
       if(url.pathname==='/corrections')return send(200,'text/html',await readFile('dist/corrections.html','utf8'));

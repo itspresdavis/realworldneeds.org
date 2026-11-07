@@ -161,10 +161,10 @@ test("public intake validates scope, bodies and methods before attempting storag
   await corrections(req(body(), "PATCH"), getReport);
   assert.equal(getReport.statusCode, 405);
   assert.equal(calls.length, 0);
-  assert.equal(CORRECTION_CATEGORIES.length, 8);
+  assert.equal(CORRECTION_CATEGORIES.filter(item => item.value !== "accessibility").length, 8);
   for (const category of CORRECTION_CATEGORIES)
     assert.equal(
-      validateCorrection({ ...body(), category: category.value }),
+      validateCorrection({ ...body(), resourceId: category.value === "accessibility" ? "rwn-website" : body().resourceId, category: category.value }),
       null,
     );
 });
@@ -301,4 +301,50 @@ test("review decisions require source evidence, revision and explicit bounded fi
     calls.filter((c) => /rwn_locations/.test(c.url.pathname)).length,
     0,
   );
+});
+
+// New private details must be validated before transport, never copied from URL text.
+test("correction details validate service identity, source and optional reply", () => {
+  assert.equal(validateCorrection({ ...body(), serviceId: "meals", proposedCorrection: "Use the meal entrance.", sourceUrl: "https://www.bowery.org/get-help/", replyContact: "reporter@example.invalid" }), null);
+  for (const extra of [
+    { serviceId: "not-a-real-route" }, { sourceUrl: "javascript:alert(1)" },
+    { sourceUrl: "https://user:secret@example.invalid" },
+    { sourceUrl: "https://example.invalid/\\nprivate" },
+    { replyContact: "person@example.invalid\\nBcc:another@example.invalid" },
+    { proposedCorrection: "x".repeat(1001) },
+  ]) assert.ok(validateCorrection({ ...body(), ...extra }), JSON.stringify(extra));
+});
+
+test('optional service/source/reply fields are privately forwarded and never echoed in the public receipt', async t => {
+  env(t); const calls = mock(t);
+  const payload = { ...body(), serviceId: 'meals', proposedCorrection: 'Independent suggestion', sourceUrl: 'https://www.bowery.org/get-help/', replyContact: 'private-reply@example.invalid' };
+  const res = response(); await corrections(req(payload), res);
+  assert.equal(res.statusCode, 201); assert.equal(parsed(res).receipt, payload.submissionId); assert.equal(calls[0].url.pathname, '/rest/v1/rpc/rwn_submit_correction_v2');
+  assert.deepEqual(calls[0].payload.p_details, { serviceId: payload.serviceId, proposedCorrection: payload.proposedCorrection, sourceUrl: payload.sourceUrl, replyContact: payload.replyContact });
+  assert.doesNotMatch(res.body, /private-reply|Independent suggestion|serviceId/);
+});
+test('accessibility context is public site identity and cannot be used as a provider mutation', async t => {
+  env(t, false); mock(t);
+  const res = response(); await corrections(req(undefined, 'GET', '/api/corrections?resourceId=rwn-website&replyContact=private@example.invalid'), res);
+  assert.deepEqual(parsed(res), { enabled: false, context: { name: 'RWN website', services: [] } });
+  assert.equal(validateCorrection({ ...body(), resourceId: 'rwn-website', category: 'accessibility' }), null);
+  assert.ok(validateCorrection({ ...body(), category: 'accessibility' }));
+  assert.ok(validateCorrection({ ...body(), resourceId: 'rwn-website' }));
+});
+test('apply action requires a confirmed user and sends independent reviewed values to atomic RPC', async t => {
+  env(t); const calls = mock(t, () => Response.json({ report: { id: submissionId, status: 'applied', revision: 3 } }));
+  const action = { action: 'apply', id: submissionId, revision: 2, catalogUpdatedAt: '2026-11-07T00:00:00Z', changes: { summary: 'Independently verified facts.' }, reason: 'Checked official source.', evidenceUrl: 'https://example.invalid/source' };
+  const anonymous = response(); await review(req(action, 'POST', '/api/correction-review'), anonymous); assert.equal(anonymous.statusCode, 401);
+  const res = response(); await review(authRequest(action, 'POST'), res); assert.equal(res.statusCode, 200);
+  assert.equal(calls.at(-1).url.pathname, '/rest/v1/rpc/rwn_apply_correction');
+  assert.deepEqual(calls.at(-1).payload.p_changes, action.changes); assert.equal(calls.at(-1).payload.p_revision, 2);
+  assert.equal(new Headers(calls.at(-1).headers).get('x-rwn-correction-key'), null);
+});
+test('publication cannot resolve an ordinary user report or accept a client supplied release URL', async t => {
+  env(t); const calls = mock(t, () => Response.json({ code: '42501', message: 'Private access rejected' }, { status: 403 }));
+  const action = { action: 'resolve', id: submissionId, revision: 3 };
+  let res = response(); await review(authRequest({ ...action, releaseUrl: 'http://127.0.0.1/private' }, 'POST'), res); assert.equal(res.statusCode, 400);
+  res = response(); await review(authRequest(action, 'POST'), res); assert.equal(res.statusCode, 403);
+  assert.ok(calls.every(call => call.url.origin === new URL(projectUrl).origin));
+  assert.equal(calls.some(call => call.url.pathname.includes('rwn_resolve_correction')), false);
 });

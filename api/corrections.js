@@ -3,6 +3,7 @@ import {
   readBody,
   RequestBodyError,
   sameOrigin,
+  requestOrigin,
 } from "../server/supabase.js";
 import {
   correctionConfig,
@@ -10,6 +11,7 @@ import {
   correctionClient,
   validateCorrection,
   correctionFailure,
+  correctionContext,
 } from "../server/corrections.js";
 
 export default async function handler(req, res) {
@@ -24,9 +26,11 @@ export default async function handler(req, res) {
         error: "Open this form on the RWN website and try again.",
       });
     const config = correctionConfig();
+    const contextId = req.method === "GET" ? new URL(req.url, requestOrigin(req)).searchParams.get("resourceId") : null;
+    const context = contextId ? { context: correctionContext(contextId) } : {};
     if (!config)
       return req.method === "GET"
-        ? json(res, 200, { enabled: false })
+        ? json(res, 200, { enabled: false, ...context })
         : json(res, 503, {
             error:
               "Correction reporting is not available yet. Nothing was submitted.",
@@ -39,7 +43,7 @@ export default async function handler(req, res) {
           enabled: false,
           error: "Correction reporting is temporarily unavailable.",
         });
-      return json(res, 200, { enabled: data === true });
+      return json(res, 200, { enabled: data === true, ...context });
     }
     const body = await readBody(req);
     const invalid = validateCorrection(body);
@@ -50,12 +54,14 @@ export default async function handler(req, res) {
         error:
           "Correction reporting could not accept this connection. Nothing was submitted.",
       });
-    const { data, error } = await client.rpc("rwn_submit_correction", {
+    const details = Object.fromEntries(["serviceId", "proposedCorrection", "sourceUrl", "replyContact"].filter(key => body[key]).map(key => [key, body[key].trim()]));
+    const { data, error } = await client.rpc(Object.keys(details).length ? "rwn_submit_correction_v2" : "rwn_submit_correction", {
       p_resource_id: body.resourceId,
       p_category: body.category,
       p_note: (body.note || "").trim(),
       p_submission_id: body.submissionId,
       p_actor: actor,
+      ...(Object.keys(details).length ? { p_details: details } : {}),
     });
     if (error || data?.accepted !== true) {
       const failure = correctionFailure(error);
@@ -64,6 +70,7 @@ export default async function handler(req, res) {
     }
     return json(res, 201, {
       ok: true,
+      receipt: body.submissionId,
       message:
         "Your correction report was saved for review. It has not changed the public listing.",
     });

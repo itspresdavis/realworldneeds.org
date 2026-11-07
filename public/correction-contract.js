@@ -1,6 +1,7 @@
 // Public vocabulary only. Operational settings and credentials stay server-side.
 export const CORRECTION_CATEGORIES = Object.freeze(
   [
+    { value: "accessibility", label: "Website accessibility problem" },
     { value: "wrong-address", label: "Wrong address" },
     { value: "wrong-hours", label: "Wrong hours" },
     { value: "closed-service", label: "Closed service" },
@@ -17,6 +18,8 @@ export const CORRECTION_STATUSES = Object.freeze([
   "open",
   "in-review",
   "ready",
+  "applied",
+  "resolved",
   "rejected",
   "duplicate",
 ]);

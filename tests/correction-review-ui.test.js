@@ -81,3 +81,19 @@ test("a changed status filter during a pending load triggers the requested queue
   old.resolve(queue([report])); await flush();
   assert.equal(paths.length, 2); assert.match(paths[1], /status=ready$/); assert.match(f.root.textContent, /No correction reports/);
 });
+
+test('switching review language preserves controls, draft and literal provider text', async () => {
+  const { setLocale } = await import('../src/utils/localization.js');
+  const { translateCorrections } = await import('../public/correction-localization.js');
+  const f = fixture(async path => path.includes('?id=') ? detail({ ...report, note: 'Open' }) : queue([report]));
+  await flush(); await f.button('Review correction').dispatch('click');
+  const reason = f.field('reason'); reason.value = 'Unsaved independent source findings.';
+  try {
+    setLocale('es'); translateCorrections(f.root);
+    assert.equal(f.field('reason'), reason, 'language switching must not remove a nested label control');
+    assert.equal(reason.value, 'Unsaved independent source findings.');
+    assert.match(f.root.textContent, /Guardar decisión/);
+    assert.match(walk(f.root).find(node => node.tagName === "BUTTON" && node.textContent === "Revisar corrección").getAttribute("aria-label"), /^Revisar corrección de /);
+    assert.ok(walk(f.root).some(node => node.tagName === 'P' && node.textContent === 'Open'), 'submitted text must retain its original language');
+  } finally { setLocale('en'); }
+});
