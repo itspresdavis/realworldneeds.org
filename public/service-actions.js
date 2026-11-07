@@ -53,17 +53,22 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const saveButton = utility.querySelector("[data-service-save]");
   const serviceId = document.querySelector("#service")?.dataset.serviceId;
   const storageUnavailableMessage = "Saving is unavailable in this browser. You can still copy or print this listing.";
+  let storageFailure = false;
+  const announce = (message, { storageUnavailable = false } = {}) => {
+    storageFailure = storageUnavailable;
+    status.textContent = message;
+  };
   const syncSaved = () => {
     try {
       const saved = readSavedResources().has(serviceId);
       saveButton.setAttribute("aria-pressed", String(saved));
       saveButton.textContent = saved ? "Remove from saved" : "Save";
       saveButton.disabled = !serviceId;
-      if (!serviceId) status.textContent = "Saving is unavailable for this listing. You can still copy or print it.";
-      else if (status.textContent === storageUnavailableMessage) status.textContent = "";
+      if (!serviceId) announce("Saving is unavailable for this listing. You can still copy or print it.");
+      else if (storageFailure) announce("");
     } catch {
       saveButton.disabled = true;
-      status.textContent = storageUnavailableMessage;
+      announce(storageUnavailableMessage, { storageUnavailable: true });
     }
   };
   saveButton.addEventListener("click", () => {
@@ -71,9 +76,9 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       const saved = readSavedResources().has(serviceId);
       setResourceSaved(serviceId, !saved);
       syncSaved();
-      status.textContent = saved ? "Removed from your saved services." : "Saved only in this browser. Use View saved services to return to your list.";
+      announce(saved ? "Removed from your saved services." : "Saved only in this browser. Use View saved services to return to your list.");
     } catch {
-      status.textContent = "Your saved list could not be changed. Check this browser’s storage settings and try again.";
+      announce("Your saved list could not be changed. Check this browser’s storage settings and try again.");
     }
   });
   window.addEventListener("pageshow", syncSaved);
@@ -152,28 +157,28 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     try {
       if (navigator.share) {
         await navigator.share(shareData);
-        status.textContent = "Share sheet opened.";
+        announce("Share sheet opened.");
       } else {
         await copyText(listingUrl);
-        status.textContent = "Link copied. You can paste it into a message.";
+        announce("Link copied. You can paste it into a message.");
       }
     } catch (error) {
       if (error?.name === "AbortError") return;
-      status.textContent = "Sharing is unavailable in this browser. Use Copy details instead.";
+      announce("Sharing is unavailable in this browser. Use Copy details instead.");
     }
   });
 
   utility.querySelector("[data-service-copy]")?.addEventListener("click", async () => {
     try {
       await copyText(publicDetails());
-      status.textContent = "Service details copied.";
+      announce("Service details copied.");
     } catch {
-      status.textContent = "Copy is unavailable in this browser. Select the service details on the page instead.";
+      announce("Copy is unavailable in this browser. Select the service details on the page instead.");
     }
   });
 
   utility.querySelector("[data-service-print]")?.addEventListener("click", () => {
-    status.textContent = "Opening the print dialog.";
+    announce("Opening the print dialog.");
     window.print();
   });
 }

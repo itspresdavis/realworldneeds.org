@@ -199,8 +199,8 @@ function serviceFixture(initial) {
   const button = { disabled: false, textContent: "", setAttribute(name, value) { attributes[name] = value; }, addEventListener(name, callback) { this[name] = callback; } };
   const context = vm.createContext({ window: f.window, URL, URLSearchParams, status,
     utility: { querySelector: () => button }, document: { querySelector: () => ({ dataset: { serviceId: "first" } }) } });
-  vm.runInContext(`${privacy}\n${between(service, '  const saveButton = utility.querySelector', '\n  const publicDetails =')}`, context);
-  return { ...f, status, button, attributes };
+  vm.runInContext(`${privacy}\n${between(service, '  const saveButton = utility.querySelector', '\n  const publicDetails =')}\nglobalThis.announce = announce;`, context);
+  return { ...f, status, button, attributes, announce: context.announce };
 }
 
 for (const denied of ["getter", "read"]) for (const initial of ['[]', '["first"]']) {
@@ -214,10 +214,20 @@ for (const denied of ["getter", "read"]) for (const initial of ['[]', '["first"]
   });
 }
 
+test('service storage recovery clears its localized failure without relying on displayed wording', () => {
+  const f = serviceFixture('[]');
+  f.deny('read'); f.events.pageshow();
+  assert.equal(f.button.disabled, true);
+  f.status.textContent = 'No se puede guardar en este navegador.';
+  f.deny(''); f.events.pageshow();
+  assert.equal(f.button.disabled, false);
+  assert.equal(f.status.textContent, '');
+});
+
 for (const message of ["Service details copied.", "Link copied. You can paste it into a message.", "Copy is unavailable in this browser.", "Opening the print dialog."]) {
   test(`service storage recovery preserves newer feedback: ${message}`, () => {
     const f = serviceFixture('["first"]'); f.deny("read"); f.events.pageshow();
-    f.status.textContent = message; f.deny(""); f.events.storage({ key: "rwn-saved-resources" });
+    f.announce(message); f.deny(""); f.events.storage({ key: "rwn-saved-resources" });
     assert.equal(f.status.textContent, message); assert.equal(f.button.disabled, false); assert.equal(f.writes(), 0);
   });
 }
