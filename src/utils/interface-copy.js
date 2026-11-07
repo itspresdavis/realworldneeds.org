@@ -95,19 +95,12 @@ export const interfaceCopy = Object.freeze([
   ['RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.', 'RWN no incluye todos los servicios o lugares. Los buscadores y las redes abarcan zonas más amplias. Los servicios pueden cambiar: confirma la cobertura, el acceso y los detalles actuales con el proveedor antes de ir.'],
 ]);
 const byEnglish = new Map(interfaceCopy.map(([en, es]) => [en, es]));
-export function translateInterfaceText(text, locale = 'en') {
-  if (locale !== 'es') return text;
-  const value = text.trim(), translated = byEnglish.get(value);
-  if (translated) return text.replace(value, translated);
-  if (value.endsWith(' · offline copy')) return `${translateInterfaceText(value.slice(0, -15), locale)} · copia sin conexión`;
-  if (!/^(?:Source |Showing |\d|Show |Remove |Actions |Quick actions |Call |Directions )/.test(value)) return text;
-  // These bounded forms contain only RWN labels, numeric counts or untouched names.
-  const patterns = [
+const patterns = [
     [/^Source checked (.+)$/, 'Fuente consultada $1'], [/^Source reviewed (.+)$/, 'Fuente revisada $1'],
     [/^Showing ([\d,]+) of ([\d,]+) listings$/, 'Mostrando $1 de $2 fichas'],
     [/^([\d,]+) listings on this page$/, '$1 fichas en esta página'],
     [/^([\d,]+) matching listings?$/, '$1 fichas coincidentes'],
-    [/^([\d,]+) matches?$/, '$1 coincidencias'], [/^([\d,]+) listed$/, '$1 fichas'],
+    [/^([\d,]+) match(?:es)?$/, (_, count) => `${count} coincidencia${count === '1' ? '' : 's'}`], [/^([\d,]+) listed$/, '$1 fichas'],
     [/^Show ([\d,]+) more listings$/, 'Mostrar $1 fichas más'],
     [/^Show ([\d,]+) more saved services$/, 'Mostrar $1 servicios guardados más'],
     [/^([\d,]+) of ([\d,]+) matches · ([\d,]+) listings$/, '$1 de $2 coincidencias · $3 fichas'],
@@ -117,6 +110,14 @@ export function translateInterfaceText(text, locale = 'en') {
     [/^Actions for (.+)$/, 'Acciones para $1'], [/^Quick actions for (.+)$/, 'Acciones rápidas para $1'],
     [/^Call (.+)$/, 'Llamar a $1'], [/^Directions to (.+)$/, 'Cómo llegar a $1'],
   ];
+
+export function translateInterfaceText(text, locale = 'en') {
+  if (locale !== 'es') return text;
+  const value = text.trim(), translated = byEnglish.get(value);
+  if (translated) return text.replace(value, translated);
+  if (value.endsWith(' · offline copy')) return `${translateInterfaceText(value.slice(0, -15), locale)} · copia sin conexión`;
+  if (!/^(?:Source |Showing |\d|Show |Remove |Actions |Quick actions |Call |Directions )/.test(value)) return text;
+  // These bounded forms contain only RWN labels, numeric counts or untouched names.
   for (const [pattern, replacement] of patterns) if (pattern.test(value)) return text.replace(value, value.replace(pattern, replacement));
   return text;
 }

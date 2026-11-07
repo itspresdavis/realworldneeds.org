@@ -29,6 +29,8 @@ test('interface translation only recognizes reviewed labels and keeps arbitrary 
   const { translateInterfaceText } = await import('../src/utils/interface-copy.js');
   assert.equal(translateInterfaceText('Search this directory', 'es'), 'Buscar en este directorio');
   assert.equal(translateInterfaceText('Call 617-555-0199', 'es'), 'Llamar a 617-555-0199');
+  assert.equal(translateInterfaceText('1 match', 'es'), '1 coincidencia');
+  assert.equal(translateInterfaceText('2 matches', 'es'), '2 coincidencias');
   assert.equal(translateInterfaceText('Services for women ages 14–24', 'es'), 'Services for women ages 14–24');
   assert.equal(translateInterfaceText('227 Bowery, New York, NY', 'es'), '227 Bowery, New York, NY');
   assert.equal(translateInterfaceText('<img src=x onerror=alert(1)>', 'es'), '<img src=x onerror=alert(1)>');
