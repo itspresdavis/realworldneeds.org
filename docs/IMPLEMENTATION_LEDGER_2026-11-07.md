@@ -123,6 +123,41 @@ settling; bad-position and delayed-arrival controls remain failures. Independent
 asset-upgrade, Saved, chaos, offline and cache-upgrade executables passed on
 `1a8871f7`; none is relabeled as certifying the later integrated commit.
 
+At `4a3d99b2`, 1,847 Node tests passed without skips and all 2,894 output hashes
+reproduced. Exact-source run `42352573095` and PR run `42352577709` remained
+failed. The PR browsers exposed a 56px Saved-return shift caused by an unintended
+hero-padding transition; the narrow layout fix passed 51 focused journeys across
+all three engines and the unchanged native directory/27 Saved cases. Inspector
+readiness and Bowery action checks now observe the rendered listing and require
+both reviewed destinations plus three official detail links; the full
+institutional executable passed independently with those QA repairs.
+
+The native touch failure was separately reproduced during cold Back navigation:
+a live capability-probe context preceded the first rendered zoom readout. The
+existing bounded Back wait now requires the restored query and ready renderer;
+all gesture, zoom-response and real context-recovery assertions remain. The full
+repaired journey passed on the original Chromium 159 version. Native CI now pins
+the independently reviewed/tested stable Chrome 157.0.8103.38 instead of an
+unversioned snapshot; this runtime choice does not erase the earlier failure.
+Deep-globe and copy/share/print executables separately passed on `9d05028f`.
+The final integrated run must certify the resulting source again.
+
+Generated-page navigation now explicitly uses six-pixel row spacing and a narrow
+viewport width bound. This preserves 50px targets and focus outlines while fixing
+short-screen clipping and the desktop-scrollbar overflow. The reviewed seven-link
+QA contract is shared across return/reflow/dismissal fixtures, with missing,
+duplicate and inaccessible-link negatives. Targeted evidence passed 170 Node,
+15 persisted Back, 33 reflow, 15 dismissal and 30 Spanish keyboard/ring cases;
+screenshots were inspected. The existing Saved/chaos executables now begin the
+second native CI job to balance the expanded service journeys: all nine scripts,
+their combined order, both 24-minute deadlines and six required names remain.
+
+A bounded read-only security review additionally compared seven deployed
+correction function-body hashes to source, with all matching, fixed search paths,
+zero private client table grants and intake still disabled. It found no
+reproduced blocking defect within that scope; hosted auth and operator acceptance
+remain separate incomplete requirements.
+
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
 detailed globe. Component browser evidence uses Chromium 158, Firefox 159 and
