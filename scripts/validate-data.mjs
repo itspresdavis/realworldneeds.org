@@ -73,8 +73,8 @@ for (const resource of resources) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(resource.lastChecked)) {
     throw new Error(`Invalid review date: ${resource.id}`);
   }
-  if (resource.kind === "direct" && resource.locationPrecision && resource.locationPrecision !== "exact") {
-    throw new Error(`Direct site must have exact location semantics: ${resource.id}`);
+  if (resource.kind === "direct" && resource.locationPrecision && !["exact", "address"].includes(resource.locationPrecision)) {
+    throw new Error(`Direct site must have exact or reviewed address-only location semantics: ${resource.id}`);
   }
   if (resource.datasetId) {
     if (!resource.sourceRecordId || !resource.verificationMethod) {

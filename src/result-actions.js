@@ -1,5 +1,6 @@
 import { isContactOnly, hasMapCoordinates } from "./utils/resource-location.js";
-import { serviceActions } from "./utils/service-access.js";
+import { beforeYouGoFacts, serviceActions } from "./utils/service-access.js";
+import { getLocale, t } from "./utils/localization.js";
 import { resources } from "./data/resources.js";
 import { phoneLinks } from "./utils/phone.js";
 
@@ -42,6 +43,22 @@ function enhanceCard(article) {
   article.dataset.resultResourceId = resource.id;
   replaceResultTrigger(trigger, resource);
 
+  const locale = getLocale();
+  const accessFacts = beforeYouGoFacts(resource, { locale });
+  if (accessFacts.length) {
+    const details = document.createElement("div");
+    details.className = "result-access-facts";
+    details.setAttribute("aria-label", t("beforeYouGo", {}, locale));
+    for (const route of accessFacts) {
+      const fact = document.createElement("p");
+      const label = document.createElement("strong");
+      label.textContent = `${route.label}: `;
+      fact.append(label, document.createTextNode([route.instructions, ...route.facts.filter(item => item.key !== "hours" || resource.serviceAccess.some(item => item.id === route.routeId && (item.schedule || item.hours))).map(item => `${item.label}: ${item.value}`)].join(" ")));
+      details.append(fact);
+    }
+    article.append(details);
+  }
+
   const actions = document.createElement("nav");
   actions.className = "result-direct-actions";
   actions.setAttribute("aria-label", `Actions for ${resource.name}`);
@@ -51,8 +68,8 @@ function enhanceCard(article) {
     for (const { label, href } of phones) {
       actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
-    for (const action of serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google" })) {
-      actions.append(createAction(action.label, action.href, `${action.label} for ${resource.name}`, { newTab: true }));
+    for (const action of serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google", locale })) {
+      actions.append(createAction(action.label, action.href, `${action.label} for ${resource.name}`, { newTab: action.href.startsWith("https://") }));
     }
     if (isContactOnly(resource) && resource.accessUrl) {
       actions.append(createAction("Contact website", resource.accessUrl, `Open the contact website for ${resource.name}`, { newTab: true }));

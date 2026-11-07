@@ -31,7 +31,7 @@ test('new service-access index suppresses legacy generic maps without changing I
   const map=JSON.parse(await readFile('dist/data/map-index.json')).resources;
   const source=sources.find(r=>r.id===record.id);
   assert.equal(source.lat,40.7219);assert.equal(source.lng,-73.9932);
-  assert.equal(map.length,sources.filter(r=>r.locationPrecision!=='contact-only').length);
+  assert.equal(map.length,sources.filter(r=>!['contact-only','address'].includes(r.locationPrecision)).length);
   for(const indexed of index.records){
     const raw=sources.find(r=>r.id===indexed.id);
     assert.ok(raw,'every compact ID retains its full source record');
@@ -40,9 +40,11 @@ test('new service-access index suppresses legacy generic maps without changing I
     }else{
       assert.equal(indexed.lat,raw.lat,indexed.id);assert.equal(indexed.lng,raw.lng,indexed.id);
     }
-    if(raw.locationPrecision!=='contact-only'){
+    if(!['contact-only','address'].includes(raw.locationPrecision)){
       const marker=map.find(r=>r.id===indexed.id);
       assert.equal(marker.lat,raw.lat,indexed.id);assert.equal(marker.lng,raw.lng,indexed.id);
+    } else {
+      assert.ok(!map.some(r=>r.id===indexed.id),'unmapped records never acquire artificial globe points');
     }
   }
 });

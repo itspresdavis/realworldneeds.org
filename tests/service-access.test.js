@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { serviceActions, serviceAccessSummary, validateServiceAccess } from '../src/utils/service-access.js';
+import { beforeYouGoFacts, isSafeServiceAction, serviceActions, serviceAccessSummary, serviceScheduleStatus, validateServiceAccess } from '../src/utils/service-access.js';
 
 const route = (changes = {}) => ({ id: 'meals', label: 'Meal service', categories: ['food'], mode: 'walk-in', address: '227 Bowery, New York, NY 10002', sourceUrl: 'https://www.bowery.org/get-help/', reviewedAt: '2026-11-06', instructions: 'Confirm current hours before traveling.', ...changes });
 const resource = (changes = {}) => ({ id: 'multi-site', name: 'Example organization', kind: 'direct', category: 'food', secondaryCategories: ['shelter'], lat: 40.72, lng: -73.99, serviceAccess: [route(), route({ id: 'shelter', label: 'Shelter intake', categories: ['shelter'], mode: 'intake', address: '90 Lafayette Street, New York, NY', instructions: 'Check intake times and availability.' })], ...changes });
@@ -58,6 +58,65 @@ test('service categories stay within the listing and physical routes cannot bypa
   }
 });
 
+const evidence = { sourceUrl: 'https://example.org/meals', checkedAt: '2026-11-07T05:00:00Z', scope: 'Meal schedule and registration cutoff only.', verification: 'source-reviewed' };
+const accessFacts = () => route({ entrance: 'Use the Caroline Street entrance.', eligibility: 'Adults aged 18 or over.', intake: 'Register at the entrance. Places are limited.', documents: ['No identification required'], capacity: 'First come, first served; service is not guaranteed.', intakeCutoff: '11:30', schedule: { timeZone: 'America/Chicago', complete: true, weekly: [{ days: [2, 3, 4, 5, 6], opens: '11:00', closes: '12:00' }] }, fieldEvidence: { schedule: { ...evidence } } });
+
+test('service facts and field evidence survive serialization without refreshing broad review dates', () => {
+  const item = resource({ lastChecked: '2026-08-01', serviceAccess: [accessFacts()] });
+  const reloaded = JSON.parse(JSON.stringify(item));
+  assert.equal(validateServiceAccess(reloaded), null);
+  const facts = beforeYouGoFacts(reloaded)[0];
+  assert.equal(facts.facts.find(item => item.key === 'entrance').value, 'Use the Caroline Street entrance.');
+  assert.equal(facts.facts.find(item => item.key === 'eligibility').value, 'Adults aged 18 or over.');
+  assert.match(facts.facts.find(item => item.key === 'hours').value, /America\/Chicago/);
+  assert.match(serviceAccessSummary(reloaded), /Intake cutoff: 11:30/);
+  assert.match(serviceAccessSummary(reloaded), /First come, first served/);
+  assert.equal(reloaded.lastChecked, '2026-08-01');
+  assert.deepEqual(facts.fieldEvidence.schedule, evidence);
+});
+
+test('derived service hours require substantive schedule evidence, not a link check or another field review', () => {
+  const value = accessFacts();
+  const options = { now: new Date('2026-11-07T17:15:00Z') };
+  assert.equal(serviceScheduleStatus(value, options).state, 'scheduled-open');
+  assert.match(serviceScheduleStatus(value, options).label, /availability is not confirmed/);
+  for (const fieldEvidence of [undefined, { schedule: { ...evidence, verification: 'link-checked' } }, { entrance: evidence }]) assert.equal(serviceScheduleStatus({ ...value, fieldEvidence }, options).state, 'unknown');
+  assert.match(serviceScheduleStatus(value, { ...options, locale: 'es' }).label, /no está confirmada/);
+});
+
+test('malformed optional fields fail closed instead of silently dropping decisive restrictions', () => {
+  for (const changes of [{ eligibility: 18 }, { entrance: ' ' }, { intake: '<valid plain text>\ncontrol' }, { intakeCutoff: '25:00' }, { schedule: {} }, { documents: [null] }, { inventedField: true }, { fieldEvidence: { schedule: { ...evidence, checkedAt: '2026-02-30T00:00:00Z' } } }, { fieldEvidence: { unknownField: evidence } }]) {
+    const item = resource({ serviceAccess: [accessFacts(), route(changes)] });
+    item.serviceAccess[1].id = 'other';
+    assert.ok(validateServiceAccess(item), JSON.stringify(changes));
+    assert.deepEqual(serviceActions(item), []);
+    assert.deepEqual(beforeYouGoFacts(item), []);
+  }
+});
+
+test('non-phone channels use reviewed contact types and reject executable or injected URLs', () => {
+  const contacts = [{ type: 'email', label: 'Email intake', url: 'mailto:help@example.org' }, { type: 'sms', label: 'Text intake', url: 'sms:+16175550100' }, { type: 'chat', label: 'Online chat', url: 'https://example.org/chat' }];
+  const item = resource({ serviceAccess: [route({ contacts })] });
+  assert.equal(validateServiceAccess(item), null);
+  const actions = serviceActions(item);
+  assert.deepEqual(actions.slice(1).map(action => action.href), contacts.map(contact => contact.url));
+  assert.ok(actions.every(isSafeServiceAction));
+  for (const contact of [{ type: 'email', label: 'Bad', url: 'mailto:help@example.org?bcc=someone@example.org' }, { type: 'sms', label: 'Bad', url: 'sms:+16175550100?body=private' }, { type: 'online', label: 'Bad', url: 'javascript:alert(1)' }, { type: 'email', label: 'Bad', url: 'mailto:help@example.org%0aBCC:other@example.org' }]) {
+    assert.ok(validateServiceAccess(resource({ serviceAccess: [route({ contacts: [contact] })] })));
+    assert.equal(isSafeServiceAction({ label: contact.label, href: contact.url, kind: 'contact' }), false);
+  }
+});
+
+test('an explicitly reviewed intake destination offers details before its own directions', () => {
+  const item = resource(); item.serviceAccess[1].directions = true;
+  const actions = serviceActions(item);
+  assert.equal(actions[1].label, 'Shelter intake details');
+  assert.equal(actions[2].label, 'Directions to shelter intake');
+  assert.equal(new URL(actions[2].href).searchParams.get('destination'), '90 Lafayette Street, New York, NY');
+  assert.equal(actions[2].routeId, 'shelter');
+  assert.match(serviceActions(item, { locale: 'es' })[2].label, /Cómo llegar/);
+});
+
 test('dynamic directory and Saved rows preserve choices and reject unsafe action URLs', async () => {
   const { readFile } = await import('node:fs/promises');
   const { default: vm } = await import('node:vm');
@@ -86,5 +145,9 @@ test('dynamic directory and Saved rows preserve choices and reject unsafe action
   for (const actions of [null, [], {}]) {
     const invalid = context.createResultRow({ ...indexed, serviceActions: actions }, {});
     assert.ok(walk(invalid).every(node => !String(node.href).includes('maps/')));
+  }
+  for (const [href, allowed] of [['mailto:help@example.org', true], ['sms:+16175550100', true], ['mailto:help@example.org?bcc=other@example.org', false], ['sms:+16175550100?body=private', false], ['javascript:alert(1)', false]]) {
+    const contact = context.createResultRow({ ...indexed, serviceActions: [{ label: 'Contact option', href, kind: 'contact' }] }, {});
+    assert.equal(walk(contact).some(node => node.textContent === 'Contact option'), allowed, href);
   }
 });

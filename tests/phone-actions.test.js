@@ -1,4 +1,5 @@
-import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "../src/utils/service-access.js";
+import { beforeYouGoFacts, serviceActions, serviceAccessSummary, serviceAccessNotice } from "../src/utils/service-access.js";
+import { getLocale, t } from "../src/utils/localization.js";
 import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { serviceContactMarkup } from "../scripts/service-contact.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
@@ -72,7 +73,7 @@ test("finder direct actions and inspector use the same safe targets and preserve
     const resource = fixture(phone);
     const article = new Element();
     article.querySelector = () => ({ dataset: { resourceId: resource.id }, replaceWith() {} });
-    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
+    const context = vm.createContext({ beforeYouGoFacts, getLocale, t, serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
     const body = actions.slice(actions.indexOf("function directionsUrl("), actions.indexOf("\nfunction enhanceResults("));
     vm.runInContext(`${body}\nenhanceCard(article);`, Object.assign(context, { article }));
     assert.deepEqual(domTargets(article), expected);

@@ -44,7 +44,7 @@ test("contact-only validation rejects coordinate fabrication, missing scope and 
 test("mapped records require valid coordinates and contact-only records never invent map positions", () => {
   for (const record of resources) {
     assert.equal(validateResourceLocation(record), null, record.id);
-    assert.equal(hasMapCoordinates(record), !isContactOnly(record), record.id);
+    assert.equal(hasMapCoordinates(record), !isContactOnly(record) && record.locationPrecision !== 'address', record.id);
   }
   for (const changes of [{ lat: null }, { lng: undefined }, { lat: "0" }, { lat: Infinity }, { lng: -181 }])
     assert.ok(validateResourceLocation({ ...resources[0], ...changes }));
