@@ -1,5 +1,47 @@
 import { resources } from "../src/data/resources.js";
 
+// Passive browser observation: the URL alone does not prove that the requested
+// listing finished rendering and bound its controls.
+export function readInspectorReadiness() {
+  const panel = document.getElementById('resourcePanel');
+  const toast = document.getElementById('statusToast');
+  const visible = element => Boolean(element?.isConnected && !element.hidden && element.getClientRects().length);
+  return {
+    selectedId: history.state?.rwnFinder?.selectedId || null,
+    inspectorOpen: history.state?.rwnFinder?.inspectorOpen === true,
+    panelVisible: visible(panel),
+    heading: document.getElementById('resourcePanelHeading')?.textContent.trim() || '',
+    toastReady: Boolean(toast?.isConnected && toast.getAttribute('role') === 'status' && toast.getAttribute('aria-live') === 'polite'),
+    missingControls: ['saveResource', 'copyAddress', 'shareResource', 'closeInspector'].filter(id => {
+      const control = document.getElementById(id);
+      return !visible(control) || control.disabled || !panel?.contains(control);
+    }),
+  };
+}
+
+export async function waitForInspectorReady({
+  read, id, name, timeoutMs = 8000,
+  now = () => performance.now(), wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
+}) {
+  const started = now();
+  let state = null;
+  const failure = () => new Error(`Inspector ${id} was not ready within ${timeoutMs}ms: ${JSON.stringify(state)}`);
+  while (now() - started < timeoutMs) {
+    let timer;
+    try {
+      state = await Promise.race([
+        Promise.resolve().then(read),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(failure()), Math.max(1, timeoutMs - (now() - started))); }),
+      ]);
+    } finally { clearTimeout(timer); }
+    if (now() - started >= timeoutMs) break;
+    if (state.selectedId === id && state.inspectorOpen && state.panelVisible && state.heading === name
+      && state.toastReady && Array.isArray(state.missingControls) && state.missingControls.length === 0) return state;
+    await wait(Math.min(50, timeoutMs - (now() - started)));
+  }
+  throw failure();
+}
+
 // Run inside the established Chromium suite. Unit tests also reproduce the
 // removal/hiding behavior, but only a browser proves real focus and key events.
 export async function verifyFocusContinuity({ client, host, navigate, evaluate }) {
@@ -21,6 +63,11 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
     // the current finder would keep the old selection and skip initialization.
     await navigate(client, "about:blank");
     await navigate(client, `${host}/#resource=${encodeURIComponent(id)}`);
+    const resource = resources.find(resource => resource.id === id);
+    if (!resource) throw new Error(`Unknown inspector fixture: ${id}`);
+    await waitForInspectorReady({ id, name:resource.name,
+      read: () => evaluate(client, `(${readInspectorReadiness.toString()})()`),
+    });
   };
   const checkSearchRecovery = async (label) => {
     await check(`document.activeElement.id === 'resourceSearch' && !document.getElementById('resourceSearch').value && document.getElementById('resourcePanel').hidden && document.getElementById('openInspector').getClientRects().length === 0`, `${label} lost focus or changed search`);

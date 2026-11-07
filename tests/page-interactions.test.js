@@ -2,7 +2,25 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
-import { hasIntermediateScrollSample } from "../scripts/qa-page-interactions.mjs";
+import { hasIntermediateScrollSample, hasReviewedBoweryActions } from "../scripts/qa-page-interactions.mjs";
+
+test('multisite QA rejects a shelter route to meals, omitted intake, generic maps and invalid destinations', () => {
+  const actions = [
+    {label:'Directions to meal service',href:'https://www.google.com/maps/dir/?destination=227%20Bowery%2C%20New%20York%2C%20NY%2010002'},
+    {label:'Shelter intake details',href:'https://www.bowery.org/get-help/'},
+    {label:'Directions to shelter intake',href:'https://www.google.com/maps/dir/?destination=90%20Lafayette%20Street%2C%20New%20York%2C%20NY%2010013'},
+    {label:'Showers and clothing details',href:'https://www.bowery.org/get-help/'},
+    {label:'Mobile medical care details',href:'https://www.bowery.org/get-help/'},
+  ];
+  assert.equal(hasReviewedBoweryActions({actions,generic:0}),true);
+  assert.equal(hasReviewedBoweryActions({actions,generic:2}),false);
+  for (const index of [0,1,2,3,4]) assert.equal(hasReviewedBoweryActions({actions:actions.filter((_,i)=>i!==index),generic:0}),false);
+  for (const href of [actions[0].href,'invalid','https://unreviewed.example/maps/dir/?destination=90%20Lafayette%20Street%2C%20New%20York%2C%20NY%2010013']) {
+    const changed = actions.map((action,index)=>index===2?{...action,href}:action);
+    assert.equal(hasReviewedBoweryActions({actions:changed,generic:0}),false,href);
+  }
+  assert.equal(hasReviewedBoweryActions({actions:actions.map((action,index)=>index===1?{...action,href:actions[2].href}:action),generic:0}),false);
+});
 
 const source = (await readFile(new URL("../src/page-interactions.js", import.meta.url), "utf8")).replace("export function", "function");
 function fixture({ reduced = false, visible = false, observerAvailable = true } = {}) {
