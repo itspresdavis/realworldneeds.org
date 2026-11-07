@@ -59,6 +59,13 @@ test('service categories stay within the listing and physical routes cannot bypa
 });
 
 const evidence = { sourceUrl: 'https://example.org/meals', checkedAt: '2026-11-07T05:00:00Z', scope: 'Meal schedule and registration cutoff only.', verification: 'source-reviewed' };
+
+test('bounded service names retain valid actions after localized interface prefixes are added', () => {
+  const item = resource({ serviceAccess: [route({ label: 'a'.repeat(100) })] });
+  assert.equal(validateServiceAccess(item), null);
+  for (const locale of ['en', 'es']) assert.ok(serviceActions(item, { locale }).every(isSafeServiceAction));
+  assert.equal(isSafeServiceAction({ label: 'a'.repeat(141), href: 'https://example.org', kind: 'details' }), false);
+});
 const accessFacts = () => route({ entrance: 'Use the Caroline Street entrance.', eligibility: 'Adults aged 18 or over.', intake: 'Register at the entrance. Places are limited.', documents: ['No identification required'], capacity: 'First come, first served; service is not guaranteed.', intakeCutoff: '11:30', schedule: { timeZone: 'America/Chicago', complete: true, weekly: [{ days: [2, 3, 4, 5, 6], opens: '11:00', closes: '12:00' }] }, fieldEvidence: { schedule: { ...evidence } } });
 
 test('service facts and field evidence survive serialization without refreshing broad review dates', () => {

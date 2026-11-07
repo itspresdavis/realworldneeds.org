@@ -16,7 +16,10 @@ const routeFields = new Set(['id', 'label', 'categories', 'mode', 'instructions'
 const mail = /^mailto:[a-zA-Z0-9.!#$'*+/=_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,63}$/;
 const sms = /^sms:(?:\+[1-9]\d{6,14}|\d{3,6})$/;
 export function isSafeServiceAction(action) {
-  return Boolean(action && text(action.label, 100) && (publicUrl(action.href) || action.kind === 'contact' && (mail.test(action.href) || sms.test(action.href))));
+  // Route names allow 100 characters; generated labels also include RWN's
+  // localized action prefix or suffix. Keep that bounded without dropping an
+  // otherwise valid route after presentation formatting.
+  return Boolean(action && text(action.label, 140) && (publicUrl(action.href) || action.kind === 'contact' && (mail.test(action.href) || sms.test(action.href))));
 }
 export function validateFieldEvidence(evidence) {
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence) || !publicUrl(evidence.sourceUrl) || !text(evidence.scope, 500) || !verificationStates.has(evidence.verification)) return 'Field evidence needs a source, check scope and verification state.';
