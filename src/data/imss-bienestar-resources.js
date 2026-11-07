@@ -21,7 +21,7 @@ export const imssBienestarResources = [
     sourceName: 'IMSS-Bienestar', sourceKind: 'Official Mexican public health service', sourceUrl: source,
     sourceDetail: `Official clinic finder CLUES ${clinic.sourceRecordId}; clinic latitud/longitud, not postal reference coordinates. Eligibility and free-care terms: ${registration}. No operating days inferred.`,
     serviceAccess: [{
-      id: 'clinic', label: 'Clinic access', categories: ['health'], mode: 'intake', address: clinic.address, sourceUrl: source, reviewedAt: '2026-11-07',
+      id: 'clinic', label: 'Clinic access', categories: ['health'], mode: 'intake', directions: true, address: clinic.address, sourceUrl: source, reviewedAt: '2026-11-07',
       instructions: 'Use the official clinic finder and call this clinic to confirm service days and intake before travel. The provider describes a medical assessment with referral when needed.',
       eligibility: 'IMSS-Bienestar serves people without social security coverage. Review the official registration requirements; RWN does not collect registration documents.',
       hours: `The finder lists ${publishedHours} but does not publish operating days. Confirm before travel.`,
