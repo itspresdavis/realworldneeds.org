@@ -82,6 +82,7 @@ try:
     sql((ROOT / "supabase/tests/permissions.sql").read_text())
     print("PASS: real RLS permissions, contributor isolation, editor history and concurrency")
     sql((ROOT / "supabase/tests/corrections.sql").read_text())
+    sql((ROOT / "supabase/tests/address-only.sql").read_text())
     # Genuine competing connections: a shared durable quota permits exactly one.
     sql("update rwn_private.correction_config set enabled=true, "
         "capability_sha256=encode(sha256(convert_to('synthetic-test-capability-never-configured-remotely-123456','UTF8')),'hex'), "

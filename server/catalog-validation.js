@@ -78,5 +78,5 @@ export function validateEdit(body) {
 
 // Coordinates for a contact-only route cannot be introduced by the editor.
 export function validateLocationEdit(current, changes) {
-  return isContactOnly(current) ? validateResourceLocation({ ...current, ...changes }) : null;
+  return (isContactOnly(current) || current?.locationPrecision === "address") ? validateResourceLocation({ ...current, ...changes }) : null;
 }
