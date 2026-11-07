@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // A fresh temporary profile and loopback-only fixture server make this safe to
 // run in CI: no production origin, catalog, browser profile or cache is touched.
@@ -16,7 +17,33 @@ const LEGACY_RELEASE = "fixture-legacy-query";
 const VARIANT_RELEASE = "fixture-hashed-next";
 const FAILED_RELEASE = "fixture-hashed-failed";
 const SAVED = JSON.stringify(["survivor", "removed"]);
-const RUNTIME_PATTERN = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|navigation-actions|directory|directory-startup|directory-geography|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
+const LEGACY_RUNTIME = ["/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory.js", "/directory-startup.js", "/directory-geography.js", "/saved-loader.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css"];
+const escapePattern = value => value.replace(/[.*+?^$()|[\]{}\\]/g, "\\$&");
+
+// Admitted stems come only from the actual public dependency graph and the
+// fixed old public runtimes. A known hash cannot make API/private data eligible.
+export function runtimePatternFor(required = {}, optional = {}) {
+  for (const [assets, isOptional] of [[required, false], [optional, true]]) {
+    assert.ok(assets && typeof assets === "object" && !Array.isArray(assets));
+    for (const [canonical, versioned] of Object.entries(assets)) {
+      const allowed = isOptional ? canonical === "/data/postal-areas.json"
+        : LEGACY_RUNTIME.includes(canonical) || /^\/src\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.js$/.test(canonical);
+      assert.ok(allowed, "Unexpected public runtime canonical: " + canonical);
+      const pattern = escapePattern(canonical).replace(/\\\.(css|js|json)$/, "\\.[a-f0-9]{12}\\.$1");
+      assert.equal(typeof versioned, "string");
+      assert.match(versioned, new RegExp("^" + pattern + "$"), "Runtime must retain its exact canonical path and extension");
+    }
+  }
+  const canonicals = [...new Set([...LEGACY_RUNTIME, ...Object.keys(required), ...Object.keys(optional)])];
+  const paths = canonicals.map(canonical => escapePattern(canonical).replace(/\\\.(css|js|json)$/, "\\.[a-f0-9]{12}\\.$1"));
+  return new RegExp("^(?=.*\\.([a-f0-9]{12})\\.(?:css|js|json)$)(?:" + paths.join("|") + ")$");
+}
+
+export function manifestIdentity(required, optional) {
+  return sha256(JSON.stringify(optional === undefined ? required : { required, optional })).slice(0, 12);
+}
+
+let RUNTIME_PATTERN = runtimePatternFor();
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -254,6 +281,9 @@ const catalog = (label) => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [re
 function html(release, baseline = false) {
   const asset = (canonical) => baseline ? canonical : release.assets[canonical] || canonical;
   const token = encodeURIComponent(baseline ? "baseline-new-query" : release.id);
+  const enhancements = baseline ? "" : ["/language.js", "/src/utils/search-intent-entry.js"]
+    .filter(path => release.assets[path])
+    .map(path => `<script type="module" src="${asset(path)}?v=${token}"></script>`).join("");
   return `<!doctype html><html lang="en" data-fixture-release="${release.label}"><head><meta charset="utf-8"><title>RWN runtime upgrade fixture</title>
 ${release.assetId ? `<meta name="rwn-offline-assets" content="${release.assetId}" />` : ""}
 <link rel="stylesheet" href="${asset("/directory-enhancements.css")}?v=${token}">
@@ -261,28 +291,32 @@ ${baseline ? "" : `<link rel="stylesheet" href="${asset("/saved-services.css")}?
 <script>window.__fixtureDocumentId = crypto.randomUUID(); window.__fixtureController = navigator.serviceWorker.controller; window.__fixtureControllerChanges = 0; navigator.serviceWorker.addEventListener("controllerchange", () => window.__fixtureControllerChanges++);</script>
 <main class="directory-shell"><h1>Runtime release ${release.label}</h1><section class="directory-search-tools" data-directory-search><input aria-label="Search" data-directory-query><button data-directory-clear hidden>Clear</button><div data-directory-categories></div><p data-directory-count></p></section><section id="directory-results" class="directory-records"></section>
 <section id="saved" class="saved-services" data-saved-services><div class="saved-services__heading"><h2 id="saved-services-heading" tabindex="-1">Saved services</h2><a href="#directory-results">Browse directory</a></div><p data-saved-summary role="status"></p><button data-saved-clear aria-expanded="false" hidden>Clear saved list</button><button data-saved-retry hidden>Try again</button><div data-saved-confirmation hidden><button data-saved-cancel>Keep list</button><button data-saved-confirm>Remove all</button></div><div data-saved-list></div><button data-saved-more hidden>Show more</button><p data-saved-status role="status"></p></section></main>
-${baseline ? "" : `<script type="module" src="${asset("/directory.js")}?v=${token}"></script><script type="module" src="${asset("/saved-loader.js")}?v=${token}"></script>`}</body></html>`;
+${baseline ? "" : `<script type="module" src="${asset("/directory.js")}?v=${token}"></script><script type="module" src="${asset("/saved-loader.js")}?v=${token}"></script>`}${enhancements}</body></html>`;
 }
 
 async function fixtures() {
   const info = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-  assert.equal(Object.keys(info.offlineAssets || {}).length, 12, "Build the contenthashed runtime assets before browser QA");
+  for (const canonical of ["/directory.js", "/page-menu.js", "/saved-loader.js", "/saved-services.js"]) {
+    assert.ok(info.offlineAssets?.[canonical], "Missing required built public runtime: " + canonical);
+  }
+  RUNTIME_PATTERN = runtimePatternFor(info.offlineAssets, info.offlineOptionalAssets);
+  const allAssets = { ...info.offlineAssets, ...info.offlineOptionalAssets };
   assert.match(info.offlineRelease, /^[a-f0-9]{12}$/);
-  assert.equal(info.offlineAssetRelease, sha256(JSON.stringify(info.offlineAssets)).slice(0, 12), "Built HTML/worker manifest identity must match");
+  assert.equal(info.offlineAssetRelease, manifestIdentity(info.offlineAssets, info.offlineOptionalAssets), "Built HTML/worker manifest identity must match");
   const source = await readFile("dist/sw.js", "utf8");
   const frozen = await readFile("tests/fixtures/legacy-query-worker.txt", "utf8");
   assert.equal(sha256(frozen), "91824c03ec63fc5172b1b6b352a32c38227fa6ec4c03e8a05671f7fe34ff2233", "Legacy baseline must remain the frozen b209762 production worker");
   const canonical = new Map();
-  for (const path of [...Object.keys(info.offlineAssets), "/brand/rwn-logo-192.png", "/rwn-mark.svg", "/site.webmanifest"]) canonical.set(path, await readFile(`dist${path}`));
+  for (const path of [...Object.keys(allAssets), "/brand/rwn-logo-192.png", "/rwn-mark.svg", "/site.webmanifest"]) canonical.set(path, await readFile(`dist${path}`));
   const allHashed = new Map();
-  for (const path of Object.values(info.offlineAssets)) {
+  for (const path of Object.values(allAssets)) {
     assert.match(path, RUNTIME_PATTERN);
     const bytes = await readFile(`dist${path}`);
     assert.equal(path.match(RUNTIME_PATTERN)[1], sha256(bytes).slice(0, 12), `Incorrect built content identity: ${path}`);
-    assert.ok(source.includes(JSON.stringify(path)), `Built worker must warm ${path}`);
+    assert.ok(source.includes(JSON.stringify(path)), `Built worker must recognize ${path}`);
     allHashed.set(path, bytes);
   }
-  const modern = { label: "modern", id: info.offlineRelease, assetId: info.offlineAssetRelease, assets: info.offlineAssets, canonical, worker: source };
+  const modern = { label: "modern", id: info.offlineRelease, assetId: info.offlineAssetRelease, assets: info.offlineAssets, optional: info.offlineOptionalAssets, canonical, worker: source };
   const legacyCanonical = new Map(canonical);
   legacyCanonical.set("/directory-enhancements.css", Buffer.concat([canonical.get("/directory-enhancements.css"), Buffer.from("\n:root{--fixture-release:legacy}\n")]));
   legacyCanonical.set("/saved-services.js", Buffer.concat([canonical.get("/saved-services.js"), Buffer.from('\nglobalThis.__fixtureSavedRelease = "legacy";\n')]));
@@ -290,7 +324,7 @@ async function fixtures() {
 
   // One later synthetic release lets a real old module graph stay open across
   // activation and rollback. The main release above uses unmodified dist bytes.
-  const variant = { label: "variant", id: VARIANT_RELEASE, assets: { ...modern.assets }, canonical: new Map(canonical) };
+  const variant = { label: "variant", id: VARIANT_RELEASE, assets: { ...modern.assets }, optional: modern.optional, canonical: new Map(canonical) };
   const addVariant = (canonicalPath, bytes) => {
     const path = canonicalPath.replace(/\.(css|js)$/, `.${sha256(bytes).slice(0, 12)}.$1`);
     variant.assets[canonicalPath] = path;
@@ -304,7 +338,7 @@ async function fixtures() {
   addVariant("/saved-loader.js", Buffer.from(originalLoader.replaceAll(modern.assets["/saved-services.js"], variant.assets["/saved-services.js"])));
   // Canonical compatibility loader remains canonical, as in the real build.
   variant.canonical.set("/saved-loader.js", canonical.get("/saved-loader.js"));
-  variant.assetId = sha256(JSON.stringify(variant.assets)).slice(0, 12);
+  variant.assetId = manifestIdentity(variant.assets, variant.optional);
   variant.worker = source.replaceAll(modern.id, variant.id).replaceAll(modern.assetId, variant.assetId);
   for (const path of Object.keys(modern.assets)) variant.worker = variant.worker.replaceAll(modern.assets[path], variant.assets[path]);
   const failed = { ...variant, id: FAILED_RELEASE, worker: variant.worker.replaceAll(variant.id, FAILED_RELEASE) };
@@ -337,7 +371,7 @@ async function run() {
     if (pathname === "/baseline") return send(response, 200, "text/html", html(deployed, true));
     if (pathname === "/data/search-index.json") return send(response, 200, "application/json", JSON.stringify(catalog(deployed.label)));
     const bytes = allHashed.get(pathname) || deployed.canonical.get(pathname);
-    if (bytes) return send(response, 200, pathname.endsWith(".js") ? "text/javascript" : pathname.endsWith(".css") ? "text/css" : pathname.endsWith(".png") ? "image/png" : pathname.endsWith(".svg") ? "image/svg+xml" : "application/manifest+json", bytes);
+    if (bytes) return send(response, 200, pathname.endsWith(".js") ? "text/javascript" : pathname.endsWith(".css") ? "text/css" : pathname.endsWith(".png") ? "image/png" : pathname.endsWith(".svg") ? "image/svg+xml" : pathname.endsWith(".json") ? "application/json" : "application/manifest+json", bytes);
     // A misconfigured/static SPA fallback must never be accepted as hashed JS.
     if (pathname === "/saved-services.000000000000.js") return send(response, 200, "text/javascript", 'globalThis.__wrongHashExecuted = true;');
     send(response, 404, "text/plain", "Synthetic fixture route not found");
@@ -397,6 +431,9 @@ async function run() {
     // Hold one required warm request. The new HTML must work while the frozen
     // query-normalizing worker still controls both navigation and lazy imports.
     deployed = modern;
+    // A postal reference outage must not block installation of the text path.
+    // It is deliberately fetched only after the installed core is established.
+    failedPath = Object.values(modern.optional || {})[0] || null;
     gatePath = modern.assets["/professional-pages.css"];
     await startUpdate(oldTab);
     await until(() => held.length > 0, "new worker install held before activation");
@@ -412,6 +449,9 @@ async function run() {
     assert.equal(first.changes, 0);
     assert.equal(first.sameController, true);
     await assertLoaded(newTabClient, modern.assets["/directory-enhancements.css"], allHashed.get(modern.assets["/directory-enhancements.css"]), false);
+    for (const [canonical, path] of Object.entries(modern.assets)) {
+      if (canonical === "/language.js" || canonical.startsWith("/src/")) await assertLoaded(newTabClient, path, allHashed.get(path), false);
+    }
     await openSaved(newTabClient);
     await assertLoaded(newTabClient, modern.assets["/saved-services.js"], allHashed.get(modern.assets["/saved-services.js"]), false);
     const firstSaved = await state(newTabClient);
@@ -423,7 +463,19 @@ async function run() {
     await waitExpression(newTabClient, "window.__fixtureControllerChanges === 1", "built worker activation");
     await waitActivated(newTabClient);
     await primeCatalog(newTabClient, "modern");
-    await assertCaches(newTabClient, modern.id);
+    const installed = await assertCaches(newTabClient, modern.id);
+    const currentCache = installed.find(cache => cache.name === "rwn-offline-" + modern.id);
+    for (const path of Object.values(modern.assets)) {
+      assert.ok(currentCache.entries.some(entry => entry.pathname === path), "Required dependency missing after real install: " + path);
+    }
+    for (const path of Object.values(modern.optional || {})) {
+      assert.equal(requests.some(request => new URL(request.url, HOST).pathname === path), false, "Optional data must not be fetched during core installation");
+      assert.equal(currentCache.entries.some(entry => entry.pathname === path), false, "Optional data must not be precached");
+    }
+    failedPath = null;
+    for (const path of Object.values(modern.optional || {})) {
+      assert.deepEqual(await fetchHash(newTabClient, path), { status: 200, hash: sha256(allHashed.get(path)) }, "Explicit optional lookup must load verified bytes");
+    }
     assertSaved(await state(newTabClient));
     console.log("RWN first-navigation check passed: legacy query mismatch reproduced; new production CSS and lazy saved JS loaded exact hashed bytes before controller replacement, without reload.");
 
@@ -436,6 +488,12 @@ async function run() {
     await openSaved(newTabClient);
     await assertLoaded(newTabClient, modern.assets["/saved-services.js"], allHashed.get(modern.assets["/saved-services.js"]), true);
     assert.equal((await state(newTabClient)).css, "");
+    for (const [canonical, path] of Object.entries(modern.assets)) {
+      if (canonical === "/language.js" || canonical.startsWith("/src/")) await assertLoaded(newTabClient, path, allHashed.get(path), true);
+    }
+    for (const path of Object.values(modern.optional || {})) {
+      assert.deepEqual(await fetchHash(newTabClient, path), { status: 200, hash: sha256(allHashed.get(path)) }, "Previously fetched optional data must remain usable offline");
+    }
     online = true;
 
     deployed = failed;
@@ -553,4 +611,6 @@ async function run() {
   }
 }
 
-run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  run().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
+}
