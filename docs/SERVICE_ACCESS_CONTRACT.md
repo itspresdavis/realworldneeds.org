@@ -27,6 +27,12 @@ their evidence. `serviceAccessSummary` carries the same present facts into
 plain-text representations. Provider wording remains in its source language;
 the English/Spanish option translates RWN's labels, not eligibility or promises.
 
+Legacy records also receive `beforeYouGoFacts`: existing access instructions,
+eligibility, cost and hours are shown before actions, with an explicit unknown
+message for missing access facts. Physical addresses and coverage descriptions
+have different labels. This presentation fallback does not manufacture a
+`serviceAccess` route, change legacy directions or advance its review date.
+
 ## Field evidence
 
 `fieldEvidence` maps an existing supported field to `{sourceUrl, checkedAt,

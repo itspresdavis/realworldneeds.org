@@ -117,6 +117,23 @@ test('an explicitly reviewed intake destination offers details before its own di
   assert.match(serviceActions(item, { locale: 'es' })[2].label, /Cómo llegar/);
 });
 
+test('legacy before-you-go facts preserve useful access, cost and unknown hours without inventing routes', () => {
+  const legacy = { id: 'legacy', name: 'Example shelter', kind: 'direct', address: '12 Main Street, Example City', lat: 42.3, lng: -71.1, sourceUrl: 'https://example.org/shelter', lastChecked: '2026-08-01', accessType: 'Referral required', eligibility: 'Adults aged 18 or over.', costNote: 'Free with eligibility', availabilityNote: 'Call the intake team before traveling.' };
+  const route = beforeYouGoFacts(legacy)[0];
+  assert.equal(route.addressLabel, 'Address');
+  assert.equal(route.facts.find(fact => fact.key === 'access').value, 'Referral required');
+  assert.equal(route.facts.find(fact => fact.key === 'eligibility').value, 'Adults aged 18 or over.');
+  assert.match(route.facts.find(fact => fact.key === 'hours').value, /not (?:published|confirmed)/);
+  assert.equal(route.reviewedAt, '2026-08-01');
+  assert.deepEqual(route.fieldEvidence, {});
+  assert.equal(serviceAccessSummary(legacy), '');
+  assert.equal(serviceActions(legacy).length, 1, 'single-site legacy maps keep their existing contract');
+  const finder = beforeYouGoFacts({ ...legacy, kind: 'locator', locationPrecision: 'contact-only', address: 'National coverage', coverageNote: 'People in Canada; no walk-in site.', lat: null, lng: null }, { locale: 'es' })[0];
+  assert.equal(finder.addressLabel, 'Cobertura');
+  assert.equal(finder.address, 'People in Canada; no walk-in site.');
+  assert.deepEqual(beforeYouGoFacts({ ...legacy, serviceAccess: [] }), [], 'an invalid explicit contract never falls back to legacy facts');
+});
+
 test('dynamic directory and Saved rows preserve choices and reject unsafe action URLs', async () => {
   const { readFile } = await import('node:fs/promises');
   const { default: vm } = await import('node:vm');

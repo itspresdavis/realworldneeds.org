@@ -75,7 +75,19 @@ export function serviceActions(resource, { mapProvider = 'google', locale = 'en'
 }
 
 export function beforeYouGoFacts(resource, { locale = 'en' } = {}) {
-  if (!resource?.serviceAccess || validateServiceAccess(resource)) return [];
+  if (!resource || typeof resource !== 'object') return [];
+  if (!Object.hasOwn(resource, 'serviceAccess')) {
+    if (!publicUrl(resource.sourceUrl)) return [];
+    const fact = (key, value) => ({ key, label: t(key, {}, locale), value });
+    return [{ routeId: 'legacy', label: resource.name || t('providerDetails', {}, locale),
+      address: resource.kind === 'direct' ? resource.address || '' : resource.coverageNote || resource.address || resource.country || '',
+      addressLabel: t(resource.kind === 'direct' ? 'address' : 'coverage', {}, locale),
+      instructions: resource.availabilityNote || '',
+      facts: [fact('access', resource.accessType || t('accessUnknown', {}, locale)), fact('eligibility', resource.eligibility || t('eligibilityUnknown', {}, locale)), fact('hours', resource.hours || t('hoursUnknown', {}, locale)), ...(resource.costNote ? [fact('cost', resource.costNote)] : [])],
+      fieldEvidence: {}, sourceUrl: resource.sourceUrl, reviewedAt: resource.lastChecked || '',
+    }];
+  }
+  if (validateServiceAccess(resource)) return [];
   return resource.serviceAccess.map(route => {
     const facts = [];
     const add = (key, value) => { if (value) facts.push({ key, label: t(key, {}, locale), value }); };

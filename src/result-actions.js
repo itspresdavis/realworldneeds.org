@@ -44,7 +44,7 @@ function enhanceCard(article) {
   replaceResultTrigger(trigger, resource);
 
   const locale = getLocale();
-  const accessFacts = beforeYouGoFacts(resource, { locale });
+  const accessFacts = resource.serviceAccess ? beforeYouGoFacts(resource, { locale }) : [];
   if (accessFacts.length) {
     const details = document.createElement("div");
     details.className = "result-access-facts";
