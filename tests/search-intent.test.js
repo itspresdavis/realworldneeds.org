@@ -279,3 +279,18 @@ for (const [label, response] of [
     assert.equal(module.resolveSearchIntent("02108").postalSupported, false);
     assert.equal(module.resolveSearchIntent("02108").area, null);
   });
+
+test('postal scope cannot be inferred from an incidental nationwide mention',()=>{
+ const area=resolveSearchIntent('02108','',{postal:'02108',radius:10}).area;
+ assert.equal(resourceMatchesArea({kind:'locator',country:'United States',coverageScope:'municipal',search:'nationwide association describes a local California service'},area),false);
+ assert.equal(resourceMatchesArea({kind:'locator',country:'United States',coverageScope:'national',search:'official nationwide finder'},area),true);
+});
+
+test('published postal-area candidates agree between source records and compact directory',async()=>{
+ const {readFile}=await import('node:fs/promises');const index=JSON.parse(await readFile('dist/data/search-index.json','utf8'));
+ for(const postal of ['02108','02780','02907']){
+  const intent=resolveSearchIntent('food',postal,{postal,radius:10});
+  const ids=records=>records.filter(record=>resourceMatchesIntent(record,intent)&&resourceSearchScore(record,intent.query)>=0).map(record=>record.id).sort();
+  assert.deepEqual(ids(index.records),ids(resources),postal);
+ }
+});

@@ -40,8 +40,10 @@ test("every generated local city and need page has exactly the same searchable l
 
 test("New York city and referral search keep the existing library and WIC listings", async () => {
   const index = JSON.parse(await read("dist/data/search-index.json"));
-  const cityPath = "/directory/local/united-states/new-york";
-  const cityIds = resources.filter(item => item.city === "New York" && item.country === "United States").map(item => item.id);
+  const cityPath = "/directory/local/united-states/new-york-city";
+  const cityIds = resources.filter(item => ["New York", "New York City"].includes(item.city) && item.country === "United States").map(item => item.id);
+  const config = JSON.parse(await read("vercel.json"));
+  assert.ok(config.redirects.some(rule => rule.source === "/directory/local/united-states/new-york/:path*" && rule.destination === `${cityPath}/:path*` && rule.permanent === true), "legacy links preserve their suffix through the reviewed municipality alias");
   const referralIds = resources.filter(item => cityIds.includes(item.id) && [item.category, ...(item.secondaryCategories || [])].includes("referral")).map(item => item.id);
   for (const [path, ids] of [[cityPath, cityIds], [`${cityPath}/help/referral`, referralIds]]) {
     assert.deepEqual((index.scopes[path] || []).map(position => index.records[position].id).sort(), [...ids].sort(), path);

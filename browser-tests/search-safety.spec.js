@@ -1,3 +1,4 @@
+import { resources } from "../src/data/resources.js";
 import { test, expect } from '@playwright/test';
 
 // These expectations come from the published catalog's service/source fields,
@@ -8,8 +9,10 @@ const mealSites = [
   'rosies-place-boston', 'womens-lunch-place', 'bridge-over-troubled-waters',
   'whittier-day-engagement', 'cardinal-medeiros-day',
 ].sort();
-const mexicoSites = ['ny-wic-214-05', 'unhcr-help-mexico'].sort();
-const taunton = 'ma-wic-tauntonattleboro-wic-program-main-clinic';
+// Independent geographic oracle uses published country/city fields, never the matcher.
+const mexicoSites = resources.filter(record => record.country === 'Mexico' || record.city === 'Mexico').map(record => record.id).sort();
+const mexicoCountrySites = resources.filter(record => record.country === 'Mexico').map(record => record.id).sort();
+const taunton = ['ma-wic-tauntonattleboro-wic-program-main-clinic', 'taunton-community-table-meals'].sort();
 const surfaces = ['/', '/directory'];
 
 // No provider request or location service is needed to search this catalog.
@@ -89,14 +92,14 @@ test('manual place search works before and after deliberate location denial', as
   await page.setViewportSize({ width: 390, height: 844 });
   await openSurface(page, '/');
   await search(page, '/', 'Taunton MA assistance');
-  expect(await resultIds(page, '/')).toEqual([taunton]);
+  expect((await resultIds(page, '/')).sort()).toEqual(taunton);
   expect(await page.evaluate(() => window.__locationRequests)).toBe(0);
   await page.locator('#locateMe').click();
   await expect(page.locator('#locationRecovery')).toContainText('Location permission was not granted');
   await expect(page.locator('#locationRecovery')).toContainText('Search by city, ZIP or postcode instead');
   expect(await page.evaluate(() => window.__locationRequests)).toBe(1);
   await expect(page.locator('#clearLocation')).toBeHidden();
-  expect(await resultIds(page, '/')).toEqual([taunton]);
+  expect((await resultIds(page, '/')).sort()).toEqual(taunton);
   await search(page, '/', '90 Lafayette shelter');
   expect(await resultIds(page, '/')).toEqual(['bowery-mission']);
   expect(await page.evaluate(() => window.__locationRequests)).toBe(1);
@@ -120,12 +123,12 @@ test('Mexico ambiguity stays visible until the visitor supplies a country or reg
     await info.attach(path === '/' ? 'finder-mexico-choice' : 'directory-mexico-choice', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
     if (path === '/directory') {
       await page.locator('[data-directory-country]').selectOption({ label: 'Mexico' });
-      await expect(page.locator('a.directory-global-result')).toHaveCount(1);
-      expect(await resultIds(page, path)).toEqual(['unhcr-help-mexico']);
+      await expect(page.locator('a.directory-global-result')).toHaveCount(mexicoCountrySites.length);
+      expect((await resultIds(page, path)).sort()).toEqual(mexicoCountrySites);
       await expect(hint).toBeHidden();
       await expect(page.locator('[data-directory-query]')).toHaveValue('México');
       await page.locator('[data-directory-country]').selectOption('');
-      await expect(page.locator('a.directory-global-result')).toHaveCount(2);
+      await expect(page.locator('a.directory-global-result')).toHaveCount(mexicoSites.length);
     }
     await search(page, path, 'Mexico NY');
     expect(await resultIds(page, path)).toEqual(['ny-wic-214-05']);

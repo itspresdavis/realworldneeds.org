@@ -1,3 +1,4 @@
+import { resourceScope } from "./resource-scope.js";
 import {
   normalizeSearch,
   searchTimeIntent,
@@ -159,9 +160,7 @@ export function resourceMatchesArea(resource, area) {
   if (!area) return true;
   if (resource.country !== area.country) return false;
   if (resource.kind !== "direct")
-    return /\b(?:nationwide|countrywide|all (?:50 states|of the united states)|united states and its territories)\b/i.test(
-      resource.coverageNote || resource.search || "",
-    );
+    return (resource.coverageScope || resourceScope(resource).type) === "national";
   const point =
     Number.isFinite(resource.lat) && Number.isFinite(resource.lng)
       ? [resource.lat, resource.lng]

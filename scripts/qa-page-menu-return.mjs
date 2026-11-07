@@ -6,7 +6,7 @@ import { directorySavedBrowseHeaderPoint, isDirectoryStartupNavigationError } fr
 // CI-only native history regression. The ordinary QA server remains no-store.
 // A separate origin forwards unchanged public bytes and adjusts Cache-Control
 // only for the exact HTML fixtures below. No production behavior is replaced.
-export const PAGE_MENU_LOCAL = '/directory/local/united-states/new-york/help/referral';
+export const PAGE_MENU_LOCAL = '/directory/local/united-states/new-york-city/help/referral';
 export const PAGE_MENU_SERVICE = '/service/new-york-public-library-access';
 export const PAGE_MENU_VIEWPORTS = [
   { name: '390', width: 390, height: 844, mobile: true, deviceScaleFactor: 1 },

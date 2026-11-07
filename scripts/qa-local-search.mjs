@@ -10,8 +10,8 @@ const assert = (ok, label, detail) => {
 };
 const ids = records => records.map(record => record.id).sort();
 const sameIds = (actual, expected) => JSON.stringify([...actual].sort()) === JSON.stringify(expected);
-const referralPath = "/directory/local/united-states/new-york/help/referral";
-const cityPath = "/directory/local/united-states/new-york";
+const referralPath = "/directory/local/united-states/new-york-city/help/referral";
+const cityPath = "/directory/local/united-states/new-york-city";
 const bostonPath = "/directory/local/united-states/boston";
 
 export function localDirectorySnapshot() {
@@ -43,7 +43,7 @@ export function localDirectorySnapshot() {
 }
 
 export async function verifyLocalDirectorySearch({ client, host, payload, navigate, evaluate, capture }) {
-  const newYork = payload.resources.filter(record => record.country === "United States" && record.city === "New York");
+  const newYork = payload.resources.filter(record => record.country === "United States" && ["New York", "New York City"].includes(record.city));
   const referral = newYork.filter(record => [record.category, ...(record.secondaryCategories || [])].includes("referral"));
   const wic = ids(newYork.filter(record => record.id.startsWith("ny-wic-")));
   const library = ["new-york-public-library-access"];

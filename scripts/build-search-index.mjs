@@ -1,3 +1,4 @@
+import { resourceScope } from "../src/utils/resource-scope.js";
 import { postalAreas } from "../src/data/generated/postal-areas.js";
 import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { serviceActions, serviceAccessSummary } from "../src/utils/service-access.js";
@@ -70,6 +71,7 @@ const records = resources.map((resource, index) => {
     categories: types,
     categoryLabels: labels,
     kind: resource.kind,
+    ...(resource.kind !== "direct" ? { coverageScope: resourceScope(resource).type } : {}),
     ...(resource.phone ? { phone: resource.phone } : {}),
     phoneLinks: phoneLinks(resource.phone),
     lat: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,

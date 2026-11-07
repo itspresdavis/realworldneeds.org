@@ -107,6 +107,7 @@ export function resourceSearchText(resource) {
   const values = [
     resource.name,
     resource.city,
+    ...(resource.country === "United States" && resource.city === "New York" ? ["New York City"] : []),
     resource.country,
     resource.region,
     resource.address,

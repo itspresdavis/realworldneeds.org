@@ -66,6 +66,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
     const resource = byId.get(record.id);
     const expected = ["categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
     if (resource.phone) expected.push("phone");
+    if (resource.kind !== "direct") expected.push("coverageScope");
     if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");
     if (sourceClosureNotice(resource)) expected.push("sourceStatus");
     if (resource.locationPrecision === "contact-only") {
