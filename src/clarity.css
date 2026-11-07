@@ -404,7 +404,7 @@ grid-column:1 / -1;grid-row:auto;min-width:0;}
 .rwn-professional .resource-row__service > i { box-shadow:none;}
 .rwn-professional .resource-row__arrow { color:var(--rwn-green-dark);}
 @media (max-width:600px) {
-.rwn-professional .resource-row__reviewed { display:block; grid-column:1 / -1; grid-row:4;padding-left:1.2rem;font-size:.75rem;}
+.rwn-professional .resource-row__reviewed { display:block; grid-column:1 / -1; grid-row:5;padding-left:1.2rem;font-size:.75rem;}
 .rwn-professional .resource-row__reviewed::before { content:"Source checked ";}
 .rwn-professional .results-tools { width:auto;}
 .rwn-professional .directory-tool { flex:0 1 auto;}
