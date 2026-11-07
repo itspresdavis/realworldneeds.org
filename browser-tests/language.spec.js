@@ -26,6 +26,7 @@ test('language switching preserves finder task, provider facts and Saved IDs', a
   await expect(card.locator('.resource-row__access')).toHaveAttribute('lang', 'en');
   await expect(page.locator('[data-language-notice]')).toContainText('no confirma que el proveedor atienda en español');
   await expect(page.locator('.header-action')).toHaveText('Guardados');
+  await expect(page.locator('.about-rwn')).toHaveAttribute('lang', 'en');
   expect(await page.evaluate(() => ({ state: history.state, href: location.href }))).toEqual(before);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await card.scrollIntoViewIfNeeded();

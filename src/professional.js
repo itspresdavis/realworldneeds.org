@@ -69,6 +69,9 @@ function rewriteFinderCopy() {
 }
 
 function rewriteMethodSections() {
+  // These authored explanations remain English until a reviewed translation is
+  // supplied. Translated navigation and labels declare their own language.
+  document.querySelectorAll('.about-rwn, .source-band').forEach(section => { section.lang = 'en'; });
   setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
   setText(
     ".about-rwn__heading p",
