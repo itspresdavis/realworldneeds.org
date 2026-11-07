@@ -1,3 +1,4 @@
+import { resolveSearchIntent, resourceMatchesIntent } from "../src/utils/search-intent.js";
 import { searchGeographyChoices } from "../src/utils/search.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -43,7 +44,7 @@ function finderFixture({ denied = "", initial } = {}) {
     viewMode: "aid", query: "First", accessMode: "all", activeTypes: new Set(["food"]), selectedId: "first", inspectorOpen: true };
   let resultsRenders = 0, panelRenders = 0;
   const messages = [], history = [];
-  const context = vm.createContext({ window: f.window, document, state, resources: records, URL, URLSearchParams,
+  const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null, window: f.window, document, state, resources: records, URL, URLSearchParams,
     renderResourcePanel() { panelRenders++; }, renderClusterTray() {}, wakeGlobe() {}, syncGlobePointLayer() {},
     availableResources: () => records, matchesResource: record => !state.query || record.name === state.query,
     searchGeographyChoices, resourceSearchScore: () => 1, initialResultCount: () => 8, pinSignature: "",
@@ -197,7 +198,7 @@ test("failed explicit Clear leaves Saved data and presentation unchanged", () =>
 function serviceFixture(initial) {
   const f = storageFixture(initial), status = { textContent: "" }, attributes = {};
   const button = { disabled: false, textContent: "", setAttribute(name, value) { attributes[name] = value; }, addEventListener(name, callback) { this[name] = callback; } };
-  const context = vm.createContext({ window: f.window, URL, URLSearchParams, status,
+  const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null, window: f.window, URL, URLSearchParams, status,
     utility: { querySelector: () => button }, document: { querySelector: () => ({ dataset: { serviceId: "first" } }) } });
   vm.runInContext(`${privacy}\n${between(service, '  const saveButton = utility.querySelector', '\n  const publicDetails =')}\nglobalThis.announce = announce;`, context);
   return { ...f, status, button, attributes, announce: context.announce };
@@ -241,7 +242,7 @@ for (const allowed of [false, true]) {
       removeItem(name) { values.delete(name); }
     }
     const storage = new Storage(), window = { localStorage: storage };
-    const context = vm.createContext({ window, Storage, DOMException, document: { addEventListener() {} }, location: { origin: allowed ? "http://127.0.0.1:4181" : "https://example.org" } });
+    const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null, window, Storage, DOMException, document: { addEventListener() {} }, location: { origin: allowed ? "http://127.0.0.1:4181" : "https://example.org" } });
     vm.runInContext(`(${installSavedStorageFixture.toString()})("http://127.0.0.1:4181", ["first"])`, context);
     if (!allowed) { assert.equal(values.size, 0); assert.equal(window.__rwnSavedStorageQA, undefined); return; }
     const probe = window.__rwnSavedStorageQA;

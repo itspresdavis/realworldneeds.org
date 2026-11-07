@@ -13,7 +13,7 @@ const applySource = bodyBetween("const apply=", "const reset=");
 
 function pageFixture(total) {
   const appended = [];
-  const f = vm.createContext({
+  const f = vm.createContext({ place: { value: "" },
     activeMatches: Array.from({ length: total }, (_, id) => ({ id })), visibleCount: 0,
     format: value => value.toLocaleString(), BATCH: 60, scopedCount: 2019, resultRow: (record) => record,
     resultList: { append: (...rows) => appended.push(...rows) }, more: {}, resultSummary: {}
@@ -42,7 +42,7 @@ test("an older pending search cannot replace newer input or reset state", async 
   let resolve;
   let renderCalls = 0;
   const pending = new Promise((done) => { resolve = done; });
-  const f = vm.createContext({
+  const f = vm.createContext({ place: { value: "" },
     input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending,
@@ -83,7 +83,7 @@ test("a failed older search cannot clear newer results after input changes or re
   let reject;
   let clearCalls = 0;
   const pending = new Promise((_, fail) => { reject = fail; });
-  const f = vm.createContext({
+  const f = vm.createContext({ place: { value: "" },
     input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }

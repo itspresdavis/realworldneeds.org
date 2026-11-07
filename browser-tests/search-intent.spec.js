@@ -1,0 +1,178 @@
+import { test, expect } from "@playwright/test";
+test.use({ serviceWorkers: "block" });
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+      return /webgl/i.test(type) ? null : original.call(this, type, ...args);
+    };
+    window.__locationCalls = 0;
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition() {
+          window.__locationCalls++;
+        },
+      },
+    });
+  });
+});
+for (const path of ["/", "/directory"]) {
+  const home = path === "/";
+  const needSelector = home ? "#resourceSearch" : "[data-directory-query]",
+    placeSelector = home ? "#resourcePlace" : "[data-directory-place]",
+    rows = home
+      ? ".resource-card[data-result-resource-id]"
+      : "a.directory-global-result";
+  const ids = (page) =>
+    page
+      .locator(rows)
+      .evaluateAll(
+        (nodes, isHome) =>
+          nodes.map((node) =>
+            isHome
+              ? node.dataset.resultResourceId
+              : node.getAttribute("href").split("/").pop(),
+          ),
+        home,
+      );
+  const settled = async (page, query) => {
+    if (home) await page.locator(needSelector).press("Enter");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (isHome) =>
+            history.state?.[isHome ? "rwnFinder" : "rwnDirectory"]?.query,
+          home,
+        ),
+      )
+      .toBe(query);
+  };
+  test(`${path}: urgent wording preserves useful services and independent manual place`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(path);
+    const need = page.locator(needSelector),
+      place = page.locator(placeSelector);
+    await need.fill("shelter");
+    await place.fill("Boston MA");
+    await settled(page, "shelter");
+    await expect(page.locator(rows).first()).toBeVisible();
+    const ordinary = await ids(page);
+    await need.fill("shelter tonight");
+    await settled(page, "shelter tonight");
+    expect(await ids(page)).toEqual(ordinary);
+    await expect(page.locator("[data-search-intent]")).toContainText(
+      "does not confirm availability",
+    );
+    await expect(place).toHaveValue("Boston MA");
+    expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+    await place.fill("Longyearbyen Norway");
+    await expect(page.locator(rows)).toHaveCount(0);
+    await expect(need).toHaveValue("shelter tonight");
+    await expect(place).toHaveValue("Longyearbyen Norway");
+    await info.attach("independent-place-empty", {
+      body: await page.screenshot({ fullPage: false }),
+      contentType: "image/png",
+    });
+  });
+  test(`${path}: postal search requires a deliberate US area choice and preserves zeros`, async ({
+    page,
+  }, info) => {
+    await page.goto(path);
+    const need = page.locator(needSelector),
+      place = page.locator(placeSelector);
+    await need.fill("food");
+    await place.fill("02108");
+    await settled(page, "food");
+    await expect(
+      page.getByRole("button", { name: "Use US ZIP 02108", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(rows)).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Use US ZIP 02108", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await ids(page)).includes("rosies-place-boston"))
+      .toBe(true);
+    expect(await ids(page)).not.toContain("bowery-mission");
+    await expect(page.locator("[data-search-intent]")).toContainText(
+      "10 km · US ZIP 02108",
+    );
+    await expect(place).toHaveValue("02108");
+    expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+    await page.reload();
+    await expect(place).toHaveValue("02108");
+    await expect
+      .poll(async () => (await ids(page)).includes("rosies-place-boston"))
+      .toBe(true);
+    await place.fill("99999");
+    await expect(page.locator(rows)).toHaveCount(0);
+    await expect(page.locator("[data-search-intent]")).toContainText(
+      "not supported",
+    );
+    await expect(need).toHaveValue("food");
+    await info.attach("unsupported-postal-keeps-context", {
+      body: await page.screenshot({ fullPage: false }),
+      contentType: "image/png",
+    });
+  });
+  test(`${path}: explicit food choices keep location and avoid benefit-only meal results`, async ({
+    page,
+  }) => {
+    await page.goto(path);
+    const need = page.locator(needSelector),
+      place = page.locator(placeSelector);
+    await need.fill("food");
+    await place.fill("Boston MA");
+    await settled(page, "food");
+    await page
+      .locator("[data-search-intent]")
+      .getByRole("button", { name: "Meals", exact: true })
+      .click();
+    await settled(page, "meals");
+    await expect(place).toHaveValue("Boston MA");
+    await expect.poll(async () => (await ids(page)).length).toBeGreaterThan(0);
+    expect((await ids(page)).some((id) => id.includes("wic"))).toBe(false);
+    await place.fill("Nowhere 99999");
+    await place.fill("Boston MA");
+    await expect.poll(async () => (await ids(page)).length).toBeGreaterThan(0);
+    await expect(place).toHaveValue("Boston MA");
+  });
+}
+
+test("postal data stays optional and a real failed fetch can recover on retry", async ({
+  page,
+}) => {
+  let requests = 0,
+    unavailable = true;
+  await page.route("**/data/postal-areas*.json*", (route) => {
+    requests++;
+    return unavailable
+      ? route.fulfill({ status: 503, body: "Unavailable" })
+      : route.continue();
+  });
+  await page.goto("/");
+  await page.locator("#resourceSearch").fill("food");
+  await page.locator("#resourcePlace").fill("Boston MA");
+  await expect
+    .poll(() => page.evaluate(() => history.state?.rwnFinder?.place))
+    .toBe("Boston MA");
+  expect(requests).toBe(0);
+  await page.locator("#resourcePlace").fill("02108");
+  await expect(page.locator("[data-search-intent]")).toContainText(
+    "Postal lookup is unavailable",
+  );
+  expect(requests).toBe(1);
+  unavailable = false;
+  await page
+    .getByRole("button", { name: "Retry postal lookup", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Use US ZIP 02108", exact: true }),
+  ).toBeVisible();
+  expect(requests).toBe(2);
+  await expect(page.locator("#resourceSearch")).toHaveValue("food");
+  await expect(page.locator("#resourcePlace")).toHaveValue("02108");
+});

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { resources } from '../src/data/resources.js';
 import { resourceSearchScore as score, resourceSearchText, searchGeographyChoices, createIndexedSearchMatcher } from '../src/utils/search.js';
 const fixture = (values = {}) => ({ name: 'Community support', city: 'Boston', country: 'United States', category: 'food', kind: 'direct', address: '1 Main Street, Boston, MA 02111', ...values });
-const compact = (resource) => ({ id: resource.id, name: resource.name, place: `${resource.city}, ${resource.country}`, country: resource.country, category: resource.category, categories: [resource.category, ...(resource.secondaryCategories || [])], search: resourceSearchText(resource) });
+const compact = (resource) => ({ id: resource.id, name: resource.name, place: `${resource.city}, ${resource.country}`, country: resource.country, kind: resource.kind, category: resource.category, categories: [resource.category, ...(resource.secondaryCategories || [])], search: resourceSearchText(resource) });
 const both = [r => r, compact];
 const ranked = (items, query) => items.filter(r => score(r, query) >= 0).sort((a, b) => score(b, query) - score(a, query) || a.name.localeCompare(b.name));
 

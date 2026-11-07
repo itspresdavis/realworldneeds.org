@@ -1,3 +1,4 @@
+import { resolveSearchIntent, resourceMatchesIntent } from "../src/utils/search-intent.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -12,7 +13,7 @@ function fixture(fragment) {
   const writes = [];
   const input = { value: initial.query };
   let renders = 0;
-  const context = vm.createContext({
+  const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null,
     state, resources: [{ id: "bowery-mission" }], FINDER_HISTORY_KEY: "rwnFinder",
     window: { location: { href: `https://www.realworldneeds.org/${fragment}` }, history: { replaceState: (...args) => writes.push(args) } },
     finderHistorySnapshot: () => ({ ...state, activeTypes: [...state.activeTypes] }),

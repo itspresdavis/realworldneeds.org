@@ -1,3 +1,5 @@
+import { resolveSearchIntent, resourceMatchesIntent } from "./utils/search-intent.js";
+import { mountSearchIntentControls } from "./utils/search-intent-controls.js";
 import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "./utils/service-access.js";
 import { escapeHtml, safeExternalUrl } from "./utils/html.js";
 import { searchGeographyChoices } from "./utils/search.js";
@@ -164,9 +166,11 @@ if (requestedResource && new URL(window.location.href).searchParams.has("resourc
 let cancelPendingSearch = () => {};
 let hasPendingSearch = () => false;
 let refreshSearchPreparation = () => {};
+let finderIntentControls;
 
 const state = {
   query: sanitizeFinderQuery(initialFinderHistory?.query),
+  place: sanitizeFinderQuery(initialFinderHistory?.place),
   viewMode: "aid",
   accessMode: finderAccessFromHistory(initialFinderHistory?.accessMode),
   activeTypes: finderTypesFromHistory(initialFinderHistory?.activeTypes),
@@ -373,7 +377,7 @@ function locationResultLabel(resource) {
   if (resource.serviceAccess) return "Choose service access";
   if (isContactOnly(resource)) return `${contactOnlyLabel} · check coverage`;
   if (!state.userLocation) return resource.accessType;
-  if (isExactServiceSite(resource)) return distanceLabel(resource);
+  if (isExactServiceSite(resource)) return [resource.accessType, distanceLabel(resource)].filter(Boolean).join(" · ");
   if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Worldwide resource finder";
   if (state.userCountry && resource.country === state.userCountry) return `${state.userCountry} resource finder`;
   return "Resource finder for this area";
@@ -442,6 +446,7 @@ function shell() {
                 <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by service or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
               </div>
+              <div class="finder-place"><label for="resourcePlace" data-i18n="place">Place (city, region, country or postal code)</label><input id="resourcePlace" type="search" maxlength="180" autocomplete="off" value="${escapeHtml(state.place)}"></div>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
               <p class="search-geography-hint" id="searchGeographyHint" role="status" hidden></p>
             </div>
@@ -600,6 +605,8 @@ function notify(message) {
 function finderHistorySnapshot() {
   return {
     query: state.query,
+    place: state.place,
+    postalArea: finderIntentControls?.snapshot() || null,
     accessMode: state.accessMode,
     activeTypes: [...state.activeTypes],
     savedOnly: state.savedOnly,
@@ -629,6 +636,10 @@ function restoreFinderHistory(historyState) {
     return;
   }
   state.query = sanitizeFinderQuery(snapshot?.query);
+  state.place = sanitizeFinderQuery(snapshot?.place);
+  finderIntentControls?.restore(snapshot?.postalArea);
+  const placeInput = document.getElementById("resourcePlace");
+  if (placeInput) placeInput.value = state.place;
   state.accessMode = finderAccessFromHistory(snapshot?.accessMode);
   state.activeTypes = finderTypesFromHistory(snapshot?.activeTypes);
   state.savedOnly = Boolean(snapshot?.savedOnly);
@@ -666,8 +677,11 @@ function kindLabel(resource) {
 
 function updateFilters() {
   wakeGlobe();
+  const intent = resolveSearchIntent(state.query, state.place, finderIntentControls?.snapshot());
+  const searchQuery = intent.query;
+  finderIntentControls?.render();
   const base = state.viewMode === "aid"
-    ? availableResources().filter((resource) => matchesResource(resource, state.query, state.activeTypes))
+    ? availableResources().filter((resource) => matchesResource(resource, searchQuery, state.activeTypes) && resourceMatchesIntent(resource, intent))
     : [];
   let accessFiltered = base.filter((resource) => {
     if (state.accessMode === "direct") return resource.kind === "direct";
@@ -677,13 +691,13 @@ function updateFilters() {
   if (state.savedOnly) accessFiltered = accessFiltered.filter((resource) => state.savedIds.has(resource.id));
 
   state.filtered = state.userLocation
-    ? rankResourcesForLocation(accessFiltered, state.userLocation, state.userCountry, state.query)
-    : state.query
-      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, state.query) - resourceSearchScore(a, state.query) || a.name.localeCompare(b.name))
+    ? rankResourcesForLocation(accessFiltered, state.userLocation, state.userCountry, searchQuery)
+    : searchQuery
+      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, searchQuery) - resourceSearchScore(a, searchQuery) || a.name.localeCompare(b.name))
       : accessFiltered;
   const geographyHint = document.getElementById("searchGeographyHint");
   if (geographyHint) {
-    const choices = searchGeographyChoices(state.filtered, state.query);
+    const choices = searchGeographyChoices(state.filtered, searchQuery);
     geographyHint.hidden = choices.length < 2;
     geographyHint.textContent = choices.length < 2 ? "" : choices.some(choice => choice.countryMatch)
       ? `This place name may mean ${choices.map(choice => choice.countryMatch ? `the country ${choice.country}` : `${choice.city}, ${choice.country}`).join(" or ")}. Add a country or region to narrow the results.`
@@ -980,17 +994,17 @@ function resourceCard(resource) {
   const selected = resource.id === state.selectedId;
   const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
   const listingType = resource.serviceAccess ? "Service access routes" : isContactOnly(resource) ? contactOnlyLabel : isExactServiceSite(resource) ? "Service location" : "Resource finder";
-  const sourcePrefix = resource.sourceName === resource.name ? "" : `${escapeHtml(resource.sourceName)} · `;
+  const sourcePrefix = resource.sourceName === resource.name ? "" : `<span data-provider-text lang="en">${escapeHtml(resource.sourceName)}</span> · `;
   const costLabel = freeAccessLabel(resource, true);
   const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
   const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
       <button type="button" data-resource-id="${escapeHtml(resource.id)}">
-        <span class="resource-row__service"><i></i><span><strong>${escapeHtml(resource.name)}</strong><small>${sourcePrefix}${listingType}${costSuffix}${openAccess}</small></span></span>
-        <span class="resource-row__place">${escapeHtml(formatResourcePlace(resource))}</span>
+        <span class="resource-row__service"><i></i><span><strong data-provider-text lang="en">${escapeHtml(resource.name)}</strong><small>${sourcePrefix}<span data-interface-text>${listingType}</span>${costSuffix}${openAccess}</small></span></span>
+        <span class="resource-row__place" data-provider-text lang="en">${escapeHtml(formatResourcePlace(resource))}</span>
         <span class="resource-row__aid">${aidLabels}</span>
-        <span class="resource-row__access">${escapeHtml(locationResultLabel(resource))}</span>
+        <span class="resource-row__access" lang="en" data-provider-text>${escapeHtml(locationResultLabel(resource))}</span>
         <time class="resource-row__reviewed" datetime="${escapeHtml(resource.lastChecked)}">${reviewLabel(resource)}</time>
         <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
@@ -1225,6 +1239,10 @@ function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
   cancelPendingSearch();
   clearUserLocation();
   state.query = "";
+  state.place = "";
+  finderIntentControls?.restore(null);
+  const placeInput = document.getElementById("resourcePlace");
+  if (placeInput) placeInput.value = "";
   state.accessMode = "all";
   state.activeTypes = createInitialTypeSet();
   state.savedOnly = false;
@@ -2541,6 +2559,29 @@ function bindEvents() {
     document.getElementById("clearSearch").hidden = !searchInput.value;
     scheduleSearchFilter(sanitizeFinderQuery(searchInput.value));
   };
+  const placeInput = document.getElementById("resourcePlace");
+  let placeComposing = false;
+  const applyIntent = async () => {
+    if (placeComposing || composingSearch) return;
+    const revision = ++searchRevision;
+    searchPreparation.prioritize();
+    await searchPreparation.ready;
+    if (revision !== searchRevision) return;
+    state.query = pendingSearchValue = sanitizeFinderQuery(searchInput.value);
+    state.place = sanitizeFinderQuery(placeInput.value);
+    updateFilters();
+    writeFinderHistory("push");
+  };
+  if (placeInput) {
+  finderIntentControls = mountSearchIntentControls({container: searchInput.closest(".finder-search"), queryInput: searchInput, placeInput, onChange: applyIntent});
+  finderIntentControls.restore(initialFinderHistory?.postalArea);
+  finderIntentControls.render();
+  if (initialFinderHistory?.postalArea) updateFilters();
+  placeInput.addEventListener("compositionstart", () => { placeComposing = true; searchRevision += 1; });
+  placeInput.addEventListener("compositionend", () => { placeComposing = false; applyIntent(); });
+  placeInput.addEventListener("input", event => { if (!event.isComposing) applyIntent(); });
+  placeInput.addEventListener("keydown", event => { if (event.key === "Enter" && !event.isComposing) applyIntent(); });
+  }
   searchInput.addEventListener("compositionstart", () => {
     const wasPreparing = preparationNoticeTimer !== null;
     cancelPendingSearch();
