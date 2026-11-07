@@ -1,0 +1,123 @@
+name: Catalog operations report
+
+on:
+  workflow_dispatch:
+    inputs:
+      check_source_links:
+        description: Check at most 20 public source URLs (reachability only)
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: '17 13 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-operations-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Catalog operations / public snapshot
+    # A weekly trigger alone is not authorization or evidence of monitoring.
+    # Scheduled runs allocate no runner until all owner approvals are configured.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && github.repository == 'iamhuvr/RWN-WEB' &&
+       vars.RWN_CATALOG_MONITOR_ENABLED == 'true' &&
+       vars.RWN_CATALOG_MONITOR_OWNER != '' &&
+       vars.RWN_CATALOG_MONITOR_ESCALATION_OWNER != '' &&
+       vars.RWN_CATALOG_MONITOR_APPROVAL_REF != '')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      REPORT_DIR: ${{ runner.temp }}/rwn-catalog-operations
+    steps:
+      - name: Check out the selected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Use the existing Node.js runtime
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Prepare report directory
+        id: prepare
+        run: |
+          mkdir -p "$REPORT_DIR"
+          date -u +%F > "$REPORT_DIR/as-of.txt"
+      - name: Report catalog structure and proposed review queue
+        id: health
+        run: node scripts/catalog-health.mjs --date "$(cat "$REPORT_DIR/as-of.txt")" --output "$REPORT_DIR/catalog-health.json"
+      - name: Report priority coverage and missing access information
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        id: coverage
+        run: node scripts/coverage-report.mjs --date "$(cat "$REPORT_DIR/as-of.txt")" --output "$REPORT_DIR/catalog-coverage.json"
+      - name: Optionally sample public source reachability
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.check_source_links == true && steps.health.outcome == 'success' }}
+        id: sources
+        run: node scripts/catalog-health.mjs --date "$(cat "$REPORT_DIR/as-of.txt")" --check-links --limit 20 --output "$REPORT_DIR/catalog-source-health.json"
+      - name: Record provenance and aggregate outcome
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        id: summary
+        env:
+          SOURCE_SAMPLE_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.check_source_links == true }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile, appendFile } from 'node:fs/promises';
+          import { createHash } from 'node:crypto';
+          import { join } from 'node:path';
+          import { resources } from './src/data/resources.js';
+          import { fingerprint } from './scripts/catalog-sync-core.mjs';
+          const directory = process.env.REPORT_DIR;
+          const read = async name => {
+            try { return JSON.parse(await readFile(join(directory, name), 'utf8')); }
+            catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+          };
+          const health = await read('catalog-health.json');
+          const coverage = await read('catalog-coverage.json');
+          const sample = await read('catalog-source-health.json');
+          const links = sample?.links || { status: 'not-checked' };
+          const counts = links.outcomes || {};
+          const incomplete = !health || !coverage || health.asOf !== coverage.asOf || (process.env.SOURCE_SAMPLE_REQUESTED === 'true' && !sample) || links.status === 'blocked' || (counts.unknown || 0) + (counts.blocked || 0) > 0;
+          const needsReview = health?.structural.passed === false || (counts.broken || 0) > 0;
+          const outcome = incomplete ? 'incomplete' : needsReview ? 'needs-review' : 'report-complete';
+          const receipt = {
+            schemaVersion: 1, sourceSha: process.env.GITHUB_SHA,
+            catalogHash: fingerprint(resources),
+            lockfileHash: createHash('sha256').update(await readFile('package-lock.json')).digest('hex'),
+            nodeVersion: process.version, asOf: health?.asOf || coverage?.asOf,
+            outcome, structuralPassed: health?.structural.passed ?? null,
+            sourceReachability: { status: links.status, checked: links.checked || 0, outcomes: counts },
+            note: 'Public snapshot report only. This is not provider verification, a publication decision, a delivered alert, or hosted backend health.',
+          };
+          await writeFile(join(directory, 'report-receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+          const queue = health?.reviewQueue?.candidates || [];
+          const total = coverage?.staticSnapshot;
+          const lines = [
+            '## Catalog operations report', '',
+            `Outcome: **${outcome}**. Source: \`${process.env.GITHUB_SHA}\`.`, '',
+            `Static listings: ${total?.listings ?? 'unavailable'}; direct records: ${total?.directRecords ?? 'unavailable'}; unique physical addresses: ${total?.uniquePhysicalAddresses ?? 'unavailable'}; referral/network records: ${total?.referralOrNetworkRecords ?? 'unavailable'}.`,
+            `Direct records without structured hours: ${total?.directWithoutStructuredHours ?? 'unavailable'}; without structured eligibility: ${total?.directWithoutStructuredEligibility ?? 'unavailable'}.`,
+            `Proposed review candidates: ${queue.length}; high priority: ${queue.filter(item => item.priority === 'high').length}. These remain unassigned; age alone does not establish closure.`,
+            `Source reachability: ${links.status}; checked ${links.checked || 0}; broken ${counts.broken || 0}; unknown ${counts.unknown || 0}; blocked ${counts.blocked || 0}.`, '',
+            'USDA dynamic seasonal results are excluded. No public facts, review dates, database rows, or publication status were changed.',
+            'Review the seven-day artifact using docs/CATALOG_OPERATIONS.md. This report sends no operator alerts and does not certify monitoring or hosted backend health.', '',
+          ];
+          await appendFile(process.env.GITHUB_STEP_SUMMARY, lines.join('\n'));
+          if (incomplete || needsReview) process.exitCode = 1;
+          NODE
+      - name: Retain bounded public reports
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: rwn-catalog-operations-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rwn-catalog-operations/catalog-health.json
+            ${{ runner.temp }}/rwn-catalog-operations/catalog-coverage.json
+            ${{ runner.temp }}/rwn-catalog-operations/catalog-source-health.json
+            ${{ runner.temp }}/rwn-catalog-operations/report-receipt.json
+          if-no-files-found: error
+          retention-days: 7
