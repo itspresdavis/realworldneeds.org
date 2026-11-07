@@ -182,7 +182,12 @@ begin
   -- Service-specific facts require a full source review, not a generic overwrite.
   if listing.record ? 'serviceAccess' and p_changes ?| array['hours','eligibility'] then raise invalid_parameter_value using message='Review the specific service routes in the full catalog'; end if;
   if listing.record || p_changes = listing.record then raise invalid_parameter_value using message='No catalog change supplied'; end if;
-  update public.rwn_locations set record=record||p_changes,editorial_note=btrim(p_reason)
+  -- Preserve earlier private evidence, including a full-length existing note.
+  -- The complete new reason always remains in the immutable event below.
+  update public.rwn_locations set record=record||p_changes,editorial_note=case
+    when length(concat_ws(E'\n',nullif(editorial_note,''),btrim(p_reason)))<=1000
+      then concat_ws(E'\n',nullif(editorial_note,''),btrim(p_reason))
+    else editorial_note end
     where id=report.resource_id returning * into listing;
   update rwn_private.corrections set status='applied',revision=revision+1,updated_at=clock_timestamp(),
     applied_record=listing.record,applied_changes=p_changes,applied_catalog_revision=listing.updated_at

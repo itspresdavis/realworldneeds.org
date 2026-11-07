@@ -5,6 +5,7 @@ update rwn_private.correction_config set enabled=true,
   approval_ref='fixture-workflow',retention_days=2,actor_hour_limit=50,global_hour_limit=100 where singleton;
 insert into auth.users(id,email,email_confirmed_at) values ('b0de7236-ea12-42d2-9201-555500000031','workflow-editor@example.invalid',now());
 insert into public.rwn_members(user_id,role) values ('b0de7236-ea12-42d2-9201-555500000031','editor');
+update public.rwn_locations set editorial_note=repeat('X',1000) where id='qa-fixture-2';
 update public.rwn_locations set record=record||'{"serviceAccess":[{"id":"meals"}]}'::jsonb where id='qa-fixture-1';
 do $$ begin
   perform set_config('request.headers',jsonb_build_object('x-rwn-correction-key','synthetic-test-capability-never-configured-remotely-123456','x-rwn-correction-approval','fixture-workflow')::text,true);
@@ -64,6 +65,8 @@ do $$ declare report_id uuid:=current_setting('rwn.qa_workflow_id')::uuid; revis
 end $$;
 reset role;
 do $$ begin
+  if (select editorial_note from public.rwn_locations where id='qa-fixture-2')<>repeat('X',1000) then raise exception 'Existing editorial note overwritten or truncated'; end if;
+  if not exists(select 1 from rwn_private.correction_events where report_id=current_setting('rwn.qa_workflow_id')::uuid and status='applied' and reason='Independent source review.') then raise exception 'New correction reason not preserved separately'; end if;
   if (select count(*) from rwn_private.correction_events where report_id=current_setting('rwn.qa_workflow_id')::uuid and status='applied')<>1 then raise exception 'Duplicate catalog publication event'; end if;
   update rwn_private.correction_config set enabled=false where singleton;
   perform set_config('rwn.qa_applied_record',(select record::text from public.rwn_locations where id='qa-fixture-2'),true);
