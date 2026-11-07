@@ -92,6 +92,25 @@ The existing contact-only browser fixture passed all 47 cases after repair.
 A separate catalog-workflow context error and renamed menu-evidence variable
 were corrected. All six jobs must pass again on the resulting candidate.
 
+At `6258d060`, the complete local check passed **1,843 tests / zero failures /
+zero skips** and reproduced all 2,894 output hashes. Exact-source run
+`42349710133` passed SQL and Chromium (68), Firefox (63, five WebGL capability
+skips) and WebKit (67, one capability skip). Its two native jobs remained failed:
+the mobile seasonal-feed fixture assumed immediate offscreen globe loading, and
+the new controls buried the primary action at 320px. The fixture now reveals the
+globe through trusted scrolling while retaining geometry/country assertions;
+desktop/mobile seasonal-feed, chaos and deep-globe checks passed separately.
+The mobile layout fix preserves all controls and 44px targets: measured English
+search/action bottoms improve from 413/690px to 290/450px; Spanish measures
+377/536px with its scope notice visible. Component tests pass 38 Node and 12
+three-engine journeys; later service-page gates remain distinct from that result.
+
+The read-only catalog report was **verified on GitHub**, run `42349712347`,
+artifact `13564913775`: exact source `6258d060`, structural pass and canonical
+catalog hash `f24285108fc754820ffbc87d614abecea05952e3213b0b36bc86254b18166a12`.
+No source links were fetched, public facts changed or operator alert sent.
+Scheduled monitoring remains disabled and operationally incomplete.
+
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
 detailed globe. Component browser evidence uses Chromium 158, Firefox 159 and
@@ -147,8 +166,9 @@ The user's earlier instruction authorizes repair and deployment. No further gene
    keep intake disabled until all pass. Never select the first signup or expose
    private reports in artifacts.
 3. **Monitoring:** approve an owner, escalation owner, cadence and destination;
-   test delivery/acknowledgement before enabling scheduled reporting. The new
-   workflow may need default-branch registration before hosted dispatch.
+   test delivery/acknowledgement before enabling scheduled reporting. Manual
+   branch dispatch is verified; scheduled operation also needs the reviewed
+   workflow on the default branch and all explicit owner gates configured.
 4. **Source rights, backup and devices:** obtain the source-specific reuse
    decisions above; establish supported backup inventory/recovery evidence; run
    the documented journeys on actual iOS/VoiceOver, Android/TalkBack and Windows

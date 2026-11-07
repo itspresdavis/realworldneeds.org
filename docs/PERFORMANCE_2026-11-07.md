@@ -112,6 +112,16 @@ an unexplained helper waterfall.
 
 ## Evidence and follow-up
 
+The later mobile layout correction was measured with real Chromium 156 layout
+and visible scrollbars at a 320×844 viewport (305px client width). English search
+and primary-action bottoms moved from 412.95/690.48px to 290.36/450.02px. Spanish
+measured 376.53/536.19px with the complete language-scope notice visible. Both meet
+the unchanged 380/560px native first-screen limits. All eight English/Spanish
+samples at 320/390/768/1440 retained 44px targets and page bounds. This measures
+layout, not loading speed or field performance; the original 38 KB CSS limit
+also remains unchanged. Evidence: `ux-locale/first-screen/EVIDENCE.md` beneath
+the external evidence directory below.
+
 Raw runs, browser/profile details, screenshots and machine-readable summaries
 are outside tracked source in
 `/workspace/rwn-release-evidence/access-quality-20261107/`:
