@@ -190,9 +190,13 @@ export async function enhanceDirectoryIntent() {
       queryInput.dispatchEvent(new Event("input", { bubbles: true })),
   });
   const { resourceMatchesIntent } = await import("./search-intent.js");
-  const restore = () => {
+  const restore = (initial = false) => {
     const stored = history.state?.rwnDirectoryIntent;
-    if (stored?.path === location.pathname) {
+    // Early input belongs to the visitor even when the enhancement loads late.
+    // The startup/core marker also distinguishes an intentional empty draft.
+    if (initial && (placeInput.dataset.rwnPlaceEdited || placeInput.value)) {
+      controls.restore(stored?.path === location.pathname && stored.place === placeInput.value ? stored.postalArea : null);
+    } else if (stored?.path === location.pathname) {
       placeInput.value = String(stored.place || "").slice(0, 180);
       controls.restore(stored.postalArea);
     } else {
@@ -225,7 +229,7 @@ export async function enhanceDirectoryIntent() {
     // gets a new plan and the core's generation guard discards stale loads.
     matches: (record) => resourceMatchesIntent(record, currentPlan),
   };
-  restore();
+  restore(true);
   render();
   window.addEventListener("popstate", () => {
     restore();

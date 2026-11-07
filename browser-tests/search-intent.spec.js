@@ -47,6 +47,11 @@ for (const path of ["/", "/directory"]) {
         ),
       )
       .toBe(query);
+    const selectedPlace = await page.locator(placeSelector).inputValue();
+    await expect.poll(() => page.evaluate(isHome =>
+      history.state?.[isHome ? "rwnFinder" : "rwnDirectoryIntent"]?.place || "", home))
+      .toBe(selectedPlace);
+    if (!home) await expect(page.locator("[data-directory-count]")).not.toContainText("Searching");
   };
   test(`${path}: urgent wording preserves useful services and independent manual place`, async ({
     page,
@@ -273,3 +278,33 @@ test("directory resolves one bounded intent per search pass while keeping the la
   // of its size. This guards the previous ~2,000 parses per keystroke.
   expect(resolutions).toBeLessThan(30);
 });
+
+for (const clearDraft of [false, true]) {
+  test(`delayed directory enhancement preserves an early ${clearDraft ? "cleared" : "typed"} place`, async ({ page }) => {
+    let release;
+    const ready = new Promise(resolve => { release = resolve; });
+    await page.route("**/src/utils/search-intent-entry*.js*", async route => {
+      await ready;
+      await route.continue();
+    });
+    if (clearDraft) await page.addInitScript(() => {
+      history.replaceState({ rwnDirectoryIntent: { path: "/directory", place: "Boston MA", postalArea: null } }, "");
+    });
+    await page.goto("/directory", { waitUntil: "commit" });
+    const need = page.locator("[data-directory-query]");
+    const place = page.locator("[data-directory-place]");
+    await need.fill("shelter");
+    await place.fill("Boston MA");
+    if (clearDraft) await place.fill("");
+    release();
+    await expect.poll(() => page.evaluate(() => Boolean(document.querySelector("[data-directory-search]").rwnIntent))).toBe(true);
+    await expect(place).toHaveValue(clearDraft ? "" : "Boston MA");
+    await expect.poll(() => page.evaluate(() => history.state?.rwnDirectoryIntent?.place)).toBe(clearDraft ? "" : "Boston MA");
+    await expect(page.locator(clearDraft
+      ? 'a.directory-global-result[href="/service/bowery-mission"]'
+      : 'a.directory-global-result[href="/service/pine-street-mens-inn"]')).toBeVisible();
+    if (!clearDraft) await expect(page.locator('a.directory-global-result[href="/service/bowery-mission"]')).toHaveCount(0);
+    await expect(need).toHaveValue("shelter");
+    expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+  });
+}
