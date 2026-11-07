@@ -5,6 +5,23 @@ const mealLabel = 'Directions to meal service';
 const shelterLabel = 'Shelter intake details';
 const officialHelp = 'https://www.bowery.org/get-help/';
 
+async function chooseServiceAccess(page) {
+  const next = page.locator('.service-next-steps');
+  expect(await next.evaluate(node => node.getBoundingClientRect().top < innerHeight)).toBe(true);
+  await expect(next.locator('a[href*="google.com/maps"], a[href*="maps.apple.com"]')).toHaveCount(0);
+  const choice = next.getByRole('link', { name: /^Choose service access/ });
+  await expect(choice).toHaveAttribute('href', '#before-you-go-title');
+  expect((await choice.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await choice.focus();
+  await page.keyboard.press('Enter');
+  const heading = page.locator('#before-you-go-title');
+  await expect(heading).toBeFocused();
+  await expect.poll(async () => heading.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return rect.top >= document.querySelector('.legal-header').getBoundingClientRect().bottom && rect.bottom <= innerHeight;
+  })).toBe(true);
+}
+
 async function assertAccessActions(scope) {
   const meal = scope.getByRole('link', { name: new RegExp('^' + mealLabel) });
   const shelter = scope.getByRole('link', { name: new RegExp('^' + shelterLabel) });
@@ -36,7 +53,8 @@ test('Bowery access routes survive detail, copy, print, and Saved on mobile', as
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/service/bowery-mission');
-  await assertAccessActions(page.locator('.service-next-steps'));
+  await chooseServiceAccess(page);
+  await assertAccessActions(page.locator('[data-service-before-you-go]'));
   const meal = page.locator('[data-service-route="meals"]');
   const shelter = page.locator('[data-service-route="shelter"]');
   await expect(meal).toContainText('227 Bowery');
@@ -60,6 +78,8 @@ test('Bowery access routes survive detail, copy, print, and Saved on mobile', as
   expect(copied).toContain('Meal service\nAccess location: 227 Bowery, New York, NY 10002');
   expect(copied).toContain('Shelter intake\nAccess location: 90 Lafayette Street, New York, NY 10013');
   expect(copied).toMatch(/Route source and review: https:\/\/www\.bowery\.org\/get-help\/ · \d{4}-\d{2}-\d{2}/);
+  expect(copied).toContain('Directions to meal service: https://www.google.com/maps/dir/?api=1&destination=227%20Bowery');
+  expect(copied).toContain('Directions to shelter intake: https://www.google.com/maps/dir/?api=1&destination=90%20Lafayette');
   await page.locator('[data-service-print]').click();
   expect(await page.evaluate(() => window.__printedListing)).toBe(true);
   await page.emulateMedia({ media: 'print' });
@@ -105,7 +125,8 @@ test('service-specific access is usable with JavaScript disabled', async ({ brow
     const page = await context.newPage();
     await page.goto(baseURL + '/service/bowery-mission');
     await expect(page.getByRole('heading', { name: 'The Bowery Mission', exact: true })).toBeVisible();
-    await assertAccessActions(page.locator('.service-next-steps'));
+    await chooseServiceAccess(page);
+    await assertAccessActions(page.locator('[data-service-before-you-go]'));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect(page.locator('.directory-record')).toContainText('90 Lafayette');
   } finally { await context.close(); }

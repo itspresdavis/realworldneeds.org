@@ -10,9 +10,9 @@ const row = (label, value, links = []) => ({
   querySelectorAll: () => links.map(href => ({ href })),
   hasAttribute: key => key === 'data-service-location-facts' && label === 'Service locations',
 });
-const route = (label, rows, evidence = []) => ({
+const route = (label, rows, evidence = [], actions = []) => ({
   querySelector: () => ({ textContent: label }),
-  querySelectorAll: selector => selector === 'dl > div' ? rows : evidence,
+  querySelectorAll: selector => selector === 'dl > div' ? rows : selector === 'details li' ? evidence : actions,
 });
 
 test('copied access facts retain each service, entrance, schedule, evidence and non-phone route exactly once', () => {
@@ -20,7 +20,10 @@ test('copied access facts retain each service, entrance, schedule, evidence and 
   const evidence = { textContent: 'schedule · 2026-11-07 — Schedule only; no live availability confirmation.', querySelectorAll: () => [{ href: sourceUrl }] };
   const routes = [
     route('Breakfast', [row('Access location', '12 Main Street, Example City'), row('Entrance', 'Use Caroline Street'), row('Hours', 'Tuesday–Saturday 7–9:30 a.m. America/Chicago'), row('Contact', 'Email intake', ['mailto:help@example.org'])], [evidence]),
-    route('Shelter intake', [row('Access location', '90 Other Street, Example City'), row('Intake', 'Registration at 3 p.m.; no admission guarantee.')]),
+    route('Shelter intake', [row('Access location', '90 Other Street, Example City'), row('Intake', 'Registration at 3 p.m.; no admission guarantee.')], [], [
+      {textContent:'Directions to shelter intake',href:'https://www.google.com/maps/dir/?api=1&destination=90%20Other%20Street'},
+      {textContent:'Unsafe injected link',href:'javascript:alert(1)'}
+    ]),
   ];
   const record = [row('Service locations', 'Old generic location summary'), row('Cost', 'Free services')];
   const context = vm.createContext({ title: 'Fixture', place: 'Example City', listingUrl: 'https://www.realworldneeds.org/service/fixture', officialSource: sourceUrl,
@@ -33,6 +36,8 @@ test('copied access facts retain each service, entrance, schedule, evidence and 
   assert.match(copied, /Entrance: Use Caroline Street/);
   assert.match(copied, /Contact: Email intake \(mailto:help@example.org\)/);
   assert.match(copied, /Schedule only; no live availability confirmation/);
+  assert.match(copied, /Directions to shelter intake: https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=90%20Other%20Street/);
+  assert.doesNotMatch(copied, /Unsafe injected link|javascript:/);
   assert.equal(copied.split('Use Caroline Street').length - 1, 1);
   assert.doesNotMatch(copied, /Old generic location summary/);
 });

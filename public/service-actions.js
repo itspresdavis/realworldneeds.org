@@ -106,6 +106,9 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     const accessDetails = accessRoutes.flatMap(route => [
       route.querySelector('h3')?.textContent?.trim() || '',
       ...[...route.querySelectorAll('dl > div')].map(rowText),
+      ...[...route.querySelectorAll('[data-service-route-actions] a[href]')]
+        .filter(link => /^(?:https:\/\/|mailto:|sms:)/.test(link.href))
+        .map(link => `${link.textContent.replace(/\s+/g, ' ').trim()}: ${link.href}`),
       ...[...route.querySelectorAll('details li')].map(item => withLinks(item.textContent.replace(/\s+/g, ' ').trim(), item, 'a[href]')),
     ]).filter(Boolean);
     const sourceStatus = document.querySelector("#service > .directory-shell > .source-status-notice");

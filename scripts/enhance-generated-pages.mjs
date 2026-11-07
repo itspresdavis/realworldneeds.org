@@ -1,10 +1,9 @@
-import { serviceActions } from "../src/utils/service-access.js";
+import { serviceContactMarkup } from "./service-contact.mjs";
 import { relatedResources } from "./related-resources.mjs";
 import { resourceScope } from "../src/utils/resource-scope.js";
 import { serviceBeforeYouGoMarkup } from "./service-before-you-go.mjs";
-import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
+import { isContactOnly } from "../src/utils/resource-location.js";
 import { minify } from "terser";
-import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -88,28 +87,6 @@ function accessibilityMarkup(resource) {
   return `<aside class="service-accessibility" aria-label="Accessibility information"><strong>Accessibility</strong><p>${escapeHtml(resource.accessibilityNote)}</p></aside>`;
 }
 
-function serviceNextStepMarkup(resource) {
-  const links = [`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`];
-  const phones = phoneLinks(resource.phone);
-  const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
-    ? `<span class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`
-    : "";
-  for (const { label, href } of phones) {
-    links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
-  }
-  for (const action of serviceActions(resource)) {
-    links.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer"><strong>${escapeHtml(action.label)}</strong><span>${escapeHtml(action.address || "Check access with the provider")}</span></a>`);
-  }
-  if (hasMapCoordinates(resource)) links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  if (isContactOnly(resource) && resource.accessUrl) {
-    links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer"><strong>Get help online</strong><span>Use the reviewed access link</span></a>`);
-  }
-  const contactContext = isContactOnly(resource)
-    ? `<span class="service-next-steps__context">${escapeHtml(contactOnlyNotice(resource))}</span>${resource.phone ? `<span class="service-next-steps__context">Phone dialing scope: ${escapeHtml(resource.phoneAccess)}</span>` : ""}`
-    : "";
-  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong>${phoneContext}${contactContext}</div><div>${links.join("")}</div></nav>`;
-}
-
 function assetLinks(release, includeScript) {
   return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script><script type="module" src="/src/utils/search-intent-entry.js?v=${releaseInfo.release}"></script>` : ""}`;
 }
@@ -180,8 +157,8 @@ function enhanceServicePage(html, resource, release) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n  ${assetLinks(release, false)}`);
   }
   if (!html.includes("service-next-steps")) {
-    const nextSteps = serviceNextStepMarkup(resource);
-    html = html.replace('<div class="policy-note">', `${serviceBeforeYouGoMarkup(resource)}\n${nextSteps}\n      <div class="policy-note">`);
+    const nextSteps = serviceContactMarkup(resource);
+    html = html.replace('<div class="policy-note">', `${nextSteps}\n${serviceBeforeYouGoMarkup(resource)}\n      <div class="policy-note">`);
   }
   const accessibility = accessibilityMarkup(resource);
   if (accessibility && !html.includes("service-accessibility")) {

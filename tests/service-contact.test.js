@@ -10,6 +10,16 @@ import { reviewedProviderUrl, serviceContactMarkup } from "../scripts/service-co
 const escape = value => String(value).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("'", "&#39;");
 const base = { id: "synthetic-contact", kind: "direct", sourceUrl: "https://source.example/", phone: "+1 (202) 555-0123", lat: 40, lng: -73, accessType: "Appointment" };
 
+test("multi-service contact panels offer a local choice before route-specific travel actions", () => {
+  const item = resources.find(resource => resource.id === "bowery-mission");
+  const html = serviceContactMarkup(item);
+  assert.match(html, /href="#before-you-go-title"/);
+  assert.match(html, /Choose service access/);
+  assert.match(html, /Call organization/);
+  assert.doesNotMatch(html, /google\.com\/maps|maps\.apple\.com|Directions to|Shelter intake details/);
+  assert.match(html, /href="\/#resource=bowery-mission"/);
+});
+
 test("supplemental provider URLs must be reviewed HTTPS, safe, and distinct from existing routes", () => {
   for (const providerUrl of [null, "", "/relative", "javascript:alert(1)", "http://example.org", "https://", "https://user:password@example.org", "https://example.org/\npath", "https://source.example", "https://access.example/"]) {
     assert.equal(reviewedProviderUrl({ ...base, providerUrl, accessUrl: "https://access.example/" }), null, String(providerUrl));
@@ -63,7 +73,14 @@ test("every generated service keeps source and phone semantics while exposing re
     const expected = resource.serviceAccess
       ? resource.serviceAccess.filter(route => route.mode === 'walk-in' && route.directions !== false || route.mode === 'intake' && route.directions === true).map(route => route.address)
       : resource.kind === 'direct' && hasMapCoordinates(resource) ? [`${resource.lat},${resource.lng}`] : [];
-    assert.deepEqual(destinations, expected, `${resource.id}: every direction uses the verified service address or legacy exact coordinates`);
+    assert.deepEqual(destinations, resource.serviceAccess ? [] : expected, `${resource.id}: explicit service travel follows its restrictions`);
+    const pageDestinations = [...page.matchAll(/href="(https:\/\/www\.google\.com\/maps\/dir\/[^\"]+)"/g)].map(match => new URL(match[1].replaceAll('&amp;', '&')).searchParams.get('destination'));
+    assert.deepEqual([...new Set(pageDestinations)].sort(), [...new Set(expected)].sort(), `${resource.id}: every page direction uses a verified service address or legacy coordinates`);
+    if (resource.serviceAccess) {
+      assert.match(panel, /href="#before-you-go-title"/);
+      assert.ok(page.indexOf(panel) < page.indexOf('data-service-before-you-go'), `${resource.id}: contact and service choice are available first`);
+      assert.match(page, /id="before-you-go-title" tabindex="-1"/);
+    }
     assert.equal(panel.includes('/#resource='), hasMapCoordinates(resource), resource.id);
     if (sourceClosureNotice(resource)) assert.ok(page.indexOf('class="source-status-notice"') < page.indexOf(panel), resource.id);
   }

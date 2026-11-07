@@ -25,6 +25,8 @@ export function reviewedProviderUrl(resource) {
 
 export function serviceContactMarkup(resource) {
   const phones = phoneLinks(resource.phone);
+  const actions = serviceActions(resource);
+  const serviceChoices = Object.hasOwn(resource, "serviceAccess") && actions.length > 0;
   const contactOnly = isContactOnly(resource);
   const finder = resource.kind === "locator";
   const network = resource.kind === "network";
@@ -41,7 +43,8 @@ export function serviceContactMarkup(resource) {
       ? `<p class="service-next-steps__context">This is a ${finder ? "help finder or referral service" : "service network"}, not a walk-in location.</p>` : "";
   const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
     ? `<p class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</p>` : "";
-  const links = phones.map(({ label, href }) => `<a class="is-call" href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
+  const callLabel = serviceChoices ? '<strong data-i18n-en="Call organization" data-i18n-es="Llamar a la organización">Call organization</strong>' : '<strong>Call</strong>';
+  const links = phones.map(({ label, href }) => `<a class="is-call" href="${href}">${callLabel}<span>${escapeHtml(label)}</span></a>`);
   if (contactOnly && resource.accessUrl) {
     links.push(`<a class="is-online" href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer"><strong>Get help online</strong><span>Use the reviewed access link</span></a>`);
   }
@@ -50,7 +53,8 @@ export function serviceContactMarkup(resource) {
   }
   links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>${hasFinder && !contactOnly ? "Open resource finder" : "Official source"}</strong><span>${hasFinder && !contactOnly ? "Official source · Check local options" : "Verify current details"}</span></a>`);
   const locations = [];
-  for (const action of serviceActions(resource)) {
+  if (serviceChoices) locations.push('<a class="is-access-choice" href="#before-you-go-title"><strong data-i18n-en="Choose service access" data-i18n-es="Elegir cómo acceder al servicio">Choose service access</strong><span class="service-contact-link-note" data-i18n-en="Directions and intake by service" data-i18n-es="Indicaciones y admisión por servicio">Directions and intake by service</span></a>');
+  for (const action of serviceChoices ? [] : actions) {
     locations.push(`<a class="${action.kind === "directions" ? "is-map is-directions" : "is-access-details"}" href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}<span class="service-contact-link-note">${escapeHtml(action.address || "Official access details")}</span></a>`);
   }
   if (hasMapCoordinates(resource)) locations.push(`<a href="/#resource=${encodeURIComponent(resource.id)}">Interactive map<span class="service-contact-link-note">View on RWN</span></a>`);

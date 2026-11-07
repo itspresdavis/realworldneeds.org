@@ -29,8 +29,10 @@ the English/Spanish option translates RWN's labels, not eligibility or promises.
 
 On details pages each reviewed route places its own actions directly after its
 access facts. Actions match the stable route ID; another service's destination
-or the organization's general phone is never substituted. The combined Next
-steps section remains available. These static links work without JavaScript;
+or the organization's general phone is never substituted. The top Next steps
+section offers organization contact and a local jump to the service choices;
+explicit route directions remain beside their restrictions. Copied handoffs
+retain each route's labeled actions and facts. These static links work without JavaScript;
 maps open only when a visitor follows a directions link.
 
 Legacy records also receive `beforeYouGoFacts`: existing access instructions,

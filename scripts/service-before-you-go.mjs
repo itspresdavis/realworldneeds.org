@@ -17,7 +17,7 @@ export function serviceBeforeYouGoMarkup(resource) {
     return unknown?`data-i18n="${unknown}"`:'data-provider-text lang="en"';
   };
   return `<section class="service-before-you-go" data-service-before-you-go aria-labelledby="before-you-go-title">
-    <h2 id="before-you-go-title" data-i18n-en="${title[0]}" data-i18n-es="${title[1]}">${title[0]}</h2>
+    <h2 id="before-you-go-title" tabindex="-1" data-i18n-en="${title[0]}" data-i18n-es="${title[1]}">${title[0]}</h2>
     <p data-i18n-en="Published schedules and intake instructions do not confirm space, stock or admission. Check current details with the provider." data-i18n-es="Los horarios y las instrucciones publicados no confirman plazas, existencias ni admisión. Confirma los detalles actuales con el proveedor.">Published schedules and intake instructions do not confirm space, stock or admission. Check current details with the provider.</p>
     ${routes.map(route=>`<article data-service-route="${escape(route.routeId)}">
       <h3 data-provider-text lang="en">${escape(route.label)}</h3>

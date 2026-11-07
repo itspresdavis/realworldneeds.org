@@ -95,11 +95,9 @@ test("finder direct actions and inspector use the same safe targets and preserve
 
 test("every static action generator rejects ambiguous phone targets", async () => {
   const build = await read("scripts/build.mjs");
-  const enhancement = await read("scripts/enhance-generated-pages.mjs");
   const professional = await read("scripts/professional-seo.mjs");
   const bodies = [
     [functionSource(build, "directoryRecordActions", "resourceRecord"), "directoryRecordActions"],
-    [functionSource(enhancement, "serviceNextStepMarkup", "assetLinks"), "serviceNextStepMarkup"],
     [functionSource(professional, "directoryQuickActions", "enhanceActionOrientation"), "directoryQuickActions"],
 
   ];

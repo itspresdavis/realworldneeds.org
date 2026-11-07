@@ -26,7 +26,9 @@ test('Beacon access facts stay grouped through mobile details, copy, print, Save
   expect((await nextBreakfast.boundingBox()).height).toBeGreaterThanOrEqual(44);
   await expect(breakfast.getByRole('link', { name: /Housing assessment intake details/ })).toHaveCount(0);
   await expect(facts.locator('[data-service-route="housing-assessment"]').getByRole('link', { name: 'Housing assessment intake details', exact: true })).toHaveAttribute('href', 'https://www.beaconhomeless.org/gethelp');
-  const breakfastDirections = page.locator('.service-next-steps').getByRole('link', { name: 'Directions to breakfast 1212 Prairie Street, Houston, TX 77002', exact: true });
+  await expect(page.locator('.service-next-steps').getByRole('link', { name: /^Choose service access/ })).toHaveAttribute('href', '#before-you-go-title');
+  await expect(page.locator('.service-next-steps a[href*="google.com/maps"]')).toHaveCount(0);
+  const breakfastDirections = breakfast.getByRole('link', { name: 'Directions to breakfast', exact: true });
   await expect(breakfastDirections).toBeVisible();
   expect(new URL(await breakfastDirections.getAttribute('href')).searchParams.get('destination')).toBe('1212 Prairie Street, Houston, TX 77002');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -72,7 +74,7 @@ test('an address-only service provides the reviewed destination without a fictio
   await expect(facts.locator('[data-service-route="weekday-lunch"]').getByRole('link', { name: 'Directions to weekday lunch', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Show on interactive globe', exact: true })).toHaveCount(0);
   await expect(page.locator('.service-next-steps a[href^="/#resource="]')).toHaveCount(0);
-  const directions = page.locator('.service-next-steps').getByRole('link', { name: 'Directions to weekday lunch 378 Bay Street, Taunton, MA 02780', exact: true });
+  const directions = facts.locator('[data-service-route="weekday-lunch"]').getByRole('link', { name: 'Directions to weekday lunch', exact: true });
   expect(new URL(await directions.getAttribute('href')).searchParams.get('destination')).toBe('378 Bay Street, Taunton, MA 02780');
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-finder-startup', 'ready');

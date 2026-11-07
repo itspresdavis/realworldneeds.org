@@ -162,6 +162,9 @@ async function run() {
       const interactive = [...(next?.querySelectorAll("a") || [])].find((link) => link.getAttribute("href")?.startsWith("/#resource="));
       const rect = next?.getBoundingClientRect();
       const links = [...(next?.querySelectorAll("a") || [])];
+      const isMap = link => link.hostname === "maps.apple.com" || link.hostname === "www.google.com" && link.pathname.startsWith("/maps/");
+      const choice = next?.querySelector('a[href="#before-you-go-title"]');
+      const access = document.getElementById("before-you-go-title");
       return {
         title: document.querySelector("#service h1")?.textContent?.trim() || "",
         nextSteps: Boolean(next),
@@ -172,7 +175,9 @@ async function run() {
         interactiveHref: interactive?.getAttribute("href") || "",
         aboveFold: Boolean(rect && rect.top < innerHeight - 70 && rect.bottom > 0),
         beforePolicy: Boolean(next && policy && (next.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING)),
-        mapActions: links.filter((link) => /Maps|Directions/.test(link.textContent || "")).length,
+        mapActions: links.filter(isMap).length,
+        pageMapDestinations: [...new Set([...document.querySelectorAll('#service a[href]')].filter(isMap).map(link => new URL(link.href).searchParams.get('destination')))].sort(),
+        serviceChoice: Boolean(choice && access?.tabIndex === -1 && (next.compareDocumentPosition(access) & Node.DOCUMENT_POSITION_FOLLOWING)),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
       };
     })()`);
@@ -181,8 +186,14 @@ async function run() {
     const expectedPhones = phoneLinks(resource.phone);
     const phoneAction = expectedPhones.length ? expectedPhones.some(({ href }) => desktop.phoneHref === href) : !desktop.phoneHref;
     const privateMapLink = desktop.interactiveHref.startsWith("/#resource=") && !desktop.interactiveHref.includes("?resource=");
-    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions !== 1 || desktop.overflow > 8) {
-      throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink })}`);
+    const expectedDestinations = [...new Set(resource.serviceAccess
+      ? resource.serviceAccess.filter(route => route.mode === 'walk-in' && route.directions !== false || route.mode === 'intake' && route.directions === true).map(route => route.address)
+      : [`${resource.lat},${resource.lng}`])].sort();
+    const safeDirections = JSON.stringify(desktop.pageMapDestinations) === JSON.stringify(expectedDestinations)
+      && desktop.mapActions === (resource.serviceAccess ? 0 : expectedDestinations.length)
+      && desktop.serviceChoice === Boolean(resource.serviceAccess);
+    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || !safeDirections || desktop.overflow > 8) {
+      throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink, safeDirections, expectedDestinations })}`);
     }
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
