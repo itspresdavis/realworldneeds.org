@@ -82,5 +82,3 @@ export default async function handler(req, res) {
   console.log(JSON.stringify(event));
   return end(204);
 }
-
-

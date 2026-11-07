@@ -87,7 +87,7 @@ export async function verifyMenuReflow({ client, host, navigate, evaluate, captu
     await loaded;
     const reachedParticipation = await evaluate(client, `location.pathname === '/get-involved' || location.pathname === '/get-involved/'`);
     if (!reachedParticipation) throw new Error(`Get involved pointer navigation failed at ${width}x${height}`);
-    cases.push({ width, height, bounds, focus, pointer, reachedJoin });
+    cases.push({ width, height, bounds, focus, pointer, reachedParticipation });
   }
   console.log(`Menu viewport QA passed: ${JSON.stringify(cases)}`);
   return cases;
