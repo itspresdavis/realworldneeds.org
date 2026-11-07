@@ -32,8 +32,6 @@ jobs:
        vars.RWN_CATALOG_MONITOR_APPROVAL_REF != '')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    env:
-      REPORT_DIR: ${{ runner.temp }}/rwn-catalog-operations
     steps:
       - name: Check out the selected source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -45,9 +43,12 @@ jobs:
           node-version: 24
       - name: Prepare report directory
         id: prepare
+        env:
+          REPORT_DIR: ${{ runner.temp }}/rwn-catalog-operations
         run: |
           mkdir -p "$REPORT_DIR"
           date -u +%F > "$REPORT_DIR/as-of.txt"
+          printf 'REPORT_DIR=%s\n' "$REPORT_DIR" >> "$GITHUB_ENV"
       - name: Report catalog structure and proposed review queue
         id: health
         run: node scripts/catalog-health.mjs --date "$(cat "$REPORT_DIR/as-of.txt")" --output "$REPORT_DIR/catalog-health.json"

@@ -22,7 +22,7 @@ function stepCommand(id) {
 function execute(id, directory, extra = {}) {
   const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', stepCommand(id)], {
     encoding: 'utf8', timeout: 20_000,
-    env: { ...process.env, REPORT_DIR: directory, GITHUB_STEP_SUMMARY: join(directory, 'summary.md'), GITHUB_SHA: sha, SOURCE_SAMPLE_REQUESTED: 'false', ...extra },
+    env: { ...process.env, REPORT_DIR: directory, GITHUB_ENV: join(directory, 'github-env'), GITHUB_STEP_SUMMARY: join(directory, 'summary.md'), GITHUB_SHA: sha, SOURCE_SAMPLE_REQUESTED: 'false', ...extra },
   });
   assert.equal(result.error, undefined, result.error?.message);
   return result;
@@ -51,6 +51,7 @@ test('actual default workflow commands produce public reports and a deterministi
       const result = execute(id, directory);
       assert.equal(result.status, 0, `${id}: ${result.stderr}`);
     }
+    assert.equal(await readFile(join(directory, 'github-env'), 'utf8'), `REPORT_DIR=${directory}\n`, 'the prepared path must be exported to subsequent GitHub steps');
     const health = await read(directory, 'catalog-health.json');
     const coverage = await read(directory, 'catalog-coverage.json');
     const receipt = await read(directory, 'report-receipt.json');
