@@ -65,7 +65,7 @@ function rewriteFinderCopy() {
   if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Read how location works</a>.`;
 
   const safety = document.querySelector(".finder-safety");
-  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not an emergency service.`;
+  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. This directory is not an emergency service.`;
 }
 
 function rewriteMethodSections() {

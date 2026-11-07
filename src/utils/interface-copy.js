@@ -18,7 +18,7 @@ export const interfaceCopy = Object.freeze([
   ['In the United States, location search can also load current USDA summer meal sites.', 'En Estados Unidos, la búsqueda por ubicación también puede cargar lugares de comidas de verano del USDA.'],
   ['Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead.', 'Tu navegador usa la ubicación para ordenar las fichas cercanas. Para búsquedas de comidas en EE. UU., el USDA recibe solo una zona aproximada. También puedes buscar por lugar.'],
   ['Read how location works', 'Consulta cómo funciona la ubicación'], ['Use location', 'Usar ubicación'],
-  ['Immediate danger?', '¿Peligro inmediato?'], ['Contact local emergency services. RWN is a directory, not an emergency service.', 'Contacta con los servicios de emergencia locales. RWN es un directorio, no un servicio de emergencia.'],
+  ['Immediate danger?', '¿Peligro inmediato?'], ['Contact local emergency services. This directory is not an emergency service.', 'Contacta con los servicios de emergencia locales. Este directorio no es un servicio de emergencia.'],
   ['View results', 'Ver resultados'], ['Nearby service locations appear first. Regional resource finders appear after them.', 'Los lugares de atención cercanos aparecen primero, seguidos de los buscadores regionales.'],
   ['Free with eligibility', 'Gratis si cumples los requisitos'], ['Eligibility applies', 'Con requisitos'], ['Free resource finder', 'Buscador de recursos gratuito'], ['Free option', 'Opción gratuita'],
   ['Find a service', 'Encuentra un servicio'], ['Search results', 'Resultados de búsqueda'], ['View listings', 'Ver fichas'],

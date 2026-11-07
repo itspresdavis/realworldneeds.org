@@ -181,6 +181,15 @@ in the performance report and aggregate runtime limits remain unchanged. These
 component passes do not certify a new integrated release: all six Quality jobs
 and the hosted candidate checks must pass on the resulting exact source.
 
+Integrated `fa8546f8` passed a clean locked installation, 1,874 Node tests,
+all 2,894 reproducible files, 109 release-tool checks and a zero-vulnerability
+dependency audit. Its exact-source SQL, three-engine (210 passed / six explicit
+graphics capability skips) and native offline/globe jobs passed. Final screenshot
+review then found homepage emergency copy incorrectly defining RWN itself as a
+directory. The English/Spanish correction now refers to this directory program;
+the earlier results remain evidence for their exact source, and the resulting
+candidate requires a fresh complete release run.
+
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
 detailed globe. Component browser evidence uses Chromium 158, Firefox 159 and
