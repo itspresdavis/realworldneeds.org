@@ -81,6 +81,17 @@ now binds the exact catalog bytes to `catalogSha256` in a stable manifest; 48
 focused correction/security tests pass, including stale or missing hash rejection.
 The exported metadata explicitly disclaims a blanket dataset reuse licence.
 
+Integrated source `a2eeca4f` passed 1,833 Node tests (zero failures/skips), all
+2,894 reproducible output hashes and the hosted PostgreSQL job. Its exact-source
+Quality run `42349191727` was **failed**, not a release receipt: native copying
+lost a legacy coverage line, all three engines identified an unnamed-role ARIA
+group, and native coordinate QA had not classified address-only records. Repairs
+preserve the original copy and accessibility assertions; the coordinate audit now
+also rejects invented address-only points and verifies real search retention.
+The existing contact-only browser fixture passed all 47 cases after repair.
+A separate catalog-workflow context error and renamed menu-evidence variable
+were corrected. All six jobs must pass again on the resulting candidate.
+
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
 detailed globe. Component browser evidence uses Chromium 158, Firefox 159 and
