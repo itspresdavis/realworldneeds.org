@@ -194,7 +194,7 @@ export async function enhanceDirectoryIntent() {
     const stored = history.state?.rwnDirectoryIntent;
     // Early input belongs to the visitor even when the enhancement loads late.
     // The startup/core marker also distinguishes an intentional empty draft.
-    if (initial && (placeInput.dataset.rwnPlaceEdited || placeInput.value)) {
+    if (initial && (placeInput.rwnEdited || placeInput.value)) {
       controls.restore(stored?.path === location.pathname && stored.place === placeInput.value ? stored.postalArea : null);
     } else if (stored?.path === location.pathname) {
       placeInput.value = String(stored.place || "").slice(0, 180);
