@@ -295,7 +295,7 @@ margin:.3rem 0 0;font-size:1rem;line-height:1.6;overflow-wrap:anywhere;}
 #service .directory-record > h3 { margin:1.5rem 0 .6rem;font-size:1.0625rem;}
 #service .directory-record > :is(p, ul) { max-width:75ch;font-size:1rem;line-height:1.65;}
 #service .directory-record > .directory-links { gap:.5rem;}
-#service .directory-record > .directory-links a { min-height:44px;font-size:.8125rem;}
+#service :is(.directory-record > .directory-links, .service-before-you-go .directory-links) a { min-height:44px;font-size:.8125rem;}
 #service .service-tools-jump {
 display:inline-flex;align-items:center;min-height:44px;margin-top:.2rem;font-size:.875rem;font-weight:650;color:#24583e;}
 #service .service-next-steps__context { font-size:.8125rem;line-height:1.55;}

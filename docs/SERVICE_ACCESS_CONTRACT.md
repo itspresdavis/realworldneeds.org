@@ -27,6 +27,12 @@ their evidence. `serviceAccessSummary` carries the same present facts into
 plain-text representations. Provider wording remains in its source language;
 the English/Spanish option translates RWN's labels, not eligibility or promises.
 
+On details pages each reviewed route places its own actions directly after its
+access facts. Actions match the stable route ID; another service's destination
+or the organization's general phone is never substituted. The combined Next
+steps section remains available. These static links work without JavaScript;
+maps open only when a visitor follows a directions link.
+
 Legacy records also receive `beforeYouGoFacts`: existing access instructions,
 eligibility, cost and hours are shown before actions, with an explicit unknown
 message for missing access facts. Physical addresses and coverage descriptions
