@@ -68,7 +68,11 @@ test("startup capture is tiny, hash-versioned and runs before editable directory
   assert.ok(page.includes(script), "capture is a classic parser-blocking script, never deferred or async");
   assert.ok(page.indexOf(script) < page.indexOf("data-directory-query"));
   assert.ok(page.indexOf(script) < page.indexOf(`<script type="module" src="${release.offlineAssets["/directory.js"]}`));
-  assert.ok(Buffer.byteLength(await read(`dist${asset}`)) <= 1_000, "early capture stays below 1 KB");
+  const startup = await read(`dist${asset}`);
+  // Both pending motion and delayed restoration can obscure an early edit;
+  // the measured safety cost is documented in PERFORMANCE_2026-11-07.md.
+  assert.ok(Buffer.byteLength(startup) <= 1_375, "served early-edit safety capture stays within its reviewed raw budget");
+  assert.ok(gzipSync(startup, { level: 9 }).length <= 810, "served early-edit safety capture has a separate compressed transfer ceiling");
 });
 
 test("every local stylesheet on the offline directory belongs to its atomic release manifest", async () => {

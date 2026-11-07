@@ -110,6 +110,62 @@ Broader path timing must be reported alongside these budgets. Neither passing a
 size assertion nor this small core exception certifies a field metric or accepts
 an unexplained helper waterfall.
 
+## Early-edit restoration safety budget
+
+At source `33d49153`, a trusted edit during a stale-history reload could leave
+its focused query above the sticky header. A paired native Chromium
+157.0.8103.38 run at 4× CPU slowdown reproduced the input at −26.375px while
+its query, caret and result remained correct. The unchanged startup assertions
+caught the problem; neither extra waiting nor a weaker visibility oracle was
+introduced.
+
+Two browser operations need separate handling. Instant cancellation at the
+visitor's current coordinates stops motion already pending when a fully visible
+input is edited. Temporarily owning `history.scrollRestoration` stops subsequent
+native restoration from applying an obsolete entry while the new query loads.
+The original full-box and hit-test guards remain, so an offscreen input still
+receives normal native focus reveal. Ordinary smooth scrolling remains enabled.
+The prior restoration mode is preserved through delayed content and restored
+before an uncancelled primary same-window link's default navigation or on each
+page departure. Cancelled, modified, download and new-context links keep the
+current edit's ownership. Runtime handoff removes the capture listeners; it is
+not assumed to be the end of browser restoration. A same-document history entry
+can retain manual mode; actual Saved → Browse → edit → Back/Forward journeys
+verify the directory's explicit state restoration and useful focused result.
+
+The original served script was **999 raw / 632 gzip bytes**, SHA-256
+`a72839bacb5c824c307ab2f17c62de418d7f0f04b3149562efca1ff4eeb0023d`.
+The combined fix is **1,366 raw / 803 gzip bytes**, SHA-256
+`9d96bcf8843382884e8d9a88402b693f8b70ca0fc3f184457be517cd33b2d9bd`:
+**367 additional raw / 171 compressed bytes**, with no additional request or
+dependency. Its served limits are **1,375 raw / 810 gzip bytes**. The required
+19-asset graph measures 195,981 raw / 61,667 gzip bytes in this isolated
+`33d49153` plus startup component build, before later integration changes;
+its existing 200,000 / 64,000 limits remain unchanged. These hashes identify
+bytes, not signed attestations, and these sizes are not a loading-speed claim.
+
+Smaller alternatives were rejected using behavior evidence. An early 999-byte
+manual-mode prototype released ownership on Ctrl-click and CSV download even
+though the visitor stayed on the directory: all four Chromium/Firefox checks
+failed. A guarded 1,090-byte candidate fixed those nondeparture cases but removed
+instant cancellation; the unchanged full native helper then caught an already
+pending smooth scroll moving from 0 through 1,136px before clamping to 597px,
+again obscuring the input. Explicit coordinates alone passed one diagnostic but
+did not establish protection against later restoration. A separate viewport
+correction prototype cost 1,237 raw bytes before necessary blur/caret cleanup
+and introduced more event ownership; it was not shipped. The combined fix keeps
+the independently necessary mechanisms and strict behavior assertions.
+
+Focused unit tests cover prior auto/manual modes, delayed restoration, repeat
+departure cleanup, cancelled/modified/download links, visible cancellation and
+offscreen negatives. Full native startup journeys retain stale reload, caret,
+IME-event simulation, delayed source settlement, Saved/Browse and privacy checks
+at 1440 and 390px. The separate five-scenario review passes in Chromium, Firefox
+and WebKit (15/15); it is not physical-device, real-IME or actual-BFCache proof.
+The retained native traces, failed alternatives, screenshots and receipt are in
+`access-quality-20261107/STARTUP_SCROLL_HANDOFF.md` beneath the external evidence
+root. Final integration still requires its own full checks and source identity.
+
 ## Evidence and follow-up
 
 The later mobile layout correction was measured with real Chromium 156 layout
