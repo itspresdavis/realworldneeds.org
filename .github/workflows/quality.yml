@@ -56,8 +56,6 @@ jobs:
         run: |
           node scripts/browser-service-qa.mjs
           node scripts/browser-asset-upgrade.mjs
-          node scripts/browser-saved-services.mjs
-          node scripts/browser-chaos.mjs
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Upload visual QA
@@ -97,6 +95,8 @@ jobs:
           chrome-version: "157.0.8103.38"
       - name: Verify globe, offline, handoff and cache upgrades
         run: |
+          node scripts/browser-saved-services.mjs
+          node scripts/browser-chaos.mjs
           node scripts/browser-institutional.mjs
           node scripts/browser-globe-v2.mjs
           node scripts/browser-offline.mjs
