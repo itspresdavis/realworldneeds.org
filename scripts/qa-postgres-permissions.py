@@ -69,9 +69,16 @@ try:
             "if (select count(*) from public.rwn_locations where editorial_note='Benign private fixture reason')<>2 " +
             "then raise exception 'Expected baseline exposure not reproduced'; end if; " +
             "raise notice 'BASELINE CONFIRMED: " + role + " can read internal editorial reasons'; end $$; rollback;")
+    # Reproduce actual hosted historical default grants without touching any
+    # external database. These rights bypass row policies for table maintenance.
+    sql("grant all privileges on public.rwn_locations,public.rwn_members,public.rwn_reviews,public.rwn_location_history,public.rwn_account_requests to anon,authenticated; "
+        "grant all privileges on sequence public.rwn_location_history_id_seq to anon,authenticated; "
+        "begin; set local role anon; truncate public.rwn_location_history; rollback;")
+    print("BASELINE CONFIRMED: anonymous role can truncate isolated audit history under broad default grants")
     for path in candidates:
         sql(path.read_text())
         print("Applied candidate:", path.name)
+    sql((ROOT / "supabase/tests/maintenance-privileges.sql").read_text())
     sql((ROOT / "supabase/tests/permissions.sql").read_text())
     print("PASS: real RLS permissions, contributor isolation, editor history and concurrency")
     sql((ROOT / "supabase/tests/corrections.sql").read_text())
