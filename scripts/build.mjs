@@ -287,7 +287,7 @@ function resourceSchema(resource, canonical) {
         name: resource.name,
         description: resourceDescription(resource),
         serviceType: aidLabels(resource),
-        areaServed: isContactOnly(resource) ? resource.coverageNote : resource.country,
+        ...(resource.kind !== "direct" && resource.coverageNote ? { areaServed: resource.coverageNote } : {}),
         ...(isContactOnly(resource) ? {
           availableChannel: {
             "@type": "ServiceChannel",
@@ -375,11 +375,11 @@ function resourcePage(resource) {
           <div><dt>Help offered</dt><dd>${escapeHtml(aidLabels(resource).join(", "))}</dd></div>
         </dl>
         <h3>Services offered</h3>
-        <ul>${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
+        <ul data-provider-text lang="en">${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
         <h3>Source and review</h3>
         <p class="service-source-review">This date records a review of the linked source, not a confirmation of current service availability.</p>
-        <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
-        <p>${escapeHtml(resource.sourceDetail)}</p>
+        <p data-provider-text lang="en"><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
+        <p data-provider-text lang="en">${escapeHtml(resource.sourceDetail)}</p>
         ${!contactOnly && resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
         <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}${correctionLink}</div>
       </article>

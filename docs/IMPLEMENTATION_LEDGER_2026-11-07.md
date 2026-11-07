@@ -42,6 +42,16 @@ Status `blocked` means incomplete, including work currently awaiting implementat
 
 ## Ownership and integration
 
+## Completed hosted repair
+
+`20261107055114_restrict_rwn_private_table_privileges.sql` (source patch `639f129e`, integrated as `5912a9fd`) was tested in a disposable PostgreSQL 17.11 clean/upgrade fixture before applying to the existing PostgreSQL 17.6 project. SQL SHA-256: `6a75a274ed6e2eefdcdcc35d8051cc3c1ea01a5998010a66d714f60a89487628`. The supported migration tool recorded hosted version **20261107055509**, name `restrict_rwn_private_table_privileges`. Match name/content; do not apply the local timestamp again.
+
+Preflight reproduced excessive TRUNCATE/TRIGGER/REFERENCES rights for anon/authenticated on four RWN private tables and authenticated audit-sequence UPDATE. No destructive probe was used. No waiting or exclusive locks on affected tables were observed. The scoped REVOKE/GRANT statements change privileges only, preserving service-role maintenance and existing RLS/audit functions.
+
+Hosted postflight: zero unsafe private-table maintenance grants; sequence UPDATE denied; legitimate authenticated review INSERT retained. Actual anonymous SQL reads count 1,992 published rows. Anonymous and authenticated `SELECT editorial_note ... WHERE false` both receive 42501 permission denial without extracting rows. Totals remain 2,033 catalog / 1,992 published / zero memberships. No role assignment or production fixture data was created. This is a verified hosted permission repair, not proof of hosted email flows, backups, correction operation or publication of the new source catalog. Details: external `hosted-grant-repair.json`.
+
+The rollback is a forward permission correction preserving confidentiality; never restore the old excessive grants. The migration is compatible with the current public snapshot and existing contributor operations exercised in the fixture.
+
 Independent worktrees start at the same baseline. Search owns matcher/app search/directory/index; access owns service-action/schedule/location contracts; coverage owns reviewed source records/reports; UX owns styles/shared locale/Saved presentation; database owns correction APIs/UI/migrations; QA retains external baseline/verification evidence. Root owns shared build/static content/locality/SEO, integrates commits and resolves shared contracts. No concurrent edits to shared files are authorized without coordination.
 
 ## Release and recovery boundaries
