@@ -1,6 +1,7 @@
 import { serviceActions } from "../src/utils/service-access.js";
 import { relatedResources } from "./related-resources.mjs";
 import { resourceScope } from "../src/utils/resource-scope.js";
+import { serviceBeforeYouGoMarkup } from "./service-before-you-go.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { minify } from "terser";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -180,7 +181,7 @@ function enhanceServicePage(html, resource, release) {
   }
   if (!html.includes("service-next-steps")) {
     const nextSteps = serviceNextStepMarkup(resource);
-    html = html.replace('<div class="policy-note">', `${nextSteps}\n      <div class="policy-note">`);
+    html = html.replace('<div class="policy-note">', `${serviceBeforeYouGoMarkup(resource)}\n${nextSteps}\n      <div class="policy-note">`);
   }
   const accessibility = accessibilityMarkup(resource);
   if (accessibility && !html.includes("service-accessibility")) {

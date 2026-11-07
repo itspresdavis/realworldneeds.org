@@ -363,7 +363,7 @@ function resourcePage(resource) {
       <article class="directory-record" aria-labelledby="service-details-heading">
         <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl class="service-facts">
-          <div><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
+          <div data-service-location-facts><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
           ${contactOnly ? `<div><dt>Coverage details</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
           ${phone}
           ${contactOnly && resource.phone ? `<div><dt>Phone dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}
@@ -521,8 +521,8 @@ const csvRows = resources.map((resource) => [
   resource.sourceUrl
 ]);
 if (resources.some(resource => resource.serviceAccess)) {
-  csvFields.push("Service-specific access");
-  resources.forEach((resource, index) => csvRows[index].push(serviceAccessSummary(resource)));
+  csvFields.push("Service-specific access", "Service access contract (JSON)");
+  resources.forEach((resource, index) => csvRows[index].push(serviceAccessSummary(resource), resource.serviceAccess ? JSON.stringify(resource.serviceAccess) : ""));
 }
 // Preserve the legacy export shape until reviewed contact-only records are
 // present, then publish their access scope without discarding existing fields.
