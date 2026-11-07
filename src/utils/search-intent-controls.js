@@ -102,7 +102,8 @@ export function mountSearchIntentControls({
       ])
         button(text(key), () => {
           queryInput.value = replaceFoodIntent(queryInput.value, intent);
-          selection = null;
+          // Need and place are independent. The resolver already rejects a
+          // selection if its ZIP no longer matches the current input.
           onChange();
           queryInput.focus();
         });
@@ -199,8 +200,9 @@ export async function enhanceDirectoryIntent() {
       controls.restore(null);
     }
   };
+  let currentPlan;
   const render = () => {
-    const plan = controls.render();
+    const plan = currentPlan = controls.render();
     try {
       history.replaceState(
         {
@@ -219,7 +221,9 @@ export async function enhanceDirectoryIntent() {
   root.rwnIntent = {
     ...controls,
     render,
-    matches: (record) => resourceMatchesIntent(record, controls.plan()),
+    // apply() renders once before its synchronous match pass. A later input
+    // gets a new plan and the core's generation guard discards stale loads.
+    matches: (record) => resourceMatchesIntent(record, currentPlan),
   };
   restore();
   render();

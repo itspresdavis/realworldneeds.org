@@ -203,3 +203,65 @@ test("a manual place supersedes a pending device-location result", async ({ page
   expect(await page.locator(".resource-card[data-result-resource-id]").evaluateAll(nodes => nodes.map(node => node.dataset.resultResourceId))).toEqual(before);
   expect(await page.evaluate(() => window.__locationCalls)).toBe(1);
 });
+
+for (const path of ["/", "/directory"]) {
+  test(`${path}: changing food need preserves the explicitly selected postal area`, async ({ page }) => {
+    const home = path === "/";
+    const need = page.locator(home ? "#resourceSearch" : "[data-directory-query]");
+    const place = page.locator(home ? "#resourcePlace" : "[data-directory-place]");
+    await page.goto(path);
+    await need.fill("food");
+    await place.fill("02108");
+    await page.getByRole("button", { name: "Use US ZIP 02108", exact: true }).click();
+    await expect(page.locator("[data-search-intent]")).toContainText("10 km · US ZIP 02108");
+    await page.locator("[data-search-intent]").getByRole("button", { name: "Meals", exact: true }).click();
+    await expect(need).toHaveValue("meals");
+    await expect(place).toHaveValue("02108");
+    await expect(page.locator("[data-search-intent]")).toContainText("10 km · US ZIP 02108");
+    await expect(page.locator(home ? '.resource-card[data-result-resource-id="rosies-place-boston"]' : '.directory-global-result[href="/service/rosies-place-boston"]')).toBeVisible();
+    expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+  });
+}
+
+for (const path of ["/", "/directory"]) {
+  test(`${path}: a postal area alone filters services without inventing a need`, async ({ page }) => {
+    const home = path === "/";
+    await page.goto(path);
+    const need = page.locator(home ? "#resourceSearch" : "[data-directory-query]");
+    await page.locator(home ? "#resourcePlace" : "[data-directory-place]").fill("02108");
+    await page.getByRole("button", { name: "Use US ZIP 02108", exact: true }).click();
+    await expect(need).toHaveValue("");
+    await expect(page.locator(home ? '.resource-card[data-result-resource-id="rosies-place-boston"]' : '.directory-global-result[href="/service/rosies-place-boston"]')).toBeVisible();
+    await expect(page.locator(home ? '.resource-card[data-result-resource-id="bowery-mission"]' : '.directory-global-result[href="/service/bowery-mission"]')).toHaveCount(0);
+    await expect(page.locator("[data-search-intent]")).toContainText("10 km · US ZIP 02108");
+    expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
+  });
+}
+
+test("directory resolves one bounded intent per search pass while keeping the latest place", async ({ page }) => {
+  let instrumented = false;
+  await page.route("**/src/utils/search-intent*.js*", async route => {
+    const response = await route.fetch();
+    let body = await response.text();
+    const declaration = 'export function resolveSearchIntent(query, place = "", selection = null) {';
+    if (body.includes(declaration)) {
+      instrumented = true;
+      body = body.replace(declaration, declaration + '\nwindow.__intentResolutions = (window.__intentResolutions || 0) + 1;');
+    }
+    await route.fulfill({ response, body });
+  });
+  await page.goto("/directory");
+  await page.locator("[data-directory-query]").fill("shelter");
+  await page.locator("[data-directory-place]").fill("Boston MA");
+  await expect(page.locator('a.directory-global-result[href="/service/pine-street-mens-inn"]')).toBeVisible();
+  await page.locator("[data-directory-place]").fill("Longyearbyen Norway");
+  await expect(page.locator("a.directory-global-result")).toHaveCount(0);
+  await page.locator("[data-directory-place]").fill("Boston MA");
+  await expect(page.locator('a.directory-global-result[href="/service/pine-street-mens-inn"]')).toBeVisible();
+  expect(instrumented).toBe(true);
+  const resolutions = await page.evaluate(() => window.__intentResolutions);
+  expect(resolutions).toBeGreaterThan(0);
+  // A search pass uses the complete catalog, but intent parsing is independent
+  // of its size. This guards the previous ~2,000 parses per keystroke.
+  expect(resolutions).toBeLessThan(30);
+});
