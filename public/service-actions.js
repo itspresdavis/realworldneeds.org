@@ -83,14 +83,26 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   syncSaved();
 
   const publicDetails = () => {
-    const rows = [...document.querySelectorAll("#service .directory-record dl > div")]
-      .map((row) => {
-        const label = row.querySelector("dt")?.textContent?.trim();
-        const value = row.querySelector("dd")?.textContent?.replace(/\s+/g, " ")?.trim();
-        const href = row.querySelector('dd a[href^="https://"]')?.href;
-        return label && value ? `${label}: ${value}${href && !value.includes(href) ? ` (${href})` : ""}` : "";
-      })
+    const withLinks = (value, element, selector) => {
+      const urls = [...element.querySelectorAll(selector)].map(link => link.href).filter(href => /^(?:https:\/\/|mailto:|sms:)/.test(href));
+      const missing = [...new Set(urls)].filter(href => !value.includes(href));
+      return `${value}${missing.length ? ` (${missing.join('; ')})` : ''}`;
+    };
+    const rowText = row => {
+      const label = row.querySelector("dt")?.textContent?.trim();
+      const value = row.querySelector("dd")?.textContent?.replace(/\s+/g, " ")?.trim();
+      return label && value ? `${label}: ${withLinks(value, row, 'dd a[href]')}` : "";
+    };
+    const accessRoutes = [...document.querySelectorAll("#service [data-service-before-you-go] [data-service-route]")];
+    const rows = [...document.querySelectorAll("#service .directory-record:not([data-service-before-you-go]) dl > div")]
+      .filter(row => !accessRoutes.length || !row.hasAttribute("data-service-location-facts"))
+      .map(rowText)
       .filter(Boolean);
+    const accessDetails = accessRoutes.flatMap(route => [
+      route.querySelector('h3')?.textContent?.trim() || '',
+      ...[...route.querySelectorAll('dl > div')].map(rowText),
+      ...[...route.querySelectorAll('details li')].map(item => withLinks(item.textContent.replace(/\s+/g, ' ').trim(), item, 'a[href]')),
+    ]).filter(Boolean);
     const sourceStatus = document.querySelector("#service > .directory-shell > .source-status-notice");
     const statusLines = sourceStatus ? [...sourceStatus.querySelectorAll("strong, p")].map((node) => node.textContent.trim()) : [];
     return [
@@ -98,6 +110,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       place,
       ...statusLines,
       ...rows,
+      ...accessDetails,
       `RWN listing: ${listingUrl}`,
       officialSource ? `Official source: ${officialSource}` : "",
       document.querySelector("#service")?.dataset?.locationPrecision === "contact-only" ? "Check coverage, eligibility and current contact details." : "Confirm current details before you go."

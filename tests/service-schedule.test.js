@@ -43,10 +43,11 @@ test('DST transitions use actual local wall time, including both repeated fall-b
 });
 
 test('unknown, malformed and out-of-season schedules do not invent opening status', () => {
-  const invalid = [null, {}, schedule({ timeZone: 'UTC' }), schedule({ timeZone: 'Madeup/Zone' }), schedule({ weekly: [{ days: [1], opens: '22:00', closes: '06:00' }] }), schedule({ weekly: [{ days: [7], opens: '09:00', closes: '17:00' }] }), schedule({ exceptions: [{ date: '2026-02-30', closed: true }] }), schedule({ exceptions: [{ date: '2026-11-07', closed: true, intervals: [] }] }), schedule({ validFrom: '2026-11-09', validThrough: '2026-11-01' })];
+  const invalid = [null, {}, schedule({ timeZone: '' }), schedule({ timeZone: 'Madeup/Zone' }), schedule({ weekly: [{ days: [1], opens: '22:00', closes: '06:00' }] }), schedule({ weekly: [{ days: [7], opens: '09:00', closes: '17:00' }] }), schedule({ exceptions: [{ date: '2026-02-30', closed: true }] }), schedule({ exceptions: [{ date: '2026-11-07', closed: true, intervals: [] }] }), schedule({ validFrom: '2026-11-09', validThrough: '2026-11-01' })];
   for (const value of invalid) { assert.ok(validateSchedule(value)); assert.equal(state(value, '2026-11-07T15:00Z').state, 'unknown'); }
   assert.equal(state(schedule({ validThrough: '2026-10-31' }), '2026-11-07T15:00Z').state, 'unknown');
   assert.equal(state(schedule(), 'bad').state, 'unknown');
+  assert.equal(state(schedule({ timeZone: 'UTC' }), '2026-11-06T10:00Z').state, 'scheduled-open', 'explicitly sourced UTC is valid; missing zones never default to it');
 });
 
 test('schedule formatting preserves seasonal exceptions, zone and overnight interpretation', () => {

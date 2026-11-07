@@ -183,7 +183,7 @@ test("copied listing facts retain the actual online access URL, not only its but
   const context = vm.createContext({
     title: route.name, place: route.country, listingUrl: "https://www.realworldneeds.org/service/example", officialSource: "https://example.org/source",
     document: {
-      querySelectorAll: () => [{ querySelector: selector => selector === "dt" ? { textContent: "Online access" } : selector === "dd" ? { textContent: "Get help online" } : { href: route.accessUrl } }],
+      querySelectorAll: selector => selector.includes('[data-service-route]') ? [] : [{ querySelector: selector => selector === "dt" ? { textContent: "Online access" } : selector === "dd" ? { textContent: "Get help online" } : { href: route.accessUrl }, querySelectorAll: () => [{ href: route.accessUrl }] }],
       querySelector: selector => selector === "#service" ? { dataset: { locationPrecision: "contact-only" } } : null,
     },
   });

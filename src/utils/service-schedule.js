@@ -15,7 +15,7 @@ const intervalValid = interval => plainObject(interval)
 export function validateSchedule(schedule) {
   if (!plainObject(schedule) || Object.keys(schedule).some(key => !['timeZone', 'weekly', 'exceptions', 'validFrom', 'validThrough', 'text', 'complete'].includes(key))) return 'A schedule needs a supported structured contract.';
   if (schedule.complete != null && typeof schedule.complete !== 'boolean') return 'Schedule completeness must be explicit.';
-  if (typeof schedule.timeZone !== 'string' || !schedule.timeZone.includes('/')) return 'A schedule needs an explicit IANA local time zone.';
+  if (typeof schedule.timeZone !== 'string' || !(schedule.timeZone.includes('/') || schedule.timeZone === 'UTC')) return 'A schedule needs an explicit IANA local time zone.';
   try { new Intl.DateTimeFormat('en', { timeZone: schedule.timeZone }).format(0); } catch { return 'The schedule time zone is invalid.'; }
   if (!Array.isArray(schedule.weekly) || !schedule.weekly.length || schedule.weekly.length > 28) return 'A schedule needs 1–28 weekly intervals.';
   if (schedule.weekly.some(interval => !intervalValid(interval) || !Array.isArray(interval.days) || !interval.days.length || interval.days.length > 7 || new Set(interval.days).size !== interval.days.length || interval.days.some(day => !Number.isInteger(day) || day < 0 || day > 6))) return 'Schedule intervals need valid weekdays and explicit overnight times.';
