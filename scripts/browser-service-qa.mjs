@@ -307,10 +307,13 @@ async function run() {
     const mealAction = directoryMobile.actionLinks?.find(action => action.label === "Directions to meal service");
     const mealUrl = mealAction ? new URL(mealAction.href) : null;
     const correctMealDestination = mealUrl?.origin === "https://www.google.com" && mealUrl.pathname === "/maps/dir/" && mealUrl.searchParams.get("destination") === "227 Bowery, New York, NY 10002";
+    const shelterAction = directoryMobile.actionLinks?.find(action => action.label === "Directions to shelter intake");
+    const shelterUrl = shelterAction ? new URL(shelterAction.href) : null;
+    const correctShelterDestination = shelterUrl?.origin === "https://www.google.com" && shelterUrl.pathname === "/maps/dir/" && shelterUrl.searchParams.get("destination") === "90 Lafayette Street, New York, NY 10013";
     const correctIntakeDetails = directoryMobile.actionLinks?.filter(action => expectedActions.slice(1, 4).includes(action.label)).every(action => action.href === "https://www.bowery.org/get-help/");
     const genericMapsAbsent = !directoryMobile.actionLabels?.some(label => ["Apple Maps", "Google Maps", "Directions"].includes(label));
-    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || !correctMealDestination || !correctIntakeDetails || !genericMapsAbsent || directoryMobile.overflow > 8) {
-      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions, correctMealDestination, correctIntakeDetails, genericMapsAbsent })}`);
+    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || !correctMealDestination || !correctShelterDestination || !correctIntakeDetails || !genericMapsAbsent || directoryMobile.overflow > 8) {
+      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions, correctMealDestination, correctShelterDestination, correctIntakeDetails, genericMapsAbsent })}`);
     }
 
     // Long names, readable metadata, and action groups must reflow together.

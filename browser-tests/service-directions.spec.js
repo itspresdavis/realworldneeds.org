@@ -10,6 +10,12 @@ async function assertAccessActions(scope) {
   const shelter = scope.getByRole('link', { name: new RegExp('^' + shelterLabel) });
   await expect(meal).toBeVisible();
   await expect(shelter).toHaveAttribute('href', officialHelp);
+  const shelterDirections = scope.getByRole('link', { name: /^Directions to shelter intake/ });
+  await expect(shelterDirections).toBeVisible();
+  const intakeDestination = new URL(await shelterDirections.getAttribute('href'));
+  expect(intakeDestination.hostname).toBe('www.google.com');
+  expect(intakeDestination.pathname).toBe('/maps/dir/');
+  expect(intakeDestination.searchParams.get('destination')).toBe('90 Lafayette Street, New York, NY 10013');
   const destination = new URL(await meal.getAttribute('href'));
   expect(destination.hostname).toBe('www.google.com');
   expect(destination.pathname).toBe('/maps/dir/');
@@ -38,9 +44,9 @@ test('Bowery access routes survive detail, copy, print, and Saved on mobile', as
   expect(copied).toContain('227 Bowery');
   expect(copied).toContain('90 Lafayette');
   expect(copied).toContain('Shelter intake');
-  expect(copied).toContain('NY 10002 Meals at');
-  expect(copied).toContain('NY 10013 Overnight shelter');
-  expect(copied).toContain('2026-11-06 Shelter intake');
+  expect(copied).toContain('Meal service\nAccess location: 227 Bowery, New York, NY 10002');
+  expect(copied).toContain('Shelter intake\nAccess location: 90 Lafayette Street, New York, NY 10013');
+  expect(copied).toMatch(/Route source and review: https:\/\/www\.bowery\.org\/get-help\/ · \d{4}-\d{2}-\d{2}/);
   await page.locator('[data-service-print]').click();
   expect(await page.evaluate(() => window.__printedListing)).toBe(true);
   await page.emulateMedia({ media: 'print' });
