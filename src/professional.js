@@ -16,9 +16,9 @@ function rewriteNavigation() {
   const links = `
     <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
     <a href="/directory">Directory</a>
-    <a href="/editorial-policy">How listings are checked</a>
+    <a href="/about">About RWN</a>
     <a href="/sources">Sources</a>
-    <a href="/join">Contribute</a>
+    <a href="/get-involved">Get involved</a>
   `;
   if (desktop) desktop.innerHTML = links;
   if (mobile) mobile.innerHTML = links;
@@ -124,7 +124,7 @@ function simplifyStructure() {
   if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/about">About RWN</a><a href="/our-work">Our work</a><a href="/get-involved">Get involved</a><a href="/contact">Contact</a><a href="/editorial-policy">How listings are checked</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {

@@ -24,3 +24,25 @@ test('date-only evidence remains the same local calendar date and invalid values
   assert.equal(formatDate('2026-02-30', 'es'), '2026-02-30');
   assert.equal(formatDate('unknown', 'es'), 'unknown');
 });
+
+test('interface translation only recognizes reviewed labels and keeps arbitrary provider claims intact', async () => {
+  const { translateInterfaceText } = await import('../src/utils/interface-copy.js');
+  assert.equal(translateInterfaceText('Search this directory', 'es'), 'Buscar en este directorio');
+  assert.equal(translateInterfaceText('Call 617-555-0199', 'es'), 'Llamar a 617-555-0199');
+  assert.equal(translateInterfaceText('Services for women ages 14–24', 'es'), 'Services for women ages 14–24');
+  assert.equal(translateInterfaceText('227 Bowery, New York, NY', 'es'), '227 Bowery, New York, NY');
+  assert.equal(translateInterfaceText('<img src=x onerror=alert(1)>', 'es'), '<img src=x onerror=alert(1)>');
+});
+
+test('clearing browser language resets memory without retaining a preference or touching Saved', async () => {
+  const { clearLanguagePreference, LANGUAGE_KEY } = await import('../src/utils/localization.js');
+  const old = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const records = new Map([['rwn-saved-resources', '["bowery-mission"]']]);
+  Object.defineProperty(globalThis, 'localStorage', {configurable:true, value:{setItem:(k,v)=>records.set(k,v), removeItem:k=>records.delete(k)}});
+  try {
+    setLocale('es'); assert.equal(records.get(LANGUAGE_KEY), 'es');
+    assert.equal(clearLanguagePreference(), true);
+    assert.equal(getLocale(), 'en'); assert.equal(records.has(LANGUAGE_KEY), false);
+    assert.equal(records.get('rwn-saved-resources'), '["bowery-mission"]');
+  } finally { if (old) Object.defineProperty(globalThis, 'localStorage', old); else delete globalThis.localStorage; }
+});

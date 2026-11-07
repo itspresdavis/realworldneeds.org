@@ -174,7 +174,7 @@ if (notice) {
       link.toggleAttribute("aria-describedby", offline);
       if (offline) link.setAttribute("aria-describedby", notice.id);
       if (!meta) continue;
-      const base = meta.textContent.replace(/\s*·\s*reconnect for full details\s*$/i, "");
+      const base = (window.RWNLanguage?.originalText(meta) ?? meta.textContent).replace(/\s*·\s*reconnect for full details\s*$/i, "");
       const desired = offline ? `${base} · reconnect for full details` : base;
       setText(meta, desired);
     }
@@ -186,7 +186,7 @@ if (notice) {
 
     const count = document.querySelector("[data-directory-count]");
     if (count) {
-      const base = count.textContent.replace(/\s*·\s*offline copy\s*$/i, "");
+      const base = (window.RWNLanguage?.originalText(count) ?? count.textContent).replace(/\s*·\s*offline copy\s*$/i, "");
       const desired = offline && /matching listings/i.test(base) ? `${base} · offline copy` : base;
       setText(count, desired);
     }

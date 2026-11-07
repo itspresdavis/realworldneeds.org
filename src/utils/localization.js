@@ -4,9 +4,12 @@ export const supportedLocales = Object.freeze(['en', 'es']);
 export const messages = Object.freeze({
   beforeYouGo: ['Before you go', 'Antes de ir'],
   sourceChecked: ['Source checked', 'Fuente consultada'],
-  hoursUnknown: ['Hours not published. Confirm before traveling.', 'Horario no publicado. Confírmalo antes de ir.'],
+  hoursUnknown: ['Hours are not confirmed here. Check with the provider.', 'El horario no está confirmado aquí. Consúltalo con el proveedor.'],
+  eligibilityUnknown: ['Eligibility is not confirmed here. Check the provider’s requirements.', 'Los requisitos no están confirmados aquí. Consulta al proveedor.'],
+  accessUnknown: ['Access instructions are not confirmed here. Check the official source.', 'Las instrucciones de acceso no están confirmadas aquí. Consulta la fuente oficial.'],
   originalProviderText: ['Provider information is shown in its original language.', 'La información del proveedor se muestra en su idioma original.'],
-  translationScope: ['RWN interface language. Provider information may remain in its original language; this does not confirm that the provider offers service in Spanish.', 'Idioma de la interfaz de RWN. La información del proveedor puede seguir en su idioma original; esto no confirma que el proveedor atienda en español.'],
+  translationScope: ['RWN interface language. Some information remains in its original language; this does not confirm that the provider offers service in Spanish.', 'Interfaz en español; algunos textos conservan su idioma original. Esto no confirma que el proveedor atienda en español.'],
+  languageClearFailed: ['The language preference could not be cleared from this browser. Check its storage settings.', 'No se pudo borrar la preferencia de idioma de este navegador. Revisa sus ajustes de almacenamiento.'],
   eligibility: ['Eligibility', 'Requisitos'], entrance: ['Entrance', 'Entrada'], hours: ['Hours', 'Horario'],
   intake: ['Intake', 'Admisión'], contact: ['Contact', 'Contacto'], directions: ['Directions', 'Cómo llegar'],
   providerDetails: ['Provider details', 'Información del proveedor'], capacity: ['Capacity', 'Capacidad'],
@@ -68,21 +71,25 @@ export const messages = Object.freeze({
 
 let selectedLocale;
 export function getLocale() {
-  if (selectedLocale) return selectedLocale;
   if (typeof document !== 'undefined' && supportedLocales.includes(document.documentElement.lang)) return document.documentElement.lang;
+  if (selectedLocale) return selectedLocale;
   return 'en';
 }
 export function t(key, parameters = {}, locale = getLocale()) {
   const template = messages[key]?.[locale === 'es' ? 1 : 0] ?? messages[key]?.[0] ?? key;
   return template.replace(/\{([a-zA-Z]+)\}/g, (match, name) => Object.hasOwn(parameters, name) ? String(parameters[name]) : match);
 }
-export function setLocale(locale) {
+export function setLocale(locale, { persist = true } = {}) {
   if (!supportedLocales.includes(locale)) return false;
   selectedLocale = locale;
   if (typeof document !== 'undefined') document.documentElement.lang = locale;
-  try { globalThis.localStorage?.setItem(LANGUAGE_KEY, locale); } catch { /* The language still works in memory when storage is blocked. */ }
+  if (persist) try { globalThis.localStorage?.setItem(LANGUAGE_KEY, locale); } catch { /* The language still works in memory when storage is blocked. */ }
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rwn:languagechange', { detail: { locale } }));
   return true;
+}
+export function clearLanguagePreference() {
+  setLocale('en', { persist: false });
+  try { globalThis.localStorage?.removeItem(LANGUAGE_KEY); return true; } catch { return false; }
 }
 export function readLanguagePreference() {
   try { const value = globalThis.localStorage?.getItem(LANGUAGE_KEY); return supportedLocales.includes(value) ? value : 'en'; } catch { return 'en'; }
