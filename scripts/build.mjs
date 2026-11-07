@@ -539,7 +539,7 @@ await mkdir("dist/data/resources/by-country", { recursive: true });
 await mkdir("dist/data/resources/by-category", { recursive: true });
 const catalogJson = `${JSON.stringify({
   schemaVersion: "1.4",
-  license: "Public service facts with source attribution; see https://www.realworldneeds.org/editorial-policy",
+  license: "No blanket dataset reuse license is asserted; consult source-specific notes at https://www.realworldneeds.org/sources",
   resourceCount: resources.length,
   resources
 }, null, 2)}\n`;

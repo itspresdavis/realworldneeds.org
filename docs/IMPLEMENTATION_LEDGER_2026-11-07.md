@@ -73,6 +73,14 @@ complete results belong to the exact-candidate receipt, not these intermediate
 counts. Release-tool tests separately passed 40 + 42 + 27 cases; locked dependency
 audit reported zero vulnerabilities at the recorded run.
 
+The later 1,822/1,824 integrated run exposed a 32,009-byte page stylesheet and a
+1,094-byte early-input script. Shared identical declarations and input-capture
+logic brought them below their unchanged 32 KB and 1 KB limits. The delayed-module
+fix preserves places typed or cleared before enhancement. Publication verification
+now binds the exact catalog bytes to `catalogSha256` in a stable manifest; 48
+focused correction/security tests pass, including stale or missing hash rejection.
+The exported metadata explicitly disclaims a blanket dataset reuse licence.
+
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
 detailed globe. Component browser evidence uses Chromium 158, Firefox 159 and
