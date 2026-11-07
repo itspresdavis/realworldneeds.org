@@ -38,7 +38,7 @@ const searchIndexUrl=`/data/search-index.json${releaseVersion?`?v=${encodeURICom
 let labels=[...new Set((need?[...need.options].map(option=>option.value):pageRecords.flatMap(record=>[...record.querySelectorAll(".directory-aid li")].map(item=>item.textContent.trim()))).filter(value=>value))].sort(collator.compare);
 let activeCategory="",generation=0,activeMatches=[],visibleCount=0,scopedCount=0;
 let rendered="",restored,saved=readState(),restorePending=false,browse=false;
-const remember=(scroll=window.scrollY)=>writeDirectoryState(history,pagePath,{query:input?.value||"",category:activeCategory,country:country?.value||"",shown:restorePending?restored.shown:visibleCount,scroll:restorePending?restored.scroll:scroll,focus:restorePending?restored.focus:document.activeElement?.closest?.('a[href^="/service/"]')?.getAttribute("href")||""});
+const remember=(scroll=window.scrollY)=>writeDirectoryState(history,pagePath,{...(restorePending?restored:{shown:visibleCount,scroll,focus:document.activeElement?.closest?.('a[href^="/service/"]')?.getAttribute("href")||""}),query:input?.value||"",category:activeCategory,country:country?.value||""});
 const stopRestore=()=>{restorePending=false;};
 for(const type of ["pointerdown","keydown","wheel","touchstart"])listen(window,type,stopRestore,{passive:true});
 listen(window,"pagehide",()=>remember());
@@ -69,8 +69,7 @@ const renderChips = () => {
     if (!node) continue;
     const select = node === need;
     const value = child => select ? child.value : child.dataset.directoryCategory;
-    const children = [...node.children];
-    if (children.length !== expected.length || children.some((child, index) => value(child) !== expected[index])) {
+    if (JSON.stringify([...node.children].map(value)) !== JSON.stringify(expected)) {
       node.replaceChildren(...expected.map(value => {
         const item = make(select ? "option" : "button");
         item.textContent = value || "All help";
@@ -83,7 +82,7 @@ const renderChips = () => {
     else for (const button of node.children) button.setAttribute("aria-pressed", String(normalize(value(button)) === activeCategory));
   }
 };
-const syncCategoryLabels=payload=>{const full=[...new Set(scopedRecords(payload).flatMap(record=>record.categoryLabels||[]).filter(value=>value))].sort(collator.compare);if(full.length===labels.length&&full.every((label,index)=>label===labels[index]))return;labels=full;renderChips();};
+const syncCategoryLabels=payload=>{const full=[...new Set(scopedRecords(payload).flatMap(record=>record.categoryLabels||[]).filter(value=>value))].sort(collator.compare);if(JSON.stringify(full)===JSON.stringify(labels))return;labels=full;renderChips();};
 const loadCatalog=createCatalogLoader(searchIndexUrl,true);
 const clearGlobalResults=()=>{activeMatches=[];visibleCount=0;more.hidden=true;results.hidden=true;resultList.replaceChildren();shell?.classList.remove("has-global-search");announce(`${format(pageRecords.length)} listings on this page`);};
 const resultRow=record=>createResultRow(record,notice);
@@ -102,7 +101,7 @@ listen(window,"popstate",restore);
 listen(window,"rwn-directory-restore",restore);
 listen(navigator.serviceWorker,"controllerchange",()=>{loadCatalog.reset();generation++;cancelInput();apply();});
 const queueInput=event=>{stopRestore();generation++;cancelInput();if(!composing&&!event?.isComposing)inputTimer=setTimeout(apply,80);};
-listen(input,"focus",()=>{const version=generation;loadCatalog().then(payload=>{if(version===generation)syncCategoryLabels(payload);}).catch(()=>{});},{once:true});listen(input,"input",queueInput);listen(place,"input",queueInput);for(const type of["compositionstart","compositionend"])listen(place,type,()=>{composing=type==="compositionstart";queueInput();});for(const type of ["compositionstart","compositionend"])listen(input,type,()=>{composing=type==="compositionstart";queueInput();});listen(input,"keydown",event=>{if(event.key==="Escape"&&!composing&&!event.isComposing){event.preventDefault();reset();}});listen(clear,"click",reset);listen(retry,"click",()=>{if(retry.getAttribute("aria-disabled")!=="true")apply();});listen(chips,"click",event=>{const button=event.target.closest("[data-directory-category]");if(!button)return;cancelInput();activeCategory=normalize(button.dataset.directoryCategory);renderChips();apply();});listen(document,"keydown",event=>{if(!event.altKey||(event.key!=="/"&&event.code!=="Slash")||event.metaKey||event.ctrlKey||event.defaultPrevented||event.isComposing)return;if(event.target?.matches?.("input,textarea")||event.target?.isContentEditable)return;event.preventDefault();input?.focus();});const connectivityChanged=()=>{showConnectivityState();loadCatalog.retry();if(!results.hidden||input?.value||place?.value||activeCategory||country?.value)apply();};for(const type of ["online","offline","rwn-connection-restored"])listen(window,type,connectivityChanged);showConnectivityState();renderChips();clearGlobalResults();
+listen(input,"focus",()=>{const version=generation;loadCatalog().then(payload=>{if(version===generation)syncCategoryLabels(payload);}).catch(()=>{});},{once:true});for(const field of [input,place]){listen(field,"input",queueInput);for(const type of ["compositionstart","compositionend"])listen(field,type,()=>{composing=type==="compositionstart";queueInput();});}listen(input,"keydown",event=>{if(event.key==="Escape"&&!composing&&!event.isComposing){event.preventDefault();reset();}});listen(clear,"click",reset);listen(retry,"click",()=>{if(retry.getAttribute("aria-disabled")!=="true")apply();});listen(chips,"click",event=>{const button=event.target.closest("[data-directory-category]");if(!button)return;cancelInput();activeCategory=normalize(button.dataset.directoryCategory);renderChips();apply();});listen(document,"keydown",event=>{if(!event.altKey||(event.key!=="/"&&event.code!=="Slash")||event.metaKey||event.ctrlKey||event.defaultPrevented||event.isComposing)return;if(event.target?.matches?.("input,textarea")||event.target?.isContentEditable)return;event.preventDefault();input?.focus();});const connectivityChanged=()=>{showConnectivityState();loadCatalog.retry();if(!results.hidden||input?.value||place?.value||activeCategory||country?.value)apply();};for(const type of ["online","offline","rwn-connection-restored"])listen(window,type,connectivityChanged);showConnectivityState();renderChips();clearGlobalResults();
 if(startup.browse&&location.hash==="#directory-results"){if(!readState())startup.edited=true;restore({detail:"browse"});}else if(startup.edited||!readState()&&(startup.scroll!==undefined||input?.value||country?.value)){if(location.hash==="#saved")saved=remember(startup.scroll);else{startup.edited=false;apply();}}else restore();
 }
 if("serviceWorker" in navigator&&window.isSecureContext){const register=()=>navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(()=>{});if(document.readyState==="complete")register();else window.addEventListener("load",register,{once:true});}
