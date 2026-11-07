@@ -48,6 +48,7 @@ function enhanceCard(article) {
   if (accessFacts.length) {
     const details = document.createElement("div");
     details.className = "result-access-facts";
+    details.setAttribute("role", "group");
     details.setAttribute("aria-label", t("beforeYouGo", {}, locale));
     for (const route of accessFacts) {
       const fact = document.createElement("p");
