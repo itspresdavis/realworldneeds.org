@@ -12,6 +12,7 @@ import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { resourceDescription } from "./resource-description.mjs";
 import { createThreeAssets, versionThreeReferences } from "./three-assets.mjs";
+import { summarizeCoverage } from "./coverage-report.mjs";
 
 // A page of 80 expanded records created a 34,000px scroll. Sixty compact
 // records keeps a browse page purposeful while whole-catalog search remains
@@ -48,6 +49,7 @@ for (const resource of resources) {
 const mapResources = resources.filter(hasMapCoordinates);
 const hasContactOnlyResources = resources.some(isContactOnly);
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
+const coverageSummary = summarizeCoverage(resources);
 const coverageCount = new Set(resources.map((resource) => resource.country)).size;
 const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked;
 const auditedLiveCount = sourceRegistry.reduce((sum, source) => sum + (source.activeRecordsAtAudit || 0), 0);
@@ -416,6 +418,7 @@ const transparencyTemplate = await readFile("public/transparency.html", "utf8");
 const transparencyHtml = transparencyTemplate
   .replaceAll("{{RESOURCE_COUNT}}", String(resources.length))
   .replaceAll("{{DIRECT_COUNT}}", String(directCount))
+  .replaceAll("{{PHYSICAL_COUNT}}", String(coverageSummary.uniquePhysicalAddresses))
   .replaceAll("{{COVERAGE_COUNT}}", String(coverageCount))
   .replaceAll("{{LATEST_REVIEW}}", latestReview);
 await writeFile("dist/transparency.html", transparencyHtml);
