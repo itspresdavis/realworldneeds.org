@@ -39,7 +39,9 @@ let labels=[...new Set((need?[...need.options].map(option=>option.value):pageRec
 let activeCategory="",generation=0,activeMatches=[],visibleCount=0,scopedCount=0;
 let rendered="",restored,saved=readState(),restorePending=false,browse=false;
 const remember=(scroll=window.scrollY)=>writeDirectoryState(history,pagePath,{...(restorePending?restored:{shown:visibleCount,scroll,focus:document.activeElement?.closest?.('a[href^="/service/"]')?.getAttribute("href")||""}),query:input?.value||"",category:activeCategory,country:country?.value||""});
-const stopRestore=()=>{restorePending=false;};
+// Passive intent data can arrive after the first restored frame. Retain that
+// view for its re-render until a newer visitor action relinquishes ownership.
+const stopRestore=()=>{restorePending=false;restored=null;};
 for(const type of ["pointerdown","keydown","wheel","touchstart"])listen(window,type,stopRestore,{passive:true});
 listen(window,"pagehide",()=>remember());
 listen(document,"click",event=>{if(event.target.closest?.('a[href$="#saved"]')&&location.hash!=="#saved")saved=remember();},true);
@@ -96,9 +98,11 @@ const reset=()=>{cancelInput();if(input)input.value="";if(place)place.value="";r
 let inputTimer;
 listen(country,"change",()=>{cancelInput();stopRestore();apply();});
 listen(need,"change",()=>{cancelInput();stopRestore();activeCategory=normalize(need.value);renderChips();apply();});
-const restore=event=>{if(location.hash==="#saved"||shell?.classList.contains("has-saved-view")){stopRestore();return;}const entry=startup.edited?saved=remember(startup.scroll):readState();startup.edited=false;browse=event?.detail==="browse";restored=entry||(browse?saved:null);if(!restored){stopRestore();return;}event?.preventDefault?.();cancelInput();restorePending=true;input.value=restored.query;activeCategory=restored.category;if(country)country.value=restored.country;renderChips();if(!entry)writeDirectoryState(history,pagePath,restored);apply();};
+const inSaved=()=>location.hash==="#saved"||shell?.classList.contains("has-saved-view");
+const restore=event=>{if(inSaved()){stopRestore();return;}const entry=startup.edited?saved=remember(startup.scroll):readState();startup.edited=false;browse=event?.detail==="browse";restored=entry||(browse?saved:null);if(!restored){stopRestore();return;}event?.preventDefault?.();cancelInput();restorePending=true;input.value=restored.query;activeCategory=restored.category;if(country)country.value=restored.country;renderChips();if(!entry)writeDirectoryState(history,pagePath,restored);apply();};
 listen(window,"popstate",restore);
 listen(window,"rwn-directory-restore",restore);
+listen(root,"rwn-directory-intent",()=>{if(inSaved())return;cancelInput();restorePending=Boolean(restored);apply();});
 listen(navigator.serviceWorker,"controllerchange",()=>{loadCatalog.reset();generation++;cancelInput();apply();});
 const queueInput=event=>{if(event?.target===place)place.rwnEdited=1;stopRestore();generation++;cancelInput();if(!composing&&!event?.isComposing)inputTimer=setTimeout(apply,80);};
 listen(input,"focus",()=>{const version=generation;loadCatalog().then(payload=>{if(version===generation)syncCategoryLabels(payload);}).catch(()=>{});},{once:true});for(const field of [input,place]){listen(field,"input",queueInput);for(const type of ["compositionstart","compositionend"])listen(field,type,event=>{composing=type==="compositionstart";queueInput(event);});}listen(input,"keydown",event=>{if(event.key==="Escape"&&!composing&&!event.isComposing){event.preventDefault();reset();}});listen(clear,"click",reset);listen(retry,"click",()=>{if(retry.getAttribute("aria-disabled")!=="true")apply();});listen(chips,"click",event=>{const button=event.target.closest("[data-directory-category]");if(!button)return;cancelInput();activeCategory=normalize(button.dataset.directoryCategory);renderChips();apply();});listen(document,"keydown",event=>{if(!event.altKey||(event.key!=="/"&&event.code!=="Slash")||event.metaKey||event.ctrlKey||event.defaultPrevented||event.isComposing)return;if(event.target?.matches?.("input,textarea")||event.target?.isContentEditable)return;event.preventDefault();input?.focus();});const connectivityChanged=()=>{showConnectivityState();loadCatalog.retry();if(!results.hidden||input?.value||place?.value||activeCategory||country?.value)apply();};for(const type of ["online","offline","rwn-connection-restored"])listen(window,type,connectivityChanged);showConnectivityState();renderChips();clearGlobalResults();

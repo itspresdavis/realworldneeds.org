@@ -48,6 +48,7 @@ export function mountSearchIntentControls({
   queryInput,
   placeInput,
   onChange,
+  onRefresh = onChange,
 }) {
   const node = document.createElement("div");
   node.className = "search-intent-guidance";
@@ -115,7 +116,7 @@ export function mountSearchIntentControls({
         loadPostalAreas()
           .then(() => {
             last = "";
-            onChange();
+            onRefresh();
           })
           .catch(() => {
             last = "";
@@ -182,12 +183,16 @@ export async function enhanceDirectoryIntent() {
   const queryInput = root?.querySelector("[data-directory-query]"),
     placeInput = root?.querySelector("[data-directory-place]");
   if (!queryInput || !placeInput) return;
+  // Startup, history and postal completion update interpretation, not the
+  // visitor's intent to leave their restored scroll/focus position.
+  const refresh = () => root.dispatchEvent(new Event("rwn-directory-intent"));
   const controls = mountSearchIntentControls({
     container: root,
     queryInput,
     placeInput,
     onChange: () =>
       queryInput.dispatchEvent(new Event("input", { bubbles: true })),
+    onRefresh: refresh,
   });
   const { resourceMatchesIntent } = await import("./search-intent.js");
   const restore = (initial = false) => {
@@ -233,7 +238,7 @@ export async function enhanceDirectoryIntent() {
   render();
   window.addEventListener("popstate", () => {
     restore();
-    queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    refresh();
   });
-  queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+  refresh();
 }

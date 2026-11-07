@@ -50,7 +50,7 @@ test("the real restore handler reads history.state and restores the filter contr
   const f = vm.createContext({ place: { value: "" }, history, location: { pathname: "/directory", hash: "" }, pagePath: "/directory", readDirectoryState,
     startup: {}, shell: null, saved: null, browse: false, readState: () => readDirectoryState(history.state, "/directory"), restored: null, restorePending: false, cancelInput() {}, clearTimeout() {}, inputTimer: null,
     input: {}, activeCategory: "", country: {}, renderChips() {}, apply: () => calls++ });
-  const restoreSource = source.slice(source.indexOf("const restore="), source.indexOf('listen(window,"popstate"'));
+  const restoreSource = source.slice(source.indexOf("const inSaved="), source.indexOf('listen(window,"popstate"'));
   vm.runInContext(`${restoreSource}\nrestore();`, f);
   assert.equal(f.input.value, "WIC"); assert.equal(f.activeCategory, "food");
   assert.equal(f.country.value, "United States"); assert.equal(f.restored.shown, 120);

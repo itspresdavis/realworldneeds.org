@@ -308,3 +308,51 @@ for (const clearDraft of [false, true]) {
     expect(await page.evaluate(() => window.__locationCalls)).toBe(0);
   });
 }
+
+for (const width of [1440, 390]) {
+  test(`directory Back and reload preserve the focused listing after a second batch at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
+    await page.goto("/directory");
+    await page.locator("[data-directory-country]").selectOption("United States");
+    await page.locator("[data-directory-query]").fill("WIC");
+    await expect(page.locator("a.directory-global-result")).toHaveCount(60);
+    if (width < 900) await page.locator("[data-directory-need]").selectOption("Food");
+    else await page.locator('[data-directory-category="Food"]').click();
+    await expect(page.locator("[data-directory-count]")).not.toContainText("Searching");
+    await page.locator("[data-directory-more]").click();
+    await expect(page.locator("a.directory-global-result")).toHaveCount(120);
+    const target = page.locator("a.directory-global-result").nth(60);
+    await expect(target).toBeFocused();
+    const href = await target.getAttribute("href");
+    await target.click();
+    await expect(page).toHaveURL(new RegExp(`${href}$`));
+    await page.goBack();
+    const returned = page.locator(`a.directory-global-result[href="${href}"]`);
+    for (const reload of [false, true]) {
+      if (reload) await page.reload();
+      await expect(page.locator("[data-directory-query]")).toHaveValue("WIC");
+      await expect(page.locator("[data-directory-country]")).toHaveValue("United States");
+      await expect(page.locator("a.directory-global-result")).toHaveCount(120);
+      await expect(returned).toBeFocused();
+      expect(await returned.evaluate(node => {
+        const box = node.getBoundingClientRect();
+        return box.top >= document.querySelector(".legal-header").getBoundingClientRect().bottom + 6 && box.bottom <= innerHeight - 6;
+      })).toBe(true);
+      expect(await page.evaluate(() => location.search || location.hash)).toBe("");
+    }
+    const savedScroll = await page.evaluate(() => scrollY);
+    // Header controls are already visible. Use their actual pointer locations
+    // so test-driver auto-scroll does not change the return position first.
+    if (width < 900) {
+      const menu = await page.locator(".rwn-page-menu > summary").boundingBox();
+      await page.mouse.click(menu.x + menu.width / 2, menu.y + menu.height / 2);
+    }
+    const savedLink = await page.locator('.legal-header a[href="/directory#saved"]:visible').boundingBox();
+    await page.mouse.click(savedLink.x + savedLink.width / 2, savedLink.y + savedLink.height / 2);
+    await expect(page.locator("#saved-services-heading")).toBeFocused();
+    await page.goBack();
+    await expect(page.locator("a.directory-global-result")).toHaveCount(120);
+    await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.matches("a.directory-global-result")))).toBe(true);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(savedScroll, 0);
+  });
+}
