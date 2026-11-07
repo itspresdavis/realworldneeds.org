@@ -64,7 +64,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   const byId = new Map(resources.map(resource => [resource.id, resource]));
   for (const record of searchIndex.records) {
     const resource = byId.get(record.id);
-    const expected = ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
+    const expected = ["categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
     if (resource.phone) expected.push("phone");
     if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");
     if (sourceClosureNotice(resource)) expected.push("sourceStatus");
@@ -74,6 +74,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
       if (resource.accessUrl) expected.push("accessUrl");
     }
     assert.deepEqual(Object.keys(record).sort(), expected.sort());
+    assert.deepEqual(record.categories, [resource.category, ...(resource.secondaryCategories || [])], "compact category order retains the authoritative primary need");
     if (resource.serviceAccess) {
       assert.equal(record.serviceActions.length, resource.serviceAccess.length);
       assert.ok(record.serviceAccessSummary.includes(resource.serviceAccess[0].label));
