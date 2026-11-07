@@ -26,8 +26,8 @@ are never relabeled as testing that final commit.
 | ID | Implemented behavior / principal files | Verification and environment | Remaining dependency / state |
 | --- | --- | --- | --- |
 | 1–2 | Preserved cumulative PR #97–101 ancestry at `bfd53f5e`; isolated integration branch; source generators remain authoritative | Fresh PR, Git, deployment and live-manifest reads; baseline artifact comparison | **Verified baseline.** Main and deployed backend SHA are not assumed equivalent; account enforcement limitations below |
-| 3 | Typed validated route facts and actions, exact address-only destinations, stable IDs; `service-access.js`, `resource-location.js`, `service-before-you-go.mjs`, CSV generator | Bowery distinct addresses, invalid/legacy/confidential/contact routes, all compact exports, Saved/copy/print; 15 focused Chromium/Firefox/WebKit journeys on the inline-action build | **Implemented / verified locally.** Final integrated release evidence remains distinct |
-| 4 | Need/place/time/food intent; explicit bounded postal areas; cancellation of stale device location; per-pass intent plan; `search*.js`, directory/app | Deterministic catalog-based relevance, original/urgent/Spanish/ZIP/ambiguity/empty cases, actual UI and delayed-response fixtures | **Implemented / verified locally.** Postal reference is limited documented US coverage, never an automatic country/radius guess |
+| 3 | Typed validated route facts/actions, exact address-only destinations, stable IDs; top contact/service choice followed by route facts and directions; `service-access.js`, `resource-location.js`, `service-before-you-go.mjs`, shared contact and CSV generators | Bowery distinct addresses, invalid/legacy/confidential/contact routes, all exports, Saved/copy/print and labeled copied URLs; 15 focused three-engine journeys, native contact/facts/print/no-JS checks | **Implemented / verified locally.** Final integrated release evidence remains distinct |
+| 4 | Need/place/time/food intent; explicit bounded postal areas; cancellation of stale device location; per-pass intent plan; passive refresh preserves Back/reload/Saved focus ownership; `search*.js`, directory/app | Deterministic catalog-based relevance, original/urgent/Spanish/ZIP/ambiguity/empty cases, delayed responses; unchanged native history journey and 27 Saved Browse cases | **Implemented / verified locally.** Postal reference is limited documented US coverage, never an automatic country/radius guess |
 | 5 | Time-zone schedules, overnight/exceptions/unknown state, intake/eligibility/entrance and scoped field evidence; `service-schedule.js`, priority sources | Controlled-clock unit cases; official Bowery/Beacon sources; generated Before you go facts; original broad dates preserved | **Implemented / verified locally.** Live availability remains unknown; review cadences require operational approval |
 | 6a | Anonymous bounded correction intake, durable SQL idempotency/rate limits, optional reply/source/proposal; API/public correction files | 60 focused Node checks; disposable PostgreSQL persistence, retries and abuse cases; isolated real-browser form journeys | **Implemented / verified locally.** No production test report or owner delivery is claimed |
 | 6b | Private transitions/assignment/revisions, atomic catalog apply, retained old notes, immutable events, fixed-origin publication verification | Real SQL role/concurrency/clean-upgrade fixtures; 15/15 three-engine correction journeys, full-page axe, publication failure/retry | **Implemented / verified locally.** Complex service-route edits retain the full source/publication gate |
@@ -110,6 +110,18 @@ artifact `13564913775`: exact source `6258d060`, structural pass and canonical
 catalog hash `f24285108fc754820ffbc87d614abecea05952e3213b0b36bc86254b18166a12`.
 No source links were fetched, public facts changed or operator alert sent.
 Scheduled monitoring remains disabled and operationally incomplete.
+
+Integrated `1a8871f7` passed 1,845 Node tests and reproducibility, SQL and all
+three CI browser jobs, but its native gates remained failed. A passive intent
+refresh incorrectly canceled directory Back/Saved restoration; the source fix
+preserves the snapshot until real visitor input. The inspector fixture now
+checks complete copied multi-service facts, while retaining legacy copy tests.
+The keyboard-skip fixture now measures the native fragment destination from
+pre-input geometry instead of assuming document-top zero after the new language
+row. It still requires immediate focus/hash/position and header clearance before
+settling; bad-position and delayed-arrival controls remain failures. Independent
+asset-upgrade, Saved, chaos, offline and cache-upgrade executables passed on
+`1a8871f7`; none is relabeled as certifying the later integrated commit.
 
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
