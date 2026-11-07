@@ -1,3 +1,4 @@
+import { readBody, RequestBodyError } from "../server/supabase.js";
 const ALLOWED_TYPES = new Set([
   "performance",
   "client_error",
@@ -21,46 +22,42 @@ const ALLOWED_ROUTES = new Set([
 const ALLOWED_VIEWPORTS = new Set(["small", "medium", "large"]);
 
 function number(value, max = 120000) {
-  const parsed = Number(value);
+  const parsed = typeof value === "number" ? value : NaN;
   if (!Number.isFinite(parsed)) return null;
   return Math.max(0, Math.min(max, parsed));
 }
 
-function text(value, max = 160) {
-  if (typeof value !== "string") return null;
-  return value.replace(/[\r\n\t]/g, " ").slice(0, max);
-}
-
-export default function handler(req, res) {
+export default async function handler(req, res) {
+  const end = status => { res.statusCode = status; res.setHeader("Cache-Control", "no-store, max-age=0"); return res.end(); };
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).end();
+    return end(405);
   }
 
   const contentLength = Number(req.headers["content-length"] || 0);
-  if (contentLength > 4096) return res.status(413).end();
+  if (!Number.isFinite(contentLength) || contentLength < 0) return end(400);
+  if (contentLength > 4096) return end(413);
 
   const origin = req.headers.origin;
   const host = req.headers.host;
   if (origin && host) {
     try {
-      if (new URL(origin).host !== host) return res.status(403).end();
+      const parsed = new URL(origin);
+      const allowed = new Set(["realworldneeds.org", "www.realworldneeds.org", process.env.VERCEL_URL].filter(Boolean));
+      const local = !process.env.VERCEL && /^127\.0\.0\.1:\d+$/.test(host) && parsed.protocol === "http:";
+      if (parsed.origin !== origin || parsed.host !== host || (!local && (parsed.protocol !== "https:" || !allowed.has(host)))) return end(403);
     } catch {
-      return res.status(403).end();
+      return end(403);
     }
-  }
-
-  let payload = req.body;
-  if (typeof payload === "string") {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      return res.status(400).end();
-    }
-  }
+  } else return end(403);
+  if (String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase() !== "application/json") return end(415);
+  let payload;
+  try { payload = await readBody(req); }
+  catch(error) { return end(error instanceof RequestBodyError ? error.status : 400); }
+  if (Buffer.byteLength(JSON.stringify(payload)) > 4096) return end(413);
 
   if (!payload || typeof payload !== "object" || !ALLOWED_TYPES.has(payload.type)) {
-    return res.status(400).end();
+    return end(400);
   }
 
   const route = ALLOWED_ROUTES.has(payload.route) ? payload.route : "other";
@@ -68,24 +65,22 @@ export default function handler(req, res) {
   const event = {
     level: payload.type.includes("error") || payload.type.includes("lost") ? "warning" : "info",
     msg: "rwn_client_telemetry",
-    schema: number(payload.schema, 10),
+    schema: 3,
     type: payload.type,
     route,
     viewportClass,
     lcp: number(payload.lcp),
-    cls: number(payload.cls, 10),
-    inp: number(payload.inp),
+    layoutShiftTotal: number(payload.layoutShiftTotal, 10),
+    maxEventDuration: number(payload.maxEventDuration),
     fcp: number(payload.fcp),
     ttfb: number(payload.ttfb),
     domReady: number(payload.domReady),
     longTasks: number(payload.longTasks, 10000),
-    errorName: text(payload.errorName, 80),
-    file: text(payload.file, 80),
-    line: number(payload.line, 1000000),
-    column: number(payload.column, 1000000)
+    errorName: ["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError", "EvalError", "AggregateError", "AbortError", "NetworkError", "SecurityError"].includes(payload.errorName) ? payload.errorName : null
   };
 
   console.log(JSON.stringify(event));
-  res.setHeader("Cache-Control", "no-store, max-age=0");
-  return res.status(204).end();
+  return end(204);
 }
+
+
