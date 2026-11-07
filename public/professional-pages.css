@@ -395,8 +395,7 @@ display:inline-flex;flex-wrap:wrap;align-items:center;gap:.25rem .45rem;min-heig
 
 /* Reflow long content and enlarged text. */
 .directory-records { grid-template-columns:minmax(0,1fr);}
-.directory-record { min-width:0;overflow-wrap:anywhere;}
 .directory-record > header time { white-space:normal;}
-.directory-record__facts > div,.directory-advanced > summary { min-width:0;overflow-wrap:anywhere;}
+.directory-record,.directory-record__facts > div,.directory-advanced > summary { min-width:0;overflow-wrap:anywhere;}
 
 .not-found .open-data-actions a:not(:first-child) { color:#24583e;}
