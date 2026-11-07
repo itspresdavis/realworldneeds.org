@@ -8,7 +8,7 @@ if (notice) {
   // The worker adds only this fixed marker to the response, never the cache.
   const cachedNavigation = document.querySelector('meta[name="rwn-offline-navigation"]');
   let navigationRecovery = Boolean(cachedNavigation);
-  let offline = false;
+  let offline = false, activePage = true;
   let networkOffline = false;
   let catalogCached = document.documentElement.dataset?.rwnCatalogCached === "true";
   let probeGeneration = 0;
@@ -77,6 +77,7 @@ if (notice) {
   };
 
   const enhanceSearchActions = async () => {
+    if (!activePage) return;
     for (const [link, { wrapper }] of fallbackRows) {
       if (wrapper.isConnected === false) fallbackRows.delete(link);
     }
@@ -193,6 +194,7 @@ if (notice) {
   };
 
   const probe = (event) => {
+    if (!activePage) return;
     if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
     // The first online retry can race actual network recovery. A healthy probe
@@ -313,9 +315,22 @@ if (notice) {
     setText(status, "Check your connection, then try again.");
     setOffline(true);
   });
+  window.addEventListener("pagehide", () => {
+    activePage = false;
+    enhancementGeneration += 1;
+    probeGeneration += 1;
+    catalog.retry();
+    pendingProbe?.cancel();
+    pendingProbe = undefined;
+    checking(false);
+  });
   // Recheck a restored cached document; another tab must not clear its warning.
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted && navigationRecovery) probe(event);
+    activePage = true;
+    if (event.persisted) {
+      if (navigationRecovery) probe(event);
+      enhanceSearchActions();
+    }
   });
   // Own visibility immediately, including while an initially offline probe hangs.
   setOffline(navigationRecovery || !navigator.onLine);

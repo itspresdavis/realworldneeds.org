@@ -685,3 +685,23 @@ test("Saved navigator mode changes rebuild offline click semantics even with unc
   }
   assert.equal(f.effects.writes, 0);
 });
+
+test("Saved cancels a departing request, ignores late worker/storage refresh and resumes on pageshow", async () => {
+  let finishOld, attempts = 0;
+  const old = new Promise(resolve => { finishOld = resolve; });
+  const current = [{ id: "service-0", name: "Current verified service" }];
+  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : catalogResponse(current) });
+  f.events.pagehide(); await settle();
+  assert.equal(f.requests[0][1].signal.aborted, true);
+  f.workerEvents.controllerchange(); await f.refresh();
+  assert.equal(f.requests.length, 1);
+  finishOld(catalogResponse([{ id: "service-0", name: "Superseded service" }])); await settle();
+  assert.equal(f.list.children.length, 0);
+  f.events.pageshow({ persisted: true }); await settle();
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.requests[1][1].cache, "reload");
+  assert.deepEqual(f.list.children[0].renderedRecord, current[0]);
+  assert.deepEqual(f.savedIds(), ["service-0"]);
+  assert.equal(f.effects.writes, 0);
+  assert.equal(f.timers.size, 0);
+});

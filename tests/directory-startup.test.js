@@ -782,3 +782,21 @@ test("online-mode changes rebuild row listeners even when record contents match"
   assert.notEqual(f.resultList.children[0], offlineRow, "offline-created detail interception must not survive reconnection");
   assertLondon(f);
 });
+
+test("pagehide aborts unfinished catalog work and blocks worker refresh until a cached return", async () => {
+  const f = fixture(); f.type(london); f.start(); await f.flush();
+  assert.equal(f.requests.length, 1);
+  f.window.dispatch("pagehide"); await tick();
+  assert.equal(f.requests[0].options.signal.aborted, true);
+  f.navigator.serviceWorker.dispatch("controllerchange");
+  f.window.dispatch("online"); await tick();
+  assert.equal(f.requests.length, 1, "departing documents must not start replacement requests");
+  await f.resolve(0);
+  assert.deepEqual(f.ids(), [], "an aborted response cannot update the departing page");
+  f.window.dispatch("pageshow", { persisted: true }); await tick();
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.requests[1].options.cache, "reload", "the worker replacement still invalidates old catalog data");
+  await f.resolve(1); f.frames();
+  assertLondon(f);
+  assert.equal(f.timers.size, 0);
+});

@@ -98,7 +98,7 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
   ];
   const frames = [], effects = { remembers: 0, focus: 0, scroll: null, cleared: 0 };
   const f = vm.createContext({ place: { value: "" },
-    geography: undefined, releaseVersion: "fixture", format: value => value.toLocaleString(), browse: false, document: {}, retry: {}, showRetry() {}, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
+    geography: undefined, releaseVersion: "fixture", format: value => value.toLocaleString(), browse: false, document: {}, retry: {}, showRetry() {}, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false, activePage: true,
     queryTokens: value => value.trim().split(/\s+/).filter(Boolean), normalize: value => value.toLowerCase(),
     clear: {}, root: { classList: { toggle() {} } }, count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: async () => ({ records }),
     syncCategoryLabels() {}, scopedRecords: payload => payload.records, scoreRecord: () => 1,

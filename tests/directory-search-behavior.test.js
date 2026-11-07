@@ -43,7 +43,7 @@ test("an older pending search cannot replace newer input or reset state", async 
   let renderCalls = 0;
   const pending = new Promise((done) => { resolve = done; });
   const f = vm.createContext({ place: { value: "" },
-    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, activePage: true, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending,
     syncCategoryLabels: () => { renderCalls += 1; }
@@ -84,7 +84,7 @@ test("a failed older search cannot clear newer results after input changes or re
   let clearCalls = 0;
   const pending = new Promise((_, fail) => { reject = fail; });
   const f = vm.createContext({ place: { value: "" },
-    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, activePage: true, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }
   });
