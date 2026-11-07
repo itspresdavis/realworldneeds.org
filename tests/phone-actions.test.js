@@ -141,7 +141,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     link.before = (element) => { wrapper = element; };
     const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice,
       document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [resource] }),
-      resultId: () => resource.id, setOffline() {}, networkOffline: false, catalogCached: false,
+      resultId: () => resource.id, setOffline() {}, networkOffline: false, catalogCached: false, activePage: true,
     });
     vm.runInContext(`${offlineBody}\nglobalThis.enhance = enhanceSearchActions;`, context);
     await context.enhance();

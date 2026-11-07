@@ -138,7 +138,7 @@ test("legacy offline result enhancement retains contact websites, eligibility an
   link.before = element => { wrapper = element; };
   const context = vm.createContext({
     document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [indexed] }),
-    resultId: () => indexed.id, setOffline() {}, networkOffline: true,
+    resultId: () => indexed.id, setOffline() {}, networkOffline: true, activePage: true,
   });
   vm.runInContext(`${body}\nglobalThis.enhance = enhanceSearchActions;`, context);
   await context.enhance();
