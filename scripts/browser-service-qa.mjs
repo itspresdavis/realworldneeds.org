@@ -298,7 +298,7 @@ async function run() {
       };
     })()`);
     await capture(client, "directory-mobile.png");
-    const expectedMenu = ["Find help", "Directory", "Saved", "How listings are checked", "Sources", "Transparency"];
+    const expectedMenu = ["Find help", "Directory", "Saved", "About RWN", "How listings are checked", "Sources", "Transparency"];
     // Bowery is a source-reviewed multisite organization: generic maps would
     // incorrectly imply that shelter intake shares the meal entrance.
     const expectedActions = ["Directions to meal service", "Shelter intake details", "Showers and clothing details", "Mobile medical care details", "View details"];

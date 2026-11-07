@@ -22,16 +22,19 @@ test('homepage retains consequential access facts at narrow and enlarged-text la
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       await expect(access).toBeVisible();
+      await expect(card.locator('.resource-row__reviewed')).toBeVisible();
       await expect(access).toContainText(fixture.fact);
       await card.scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       const bounds = await card.evaluate(card => {
         const row = card.getBoundingClientRect(), fact = card.querySelector('.resource-row__access').getBoundingClientRect();
-        return { row: {left: row.left, right: row.right, bottom: row.bottom}, fact: {left: fact.left, right: fact.right, bottom: fact.bottom} };
+        const review = card.querySelector('.resource-row__reviewed').getBoundingClientRect();
+        return { row: {left: row.left, right: row.right, bottom: row.bottom}, fact: {left: fact.left, right: fact.right, bottom: fact.bottom}, reviewTop: review.top };
       });
       expect(bounds.fact.left).toBeGreaterThanOrEqual(bounds.row.left);
       expect(bounds.fact.right).toBeLessThanOrEqual(bounds.row.right + 1);
       expect(bounds.fact.bottom).toBeLessThanOrEqual(bounds.row.bottom + 1);
+      if (width <= 600) expect(bounds.reviewTop).toBeGreaterThanOrEqual(bounds.fact.bottom);
       if (width === 390) await info.attach(`${fixture.id}-${width}`, {body: await page.screenshot(), contentType: 'image/png'});
     }
     await page.setViewportSize({ width: 320, height: 844 });

@@ -47,7 +47,7 @@ test('forest hero, map legend and warning colors retain normal text contrast', (
 
 test('compact fallback removes the empty column and source review remains visible on phones', () => {
   assert.match(css, /\.finder__grid:has\(\.is-globe-unavailable\) \{ grid-template-columns:\s*minmax\(0,1fr\);/);
-  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:4;/);
+  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:5;/);
   assert.match(css, /\.resource-row__reviewed::before \{ content:"Source checked ";/);
   assert.match(refinement, /groupFinderDisclosures\(\);\s*composeFinderSurface\(\);/);
 });

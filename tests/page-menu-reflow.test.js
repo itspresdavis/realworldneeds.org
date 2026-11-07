@@ -27,7 +27,7 @@ test('short-height reflow retains generated link targets and every navigation la
   const html = await readFile(new URL('../dist/directory/index.html', import.meta.url), 'utf8');
   const menu = html.match(/<details class="rwn-page-menu">([\s\S]*?)<\/details>/)?.[1] || '';
   assert.deepEqual([...menu.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([,href,label]) => [href,label]), [
-    ['/', 'Find help'], ['/directory', 'Directory'], ['/directory#saved', 'Saved'],
+    ['/', 'Find help'], ['/directory', 'Directory'], ['/directory#saved', 'Saved'], ['/about', 'About RWN'],
     ['/editorial-policy', 'How listings are checked'], ['/sources', 'Sources'], ['/transparency', 'Transparency']
   ]);
 });
