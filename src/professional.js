@@ -49,10 +49,10 @@ function rewriteBrandText() {
 }
 
 function rewriteFinderCopy() {
-  setText(".finder-intro h1", "Find essential services near you.");
+  setText(".finder-intro h1", "Find help");
   setText(
     ".finder-intro p",
-    "Practical help, with contact details and sources you can check."
+    "Free help. Clear next steps."
   );
 
   const status = document.getElementById("locationStatus");

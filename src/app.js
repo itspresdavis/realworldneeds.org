@@ -435,7 +435,7 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find essential services near you.</h1>
+              <h1>Find help</h1>
               <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
             </div>
 
@@ -450,7 +450,7 @@ function shell() {
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
               <p class="search-geography-hint" id="searchGeographyHint" role="status" hidden></p>
             </div>
-            <a class="jump-results" id="jumpResults" href="#results"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
+            <a class="jump-results" id="jumpResults" href="#results"><span>View results</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
 
             <div class="location-actions">
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>

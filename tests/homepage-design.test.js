@@ -10,7 +10,7 @@ const refinement = await readFile('src/refinement.js', 'utf8');
 
 // Tests the rearrangement itself, rather than relying on a static markup claim.
 test('finder composition reuses each existing interactive node exactly once', () => {
-  const selectors = ['.finder-search', '.quick-needs', '.jump-results', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
+  const selectors = ['.finder-search', '.jump-results', '.quick-needs', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
   const nodes = new Map(selectors.map(selector => [selector, {selector, marker:Symbol(selector)}]));
   const search = nodes.get('.finder-search');
   const label = { marker: Symbol("existing visible label") };

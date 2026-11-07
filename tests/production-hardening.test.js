@@ -27,8 +27,8 @@ test("built homepage uses one content-derived release version for every shipped 
 test("built homepage contains useful server-visible finder content before JavaScript", async () => {
   const html = await text("dist/index.html");
   assert.match(html, /<main class="preboot-finder"/);
-  assert.match(html, /Find essential services near you/);
-  assert.match(html, /Practical help, with contact details and sources you can check/);
+  assert.match(html, /<h1>Find help<\/h1>/);
+  assert.match(html, /Free help\. Clear next steps\./);
   assert.match(html, /\/directory\/help\/food/);
   assert.match(html, /Browse the full directory/);
   assert.doesNotMatch(html, /No account required\. No paywall/);
