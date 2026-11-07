@@ -16,10 +16,10 @@ export function serviceBeforeYouGoMarkup(resource) {
     ${routes.map(route=>`<article data-service-route="${escape(route.routeId)}">
       <h3 data-provider-text lang="en">${escape(route.label)}</h3>
       <dl>
-        ${route.address?`<div><dt>${escape(route.addressLabel||'Access location')}</dt><dd data-provider-text lang="en">${escape(route.address)}</dd></div>`:''}
-        ${route.instructions?`<div><dt>Instructions</dt><dd data-provider-text lang="en">${escape(route.instructions)}</dd></div>`:''}
+        ${route.address?`<div><dt ${route.addressLabel?`data-i18n="${resource.kind==='direct'?'address':'coverage'}"`:'data-i18n-en="Access location" data-i18n-es="Lugar de acceso"'}>${escape(route.addressLabel||'Access location')}</dt><dd data-provider-text lang="en">${escape(route.address)}</dd></div>`:''}
+        ${route.instructions?`<div><dt data-i18n-en="Instructions" data-i18n-es="Instrucciones">Instructions</dt><dd data-provider-text lang="en">${escape(route.instructions)}</dd></div>`:''}
         ${route.facts.map(fact=>`<div><dt data-i18n="${escape(fact.key)}">${escape(fact.label)}</dt><dd ${valueAttributes(fact.value)}>${escape(fact.value)}</dd></div>`).join('')}
-        <div data-service-route-source><dt>Route source and review</dt><dd><a href="${escape(route.sourceUrl)}" rel="noopener noreferrer">${escape(route.sourceUrl)}</a> · <time datetime="${escape(route.reviewedAt)}">${escape(route.reviewedAt)}</time></dd></div>
+        <div data-service-route-source><dt data-i18n-en="Route source and review" data-i18n-es="Fuente y revisión del acceso">Route source and review</dt><dd><a href="${escape(route.sourceUrl)}" rel="noopener noreferrer">${escape(route.sourceUrl)}</a> · <time datetime="${escape(route.reviewedAt)}">${escape(route.reviewedAt)}</time></dd></div>
       </dl>
       ${Object.entries(route.fieldEvidence||{}).length?`<details><summary data-i18n-en="Sources for these details" data-i18n-es="Fuentes de estos detalles">Sources for these details</summary><ul>${Object.entries(route.fieldEvidence).map(([field,evidence])=>`<li><a href="${escape(evidence.sourceUrl)}" rel="noopener noreferrer">${escape(field)}</a> · <time datetime="${escape(evidence.checkedAt)}">${escape(evidence.checkedAt.slice(0,10))}</time><span data-provider-text lang="en"> — ${escape(evidence.scope)}</span></li>`).join('')}</ul></details>`:''}
     </article>`).join('')}

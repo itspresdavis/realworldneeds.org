@@ -31,6 +31,9 @@ test('interface translation only recognizes reviewed labels and keeps arbitrary 
   assert.equal(translateInterfaceText('Call 617-555-0199', 'es'), 'Llamar a 617-555-0199');
   assert.equal(translateInterfaceText('1 match', 'es'), '1 coincidencia');
   assert.equal(translateInterfaceText('2 matches', 'es'), '2 coincidencias');
+  assert.equal(translateInterfaceText('Interactive map', 'es'), 'Mapa interactivo');
+  assert.equal(translateInterfaceText('View on RWN', 'es'), 'Ver en RWN');
+  assert.equal(translateInterfaceText('Showers and laundry details', 'es'), 'Showers and laundry details'); // Only the explicit action element owns the suffix.
   assert.equal(translateInterfaceText('Services for women ages 14–24', 'es'), 'Services for women ages 14–24');
   assert.equal(translateInterfaceText('227 Bowery, New York, NY', 'es'), '227 Bowery, New York, NY');
   assert.equal(translateInterfaceText('<img src=x onerror=alert(1)>', 'es'), '<img src=x onerror=alert(1)>');

@@ -15,7 +15,7 @@ function translateNode(node) {
   const old = originalText.get(node), current = node.textContent;
   const source = old && current === old.rendered ? old.source : current;
   if (!old && getLocale() === 'en') return;
-  const rendered = parent.closest('.resource-row__aid, .directory-global-result > small')
+  const rendered = parent.closest('.is-access-details') ? source.replace(/^(.+) details$/, (_, service) => t('detailsFor', {service})) : parent.closest('.resource-row__aid, .directory-global-result > small')
     ? source.split(/( · )/).map(part => translateInterfaceText(part, getLocale())).join('')
     : translateInterfaceText(source, getLocale());
   if (rendered === current && !old) return;

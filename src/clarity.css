@@ -406,6 +406,7 @@ grid-column:1 / -1;grid-row:auto;min-width:0;}
 @media (max-width:600px) {
 .rwn-professional .resource-row__reviewed { display:block; grid-column:1 / -1; grid-row:5;padding-left:1.2rem;font-size:.75rem;}
 .rwn-professional .resource-row__reviewed::before { content:"Source checked ";}
+.rwn-professional:lang(es) .resource-row__reviewed::before { content:"Fuente consultada ";}
 .rwn-professional .results-tools { width:auto;}
 .rwn-professional .directory-tool { flex:0 1 auto;}
 .rwn-professional .finder-surface .location-status { font-size:.6875rem;}

@@ -87,6 +87,22 @@ test('translated detail page settles and keeps original service destinations', a
   expect(scan.violations).toEqual([]);
 });
 
+test('service detail choices translate interface labels while retaining their provider text and destinations', async ({ page }) => {
+  await page.goto('/service/beacon-houston');
+  const action = page.locator('.is-access-details').first();
+  await expect(action).toBeVisible();
+  const original = await action.textContent(), label = await action.evaluate(element => element.firstChild.textContent), href = await action.getAttribute('href');
+  await page.locator('[data-language-control] select').selectOption('es');
+  await expect(action).toHaveText(original.replace(label, `Detalles de ${label.replace(/ details$/, '')}`));
+  await expect(page.locator('[data-service-before-you-go] dt').filter({hasText:'Lugar de acceso'}).first()).toBeVisible();
+  await expect(page.locator('[data-service-before-you-go] dt').filter({hasText:'Instrucciones'}).first()).toBeVisible();
+  await expect(page.locator('[data-service-before-you-go] dt').filter({hasText:'Fuente y revisión del acceso'}).first()).toBeVisible();
+  expect(await action.getAttribute('href')).toBe(href);
+  await page.locator('[data-language-control] select').selectOption('en');
+  await expect(action).toHaveText(original);
+  expect(await action.getAttribute('href')).toBe(href);
+});
+
 test('Spanish directory retains its search through offline and connection recovery', async ({ page, context }) => {
   await page.goto('/directory');
   await page.locator('[data-directory-query]').fill('Boston');

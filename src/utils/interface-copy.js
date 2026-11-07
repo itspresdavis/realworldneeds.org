@@ -4,6 +4,7 @@ import { messages } from './localization.js';
 export const interfaceCopy = Object.freeze([
   ...Object.values(messages),
   ['Home', 'Inicio'], ['All', 'Todas'], ['All help', 'Todos los tipos de ayuda'], ['Health care', 'Atención médica'], ['Navigation', 'Orientación'],
+  ['Interactive map', 'Mapa interactivo'], ['View on RWN', 'Ver en RWN'],
   ['Find essential services near you.', 'Encuentra servicios esenciales cerca de ti.'],
   ['Practical help, with contact details and sources you can check.', 'Ayuda práctica, con datos de contacto y fuentes que puedes consultar.'],
   ['Essential services directory', 'Directorio de servicios esenciales'], ['Free essential services directory', 'Directorio de servicios esenciales gratuitos'],
@@ -17,7 +18,7 @@ export const interfaceCopy = Object.freeze([
   ['Nearby service locations appear first when you choose to share your location.', 'Los lugares cercanos aparecen primero si decides compartir tu ubicación.'],
   ['In the United States, location search can also load current USDA summer meal sites.', 'En Estados Unidos, la búsqueda por ubicación también puede cargar lugares de comidas de verano del USDA.'],
   ['Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead.', 'Tu navegador usa la ubicación para ordenar las fichas cercanas. Para búsquedas de comidas en EE. UU., el USDA recibe solo una zona aproximada. También puedes buscar por lugar.'],
-  ['Read how location works', 'Consulta cómo funciona la ubicación'], ['Use location', 'Usar ubicación'], ['Clear location', 'Borrar ubicación'],
+  ['Read how location works', 'Consulta cómo funciona la ubicación'], ['Use location', 'Usar ubicación'],
   ['Immediate danger?', '¿Peligro inmediato?'], ['Contact local emergency services. RWN is a directory, not an emergency service.', 'Contacta con los servicios de emergencia locales. RWN es un directorio, no un servicio de emergencia.'],
   ['See matching services', 'Ver servicios coincidentes'], ['Nearby service locations appear first. Regional resource finders appear after them.', 'Los lugares de atención cercanos aparecen primero, seguidos de los buscadores regionales.'],
   ['Free with eligibility', 'Gratis si cumples los requisitos'], ['Eligibility applies', 'Con requisitos'], ['Free resource finder', 'Buscador de recursos gratuito'], ['Free option', 'Opción gratuita'],
@@ -94,7 +95,7 @@ export const interfaceCopy = Object.freeze([
   ['Offline saving is unavailable. The directory still works online.', 'No se puede guardar sin conexión. El directorio sigue funcionando en línea.'],
   ['RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.', 'RWN no incluye todos los servicios o lugares. Los buscadores y las redes abarcan zonas más amplias. Los servicios pueden cambiar: confirma la cobertura, el acceso y los detalles actuales con el proveedor antes de ir.'],
 ]);
-const byEnglish = new Map(interfaceCopy.map(([en, es]) => [en, es]));
+const byEnglish = new Map(interfaceCopy);
 const patterns = [
     [/^Source checked (.+)$/, 'Fuente consultada $1'], [/^Source reviewed (.+)$/, 'Fuente revisada $1'],
     [/^Showing ([\d,]+) of ([\d,]+) listings$/, 'Mostrando $1 de $2 fichas'],

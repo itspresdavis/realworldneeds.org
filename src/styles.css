@@ -2976,17 +2976,22 @@ svg {
   .resource-list-head span:nth-child(3),
   .resource-list-head span:nth-child(5),
   .resource-list-head span:nth-child(6),
-  .resource-row__type,
-  .resource-row__reviewed {
+  .resource-row__type {
     display: none;
   }
 
   /* Eligibility and intake instructions remain visible before choosing a
      service. A narrow layout may grow vertically rather than remove facts. */
-  .resource-row__access {
+  .resource-row__access,
+  .resource-row__reviewed {
     display: block;
     grid-column: 1 / -1;
     overflow-wrap: anywhere;
+  }
+
+  .resource-row__arrow {
+    grid-column: 4;
+    grid-row: 1;
   }
 
   .source-band {
