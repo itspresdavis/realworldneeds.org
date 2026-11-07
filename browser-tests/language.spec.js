@@ -97,8 +97,9 @@ test('Spanish directory retains its search through offline and connection recove
   await expect(page.locator('#offlineDirectoryNotice')).toContainText(/conexión|conectarte/);
   await expect(page.locator('[data-directory-query]')).toHaveValue('Boston');
   await context.setOffline(false);
-  const retry = page.locator('[data-directory-reconnect]');
-  if (await retry.isVisible()) await retry.click();
+  // The real online event performs recovery and may remove Retry between a
+  // visibility check and a click. Assert that completed automatic transition.
+  await expect(page.locator('#offlineDirectoryNotice')).toHaveAttribute('data-network-state', 'online');
   await expect(page.locator('[data-global-list] .directory-global-result').first()).toBeVisible();
   await expect(page.locator('[data-directory-query]')).toHaveValue('Boston');
   await page.locator('[data-language-control] select').selectOption('en');
