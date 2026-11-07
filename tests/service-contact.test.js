@@ -59,7 +59,11 @@ test("every generated service keeps source and phone semantics while exposing re
       assert.ok(panel.indexOf('class="is-provider"') < panel.indexOf('class="service-location-actions"'), resource.id);
     }
     assert.deepEqual([...panel.matchAll(/href="(tel:[^"]+)"/g)].map(match => match[1]), phoneLinks(resource.phone).map(link => link.href), resource.id);
-    assert.equal(panel.includes('class="is-map is-directions"'), resource.kind === "direct" && hasMapCoordinates(resource), resource.id);
+    const destinations = [...panel.matchAll(/class="is-map is-directions" href="([^"]+)"/g)].map(match => new URL(match[1].replaceAll('&amp;', '&')).searchParams.get('destination'));
+    const expected = resource.serviceAccess
+      ? resource.serviceAccess.filter(route => route.mode === 'walk-in' && route.directions !== false || route.mode === 'intake' && route.directions === true).map(route => route.address)
+      : resource.kind === 'direct' && hasMapCoordinates(resource) ? [`${resource.lat},${resource.lng}`] : [];
+    assert.deepEqual(destinations, expected, `${resource.id}: every direction uses the verified service address or legacy exact coordinates`);
     assert.equal(panel.includes('/#resource='), hasMapCoordinates(resource), resource.id);
     if (sourceClosureNotice(resource)) assert.ok(page.indexOf('class="source-status-notice"') < page.indexOf(panel), resource.id);
   }
