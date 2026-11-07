@@ -2612,6 +2612,7 @@ function bindEvents() {
     updateFilters();
     writeFinderHistory("push");
   });
+  searchInput.addEventListener("focus", () => searchPreparation.prioritize());
   searchInput.addEventListener("blur", commitPendingSearch);
   document.getElementById("clearSearch").addEventListener("click", () => {
     cancelPendingSearch();
@@ -3225,6 +3226,9 @@ shell();
 renderStatic();
 updateFilters();
 const searchPreparation = warmSearchIndex(resources);
+// Start bounded active slices after the finder can paint, so optional map work
+// does not postpone essential text-search preparation until the first keypress.
+requestAnimationFrame(() => searchPreparation.prioritize());
 bindEvents();
 writeFinderHistory();
 // Bootstrap starts optional graphics after the enhanced finder has painted.
