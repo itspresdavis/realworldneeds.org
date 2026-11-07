@@ -27,12 +27,18 @@ export function globeCoordinateSnapshot(resources, createPoints, updatePoints) {
 export function assertGlobeCoordinateFidelity(snapshot) {
   const fail = message => { throw new Error("Catalog coordinate fidelity: " + message); };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const { catalog, frames, retainedIds, contactOnlySearchIds } = snapshot;
+  const { catalog, frames, retainedIds, contactOnlySearchIds, addressOnlySearchIds } = snapshot;
   const ids = catalog.map(record => record.id);
   if (new Set(ids).size !== ids.length) fail("duplicate catalog IDs");
   if (!same(retainedIds, ids)) fail("point layer did not retain the complete source catalog");
-  const mapped = catalog.filter(record => record.locationPrecision !== "contact-only");
+  for (const record of catalog) {
+    if (record.locationPrecision != null && record.locationPrecision !== ""
+      && !["exact", "coverage", "contact-only", "address"].includes(record.locationPrecision))
+      fail("unknown catalog location precision for " + record.id);
+  }
+  const mapped = catalog.filter(record => !["contact-only", "address"].includes(record.locationPrecision));
   const contactOnly = catalog.filter(record => record.locationPrecision === "contact-only");
+  const addressOnly = catalog.filter(record => record.locationPrecision === "address");
   for (const record of mapped) {
     if (!Number.isFinite(record.lat) || Math.abs(record.lat) > 90
       || !Number.isFinite(record.lng) || Math.abs(record.lng) > 180)
@@ -41,15 +47,20 @@ export function assertGlobeCoordinateFidelity(snapshot) {
   for (const record of contactOnly) {
     if (record.lat != null || record.lng != null) fail("contact-only coordinates were fabricated for " + record.id);
   }
+  for (const record of addressOnly) {
+    if (record.lat !== null || record.lng !== null) fail("address-only coordinates must be null for " + record.id);
+  }
   if (!same(contactOnlySearchIds, contactOnly.map(record => record.id)))
     fail("contact-only listing is missing from text search");
+  if (!same(addressOnlySearchIds, addressOnly.map(record => record.id)))
+    fail("address-only listing is missing from text search");
   if (!same(frames.map(frame => frame.zoom), [1, 3, 8, 12])) fail("required zoom coverage changed");
   let maximumError = 0;
   for (const frame of frames) {
     if (frame.count !== mapped.length || frame.positions.length !== mapped.length)
       fail("missing or extra mapped points at zoom " + frame.zoom);
     if (!same(frame.ids, mapped.map(record => record.id)))
-      fail("mapped point ID order changed or contact-only point leaked at zoom " + frame.zoom);
+      fail("mapped point ID order changed or unmapped listing point leaked at zoom " + frame.zoom);
     for (let i = 0; i < mapped.length; i++) {
       const vector = frame.positions[i];
       if (vector.length !== 3 || !vector.every(Number.isFinite) || Math.hypot(...vector) === 0)
@@ -62,17 +73,17 @@ export function assertGlobeCoordinateFidelity(snapshot) {
       if (error > 0.00001) fail(mapped[i].id + " moved " + error + " degrees at zoom " + frame.zoom);
     }
   }
-  return { catalog: catalog.length, mapped: mapped.length, contactOnly: contactOnly.length,
-    counts: frames.map(frame => frame.count), maximumError, contactOnlySearchIds };
+  return { catalog: catalog.length, mapped: mapped.length, contactOnly: contactOnly.length, addressOnly: addressOnly.length,
+    counts: frames.map(frame => frame.count), maximumError, contactOnlySearchIds, addressOnlySearchIds };
 }
 
-export async function contactOnlyFinderSearch(resources) {
+export async function unmappedFinderSearch(resources, locationPrecision) {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search control is missing");
   const before = input.value;
   const found = [];
   try {
-    for (const record of resources.filter(resource => resource.locationPrecision === "contact-only")) {
+    for (const record of resources.filter(resource => resource.locationPrecision === locationPrecision)) {
       input.value = record.name;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       const deadline = Date.now() + 8000;
@@ -99,7 +110,8 @@ export async function verifyGlobeCoordinates({ client, evaluate }) {
     const { resources } = await import('/src/data/resources.js' + version);
     const { createGlobePointLayer, updateGlobePointLayer } = await import('/src/globe-points.js' + version);
     const snapshot = (${globeCoordinateSnapshot.toString()})(resources, createGlobePointLayer, updateGlobePointLayer);
-    snapshot.contactOnlySearchIds = await (${contactOnlyFinderSearch.toString()})(resources);
+    snapshot.contactOnlySearchIds = await (${unmappedFinderSearch.toString()})(resources, "contact-only");
+    snapshot.addressOnlySearchIds = await (${unmappedFinderSearch.toString()})(resources, "address");
     return snapshot;
   })()`);
   return assertGlobeCoordinateFidelity(snapshot);
