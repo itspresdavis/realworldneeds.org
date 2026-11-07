@@ -66,7 +66,7 @@ test("shipped directory entry stays self-contained for existing offline workers"
   assert.equal(row.children[0].href, "/service/fixture");
   assert.doesNotMatch(client, /from[\s]*["\'].*search\.js/);
   assert.doesNotMatch(client, /\bimport(?!\s*\.)[^;]*directory-results/);
-  assert.ok(Buffer.byteLength(client) <= 16_000, "bundled entry must stay inside the directory client budget");
+  assert.ok(Buffer.byteLength(client) <= 17_000, "bundled entry must stay inside the documented directory client budget");
   const page = await readFile("dist/directory/index.html", "utf8");
   assert.ok(page.includes(`${offlineAssets["/directory.js"]}?v=${directoryRelease}`));
   const worker = await readFile("dist/sw.js", "utf8");

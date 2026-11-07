@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
@@ -45,7 +46,13 @@ test("offline manifest and lazy saved entry reference actual byte-addressed arti
   }
   const directory = await read(`dist${release.offlineAssets["/directory.js"]}`);
   assert.ok(directory.includes(`.${release.offlineAssets["/directory-geography.js"]}?v=`));
-  assert.ok(Buffer.byteLength(directory) <= 16_000, "actual served directory entry includes its hashed lazy-import path within the budget");
+  // Required food/time matching and validated contact actions are documented in
+  // docs/PERFORMANCE_2026-11-07.md; the aggregate guard prevents moving bytes away.
+  assert.ok(Buffer.byteLength(directory) <= 17_000, "actual served directory entry includes its hashed lazy-import path within the budget");
+  assert.ok(gzipSync(directory, { level: 9 }).length <= 7_750, "served core has a separate compressed transfer ceiling");
+  const requiredBytes = await Promise.all(Object.values(release.offlineAssets).map(path => readFile(`dist${path}`)));
+  assert.ok(requiredBytes.reduce((sum, bytes) => sum + bytes.length, 0) <= 200_000, "complete required public runtime graph stays bounded, including helpers, locale, Saved and styles");
+  assert.ok(requiredBytes.reduce((sum, bytes) => sum + gzipSync(bytes, { level: 9 }).length, 0) <= 64_000, "complete required public runtime graph stays under its compressed transfer ceiling");
   assert.ok(Buffer.byteLength(await read(`dist${release.offlineAssets["/directory-geography.js"]}`)) <= 1_500, "optional geographic guidance has a separate explicit transfer budget");
   const loader = await read(`dist${release.offlineAssets["/saved-loader.js"]}`);
   assert.ok(loader.includes(`.${release.offlineAssets["/saved-services.js"]}?v=`));

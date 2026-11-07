@@ -124,9 +124,9 @@ test("directory and offline fallback use build-parsed phone targets without new 
   const offline = await read("public/offline-status.js");
   const shipped = await read("dist/directory.js");
   const createRow = (source) => {
-    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true } });
-    vm.runInContext(`${source.replace("export const createResultRow", "const createResultRow")}\nglobalThis.row = createResultRow;`, context);
-    return context.row;
+    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true }, window: {}, history: {}, URL });
+    vm.runInContext(exposeDirectoryRenderer(source), context);
+    return context.rwnTestRenderer;
   };
   const rows = [createRow(renderer), createRow(shipped.replaceAll("import.meta.url", '"https://fixture.test/directory.js"'))];
   const offlineBody = offline.slice(offline.indexOf("  const actionLink ="), offline.indexOf("  const setOffline ="));
@@ -159,7 +159,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     }
   }
   assert.doesNotMatch(shipped, /\bimport\s/);
-  assert.ok(Buffer.byteLength(shipped) <= 16_000);
+  assert.ok(Buffer.byteLength(shipped) <= 17_000);
 });
 
 test("built service pages, directory records and search index agree on every phone target", async () => {
@@ -186,3 +186,4 @@ test("built service pages, directory records and search index agree on every pho
     }
   }
 });
+import { exposeDirectoryRenderer } from './helpers/directory-renderer.js';
