@@ -61,7 +61,12 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
     await checkSearchRecovery(`Fallback Close at ${width}px`);
   }
 
-  await openResource(resources[1].id);
+  // Exercise the reviewed multi-service handoff explicitly. Legacy address
+  // copying remains covered independently by the focus-continuity unit fixture.
+  const copyResource = resources.find(resource => resource.id === 'beacon-houston');
+  if (!copyResource?.serviceAccess?.length) throw new Error('Multi-service copy fixture is missing');
+  const accessFacts = copyResource.serviceAccess.flatMap(route => [route.label, route.address, route.instructions]).filter(Boolean);
+  await openResource(copyResource.id);
 
   const clipboard = await evaluate(client, `(async () => {
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
@@ -83,8 +88,10 @@ export async function verifyFocusContinuity({ client, host, navigate, evaluate }
       await run('shareResource', /could not be copied/);
       Object.defineProperty(navigator, 'clipboard', {configurable:true, value:undefined});
       for (const outcome of ['false','throw','success']) {
-        document.execCommand = () => {if (outcome === 'throw') throw new Error('denied fixture'); return outcome === 'success';};
-        await run('copyAddress', outcome === 'success' ? /^(Address|Coverage) copied$/ : /could not be copied/);
+        let copiedText = '';
+        document.execCommand = () => {if (outcome === 'throw') throw new Error('denied fixture'); if (outcome === 'success') copiedText = document.querySelector('textarea')?.value || ''; return outcome === 'success';};
+        await run('copyAddress', outcome === 'success' ? /^Service access copied$/ : /could not be copied/);
+        if (outcome === 'success') results.at(-1).passed &&= ${JSON.stringify(accessFacts)}.every(fact => copiedText.includes(fact));
         await run('shareResource', outcome === 'success' ? /^Service link copied$/ : /could not be copied/);
       }
       let copies = 0;
