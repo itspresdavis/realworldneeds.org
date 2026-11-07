@@ -176,3 +176,30 @@ test("postal data stays optional and a real failed fetch can recover on retry", 
   await expect(page.locator("#resourceSearch")).toHaveValue("food");
   await expect(page.locator("#resourcePlace")).toHaveValue("02108");
 });
+
+test("a manual place supersedes a pending device-location result", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    navigator.geolocation.getCurrentPosition = (success, failure) => {
+      window.__locationCalls++;
+      window.__pendingLocation = { success, failure };
+    };
+  });
+  await page.locator("#locateMe").click();
+  await expect(page.locator("#locateMe")).toHaveClass(/is-loading/);
+  await page.locator("#resourceSearch").fill("shelter");
+  await page.locator("#resourcePlace").fill("Boston MA");
+  await expect.poll(() => page.evaluate(() => history.state?.rwnFinder?.place)).toBe("Boston MA");
+  await expect(page.locator("#locateMe")).not.toHaveClass(/is-loading/);
+  const before = await page.locator(".resource-card[data-result-resource-id]").evaluateAll(nodes => nodes.map(node => node.dataset.resultResourceId));
+  expect(before.length).toBeGreaterThan(0);
+  await page.evaluate(async () => {
+    await window.__pendingLocation.success({ coords: { latitude: 47.6062, longitude: -122.3321, accuracy: 100 } });
+    window.__pendingLocation.failure({ code: 1 });
+  });
+  await expect(page.locator("#resourcePlace")).toHaveValue("Boston MA");
+  await expect(page.locator("#clearLocation")).toBeHidden();
+  await expect(page.locator("#locationRecovery")).toBeHidden();
+  expect(await page.locator(".resource-card[data-result-resource-id]").evaluateAll(nodes => nodes.map(node => node.dataset.resultResourceId))).toEqual(before);
+  expect(await page.evaluate(() => window.__locationCalls)).toBe(1);
+});

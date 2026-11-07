@@ -2563,12 +2563,18 @@ function bindEvents() {
   let placeComposing = false;
   const applyIntent = async () => {
     if (placeComposing || composingSearch) return;
+    // A newly entered place supersedes even an unfinished device request.
+    // Cancel before awaiting preparation so late permission/provider callbacks
+    // cannot replace the visitor's more recent manual choice.
+    const manualPlace = sanitizeFinderQuery(placeInput.value);
+    if ((manualPlace || finderIntentControls?.plan().area) &&
+        (state.userLocation || document.getElementById("locateMe")?.classList.contains("is-loading"))) clearUserLocation();
     const revision = ++searchRevision;
     searchPreparation.prioritize();
     await searchPreparation.ready;
     if (revision !== searchRevision) return;
     state.query = pendingSearchValue = sanitizeFinderQuery(searchInput.value);
-    state.place = sanitizeFinderQuery(placeInput.value);
+    state.place = manualPlace;
     updateFilters();
     writeFinderHistory("push");
   };
