@@ -9,6 +9,26 @@ export function hasIntermediateScrollSample(start, end, samples) {
   return samples.some(value => Number.isFinite(value) && value > low && value < high);
 }
 
+// Native fragment alignment accounts for scroll-padding and the target's
+// scroll-margin. Capture these inputs before Enter, never from the arrival.
+export function skipLinkDestination(prepared) {
+  const { finderDocumentTop, scrollHeight, clientHeight } = prepared;
+  const padding = parseFloat(prepared.clearance), margin = parseFloat(prepared.finderMargin);
+  if (![finderDocumentTop, scrollHeight, clientHeight, padding, margin].every(Number.isFinite)) {
+    throw new Error('Skip-link destination geometry is unavailable');
+  }
+  const y = Math.max(0, Math.min(scrollHeight - clientHeight, finderDocumentTop - padding - margin));
+  return { y, target: finderDocumentTop - y, clearance: padding, margin };
+}
+
+export function hasImmediateSkipLinkArrival(actual, expected) {
+  return [actual.y, actual.target, actual.header, actual.clearance].every(Number.isFinite)
+    && Math.abs(actual.y - expected.y) <= 1 && Math.abs(actual.target - expected.target) <= 1
+    && actual.target >= actual.header && actual.clearance === expected.clearance
+    && actual.hash === '#finder' && actual.active === 'finder'
+    && actual.smooth === 'auto' && actual.overflow === false;
+}
+
 // Native browser input and rendered geometry, rather than source-string claims.
 // Runs in existing CI Chrome; this is not a physical mobile-device benchmark.
 export async function verifyPageInteractions({ client, host, navigate, evaluate, capture }) {
@@ -178,15 +198,16 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         dispose: () => evaluate(client, 'window.__rwnSkipLinkWitness?.dispose()'),
         run: async record => {
           record.prepared = await evaluate(client, `scrollTo({top:300,behavior:'instant'}); document.querySelector('.skip-link').focus({preventScroll:true}); window.__rwnSkipLinkWitness.snapshot()`);
+          record.expected = skipLinkDestination(record.prepared.state);
           await client.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
           await client.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
           const skipImmediate = await inspect();
           record.immediate = skipImmediate;
-          assert(skipImmediate.y<=1 && skipImmediate.active==='finder', 'Keyboard skip link did not arrive immediately', skipImmediate);
+          assert(hasImmediateSkipLinkArrival(skipImmediate, record.expected), 'Keyboard skip link did not arrive immediately', {expected:record.expected,actual:skipImmediate});
           await settle();
           const skipped = await inspect();
           record.settled = skipped;
-          assert(skipped.hash === '#finder' && skipped.active === 'finder' && skipped.smooth === 'auto', 'Keyboard skip link lost native focus or immediate scrolling', skipped);
+          assert(hasImmediateSkipLinkArrival(skipped, record.expected), 'Keyboard skip link lost native focus or immediate scrolling', {expected:record.expected,actual:skipped});
         },
       });
     }
