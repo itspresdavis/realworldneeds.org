@@ -108,6 +108,15 @@ test("listing correction links stay closed by default and prefill only public id
   assert.deepEqual([...url.searchParams], [["resourceId", fixture.id]]);
 });
 
+test('structured data does not turn a physical site country into a promised national catchment', async () => {
+  const physical = { ...closed, kind: 'direct', country: 'United States', city: 'Example City', coverageNote: undefined };
+  const service = graph(await renderService(physical)).find(entry => entry['@type'] === 'Service');
+  assert.equal(Object.hasOwn(service, 'areaServed'), false, 'an operating location does not establish who is eligible across the country');
+  const contact = { ...physical, kind: 'locator', locationPrecision: 'contact-only', lat: null, lng: null, coverageNote: 'Residents of Massachusetts only; check provider eligibility.', accessUrl: 'https://example.org/intake', phone: '', phoneAccess: '' };
+  const remote = graph(await renderService(contact)).find(entry => entry['@type'] === 'Service');
+  assert.equal(remote.areaServed, contact.coverageNote, 'explicit reviewed coverage remains intact');
+});
+
 test("every source-flagged final page carries the full warning in search, share and schema descriptions", async () => {
   assert.ok(flagged.some((resource) => resource.collectionStatus === "Closed"));
   assert.ok(flagged.some((resource) => resource.collectionStatus === "Temporarily closed"));
