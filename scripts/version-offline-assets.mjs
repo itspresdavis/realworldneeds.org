@@ -20,7 +20,7 @@ export function moduleDependencies(source, parent, { allowVersioned = false } = 
     if (specifier.includes("\\") || specifier.includes("%")) throw new Error(`Unsafe offline module path: ${parent}`);
     const url = new URL(specifier, `https://rwn.invalid${parent}`);
     if (url.origin !== "https://rwn.invalid" || !((allowVersioned ? /^\/src\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+(?:\.[a-f0-9]{12})?\.js$/ : modulePath).test(url.pathname)) || url.hash) throw new Error(`Offline module dependency escaped public src: ${parent}`);
-    references.push({ specifier, canonical: url.pathname, suffix: url.search, start: match.index + match[0].indexOf(match[1] + specifier) + 1, length: specifier.length });
+    references.push({ specifier, canonical: url.pathname, suffix: url.search, dynamic: pattern === patterns[1], start: match.index + match[0].indexOf(match[1] + specifier) + 1, length: specifier.length });
   }
   // Fail closed if an entry adopts a computed dynamic import we cannot identify.
   const dynamic = [...source.matchAll(/\bimport\s*\(/g)].length;
@@ -51,7 +51,7 @@ export async function versionOfflineAssets(root = "dist") {
     assets[path] = versioned(path, bytes);
     await writeFile(join(root, assets[path]), bytes);
   }
-  const visiting = new Set();
+  const visiting = new Set(), dependenciesByModule = new Map();
   async function module(canonical) {
     if (assets[canonical]) return;
     if (visiting.has(canonical)) throw new Error(`Cyclic offline module dependency: ${canonical}`);
@@ -60,6 +60,7 @@ export async function versionOfflineAssets(root = "dist") {
     visiting.add(canonical);
     let source = await readFile(join(root, canonical), "utf8");
     const dependencies = moduleDependencies(source, canonical);
+    dependenciesByModule.set(canonical, dependencies);
     for (const child of dependencies) await module(child.canonical);
     for (const child of dependencies.toReversed()) {
       let relative = posix.relative(posix.dirname(canonical), assets[child.canonical]);
@@ -77,6 +78,22 @@ export async function versionOfflineAssets(root = "dist") {
     visiting.delete(canonical);
   }
   for (const entry of offlineModuleEntries) await module(entry);
+  // The required intent graph otherwise takes four sequential network discovery
+  // waves. Preload the exact static import URLs in parallel, only on pages that
+  // execute this entry. Dynamic imports and postal data retain their demand gate.
+  const preloadsFor = entry => {
+    const urls = new Set();
+    const visit = canonical => {
+      for (const child of dependenciesByModule.get(canonical) || []) {
+        if (child.dynamic) continue;
+        const url = assets[child.canonical] + child.suffix;
+        if (urls.has(url)) continue;
+        urls.add(url); visit(child.canonical);
+      }
+    };
+    visit(entry);
+    return [...urls];
+  };
   const manifestId = digest(JSON.stringify({ required: assets, optional }));
   async function rewriteHtml(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -84,10 +101,14 @@ export async function versionOfflineAssets(root = "dist") {
       if (entry.isDirectory()) await rewriteHtml(path);
       else if (entry.name.endsWith(".html")) {
         const original = await readFile(path, "utf8");
-        const html = original.replace(/((?:src|href)=(["']))(\/[^"'?]+)(?=[?"'])/g,
+        let html = original.replace(/((?:src|href)=(["']))(\/[^"'?]+)(?=[?"'])/g,
           (match, prefix, _quote, asset) => { const target = assets[asset] || assets[previous.get(asset)]; return target ? `${prefix}${target}` : match; })
+          .replace(/<link rel="modulepreload" href="[^"]+" data-rwn-search-preload \/>\n?/g, "")
           .replace(/<meta name="rwn-offline-assets" content="[a-f0-9]{12}"\s*\/?>\s*/g, "")
           .replace("</head>", `<meta name="rwn-offline-assets" content="${manifestId}" />\n</head>`);
+        const preloads = new Set(offlineModuleEntries.filter(entry => html.includes(`src="${assets[entry]}?`) || html.includes(`src="${assets[entry]}"`)).flatMap(preloadsFor));
+        const links = [...preloads].map(url => `<link rel="modulepreload" href="${url.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}" data-rwn-search-preload />\n`).join('');
+        html = html.replace("</head>", links + "</head>");
         if (html !== original) await writeFile(path, html);
       }
     }

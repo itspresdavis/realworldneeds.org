@@ -44,9 +44,26 @@ test('byte-hashes cover the entire explicit public graph and optional postal ref
     const html = await readFile(join(root, '/directory/index.html'), 'utf8');
     assert.ok(html.includes(result.assets['/language.js']));
     assert.ok(html.includes(result.assets['/src/utils/search-intent-entry.js']));
+    const preloads = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)" data-rwn-search-preload \/>/g)].map(match => match[1]);
+    assert.deepEqual(preloads.sort(), ['search-intent-controls', 'search-intent', 'search'].map(name => result.assets[`/src/utils/${name}.js`] + '?v=abc').sort());
+    assert.equal(new Set(preloads).size, preloads.length);
+    assert.ok(preloads.every(url => !url.includes('postal-areas')), 'postal reference still requires a deliberate postal query');
     const again = await versionOfflineAssets(root);
     assert.deepEqual(again, result);
     assert.equal(await readFile(join(root, '/directory/index.html'), 'utf8'), html);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('preloads exclude unrelated pages and optional dynamic modules', async () => {
+  const { root, put } = await fixture();
+  try {
+    await put('/about/index.html', '<head><title>About RWN</title></head>');
+    await put('/src/utils/search.js', 'export const value = "before"; export const extra = () => import("./extra.js?v=abc");');
+    await put('/src/utils/extra.js', 'export const optional = true;');
+    const result = await versionOfflineAssets(root);
+    assert.ok(result.assets['/src/utils/extra.js'], 'the explicit cache graph still includes declared modules');
+    assert.ok(!(await readFile(join(root, '/directory/index.html'), 'utf8')).includes(`href="${result.assets['/src/utils/extra.js']}`));
+    assert.ok(!(await readFile(join(root, '/about/index.html'), 'utf8')).includes('modulepreload'));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

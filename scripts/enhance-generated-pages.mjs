@@ -220,10 +220,13 @@ const searchImport = 'import { normalizeSearch as normalize, querySearchTokens a
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
 const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n{\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}\n}`;
-// Keep the complete offline entry under its 16 KB ceiling, without
-// another runtime request. Terser uses its safe defaults (no unsafe transforms),
-// including declaration joining; rendered CI tests exercise the shipped bundle.
-const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow"] } });
+// Keep one complete offline entry, without another runtime request. A lexical
+// wrapper lets the compiler shorten repeated references to stable browser objects;
+// their mutable properties (history state, online status) are still read live.
+// Fetch and timers remain global so transport recovery/testing can replace them.
+// Terser keeps its safe transforms; real rendered/upgrade tests exercise this output.
+const scopedDirectoryBundle = `((document,window,navigator,history)=>{${directoryBundle}})(document,window,navigator,history);`;
+const { code: directoryCode } = await minify(scopedDirectoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow"] } });
 await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search
