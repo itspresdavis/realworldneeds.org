@@ -70,5 +70,5 @@ export function scheduleText(schedule, { locale = 'en', nextDay = 'next day', ex
   return [schedule.text, ...schedule.weekly.map(item => `${item.days.map(day).join(', ')} ${interval(item)}`), schedule.timeZone,
     schedule.validFrom || schedule.validThrough ? `${season}: ${schedule.validFrom || '…'}–${schedule.validThrough || '…'}` : '',
     schedule.exceptions?.length ? `${exceptions}: ${schedule.exceptions.map(item => `${item.date}: ${item.closed ? (language === 'es' ? 'cerrado' : 'closed') : item.intervals.map(interval).join(', ')}${item.note ? ` (${item.note})` : ''}`).join('; ')}` : ''
-  ].filter(Boolean).join('. ');
+  ].filter(Boolean).reduce((result, part) => `${result}${result ? /[.!?]$/.test(result) ? ' ' : '. ' : ''}${part}`, '');
 }

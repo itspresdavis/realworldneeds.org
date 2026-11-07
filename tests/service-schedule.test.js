@@ -64,3 +64,9 @@ test('partially structured hours never imply closure outside the known intervals
   value.exceptions = [{ date: '2026-11-07', closed: true }];
   assert.equal(state(value, '2026-11-07T15:00Z').state, 'scheduled-closed');
 });
+
+test('published narrative punctuation is preserved without doubled sentence stops', () => {
+  const text = scheduleText(schedule({ text: 'Weekday meals end at 5 p.m.' }));
+  assert.match(text, /5 p\.m\. Mon/);
+  assert.doesNotMatch(text, /\.\./);
+});
