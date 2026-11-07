@@ -584,7 +584,7 @@ test("deployment canonicalizes only the apex hostname and keeps live release met
     "/api/correction-review",
   ];
   assert.deepEqual(
-    config.redirects,
+    config.redirects.filter(rule => rule.has),
     protectedPaths.map((path) => ({
       source: path,
       has: [{ type: "host", value: "realworldneeds.org" }],

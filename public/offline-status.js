@@ -8,7 +8,7 @@ if (notice) {
   // The worker adds only this fixed marker to the response, never the cache.
   const cachedNavigation = document.querySelector('meta[name="rwn-offline-navigation"]');
   let navigationRecovery = Boolean(cachedNavigation);
-  let offline = false;
+  let offline = false, activePage = true;
   let networkOffline = false;
   let catalogCached = document.documentElement.dataset?.rwnCatalogCached === "true";
   let probeGeneration = 0;
@@ -77,6 +77,7 @@ if (notice) {
   };
 
   const enhanceSearchActions = async () => {
+    if (!activePage) return;
     for (const [link, { wrapper }] of fallbackRows) {
       if (wrapper.isConnected === false) fallbackRows.delete(link);
     }
@@ -174,7 +175,7 @@ if (notice) {
       link.toggleAttribute("aria-describedby", offline);
       if (offline) link.setAttribute("aria-describedby", notice.id);
       if (!meta) continue;
-      const base = meta.textContent.replace(/\s*·\s*reconnect for full details\s*$/i, "");
+      const base = (window.RWNLanguage?.originalText(meta) ?? meta.textContent).replace(/\s*·\s*reconnect for full details\s*$/i, "");
       const desired = offline ? `${base} · reconnect for full details` : base;
       setText(meta, desired);
     }
@@ -186,13 +187,14 @@ if (notice) {
 
     const count = document.querySelector("[data-directory-count]");
     if (count) {
-      const base = count.textContent.replace(/\s*·\s*offline copy\s*$/i, "");
+      const base = (window.RWNLanguage?.originalText(count) ?? count.textContent).replace(/\s*·\s*offline copy\s*$/i, "");
       const desired = offline && /matching listings/i.test(base) ? `${base} · offline copy` : base;
       setText(count, desired);
     }
   };
 
   const probe = (event) => {
+    if (!activePage) return;
     if (pendingProbe) return pendingProbe.promise;
     const generation = ++probeGeneration;
     // The first online retry can race actual network recovery. A healthy probe
@@ -313,9 +315,22 @@ if (notice) {
     setText(status, "Check your connection, then try again.");
     setOffline(true);
   });
+  window.addEventListener("pagehide", () => {
+    activePage = false;
+    enhancementGeneration += 1;
+    probeGeneration += 1;
+    catalog.retry();
+    pendingProbe?.cancel();
+    pendingProbe = undefined;
+    checking(false);
+  });
   // Recheck a restored cached document; another tab must not clear its warning.
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted && navigationRecovery) probe(event);
+    activePage = true;
+    if (event.persisted) {
+      if (navigationRecovery) probe(event);
+      enhanceSearchActions();
+    }
   });
   // Own visibility immediately, including while an initially offline probe hangs.
   setOffline(navigationRecovery || !navigator.onLine);

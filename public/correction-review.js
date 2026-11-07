@@ -1,7 +1,9 @@
+import { correctionText, correctionTextFor as setText, correctionLabelFor as setLabel, observeCorrectionLanguage } from "./correction-localization.js";
+import { appendCorrectionPublication } from "./correction-publication.js";
 import { CORRECTION_CATEGORIES, CORRECTION_STATUSES, MAX_CORRECTION_REASON } from "./correction-contract.js";
 import { correctionRequest } from "./correction-request.js";
 
-const statusLabels = { open: "Open", "in-review": "In review", ready: "Ready for catalog review", rejected: "No listing change needed", duplicate: "Duplicate report" };
+const statusLabels = { open: "Open", "in-review": "In review", ready: "Ready for catalog review", applied: "Catalog updated; awaiting release", resolved: "Public release verified", rejected: "No listing change needed", duplicate: "Duplicate report" };
 const validId = value => typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,159}$/.test(value);
 const secureUrl = value => {
   try {
@@ -18,26 +20,28 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
     if (className) element.className = className;
     return element;
   };
+  const uiNode = (tag, key, className, params = {}) => { const element = node(tag, null, className); const label = tag === "label" ? node("span") : element; setText(label, key, params); if (label !== element) element.append(label); return element; };
+  observeCorrectionLanguage(root);
   const link = (label, href) => {
-    const element = node("a", label);
+    const element = uiNode("a", label);
     element.href = href;
     element.rel = "noopener noreferrer";
     return element;
   };
   const api = (path, options = {}) => request(path, { ...options, privateRequest: true });
-  const heading = node("h2", "Listing correction review");
-  const explanation = node("p", "Reports are private review candidates. Decisions recorded here do not edit or publish a listing. Do not add personal case information.");
+  const heading = uiNode("h2", "Listing correction review");
+  const explanation = uiNode("p", "Reports are private review candidates. Decisions recorded here do not edit or publish a listing. Do not add personal case information.");
   const tools = node("div", null, "correction-review__tools");
-  const filterLabel = node("label", "Report status"), filter = node("select");
-  filter.setAttribute("aria-label", "Report status");
+  const filterLabel = uiNode("label", "Report status"), filter = node("select");
+  setLabel(filter, "Report status");
   for (const value of [...CORRECTION_STATUSES, "all"]) {
-    const option = node("option", statusLabels[value] || "All reports");
+    const option = uiNode("option", statusLabels[value] || "All reports");
     option.value = value;
     filter.append(option);
   }
   filter.value = "open";
   filterLabel.append(filter);
-  const refresh = node("button", "Refresh correction queue");
+  const refresh = uiNode("button", "Refresh correction queue");
   refresh.type = "button";
   tools.append(filterLabel, refresh);
   const status = node("p");
@@ -45,20 +49,28 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
   status.setAttribute("aria-live", "polite");
   const list = node("div", null, "correction-review__list");
   const pages = node("nav", null, "correction-review__pages");
-  pages.setAttribute("aria-label", "Correction report pages");
-  const previous = node("button", "Previous reports"), next = node("button", "Next reports"), pageLabel = node("span");
+  setLabel(pages, "Correction report pages");
+  const previous = uiNode("button", "Previous reports"), next = uiNode("button", "Next reports"), pageLabel = node("span");
   previous.type = next.type = "button";
   pages.append(previous, pageLabel, next);
   const detail = node("section", null, "correction-review__detail");
   detail.hidden = true;
   root.replaceChildren(heading, explanation, tools, status, list, pages, detail);
+  const queueStatusNodes = new Map();
+  const updateQueueStatus = report => {
+    const target = queueStatusNodes.get(report.id);
+    if (target) setText(target, "{status} · {priority}", {
+      status: statusLabels[report.status] || "Unknown status",
+      priority: ({ urgent: "Urgent", normal: "Normal", low: "Low" })[report.priority] || "Unknown status",
+    });
+  };
   let page = 0, sequence = 0, detailSequence = 0, loading = false, selectedId;
 
   const clearPrivate = () => {
     sequence += 1;
     detailSequence += 1;
     selectedId = undefined;
-    list.replaceChildren();
+    list.replaceChildren(); queueStatusNodes.clear();
     detail.replaceChildren();
     detail.hidden = true;
   };
@@ -69,36 +81,37 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
     else {
       root.hidden = false;
       tools.hidden = pages.hidden = true;
-      status.replaceChildren(node("span", "Your session has ended. "), link("Sign in to review corrections", "/join"));
+      status.replaceChildren(uiNode("span", "Your session has ended. "), link("Sign in to review corrections", "/join"));
     }
     return true;
   };
-  const inspect = async (id, { preserveDraft, focus = true } = {}) => {
+  const inspect = async (id, { preserveDraft, preserveCatalogDraft, focus = true } = {}) => {
     const current = ++detailSequence;
     selectedId = id;
     detail.hidden = false;
-    detail.replaceChildren(node("p", "Opening correction report…"));
+    detail.replaceChildren(uiNode("p", "Opening correction report…"));
     try {
       const { data } = await api(`/api/correction-review?id=${encodeURIComponent(id)}`);
       if (current !== detailSequence) return;
       if (!data.report || !Array.isArray(data.events)) throw new Error("Invalid report");
-      renderReport(data.report, data.events, preserveDraft, focus);
+      renderReport(data.report, data.events, preserveDraft, focus, data.currentCatalog, preserveCatalogDraft);
     } catch (error) {
       if (current !== detailSequence || denied(error)) return;
-      const retry = node("button", "Retry opening report");
+      const retry = uiNode("button", "Retry opening report");
       retry.type = "button";
-      retry.addEventListener("click", () => inspect(id, { preserveDraft }));
-      detail.replaceChildren(node("p", "This report could not be loaded. Please try again."), retry);
+      retry.addEventListener("click", () => inspect(id, { preserveDraft, preserveCatalogDraft }));
+      detail.replaceChildren(uiNode("p", "This report could not be loaded. Please try again."), retry);
     }
   };
-  function renderReport(report, events, draft, focus) {
+  function renderReport(report, events, draft, focus, currentCatalog, catalogDraft) {
+    const renderedSequence = detailSequence;
     detail.replaceChildren();
     const title = node("h3", report.listingName || report.resourceId);
     title.tabIndex = -1;
     title.id = "correction-detail-title";
     detail.setAttribute("aria-labelledby", title.id);
     detail.append(title);
-    if (validId(report.resourceId)) detail.append(link("Open public listing", `/service/${encodeURIComponent(report.resourceId)}`));
+    if (validId(report.resourceId)) detail.append(link("Open public listing", report.resourceId === "rwn-website" ? "/accessibility" : `/service/${encodeURIComponent(report.resourceId)}`));
     const source = secureUrl(report.sourceUrl);
     if (source) {
       const sourceLine = node("p"); sourceLine.append(link("Listing source at submission", source)); detail.append(sourceLine);
@@ -111,41 +124,48 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
       ["Listing source check at submission", report.lastChecked || "Not recorded"],
     ]) {
       const field = node("dd", value); factValues[label] = field;
-      facts.append(node("dt", label), field);
+      if (["Status", "Reported issue"].includes(label)) setText(field, value);
+      if (label === "Priority") setText(field, ({ urgent: "Urgent", normal: "Normal", low: "Low" })[value] || "Unknown status");
+      if (value === "Unassigned" || value === "Not recorded") setText(field, value);
+      facts.append(uiNode("dt", label), field);
     }
-    detail.append(facts, node("h4", "Submitted listing details"), node("p", report.note || "No additional detail supplied.", "correction-review__note"));
-    const form = node("form"), fields = node("fieldset"), legend = node("legend", "Record a review decision");
+    detail.append(facts, uiNode("h4", "Submitted listing details"), node("p", report.note || "No additional detail supplied.", "correction-review__note"));
+    for (const [label, value] of [["Proposed correction", report.proposedCorrection], ["Private reply email", report.replyContact]]) if (value) detail.append(uiNode("h4", label), node("p", value, "correction-review__note"));
+    const proposedSource = secureUrl(report.proposedSourceUrl);
+    if (proposedSource) detail.append(link("Submitted source", proposedSource));
+    detail.append(uiNode("p", "Original provider text is preserved."));
+    const form = node("form"), fields = node("fieldset"), legend = uiNode("legend", "Record a review decision");
     fields.append(legend);
     const controls = {};
     const select = (name, label, values, value) => {
-      const field = node("label", label), input = node("select");
+      const field = uiNode("label", label), input = node("select");
       input.name = name;
       for (const [key, text] of values) {
-        const option = node("option", text); option.value = key; input.append(option);
+        const option = uiNode("option", text); option.value = key; input.append(option);
       }
       input.value = value;
       field.append(input); fields.append(field); controls[name] = input;
     };
-    select("status", "Decision status", CORRECTION_STATUSES.map(value => [value, statusLabels[value]]), report.status);
+    select("status", "Decision status", CORRECTION_STATUSES.filter(value => !["applied", "resolved"].includes(value)).map(value => [value, statusLabels[value]]), report.status);
     select("priority", "Review priority", [["urgent", "Urgent"], ["normal", "Normal"], ["low", "Low"]], report.priority);
     select("assignment", "Assignment", [["keep", "Keep current assignment"], ["self", "Assign to me"], ["unassigned", "Leave unassigned"]], "keep");
     for (const [name, label, type, maxLength] of [["reason", "Reason and source findings", "textarea", MAX_CORRECTION_REASON], ["evidenceUrl", "Evidence URL (HTTPS)", "input", 2000]]) {
-      const field = node("label", label), input = node(type);
+      const field = uiNode("label", label), input = node(type);
       input.name = name; input.maxLength = maxLength;
       if (name === "reason") { input.required = true; input.minLength = 10; input.rows = 4; }
       else input.type = "url";
       field.append(input); fields.append(field); controls[name] = input;
     }
-    const guidance = node("p", "A ready, rejected or duplicate decision needs a source URL. Ready means evidence is sufficient for a separate catalog review; the public listing still needs an approved release.");
+    const guidance = uiNode("p", "A ready, rejected or duplicate decision needs a source URL. Ready means evidence is sufficient for a separate catalog review; the public listing still needs an approved release.");
     guidance.id = "correction-decision-guidance";
     controls.evidenceUrl.setAttribute("aria-describedby", guidance.id);
     fields.append(guidance);
     if (draft) for (const [key, value] of Object.entries(draft)) if (controls[key]) controls[key].value = value;
-    const save = node("button", "Save review decision", "primary-button"); save.type = "submit";
+    const save = uiNode("button", "Save review decision", "primary-button"); save.type = "submit";
     const result = node("p"); result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
-    const reload = node("button", "Reload report and keep my draft"); reload.type = "button"; reload.hidden = true;
+    const reload = uiNode("button", "Reload report and keep my draft"); reload.type = "button"; reload.hidden = true;
     let pending = false, conflict = false;
-    if (draft) result.textContent = "Latest report loaded. Your unsaved decision is retained; compare it with the current report before saving.";
+    if (draft) setText(result, "Latest report loaded. Your unsaved decision is retained; compare it with the current report before saving.");
     // Reloading retains the draft; saving again is a separate deliberate action.
     const collect = () => Object.fromEntries(Object.entries(controls).map(([key, element]) => [key, element.value.trim()]));
     reload.addEventListener("click", () => inspect(report.id, { preserveDraft: collect() }));
@@ -156,40 +176,59 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
       const values = collect();
       const needsEvidence = ["ready", "rejected", "duplicate"].includes(values.status);
       if (values.reason.length < 10 || values.reason.length > MAX_CORRECTION_REASON) {
-        result.textContent = `Write a reason between 10 and ${MAX_CORRECTION_REASON.toLocaleString()} characters.`;
+        setText(result, "Write a reason between 10 and {limit} characters.", { limit: MAX_CORRECTION_REASON.toLocaleString() });
         controls.reason.focus(); return;
       }
       if ((needsEvidence && !values.evidenceUrl) || (values.evidenceUrl && !secureUrl(values.evidenceUrl))) {
-        result.textContent = "Use a public HTTPS evidence URL without credentials.";
+        setText(result, "Use a public HTTPS evidence URL without credentials.");
         controls.evidenceUrl.focus(); return;
       }
-      pending = true; fields.disabled = true; save.setAttribute("aria-disabled", "true"); result.textContent = "Saving review decision…";
+      pending = true; fields.disabled = true; save.setAttribute("aria-disabled", "true"); setText(result, "Saving review decision…");
       const current = detailSequence;
       try {
         const { data } = await api("/api/correction-review", { method: "PATCH", body: { id: report.id, revision: report.revision, ...values } });
         if (current !== detailSequence) return;
         if (!data.report || data.report.id !== report.id || !Number.isInteger(data.report.revision) || data.report.revision <= report.revision) throw new Error("Save not confirmed");
-        report = data.report;
-        factValues.Status.textContent = statusLabels[report.status] || "Unknown";
-        factValues.Priority.textContent = report.priority;
-        factValues["Assigned reviewer account"].textContent = report.assignedTo || "Unassigned";
+        report = data.report; updateQueueStatus(report);
+        setText(factValues.Status, statusLabels[report.status] || "Unknown status");
+        setText(factValues.Priority, ({ urgent: "Urgent", normal: "Normal", low: "Low" })[report.priority] || "Unknown status");
+        if (report.assignedTo) { factValues["Assigned reviewer account"].removeAttribute("data-correction-message"); factValues["Assigned reviewer account"].textContent = report.assignedTo; }
+        else setText(factValues["Assigned reviewer account"], "Unassigned");
         controls.assignment.value = "keep";
         controls.reason.value = "";
-        result.textContent = "Review decision saved. No public listing was changed or published.";
+        setText(result, "Review decision saved. No public listing was changed or published.");
+        renderPublication();
       } catch (error) {
         if (current !== detailSequence || denied(error)) return;
         conflict = error.status === 409;
-        result.textContent = conflict ? "Another reviewer changed this report. Reload the latest report, compare it with your retained draft, and then save." : "The review decision could not be confirmed. Your draft is still here; try again.";
+        setText(result, conflict ? "Another reviewer changed this report. Reload the latest report, compare it with your retained draft, and then save." : "The review decision could not be confirmed. Your draft is still here; try again.");
         reload.hidden = !conflict;
       } finally {
         pending = false; fields.disabled = false; save.setAttribute("aria-disabled", String(conflict));
       }
     });
-    detail.append(form, node("h4", "Review history"));
-    if (!events.length) detail.append(node("p", "No review decisions recorded yet."));
+    if (!["applied", "resolved"].includes(report.status)) detail.append(form);
+    else detail.append(uiNode("p", "This report is linked to a catalog change. Review its publication status below."));
+    const publication = node("section");
+    const renderPublication = () => {
+      publication.replaceChildren();
+      appendCorrectionPublication(publication, { report, currentCatalog, request: async (...args) => {
+        try {
+          const response = await api(...args);
+          if (renderedSequence !== detailSequence || selectedId !== report.id) throw new Error("Superseded review action");
+          return response;
+        } catch (error) { denied(error); throw error; }
+      }, draft: catalogDraft,
+        onComplete: updated => { if (renderedSequence === detailSequence && selectedId === report.id) { updateQueueStatus(updated); inspect(report.id); } },
+        onReload: nextDraft => inspect(report.id, { preserveCatalogDraft: nextDraft }),
+      });
+    };
+    renderPublication(); detail.append(publication);
+    detail.append(uiNode("h4", "Review history"));
+    if (!events.length) detail.append(uiNode("p", "No review decisions recorded yet."));
     for (const event of events) {
       const entry = node("article", null, "correction-review__card");
-      entry.append(node("strong", `${statusLabels[event.status] || "Review"} · ${event.createdAt}`), node("p", event.reason, "correction-review__note"), node("p", `Reviewer account: ${event.actorId || "Unavailable"}`));
+      entry.append(uiNode("strong", "{status} · {date}", undefined, { status: statusLabels[event.status] || "Review", date: event.createdAt }), node("p", event.reason, "correction-review__note"), uiNode("p", "Reviewer account: {account}", undefined, { account: event.actorId || correctionText("Unavailable") }));
       const url = secureUrl(event.evidenceUrl);
       if (url) entry.append(link("Open review evidence", url));
       detail.append(entry);
@@ -201,27 +240,28 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
     loading = true;
     const current = ++sequence, selectedFilter = filter.value;
     refresh.setAttribute("aria-disabled", "true"); previous.disabled = next.disabled = true;
-    status.textContent = "Loading correction reports…";
+    setText(status, "Loading correction reports…");
     try {
       const { data } = await api(`/api/correction-review?page=${page}&status=${encodeURIComponent(filter.value)}`);
       if (current !== sequence) return;
       if (!Array.isArray(data.reports) || typeof data.hasMore !== "boolean") throw new Error("Invalid queue");
       root.hidden = false; tools.hidden = pages.hidden = false;
-      list.replaceChildren();
+      list.replaceChildren(); queueStatusNodes.clear();
       for (const report of data.reports) {
         const card = node("article", null, "correction-review__card");
-        card.append(node("h3", report.listingName || report.resourceId), node("p", CORRECTION_CATEGORIES.find(item => item.value === report.category)?.label || "Unrecognized issue"), node("p", `${statusLabels[report.status] || "Unknown status"} · ${report.priority} priority`));
-        const open = node("button", "Review correction"); open.type = "button";
-        open.setAttribute("aria-label", `Review correction for ${report.listingName || report.resourceId}`);
+        const currentStatus = node("p"); queueStatusNodes.set(report.id, currentStatus); updateQueueStatus(report);
+        card.append(node("h3", report.listingName || report.resourceId), uiNode("p", CORRECTION_CATEGORIES.find(item => item.value === report.category)?.label || "Unrecognized issue"), currentStatus);
+        const open = uiNode("button", "Review correction"); open.type = "button";
+        setLabel(open, "Review correction for {listing}", { listing: report.listingName || report.resourceId });
         open.addEventListener("click", () => inspect(report.id)); card.append(open); list.append(card);
       }
-      status.textContent = data.reports.length ? `${data.reports.length} correction reports on this page.` : "No correction reports match this status.";
-      pageLabel.textContent = `Page ${page + 1}`;
+      setText(status, data.reports.length ? "{count} correction reports on this page." : "No correction reports match this status.", { count: data.reports.length });
+      setText(pageLabel, "Page {page}", { page: page + 1 });
       previous.disabled = page === 0; next.disabled = !data.hasMore;
     } catch (error) {
       if (current !== sequence || denied(error)) return;
-      root.hidden = false; list.replaceChildren();
-      status.textContent = "The correction queue is unavailable. Use Refresh correction queue to try again.";
+      root.hidden = false; list.replaceChildren(); queueStatusNodes.clear();
+      setText(status, "The correction queue is unavailable. Use Refresh correction queue to try again.");
     } finally {
       loading = false; refresh.setAttribute("aria-disabled", "false");
       if (current === sequence && filter.value !== selectedFilter) { page = 0; load(); }

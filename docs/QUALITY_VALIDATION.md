@@ -8,8 +8,8 @@ The exact-source release selector requires every job below to complete successfu
 
 | Required check name | Workload | Job limit |
 | --- | --- | --- |
-| `test` | Locked installation, dependency audit, complete validation/build/tooling tests, native globe touch, service/directory QA, asset upgrade, Saved and chaos | 24 minutes |
-| `Native browser / offline and globe` | Independent locked installation/build, institutional interactions, deep globe, offline navigation, service actions and cache upgrade | 24 minutes |
+| `test` | Locked installation, dependency audit, complete validation/build/tooling tests, native globe touch, service/directory QA and asset upgrade | 24 minutes |
+| `Native browser / offline and globe` | Independent locked installation/build, Saved, chaos, institutional interactions, deep globe, offline navigation, service actions and cache upgrade | 24 minutes |
 | `PostgreSQL permission and migration tests` | Pinned disposable database fixture | 10 minutes |
 | `Cross-browser / chromium` | Locked Chromium journeys and accessibility | 20 minutes |
 | `Cross-browser / firefox` | Locked Firefox journeys and accessibility | 20 minutes |
@@ -18,6 +18,24 @@ The exact-source release selector requires every job below to complete successfu
 The two native jobs run independently. Run `42293453337` exhausted the former single job's 24-minute deadline near its final cache-upgrade script. Its service/Saved/chaos boundary was approximately 16 minutes 40 seconds after job start; the later printed journeys occupied about another 7 minutes 30 seconds. Splitting those existing workloads preserves every script, assertion and deadline. It does not classify the cancelled run as passing. The original full `npm run test:browser:qa` command remains unchanged for local validation; tooling tests check that both CI groups together run those same nine scripts exactly once and in order.
 
 Native evidence is retained for seven days in separate `rwn-visual-qa` and `rwn-native-offline-globe-qa` artifacts. Each job installs from the lockfile and uses the existing pinned actions. This configuration does not purchase capacity or alter account limits. It is a release-tool requirement, not a claim that account-level branch protection has been enabled; configure and verify all six check names where that enforcement is available.
+
+The expanded service/menu journeys remain in `test`; the existing Saved and chaos
+executables now begin the other native job. This balances the two workloads while
+preserving all nine browser executables, their combined order, both 24-minute
+deadlines and the same six required check names. The workflow-contract test
+compares the combined sequence with the unchanged full local command.
+
+Both native CI jobs use Chrome for Testing **157.0.8103.38**, the official stable
+version in the [November 6 channel metadata](https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json).
+The pinned setup action defaults to a changing Chromium snapshot when no version
+is supplied; explicit versions make native results repeatable. The reviewed
+Linux archive SHA-256 is
+`8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66`.
+An unchanged touch journey passed on this version before selection. The retained
+Chromium 159 cold-return failure is investigated independently; changing browser
+versions does not turn that failure into a pass. Review official release metadata
+and rerun the complete native gates when updating this version. Playwright's
+three engines remain tied to the dependency lockfile.
 
 ## Five mandatory local stages
 

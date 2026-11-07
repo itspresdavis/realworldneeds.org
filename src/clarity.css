@@ -48,7 +48,7 @@ max-width:17ch;margin:0;color:#f9f8ef;font-family:Georgia, "Times New Roman", se
 .rwn-professional .finder-intro p {
 max-width:31rem;margin:1.15rem 0 0;color:#c6d7cc;font-size:1rem;line-height:1.6;}
 .rwn-professional .finder-surface { container-type:inline-size;margin-top:1.6rem;padding:1.25rem;border:1px solid #e0e7df;border-radius:12px;background:#fffefb;color:var(--rwn-ink);box-shadow:0 12px 36px #061b1726;}
-.finder-search-label { display:block;margin-bottom:.6rem;color:var(--rwn-ink-strong);font-size:.875rem;font-weight:700;}
+.finder-search-label { display:block;margin-bottom:.4rem;color:var(--rwn-ink-strong);font-size:.875rem;font-weight:700;}
 .rwn-professional .finder-search { margin-top:0;}
 .rwn-professional .search-box {
 display:flex;min-height:56px;align-items:center;gap:.65rem;padding:0 .78rem 0 .9rem;border:1px solid #c5d0cc;border-radius:8px;background:#fff;color:#65757a;box-shadow:0 1px 2px rgba(8, 26, 34, .035);}
@@ -284,8 +284,8 @@ display:grid;grid-template-columns:minmax(13rem,1.3fr) repeat(3,minmax(10rem,.8f
 }
 @media (max-width:900px) {
 .rwn-professional .primary-nav { display:none;}
-.rwn-professional .site-menu { position:static;display:block;justify-self:end;}
-.rwn-professional .site-menu > summary { display:grid;width:44px;height:44px;place-items:center;list-style:none;cursor:pointer;}
+.rwn-professional .site-menu { position:static;display:block;justify-self:end;margin-left:auto;}
+.rwn-professional .site-menu > summary { display:grid;width:auto;min-width:44px;height:auto;min-height:44px;place-items:center;list-style:none;cursor:pointer;}
 .rwn-professional .site-menu > summary::-webkit-details-marker { display:none;}
 .rwn-professional .site-menu nav {
 position:absolute;top:calc(100% + .45rem);right:1rem;display:grid;width:min(17rem, calc(100% - 2rem));min-width:0;/* Reserve the full wrapped header and gaps. */
@@ -293,9 +293,7 @@ max-height:calc(100vh - 100% - .9rem);max-height:calc(100dvh - 100% - .9rem);ove
 .rwn-professional .site-menu nav a { min-height:44px;padding:.75rem .85rem;border-bottom:1px solid #edf0ef;color:var(--rwn-ink);font-size:.74rem;text-decoration:none;}
 .rwn-professional .site-menu nav a:last-child { border-bottom:0;}
 .rwn-professional .site-header { display:flex;flex-wrap:wrap;gap:.65rem;}
-.rwn-professional .site-header > .brand { flex:1 1 11rem;}
-.rwn-professional .site-menu { margin-left:auto;}
-.rwn-professional .site-menu > summary { width:auto;min-width:44px;height:auto;min-height:44px;}
+.rwn-professional .site-header > .brand { flex:1 1 0;}
 .rwn-professional :is(.brand,.brand__name) { min-width:0;}
 .rwn-professional .header-action { display:inline-flex;padding-inline:.7rem;}
 .rwn-professional .finder__grid,
@@ -318,10 +316,10 @@ max-height:calc(100vh - 100% - .9rem);max-height:calc(100dvh - 100% - .9rem);ove
 .rwn-professional .brand small { font-size:.59rem;}
 .rwn-professional .finder__grid,
 .rwn-professional .finder__grid.is-panel-collapsed,
-.rwn-professional .finder__grid:not(.is-panel-collapsed) { padding:1.15rem .8rem 1.5rem;gap:1rem;}
+.rwn-professional .finder__grid:not(.is-panel-collapsed) { padding:.55rem .8rem 1.5rem;gap:1rem;}
 .rwn-professional .finder-intro h1 { max-width:17ch;font-size:clamp(2rem,9.6vw,2.8rem);line-height:1.06;}
-.rwn-professional .finder-intro p { margin-top:.65rem;font-size:.9375rem;line-height:1.5;}
-.rwn-professional .finder-surface { margin-top:.85rem;padding:.8rem;}
+.rwn-professional .finder-intro p { margin-top:.35rem;font-size:.9375rem;line-height:1.5;}
+.rwn-professional .finder-surface { margin-top:.7rem;padding:.8rem;}
 .rwn-professional .globe-stage { height:27rem;border-radius:14px;}
 .rwn-professional .globe-meta { top:.65rem;right:.75rem;left:.75rem;}
 .rwn-professional .globe-meta__tools { margin-left:auto;}
@@ -404,8 +402,9 @@ grid-column:1 / -1;grid-row:auto;min-width:0;}
 .rwn-professional .resource-row__service > i { box-shadow:none;}
 .rwn-professional .resource-row__arrow { color:var(--rwn-green-dark);}
 @media (max-width:600px) {
-.rwn-professional .resource-row__reviewed { display:block; grid-column:1 / -1; grid-row:4;padding-left:1.2rem;font-size:.75rem;}
+.rwn-professional .resource-row__reviewed { display:block; grid-column:1 / -1; grid-row:5;padding-left:1.2rem;font-size:.75rem;}
 .rwn-professional .resource-row__reviewed::before { content:"Source checked ";}
+.rwn-professional:lang(es) .resource-row__reviewed::before { content:"Fuente consultada ";}
 .rwn-professional .results-tools { width:auto;}
 .rwn-professional .directory-tool { flex:0 1 auto;}
 .rwn-professional .finder-surface .location-status { font-size:.6875rem;}

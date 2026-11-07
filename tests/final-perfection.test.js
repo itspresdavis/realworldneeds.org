@@ -13,12 +13,12 @@ const [app, index, seo, pagesCss, refinement, professional] = await Promise.all(
 ]);
 
 test("preboot and initialized finder use one canonical task message and need order", () => {
-  assert.match(app, /<h1>Find essential services near you\.<\/h1>/);
+  assert.match(app, /<h1>Find help<\/h1>/);
   assert.match(app, /placeholder="Search by service or place"/);
-  assert.match(index, /<h1>Find essential services near you\.<\/h1>/);
-  assert.match(index, /Practical help, with contact details and sources you can check\./);
+  assert.match(index, /<h1>Find help<\/h1>/);
+  assert.match(index, /Free help\. Clear next steps\./);
   assert.match(refinement, /Search by service or place/);
-  assert.match(professional, /Practical help, with contact details and sources you can check\./);
+  assert.match(professional, /Free help\. Clear next steps\./);
   assert.match(index, /Food[\s\S]*Water[\s\S]*Shelter[\s\S]*Clothing[\s\S]*Hygiene[\s\S]*Health care/);
 });
 

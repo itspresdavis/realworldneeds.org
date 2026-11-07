@@ -12,6 +12,7 @@ import { sourceRegistry } from "../src/data/live-sources.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { resourceDescription } from "./resource-description.mjs";
 import { createThreeAssets, versionThreeReferences } from "./three-assets.mjs";
+import { summarizeCoverage } from "./coverage-report.mjs";
 
 // A page of 80 expanded records created a 34,000px scroll. Sixty compact
 // records keeps a browse page purposeful while whole-catalog search remains
@@ -48,6 +49,7 @@ for (const resource of resources) {
 const mapResources = resources.filter(hasMapCoordinates);
 const hasContactOnlyResources = resources.some(isContactOnly);
 const directCount = resources.filter((resource) => resource.kind === "direct").length;
+const coverageSummary = summarizeCoverage(resources);
 const coverageCount = new Set(resources.map((resource) => resource.country)).size;
 const latestReview = [...resources].sort((a, b) => b.lastChecked.localeCompare(a.lastChecked))[0]?.lastChecked;
 const auditedLiveCount = sourceRegistry.reduce((sum, source) => sum + (source.activeRecordsAtAudit || 0), 0);
@@ -285,7 +287,7 @@ function resourceSchema(resource, canonical) {
         name: resource.name,
         description: resourceDescription(resource),
         serviceType: aidLabels(resource),
-        areaServed: isContactOnly(resource) ? resource.coverageNote : resource.country,
+        ...(resource.kind !== "direct" && resource.coverageNote ? { areaServed: resource.coverageNote } : {}),
         ...(isContactOnly(resource) ? {
           availableChannel: {
             "@type": "ServiceChannel",
@@ -361,7 +363,7 @@ function resourcePage(resource) {
       <article class="directory-record" aria-labelledby="service-details-heading">
         <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl class="service-facts">
-          <div><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
+          <div${resource.serviceAccess ? ' data-service-location-facts' : ''}><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
           ${contactOnly ? `<div><dt>Coverage details</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
           ${phone}
           ${contactOnly && resource.phone ? `<div><dt>Phone dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}
@@ -373,11 +375,11 @@ function resourcePage(resource) {
           <div><dt>Help offered</dt><dd>${escapeHtml(aidLabels(resource).join(", "))}</dd></div>
         </dl>
         <h3>Services offered</h3>
-        <ul>${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
+        <ul data-provider-text lang="en">${resource.services.map((service) => `<li>${escapeHtml(service)}</li>`).join("")}</ul>
         <h3>Source and review</h3>
         <p class="service-source-review">This date records a review of the linked source, not a confirmation of current service availability.</p>
-        <p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
-        <p>${escapeHtml(resource.sourceDetail)}</p>
+        <p data-provider-text lang="en"><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)}</p>
+        <p data-provider-text lang="en">${escapeHtml(resource.sourceDetail)}</p>
         ${!contactOnly && resource.coordinateNote ? `<p class="service-coordinate-note">${escapeHtml(resource.coordinateNote)}</p>` : ""}
         <div class="directory-links"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Visit original source</a>${mapLinks}${accessLink}${globeLink}${correctionLink}</div>
       </article>
@@ -416,6 +418,7 @@ const transparencyTemplate = await readFile("public/transparency.html", "utf8");
 const transparencyHtml = transparencyTemplate
   .replaceAll("{{RESOURCE_COUNT}}", String(resources.length))
   .replaceAll("{{DIRECT_COUNT}}", String(directCount))
+  .replaceAll("{{PHYSICAL_COUNT}}", String(coverageSummary.uniquePhysicalAddresses))
   .replaceAll("{{COVERAGE_COUNT}}", String(coverageCount))
   .replaceAll("{{LATEST_REVIEW}}", latestReview);
 await writeFile("dist/transparency.html", transparencyHtml);
@@ -518,8 +521,8 @@ const csvRows = resources.map((resource) => [
   resource.sourceUrl
 ]);
 if (resources.some(resource => resource.serviceAccess)) {
-  csvFields.push("Service-specific access");
-  resources.forEach((resource, index) => csvRows[index].push(serviceAccessSummary(resource)));
+  csvFields.push("Service-specific access", "Service access contract (JSON)");
+  resources.forEach((resource, index) => csvRows[index].push(serviceAccessSummary(resource), resource.serviceAccess ? JSON.stringify(resource.serviceAccess) : ""));
 }
 // Preserve the legacy export shape until reviewed contact-only records are
 // present, then publish their access scope without discarding existing fields.
@@ -534,12 +537,14 @@ await writeFile("dist/directory.csv", `${directoryCsv}\n`);
 
 await mkdir("dist/data/resources/by-country", { recursive: true });
 await mkdir("dist/data/resources/by-category", { recursive: true });
-await writeFile("dist/data/resources.json", `${JSON.stringify({
+const catalogJson = `${JSON.stringify({
   schemaVersion: "1.4",
-  license: "Public service facts with source attribution; see https://www.realworldneeds.org/editorial-policy",
+  license: "No blanket dataset reuse license is asserted; consult source-specific notes at https://www.realworldneeds.org/sources",
   resourceCount: resources.length,
   resources
-}, null, 2)}\n`);
+}, null, 2)}\n`;
+await writeFile("dist/data/resources.json", catalogJson);
+const catalogSha256 = createHash("sha256").update(catalogJson).digest("hex");
 await writeFile("dist/data/map-index.json", `${JSON.stringify({
   schemaVersion: "1.0",
   resourceCount: mapResources.length,
@@ -566,7 +571,7 @@ await writeFile("dist/data/sources.json", `${JSON.stringify({
   note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
-await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, snapshotReviewedThrough: latestReview })}\n`);
+await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, catalogSha256, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, snapshotReviewedThrough: latestReview })}\n`);
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
 await writeFile("dist/sitemap.xml", sitemap);

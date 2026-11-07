@@ -3,7 +3,7 @@ import test from 'node:test';
 import { resources } from '../src/data/resources.js';
 import { resourceSearchScore as score, resourceSearchText, searchGeographyChoices, createIndexedSearchMatcher } from '../src/utils/search.js';
 const fixture = (values = {}) => ({ name: 'Community support', city: 'Boston', country: 'United States', category: 'food', kind: 'direct', address: '1 Main Street, Boston, MA 02111', ...values });
-const compact = (resource) => ({ id: resource.id, name: resource.name, place: `${resource.city}, ${resource.country}`, country: resource.country, category: resource.category, categories: [resource.category, ...(resource.secondaryCategories || [])], search: resourceSearchText(resource) });
+const compact = (resource) => ({ id: resource.id, name: resource.name, place: `${resource.city}, ${resource.country}`, country: resource.country, kind: resource.kind, category: resource.category, categories: [resource.category, ...(resource.secondaryCategories || [])], search: resourceSearchText(resource) });
 const both = [r => r, compact];
 const ranked = (items, query) => items.filter(r => score(r, query) >= 0).sort((a, b) => score(b, query) - score(a, query) || a.name.localeCompare(b.name));
 
@@ -88,8 +88,12 @@ test('published geography regressions and realistic queries agree across homepag
   assert.deepEqual(ranked(resources, 'Boston MA').map(r => r.id).sort(), ranked(resources, 'Boston Massachusetts').map(r => r.id).sort());
   assert.ok(ranked(resources, 'Boston MA').slice(0, 17).every(r => r.city === 'Boston' && r.country === 'United States'));
   assert.equal(ranked(resources, 'Boston UK')[0].city, 'Boston');
-  assert.equal(ranked(resources, 'Taunton MA')[0].id, 'ma-wic-tauntonattleboro-wic-program-main-clinic');
-  for (const query of ['Tijuana', 'Rosarito', 'Baby formula', 'Wheelchair']) assert.equal(ranked(resources, query).length, 0, 'absent catalog coverage remains honestly absent');
+  const taunton = ranked(resources, 'Taunton MA');
+  assert.ok(taunton.some(record => record.id === 'ma-wic-tauntonattleboro-wic-program-main-clinic'));
+  assert.ok(taunton.some(record => record.id === 'taunton-community-table-meals'));
+  assert.equal(ranked(resources, 'food Taunton MA')[0].id, 'taunton-community-table-meals', 'reviewed free walk-in meal service precedes eligible food benefits');
+  for (const [query,id] of [['Tijuana','imss-bienestar-tijuana-centro'],['Rosarito','imss-bienestar-rosarito-urbano']]) assert.ok(ranked(resources,query).some(record => record.id === id && record.category === 'health'), 'reviewed clinics are discoverable as health services');
+  for (const query of ['Tijuana shelter', 'Rosarito food', 'Baby formula', 'Wheelchair']) assert.equal(ranked(resources, query).length, 0, 'unverified needs remain honestly absent; health clinics do not become food or shelter coverage');
   assert.ok(ranked(resources, 'Boston food pantry').every(r => !r.id.startsWith('ma-wic')));
 });
 
@@ -117,4 +121,11 @@ test('compact state-code guard exactly preserves the documented unambiguous code
     // Feed literal tokens to isolate the guard from multilingual noise words.
     assert.equal(score(uk, [["gnome", "gnome"], [code, code]]) < 0, constrained.has(code), code);
   }
+});
+
+test('reviewed New York municipality aliases work in both natural-language and separate place queries',()=>{
+ for(const id of ['new-york-public-library-access','ny-wic-312-01','bowery-mission']){
+  const record=resources.find(resource=>resource.id===id);assert.ok(record,id);
+  for(const query of ['New York City','NYC']){assert.ok(score(record,query)>=0,`${id}: ${query}`);assert.equal(createIndexedSearchMatcher().score(compact(record),query),score(record,query));}
+ }
 });

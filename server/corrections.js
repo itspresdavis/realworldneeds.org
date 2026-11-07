@@ -11,7 +11,13 @@ import {
 } from "../public/correction-contract.js";
 
 const categories = new Set(CORRECTION_CATEGORIES.map(({ value }) => value));
-const listingIds = new Set(resources.map(({ id }) => id));
+const listingIds = new Set([...resources.map(({ id }) => id), "rwn-website"]);
+const listings = new Map(resources.map((record) => [record.id, record]));
+export function correctionContext(id) {
+  if (id === "rwn-website") return { name: "RWN website", services: [] };
+  const record = listings.get(id);
+  return record ? { name: record.name, services: (record.serviceAccess || []).map(route => ({ id: route.id, label: route.label })) } : null;
+}
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const plain = (value) =>
@@ -20,11 +26,11 @@ const plain = (value) =>
 const exactKeys = (value, keys) =>
   Object.keys(value).every((key) => keys.includes(key));
 
-export function correctionConfig() {
+export function correctionConfig({ requireEnabled = true } = {}) {
   const token = process.env.RWN_CORRECTIONS_INGEST_TOKEN;
   const approvalRef = process.env.RWN_CORRECTIONS_APPROVAL_REF;
   if (
-    process.env.RWN_CORRECTIONS_ENABLED !== "true" ||
+    (requireEnabled && process.env.RWN_CORRECTIONS_ENABLED !== "true") ||
     !/^[A-Za-z0-9_-]{43,128}$/.test(token || "") ||
     !/^[A-Za-z0-9][A-Za-z0-9._/-]{7,159}$/.test(approvalRef || "")
   )
@@ -40,6 +46,10 @@ export function validateCorrection(body) {
       "note",
       "submissionId",
       "website",
+      "serviceId",
+      "proposedCorrection",
+      "sourceUrl",
+      "replyContact",
     ]) ||
     typeof body.resourceId !== "string" ||
     !listingIds.has(body.resourceId)
@@ -47,6 +57,8 @@ export function validateCorrection(body) {
     return "Choose a published RWN listing.";
   if (body.website !== undefined && body.website !== "")
     return "Check the correction form and try again.";
+  if ((body.resourceId === "rwn-website") !== (body.category === "accessibility"))
+    return "Choose the matching listing or website accessibility issue.";
   if (!categories.has(body.category))
     return "Choose one of the listed correction categories.";
   if (!uuid.test(body.submissionId || ""))
@@ -56,6 +68,40 @@ export function validateCorrection(body) {
     (!plain(body.note) || body.note.length > MAX_CORRECTION_NOTE)
   )
     return "Keep the optional note within 1,000 characters and use plain text.";
+  if (body.serviceId && !listings.get(body.resourceId)?.serviceAccess?.some(route => route.id === body.serviceId))
+    return "Choose a service listed for this provider.";
+  for (const key of ["serviceId", "proposedCorrection", "sourceUrl", "replyContact"])
+    if (body[key] !== undefined && (!plain(body[key]) || body[key].length > ({ serviceId: 80, proposedCorrection: 1000, sourceUrl: 2048, replyContact: 254 }[key])))
+      return "Check the optional correction fields and their length.";
+  if (body.sourceUrl && !correctionSourceUrl(body.sourceUrl))
+    return "Use an HTTPS source URL without credentials.";
+  if (body.replyContact && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(body.replyContact))
+    return "Use an email address for the optional reply contact.";
+  return null;
+}
+
+export function correctionSourceUrl(value) {
+  try {
+    const url = new URL(value);
+    return typeof value === "string" && value.length <= 2048 && !/[\\\s\u0000-\u001f\u007f]/.test(value)
+      && url.protocol === "https:" && !url.username && !url.password;
+  } catch { return false; }
+}
+
+export function validateCorrectionAction(body) {
+  if (!body || !["apply", "resolve"].includes(body.action) || !uuid.test(body.id || "") || !Number.isSafeInteger(body.revision) || body.revision < 1)
+    return "Reopen the report before continuing.";
+  const keys = body.action === "apply" ? ["action", "id", "revision", "catalogUpdatedAt", "changes", "reason", "evidenceUrl"] : ["action", "id", "revision"];
+  if (!exactKeys(body, keys)) return "Use the supported correction action fields.";
+  if (body.action === "resolve") return null;
+  if (typeof body.catalogUpdatedAt !== "string" || !Number.isFinite(Date.parse(body.catalogUpdatedAt)) || !plain(body.reason) || body.reason.trim().length < 10 || body.reason.length > 1000 || !correctionSourceUrl(body.evidenceUrl))
+    return "Include the current catalog revision, a review reason and an HTTPS evidence source.";
+  if (!body.changes || Array.isArray(body.changes) || typeof body.changes !== "object" || !Object.keys(body.changes).length)
+    return "Enter at least one independently verified catalog change.";
+  for (const [field, value] of Object.entries(body.changes)) {
+    if (!["summary", "hours", "phone", "eligibility"].includes(field) || !plain(value) || !value.trim() || value.length > (["summary", "eligibility"].includes(field) ? 2000 : 1000))
+      return "This workflow accepts verified summary, hours, phone or eligibility text. Use the full catalog review for service routes and other fields.";
+  }
   return null;
 }
 
@@ -76,7 +122,7 @@ export function validateDecision(body) {
   )
     return "Reopen the report before saving.";
   if (
-    !CORRECTION_STATUSES.includes(body.status) ||
+    !CORRECTION_STATUSES.includes(body.status) || ["applied", "resolved"].includes(body.status) ||
     !["urgent", "normal", "low"].includes(body.priority) ||
     !["keep", "self", "unassigned"].includes(body.assignment)
   )

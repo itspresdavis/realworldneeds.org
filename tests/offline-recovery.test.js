@@ -471,3 +471,20 @@ for (const [label, response] of [
   assert.deepEqual(f.recovered, []);
   assert.equal(f.timers.size, 0);
 });
+
+test("pagehide cancels a connectivity probe without allowing late results or new hidden work", async () => {
+  const old = deferred();
+  const f = fixture([old.promise, ok]);
+  f.windowListeners.get("pagehide")(); await flush();
+  assert.equal(f.calls[0].options.signal.aborted, true);
+  assert.equal(f.timers.size, 0);
+  f.online(); f.mutate(); await flush();
+  assert.equal(f.calls.length, 1);
+  old.resolve({ ok: false, status: 503 }); await flush();
+  assert.equal(f.notice.dataset.networkState, "online", "late failure cannot replace the suspended view");
+  f.windowListeners.get("pageshow")({ persisted: true });
+  await f.online(); await flush();
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.notice.dataset.networkState, "online");
+  assert.equal(f.retry.getAttribute("aria-disabled"), "false");
+});

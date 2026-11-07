@@ -20,7 +20,7 @@ export function directoryWicFixture(shown, category = "Food", catalog = resource
 // This deliberately uses the raw country/city/category facts rather than the
 // shared locality builder or a generated scope/UI result as its own oracle.
 export function newYorkCatalogFixtures(catalog = resources) {
-  const city = catalog.filter(record => record.country === "United States" && record.city === "New York");
+  const city = catalog.filter(record => record.country === "United States" && ["New York", "New York City"].includes(record.city));
   const ids = records => records.map(record => record.id).sort();
   return {
     city: ids(city),

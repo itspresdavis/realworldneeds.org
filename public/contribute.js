@@ -31,6 +31,12 @@ function node(tag, text, className) {
   if (className) el.className = className;
   return el;
 }
+function providerNode(tag, value) {
+  const element = node(tag, value);
+  element.dataset.providerText = "";
+  element.lang = "und";
+  return element;
+}
 function safeLink(label, href) {
   const a = node("a", label);
   try {
@@ -142,7 +148,7 @@ if (document.body.dataset.page === "workspace") {
       const r = data.location.record;
       panel.replaceChildren(
         node("p", "Database record", "eyebrow"),
-        node("h2", r.name),
+        providerNode("h2", r.name),
       );
       const links = node("div", null, "card-links");
       links.append(safeLink("Original source ↗", r.sourceUrl));
@@ -297,11 +303,11 @@ if (document.body.dataset.page === "workspace") {
         panel.append(node("h3", "Change history"));
         for (const change of data.history) {
           const entry = node("details");
+          const heading = node("summary"), changedAt = node("time", new Date(change.changed_at).toLocaleString());
+          changedAt.dateTime = change.changed_at;
+          heading.append(providerNode("span", change.operation), document.createTextNode(" · "), changedAt);
           entry.append(
-            node(
-              "summary",
-              `${change.operation} · ${new Date(change.changed_at).toLocaleString()}`,
-            ),
+            heading,
             node(
               "pre",
               JSON.stringify(
@@ -341,8 +347,8 @@ if (document.body.dataset.page === "workspace") {
               : "Coverage / resource finder",
             "kind",
           ),
-          node("h2", r.name),
-          node("p", r.country),
+          providerNode("h2", r.name),
+          providerNode("p", r.country),
         );
         const facts = node("dl");
         facts.append(
@@ -377,6 +383,8 @@ if (document.body.dataset.page === "workspace") {
         review.addEventListener("click", () => {
           $("#reviewForm").elements.locationId.value = r.id;
           $("#reviewSelection").textContent = r.name;
+          $("#reviewSelection").dataset.providerText = "";
+          $("#reviewSelection").lang = "und";
           $("#reviewNote").disabled = false;
           $("#reviewSubmit").disabled = false;
           $("#reviewStatus").textContent = "";
@@ -405,8 +413,8 @@ if (document.body.dataset.page === "workspace") {
         const date = node("time", new Date(review.created_at).toLocaleString());
         date.dateTime = review.created_at;
         row.append(
-          node("strong", review.location_id),
-          node("p", review.note),
+          providerNode("strong", review.location_id),
+          providerNode("p", review.note),
           date,
         );
         history.append(row);

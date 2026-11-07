@@ -44,7 +44,7 @@ test("contact-only validation rejects coordinate fabrication, missing scope and 
 test("mapped records require valid coordinates and contact-only records never invent map positions", () => {
   for (const record of resources) {
     assert.equal(validateResourceLocation(record), null, record.id);
-    assert.equal(hasMapCoordinates(record), !isContactOnly(record), record.id);
+    assert.equal(hasMapCoordinates(record), !isContactOnly(record) && record.locationPrecision !== 'address', record.id);
   }
   for (const changes of [{ lat: null }, { lng: undefined }, { lat: "0" }, { lat: Infinity }, { lng: -181 }])
     assert.ok(validateResourceLocation({ ...resources[0], ...changes }));
@@ -138,7 +138,7 @@ test("legacy offline result enhancement retains contact websites, eligibility an
   link.before = element => { wrapper = element; };
   const context = vm.createContext({
     document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [indexed] }),
-    resultId: () => indexed.id, setOffline() {}, networkOffline: true,
+    resultId: () => indexed.id, setOffline() {}, networkOffline: true, activePage: true,
   });
   vm.runInContext(`${body}\nglobalThis.enhance = enhanceSearchActions;`, context);
   await context.enhance();
@@ -183,7 +183,7 @@ test("copied listing facts retain the actual online access URL, not only its but
   const context = vm.createContext({
     title: route.name, place: route.country, listingUrl: "https://www.realworldneeds.org/service/example", officialSource: "https://example.org/source",
     document: {
-      querySelectorAll: () => [{ querySelector: selector => selector === "dt" ? { textContent: "Online access" } : selector === "dd" ? { textContent: "Get help online" } : { href: route.accessUrl } }],
+      querySelectorAll: selector => selector.includes('[data-service-route]') ? [] : [{ querySelector: selector => selector === "dt" ? { textContent: "Online access" } : selector === "dd" ? { textContent: "Get help online" } : { href: route.accessUrl }, querySelectorAll: () => [{ href: route.accessUrl }] }],
       querySelector: selector => selector === "#service" ? { dataset: { locationPrecision: "contact-only" } } : null,
     },
   });

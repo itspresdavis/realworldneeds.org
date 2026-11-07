@@ -1,3 +1,5 @@
+import { resourceScope } from "../src/utils/resource-scope.js";
+import { postalAreas } from "../src/data/generated/postal-areas.js";
 import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { serviceActions, serviceAccessSummary } from "../src/utils/service-access.js";
 import { isContactOnly, contactOnlyNotice } from "../src/utils/resource-location.js";
@@ -66,10 +68,10 @@ const records = resources.map((resource, index) => {
     name: resource.name,
     place,
     country: resource.country,
-    category: resource.category,
     categories: types,
     categoryLabels: labels,
     kind: resource.kind,
+    ...(resource.kind !== "direct" ? { coverageScope: resourceScope(resource).type } : {}),
     ...(resource.phone ? { phone: resource.phone } : {}),
     phoneLinks: phoneLinks(resource.phone),
     lat: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
@@ -97,3 +99,7 @@ await writeFile("dist/data/search-index.json", `${JSON.stringify({
   records,
   scopes
 })}\n`);
+
+// Postal reference is optional and fetched only after postal input, never as a
+// provider lookup. The offline versioner addresses these exact bytes separately.
+await writeFile("dist/data/postal-areas.json", `${JSON.stringify({schemaVersion: "1.0", source: "US Census 2025 Gazetteer ZCTA", areas: postalAreas})}\n`);

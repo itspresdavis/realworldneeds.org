@@ -60,7 +60,7 @@ export async function verifyMenuReflow({ client, host, navigate, evaluate, captu
     if (!dismissed.closed || !dismissed.summaryFocused) throw new Error(`Escape focus changed at ${width}x${height}`);
 
     await openMenu();
-    // Reset the scroll fixture so a native wheel gesture must expose Contribute.
+    // Reset the scroll fixture so a native wheel gesture must expose Get involved.
     const point = await evaluate(client, `(() => {
       const nav = document.querySelector('.site-menu nav');
       nav.scrollTop = 0;
@@ -77,7 +77,7 @@ export async function verifyMenuReflow({ client, host, navigate, evaluate, captu
       return { x, y, scrollTop: nav.scrollTop, visible: box.top >= nav.getBoundingClientRect().top && box.bottom <= innerHeight,
         hit: document.elementFromPoint(x, y) === link, text: link.textContent.trim() };
     })()`);
-    if (!pointer.visible || !pointer.hit || pointer.text !== 'Contribute' || (bounds.scrollable && pointer.scrollTop <= 0)) throw new Error(`Pointer cannot reach final link at ${width}x${height}: ${JSON.stringify(pointer)}`);
+    if (!pointer.visible || !pointer.hit || pointer.text !== 'Get involved' || (bounds.scrollable && pointer.scrollTop <= 0)) throw new Error(`Pointer cannot reach final link at ${width}x${height}: ${JSON.stringify(pointer)}`);
     await capture(client, `menu-pointer-${width}x${height}.png`);
     const loaded = new Promise((resolve) => {
       const off = client.on('Page.loadEventFired', () => { off(); resolve(); });
@@ -85,9 +85,9 @@ export async function verifyMenuReflow({ client, host, navigate, evaluate, captu
     });
     await click({ x: pointer.x, y: pointer.y });
     await loaded;
-    const reachedJoin = await evaluate(client, `location.pathname === '/join' || location.pathname === '/join.html'`);
-    if (!reachedJoin) throw new Error(`Contribute pointer navigation failed at ${width}x${height}`);
-    cases.push({ width, height, bounds, focus, pointer, reachedJoin });
+    const reachedParticipation = await evaluate(client, `location.pathname === '/get-involved' || location.pathname === '/get-involved/'`);
+    if (!reachedParticipation) throw new Error(`Get involved pointer navigation failed at ${width}x${height}`);
+    cases.push({ width, height, bounds, focus, pointer, reachedParticipation });
   }
   console.log(`Menu viewport QA passed: ${JSON.stringify(cases)}`);
   return cases;

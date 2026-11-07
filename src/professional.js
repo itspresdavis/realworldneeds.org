@@ -16,9 +16,9 @@ function rewriteNavigation() {
   const links = `
     <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
     <a href="/directory">Directory</a>
-    <a href="/editorial-policy">How listings are checked</a>
+    <a href="/about">About RWN</a>
     <a href="/sources">Sources</a>
-    <a href="/join">Contribute</a>
+    <a href="/get-involved">Get involved</a>
   `;
   if (desktop) desktop.innerHTML = links;
   if (mobile) mobile.innerHTML = links;
@@ -49,10 +49,10 @@ function rewriteBrandText() {
 }
 
 function rewriteFinderCopy() {
-  setText(".finder-intro h1", "Find essential services near you.");
+  setText(".finder-intro h1", "Find help");
   setText(
     ".finder-intro p",
-    "Practical help, with contact details and sources you can check."
+    "Free help. Clear next steps."
   );
 
   const status = document.getElementById("locationStatus");
@@ -65,10 +65,13 @@ function rewriteFinderCopy() {
   if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Read how location works</a>.`;
 
   const safety = document.querySelector(".finder-safety");
-  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not an emergency service.`;
+  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. This directory is not an emergency service.`;
 }
 
 function rewriteMethodSections() {
+  // These authored explanations remain English until a reviewed translation is
+  // supplied. Translated navigation and labels declare their own language.
+  document.querySelectorAll('.about-rwn, .source-band').forEach(section => { section.lang = 'en'; });
   setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
   setText(
     ".about-rwn__heading p",
@@ -124,7 +127,7 @@ function simplifyStructure() {
   if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/about">About RWN</a><a href="/our-work">Our work</a><a href="/get-involved">Get involved</a><a href="/contact">Contact</a><a href="/editorial-policy">How listings are checked</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {

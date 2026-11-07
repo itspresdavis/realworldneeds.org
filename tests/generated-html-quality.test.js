@@ -30,7 +30,7 @@ test("every generated HTML document keeps a clean crawl/index structure", async 
     const html = await readFile(file, "utf8");
     const isNotFound = file.endsWith("/404.html") || file.endsWith("\\404.html") || file === "dist/404.html";
     const reviewedNoticeId = reviewedNoticeIds.find((id) => file === join("dist", "service", id, "index.html"));
-    const titles = captures(html, /<title>([\s\S]*?)<\/title>/gi);
+    const titles = captures(html, /<title\b[^>]*>([\s\S]*?)<\/title>/gi);
     const canonicals = captures(html, /<link\b[^>]*\brel=["']canonical["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi);
     const h1s = captures(html, /<h1\b[^>]*>([\s\S]*?)<\/h1>/gi);
     const ids = captures(html, /\bid=["']([^"']+)["']/gi);

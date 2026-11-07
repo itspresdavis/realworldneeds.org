@@ -1,5 +1,6 @@
 import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
+import { serviceActions } from "../src/utils/service-access.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
@@ -64,8 +65,9 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   const byId = new Map(resources.map(resource => [resource.id, resource]));
   for (const record of searchIndex.records) {
     const resource = byId.get(record.id);
-    const expected = ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
+    const expected = ["categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
     if (resource.phone) expected.push("phone");
+    if (resource.kind !== "direct") expected.push("coverageScope");
     if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");
     if (sourceClosureNotice(resource)) expected.push("sourceStatus");
     if (resource.locationPrecision === "contact-only") {
@@ -74,8 +76,9 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
       if (resource.accessUrl) expected.push("accessUrl");
     }
     assert.deepEqual(Object.keys(record).sort(), expected.sort());
+    assert.deepEqual(record.categories, [resource.category, ...(resource.secondaryCategories || [])], "compact category order retains the authoritative primary need");
     if (resource.serviceAccess) {
-      assert.equal(record.serviceActions.length, resource.serviceAccess.length);
+      assert.deepEqual(record.serviceActions, serviceActions(resource).map(({ label, href, kind }) => ({ label, href, kind })), "every verified destination and contact survives compact export; one route may have several actions");
       assert.ok(record.serviceAccessSummary.includes(resource.serviceAccess[0].label));
       for (const action of record.serviceActions) assert.deepEqual(Object.keys(action).sort(), ["href", "kind", "label"]);
     }
@@ -92,7 +95,8 @@ test("service pages add crawlable related-help links and source-backed accessibi
   const sample = resources.find((resource) => resource.id === "bowery-mission") || resources[0];
   const html = await text(`dist/service/${sample.id}/index.html`);
   assert.match(html, /class="related-services"/);
-  assert.match(html, /Other help near|Related help in|Related essential services/);
+  assert.match(html, /Related help and wider finders/);
+  assert.match(html, /Service areas and eligibility vary/);
   const relatedLinks = html.match(/href="\/service\//g) || [];
   assert.ok(relatedLinks.length >= 2, "service page should link to at least one other permanent service page");
 

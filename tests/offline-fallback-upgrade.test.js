@@ -20,7 +20,7 @@ for (const outcome of ['success', 'failure']) {
       document: { querySelectorAll: () => [link], createElement() { throw new Error('Withdrawn actions must not render'); } },
       catalog: () => ++requests === 1 ? old.promise : Promise.resolve({ records: [] }),
       resultId: () => 'withdrawn', catalogUnavailable: false,
-      networkOffline: false, setOffline() {}, status: {},
+      networkOffline: false, activePage: true, setOffline() {}, status: {},
       unavailableMessage: 'Unavailable', setText(node, value) { node.textContent = value; },
     });
     vm.runInContext(`${body}\nglobalThis.enhance = enhanceSearchActions; globalThis.invalidate = invalidateFallback;`, context);
@@ -41,7 +41,7 @@ test('fallback releases detached owned rows before another search or upgrade', a
   const context = vm.createContext({
     document: { querySelectorAll: () => [] },
     catalog() { throw new Error('An empty result list must not request a catalog'); },
-    networkOffline: false, setOffline() {},
+    networkOffline: false, activePage: true, setOffline() {},
   });
   vm.runInContext(`${body}
     fallbackRows.set({}, { wrapper: { isConnected: false, replaceWith() { throw new Error("Detached rows must be released"); } }, extras: [] });

@@ -11,6 +11,7 @@ import { formatResourcePlace } from "../src/utils/geo.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { sourceClosureNotice, sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
+import { summarizeCoverage } from '../scripts/coverage-report.mjs';
 
 const flagged = resources.filter(sourceClosureNotice);
 const closed = flagged[0];
@@ -75,7 +76,7 @@ async function renderService(fixture, platform = platformStatus) {
     fixture, resources: [fixture], categories, sourceRegistry: [], serviceActions, serviceAccessSummary, validateServiceAccess,
     freeAccessLabel, freeAccessModels, formatResourcePlace, phoneLinks, phoneMarkup,
     isContactOnly, hasMapCoordinates, contactOnlyNotice,
-    sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription
+    sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription, summarizeCoverage
   });
 }
 
@@ -105,6 +106,15 @@ test("listing correction links stay closed by default and prefill only public id
   assert.equal(links.length, 1);
   const url = new URL(links[0][1], "https://www.realworldneeds.org");
   assert.deepEqual([...url.searchParams], [["resourceId", fixture.id]]);
+});
+
+test('structured data does not turn a physical site country into a promised national catchment', async () => {
+  const physical = { ...closed, kind: 'direct', country: 'United States', city: 'Example City', coverageNote: undefined };
+  const service = graph(await renderService(physical)).find(entry => entry['@type'] === 'Service');
+  assert.equal(Object.hasOwn(service, 'areaServed'), false, 'an operating location does not establish who is eligible across the country');
+  const contact = { ...physical, kind: 'locator', locationPrecision: 'contact-only', lat: null, lng: null, coverageNote: 'Residents of Massachusetts only; check provider eligibility.', accessUrl: 'https://example.org/intake', phone: '', phoneAccess: '' };
+  const remote = graph(await renderService(contact)).find(entry => entry['@type'] === 'Service');
+  assert.equal(remote.areaServed, contact.coverageNote, 'explicit reviewed coverage remains intact');
 });
 
 test("every source-flagged final page carries the full warning in search, share and schema descriptions", async () => {

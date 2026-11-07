@@ -61,7 +61,7 @@ const escapeAttribute = (value) => String(value || "")
 const escapeHtml = (value) => escapeAttribute(value).replaceAll("'", "&#39;");
 
 function titleFrom(html) {
-  return decodeEntities(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() || "Real World Needs");
+  return decodeEntities(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() || "Real World Needs");
 }
 
 function descriptionFrom(html) {
@@ -117,6 +117,7 @@ function navKey(path) {
   if (path === "/editorial-policy") return "checks";
   if (path === "/sources") return "sources";
   if (path === "/transparency") return "transparency";
+  if (["/about", "/our-work", "/get-involved", "/contact"].includes(path)) return "about";
   return path === "/" ? "find" : null;
 }
 
@@ -126,6 +127,7 @@ function navigationLinks(path) {
     ["find", "/", "Find help"],
     ["directory", "/directory", "Directory"],
     ["saved", "/directory#saved", "Saved"],
+    ["about", "/about", "About RWN"],
     ["checks", "/editorial-policy", "How listings are checked"],
     ["sources", "/sources", "Sources"],
     ["transparency", "/transparency", "Transparency"]
@@ -146,8 +148,8 @@ function unifiedFooter() {
   return `<footer class="legal-footer rwn-unified-footer">
     <p><strong>Real World Needs</strong><br />Essential services directory</p>
     <nav aria-label="Footer find help"><strong>Find help</strong><a href="/">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a></nav>
-    <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a></nav>
-    <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav>
+    <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/about">About RWN</a><a href="/our-work">Our work</a><a href="/get-involved">Get involved</a><a href="/contact">Contact and help</a><a href="/transparency">Transparency</a></nav>
+    <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a></nav>
     <nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse by need</strong><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Water</a></nav>
   </footer>`;
 }

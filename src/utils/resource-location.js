@@ -7,7 +7,7 @@ export function isContactOnly(resource) {
 }
 
 export function hasMapCoordinates(resource) {
-  return Boolean(resource && !isContactOnly(resource)
+  return Boolean(resource && !isContactOnly(resource) && resource.locationPrecision !== 'address'
     && Number.isFinite(resource.lat) && Math.abs(resource.lat) <= 90
     && Number.isFinite(resource.lng) && Math.abs(resource.lng) <= 180);
 }
@@ -20,8 +20,15 @@ export function contactOnlyNotice(resource) {
 
 export function validateResourceLocation(resource) {
   if (!resource || typeof resource !== "object") return "A resource is required.";
-  if (resource.locationPrecision && !["exact", "coverage", "contact-only"].includes(resource.locationPrecision))
+  if (resource.locationPrecision && !["exact", "address", "coverage", "contact-only"].includes(resource.locationPrecision))
     return "Unknown location precision.";
+  if (resource.locationPrecision === 'address') {
+    if (resource.kind !== 'direct' || resource.lat != null || resource.lng != null) return 'Address-only physical sites must be direct services without coordinates.';
+    for (const field of ['city', 'country', 'address']) if (typeof resource[field] !== 'string' || !resource[field].trim() || /[\u0000-\u001f\u007f]/.test(resource[field])) return 'Address-only sites need a reviewed city, country and complete operating address.';
+    if (resource.address.length < 8 || !resource.address.includes(',') || /^https?:|\bP\.?\s*O\.?\s*Box\b/i.test(resource.address)) return 'Address-only sites need a complete operating address, not a mailing destination.';
+    if (!Array.isArray(resource.serviceAccess) || !resource.serviceAccess.some(route => ['walk-in', 'intake'].includes(route?.mode) && route.address === resource.address)) return 'Address-only sites need an explicit source-backed physical service route for their operating address.';
+    return null;
+  }
   if (!isContactOnly(resource)) {
     if (!hasMapCoordinates(resource)) return "Coordinates must be finite numbers within their valid range.";
     if (!String(resource.city || "").trim()) return "A mapped listing requires a city or coverage place.";

@@ -33,7 +33,7 @@ test("availability failure offers an intentional retry and prefills only listing
   assert.equal(f.get("form").hidden, false); assert.equal(f.get("note").value, "");
   assert.equal(f.get("listing-id").textContent, "bowery-mission");
   assert.equal(f.get("listing-link").href, "/service/bowery-mission");
-  assert.deepEqual(f.get("category").children.map(option => option.value), CORRECTION_CATEGORIES.map(item => item.value));
+  assert.deepEqual(f.get("category").children.map(option => option.value), CORRECTION_CATEGORIES.filter(item => item.value !== "accessibility").map(item => item.value));
 });
 test("failed storage and duplicate clicks preserve payload identity until a confirmed durable receipt", async () => {
   const pending = deferred(), calls = [];
@@ -87,4 +87,21 @@ for (const stage of ["headers", "body"]) test(`transport bounds stalled ${stage}
     return stage === "headers" ? new Promise(() => {}) : { ok: true, status: 201, json: () => new Promise(() => {}) };
   } }));
   assert.equal(signal.aborted, true);
+});
+
+test('service context and optional private details survive a failed retry and clear only after confirmation', async () => {
+  const calls = []; let attempt = 0;
+  const f = fixture(async (path, options) => {
+    if (!options) return { data: { enabled: true, context: { name: 'Source-backed listing', services: [{ id: 'meals', label: 'Meal service' }] } } };
+    calls.push(options.body); if (++attempt === 1) throw { status: 503 }; return { status: 201, data: { ok: true } };
+  }, '?resourceId=bowery-mission&serviceId=meals&replyContact=not-prefilled@example.invalid');
+  await flush(); assert.equal(f.get('service').value, 'meals'); assert.equal(f.get('reply').value, '');
+  f.get('category').value = 'wrong-hours'; f.get('proposal').value = 'Check the afternoon session.'; f.get('source').value = 'https://www.bowery.org/get-help/'; f.get('reply').value = 'synthetic@example.invalid';
+  await f.get('form').dispatch('submit'); assert.equal(f.get('reply').value, 'synthetic@example.invalid');
+  await f.get('form').dispatch('submit'); assert.deepEqual(calls[0], calls[1]); assert.equal(calls[0].serviceId, 'meals'); assert.equal(f.get('reply').value, '');
+});
+test('website accessibility has its own bounded context and truthful unavailable state', async () => {
+  const f = fixture(async () => ({ data: { enabled: false } }), '?resourceId=rwn-website'); await flush();
+  assert.deepEqual(f.get('category').children.map(node => node.value), ['accessibility']);
+  assert.equal(f.get('listing-link').href, '/accessibility'); assert.match(f.get('availability').textContent, /monitored review channel has not been confirmed/);
 });

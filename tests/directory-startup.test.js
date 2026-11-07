@@ -24,7 +24,7 @@ const deferred = () => {
 
 // Execute the entire real entry and real search/state helpers. These deliberately
 // narrow DOM doubles test initialization and event ordering, not browser layout.
-function fixture({ state = null, hash = "", path = "/directory", online = true } = {}) {
+function fixture({ state = null, hash = "", path = "/directory", online = true, restoration = "auto" } = {}) {
   let document;
   class Node {
     constructor(tag = "div", selectors = []) {
@@ -88,6 +88,9 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     replaceChildren(...children) { this.children = []; this.append(...children); }
     setAttribute(name, value) { this.attrs.set(name, String(value)); }
     getAttribute(name) { return this.attrs.get(name) || null; }
+    hasAttribute(name) { return this.attrs.has(name); }
+    get hash() { return new URL(this.getAttribute('href') || '', 'https://example.org/directory').hash; }
+    get target() { return this.getAttribute('target') || ''; }
     removeAttribute(name) { this.attrs.delete(name); }
     scrollIntoView() { this.scrolled = true; }
     getBoundingClientRect() { return { top: 120, bottom: 164, left: 100, right: 340, width: 240, height: 44 }; }
@@ -123,13 +126,15 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
   document.createDocumentFragment = () => Object.assign(new Node(), { fragment: true });
   const writes = [], requests = [], timers = new Map(), frames = [], scrolls = [], scrollCalls = [];
   let timerId = 0;
-  const history = { state, replaceState(...args) { writes.push(args); this.state = args[0]; } };
+  const history = { state, scrollRestoration:restoration, replaceState(...args) { writes.push(args); this.state = args[0]; } };
   const location = { pathname: path, hash, href: `https://example.org${path}${hash}` };
   const window = Object.assign(new Node("window"), { scrollX: 0, scrollY: 0, innerWidth: 1280, innerHeight: 800, isSecureContext: false,
     scrollTo({ top = this.scrollY, left = this.scrollX, behavior }) { this.scrollY = top; this.scrollX = left; scrolls.push(top); scrollCalls.push({ top, left, behavior }); } });
+  document.parentElement = window;
   const navigator = { onLine: online, serviceWorker: new Node("serviceworker") };
   const storage = new Proxy({}, { get() { assert.fail("Directory search must never read or write web storage"); } });
   const context = vm.createContext({ document, window, history, location, navigator, URL, Intl, AbortController,
+    addEventListener:window.addEventListener.bind(window),
     normalize, queryTokens, scoreRecord, createIndexedSearchMatcher, readDirectoryState, writeDirectoryState,
     HTMLInputElement: Node, HTMLTextAreaElement: Node,
     Event: class { constructor(type, options) { this.type = type; Object.assign(this, options); } }, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
@@ -142,6 +147,7 @@ function fixture({ state = null, hash = "", path = "/directory", online = true }
     setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
     clearTimeout(id) { timers.delete(id); }, requestAnimationFrame(callback) { frames.push(callback); }
   });
+  Object.defineProperty(context,'scrollY',{get:()=>window.scrollY});
   vm.runInContext(`const restoreDirectoryView = ${restoreDirectoryView.toString()};`, context);
   // A classic head script runs before static search controls exist.
   vm.runInContext(startupSource, context);
@@ -209,19 +215,46 @@ test("fresh early typing searches the real catalog without another input event o
   assertLondon(f); assert.equal(f.document.activeElement, f.input); assert.equal(f.input.selectionStart, 9);
 });
 
-test("a focused pre-runtime edit cancels pending motion at the visitor's current position", () => {
+test("a focused early edit owns delayed reload restoration without moving the visitor", () => {
   const f = fixture({ state: stale() }); f.window.scrollX = 17; f.window.scrollY = 145; f.input.focus();
   f.type(london, { isComposing: true });
-  assert.deepEqual(f.scrollCalls, [{ top: 145, left: 17, behavior: "instant" }]);
+  assert.equal(f.history.scrollRestoration, 'manual');
+  for (const type of ['load','pageshow']) f.window.dispatch(type);
+  // HTML permits delayed restoration attempts. A completed load is not an
+  // ownership boundary; manual mode prevents the old entry moving the editor.
+  if (f.history.scrollRestoration === 'auto') f.window.scrollY = 900;
+  assert.deepEqual(f.scrollCalls, [{top:145,left:17,behavior:'instant'}]);
   assert.equal(f.window.scrollY, 145); assert.equal(f.window.scrollX, 17);
   assert.equal(f.document.activeElement, f.input); assert.equal(f.input.value, london);
   assert.deepEqual(f.history.state, stale());
+});
+
+for (const restoration of ['auto','manual']) test(`early edit restores the prior ${restoration} mode before normal navigation and each departure`, () => {
+  const f = fixture({restoration}); f.input.focus(); f.type(london);
+  f.savedLink.dispatch('click');
+  assert.equal(f.history.scrollRestoration,restoration);
+  f.type(london); f.window.dispatch('pagehide');
+  assert.equal(f.history.scrollRestoration,restoration);
+  f.window.dispatch('pageshow'); f.type(london); f.window.dispatch('pagehide');
+  assert.equal(f.history.scrollRestoration,restoration,'BFCache return does not consume cleanup after one departure');
+});
+
+test('cancelled, modified, download and new-context links retain current edit ownership', () => {
+  for (const activation of [{ctrlKey:true},{metaKey:true},{shiftKey:true},{altKey:true},{button:1},{cancel:true},{download:true},{target:'_blank'},{target:'provider-window'}]) {
+    const f=fixture();f.input.focus();f.type(london);
+    if(activation.cancel)f.savedLink.addEventListener('click',event=>event.preventDefault());
+    if(activation.download)f.savedLink.setAttribute('download','');
+    if(activation.target)f.savedLink.setAttribute('target',activation.target);
+    f.savedLink.dispatch('click',activation);
+    assert.equal(f.history.scrollRestoration,'manual',JSON.stringify(activation));
+  }
 });
 
 test("unfocused, country, and post-runtime edits do not cancel unrelated visitor scrolling", () => {
   const f = fixture(); f.window.scrollY = 145;
   f.input.focus(); f.input.blur(); f.type(london); f.country.dispatch("change");
   assert.deepEqual(f.scrollCalls, []);
+  assert.equal(f.history.scrollRestoration,'auto');
   f.start(); f.input.focus(); f.type("WIC");
   assert.deepEqual(f.scrollCalls, []); assert.equal(f.window.scrollY, 145);
 });
@@ -781,4 +814,22 @@ test("online-mode changes rebuild row listeners even when record contents match"
   f.navigator.onLine = true; f.window.dispatch("online"); await tick();
   assert.notEqual(f.resultList.children[0], offlineRow, "offline-created detail interception must not survive reconnection");
   assertLondon(f);
+});
+
+test("pagehide aborts unfinished catalog work and blocks worker refresh until a cached return", async () => {
+  const f = fixture(); f.type(london); f.start(); await f.flush();
+  assert.equal(f.requests.length, 1);
+  f.window.dispatch("pagehide"); await tick();
+  assert.equal(f.requests[0].options.signal.aborted, true);
+  f.navigator.serviceWorker.dispatch("controllerchange");
+  f.window.dispatch("online"); await tick();
+  assert.equal(f.requests.length, 1, "departing documents must not start replacement requests");
+  await f.resolve(0);
+  assert.deepEqual(f.ids(), [], "an aborted response cannot update the departing page");
+  f.window.dispatch("pageshow", { persisted: true }); await tick();
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.requests[1].options.cache, "reload", "the worker replacement still invalidates old catalog data");
+  await f.resolve(1); f.frames();
+  assertLondon(f);
+  assert.equal(f.timers.size, 0);
 });

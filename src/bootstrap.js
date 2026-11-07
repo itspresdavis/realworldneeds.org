@@ -42,11 +42,13 @@ if (app.ok) {
     return installResultActions();
   });
   document.documentElement.dataset.finderStartup = degraded ? "degraded" : "ready";
-  // Give the completed finder an actual paint opportunity before context
-  // creation, shader compilation, texture uploads and boundary geometry work.
-  // Hidden tabs naturally wait for their next animation frame.
+  // Give the finder a paint before checking capability and map demand. Keep
+  // this optional import out of the finding path; a missing scheduling helper
+  // preserves the existing map startup and its unavailable-map fallback.
   window.requestAnimationFrame(() => {
-    window.setTimeout(() => { void app.module.startGlobe(); }, 0);
+    window.setTimeout(() => import('./utils/globe-demand.js')
+      .then(({ startGlobeWhenNeeded }) => startGlobeWhenNeeded(app.module.startGlobe))
+      .catch(() => app.module.startGlobe()), 0);
   });
 } else {
   document.documentElement.dataset.finderStartup = "unavailable";

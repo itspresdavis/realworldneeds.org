@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     res.statusCode = 503;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.end(
-      '<!doctype html><html lang="en"><title>Workspace unavailable | RWN</title><meta name="viewport" content="width=device-width"><main><h1>The workspace is temporarily unavailable.</h1><p>Please try again shortly.</p><a href="/directory">Browse the public directory</a></main></html>',
+      '<!doctype html><html lang="en"><head><title>Workspace unavailable | RWN</title><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/contribute.css"><script type="module" src="/contributor-localization.js"></script></head><body data-page="workspace-unavailable"><main><h1>The workspace is temporarily unavailable.</h1><p>Please try again shortly.</p><a href="/directory">Browse the public directory</a></main></body></html>',
     );
   }
 }

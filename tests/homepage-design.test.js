@@ -10,7 +10,7 @@ const refinement = await readFile('src/refinement.js', 'utf8');
 
 // Tests the rearrangement itself, rather than relying on a static markup claim.
 test('finder composition reuses each existing interactive node exactly once', () => {
-  const selectors = ['.finder-search', '.quick-needs', '.jump-results', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
+  const selectors = ['.finder-search', '.jump-results', '.quick-needs', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
   const nodes = new Map(selectors.map(selector => [selector, {selector, marker:Symbol(selector)}]));
   const search = nodes.get('.finder-search');
   const label = { marker: Symbol("existing visible label") };
@@ -47,7 +47,7 @@ test('forest hero, map legend and warning colors retain normal text contrast', (
 
 test('compact fallback removes the empty column and source review remains visible on phones', () => {
   assert.match(css, /\.finder__grid:has\(\.is-globe-unavailable\) \{ grid-template-columns:\s*minmax\(0,1fr\);/);
-  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:4;/);
+  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:5;/);
   assert.match(css, /\.resource-row__reviewed::before \{ content:"Source checked ";/);
   assert.match(refinement, /groupFinderDisclosures\(\);\s*composeFinderSurface\(\);/);
 });

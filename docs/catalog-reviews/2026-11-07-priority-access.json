@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-11-07",
+  "decisions": [
+    {
+      "resourceId": "bowery-mission",
+      "action": "scoped-update",
+      "preserve": "Stable ID, coordinates and 2026-08-04 broad review",
+      "sourceIds": [
+        "bowery"
+      ]
+    },
+    {
+      "resourceId": "beacon-houston",
+      "action": "scoped-update",
+      "preserve": "Stable ID, coordinates, existing cost claim and 2026-08-04 broad review",
+      "sourceIds": [
+        "beacon"
+      ]
+    },
+    {
+      "resourceId": "amos-house-providence-meals",
+      "action": "add",
+      "sourceIds": [
+        "amos-food"
+      ],
+      "coordinates": "Not verified; address-only direct site"
+    },
+    {
+      "resourceId": "taunton-community-table-meals",
+      "action": "add",
+      "sourceIds": [
+        "tact-visit",
+        "tact-mission"
+      ],
+      "coordinates": "Not verified; address-only direct site"
+    },
+    {
+      "resourceId": "imss-bienestar-tijuana-centro",
+      "action": "add",
+      "sourceIds": [
+        "imss-registro",
+        "imss-clinics",
+        "imss-clinic-postal22"
+      ],
+      "sourceRecordId": "BCIMB001731",
+      "coordinates": "Use source latitud/longitud, not postal ylat/xlong. Operating days remain unknown."
+    },
+    {
+      "resourceId": "imss-bienestar-rosarito-urbano",
+      "action": "add",
+      "sourceIds": [
+        "imss-registro",
+        "imss-clinics",
+        "imss-clinic-postal22"
+      ],
+      "sourceRecordId": "BCIMB001755",
+      "coordinates": "Use source latitud/longitud, not postal ylat/xlong. Operating days remain unknown."
+    },
+    {
+      "resourceId": "imss-bienestar-mexico-finder",
+      "action": "add",
+      "sourceIds": [
+        "imss-registro",
+        "imss-clinics"
+      ],
+      "coordinates": "None; contact-only national finder, not local physical coverage."
+    }
+  ],
+  "sources": [
+    {
+      "id": "bowery",
+      "url": "https://www.bowery.org/get-help/",
+      "successfulFetchAt": "2026-11-07T05:37:35.112886+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Meal start times, ID/chapel policy, shelter destination/intake, showers/clothing registration, mobile medical schedule; no new coordinates or broad review refresh",
+      "verificationMethod": "substantive official-page review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "sourcePublicationNote": null,
+      "htmlSha256": "8f137ca9bda6173e68daee7b241f02c6ee96a51172a213de41a7c9495ea8e870",
+      "reuse": {
+        "mode": "bounded factual summary with attribution and source link",
+        "limits": "No bulk feed, copyrighted page text, imagery, logos or private data republished. No open-data licence or provider endorsement asserted. Further automated refresh needs a source-specific access/terms review."
+      }
+    },
+    {
+      "id": "beacon",
+      "url": "https://www.beaconhomeless.org/gethelp",
+      "successfulFetchAt": "2026-11-07T05:37:36.838828+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Service entrance, meal days/hours, shower/laundry unknown end times, housing intake and capacity; no new cost claim or broad review refresh",
+      "verificationMethod": "substantive official-page review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "sourcePublicationNote": null,
+      "htmlSha256": "d1658236e8519ce0d821a77f5dcb01c810cc68acb271e3bdae5038e734bea38d",
+      "reuse": {
+        "mode": "bounded factual summary with attribution and source link",
+        "limits": "No bulk feed, copyrighted page text, imagery, logos or private data republished. No open-data licence or provider endorsement asserted. Further automated refresh needs a source-specific access/terms review."
+      }
+    },
+    {
+      "id": "amos-food",
+      "url": "https://amoshouse.com/what-we-do/food",
+      "successfulFetchAt": "2026-11-07T05:39:17.958716+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Free meal cost, address, no-ID eligibility, weekday meal hours and first-Saturday closure",
+      "verificationMethod": "substantive official-page review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "sourcePublicationNote": null,
+      "htmlSha256": "23684592016e3952cc9cff72275ea571d02e046a6318faa389cf611ac9b6645c",
+      "reuse": {
+        "mode": "bounded factual summary with attribution and source link",
+        "limits": "No bulk feed, copyrighted page text, imagery, logos or private data republished. No open-data licence or provider endorsement asserted. Further automated refresh needs a source-specific access/terms review."
+      }
+    },
+    {
+      "id": "tact-visit",
+      "url": "https://www.tactmealcenter.org/visit-us.html",
+      "successfulFetchAt": "2026-11-07T05:42:59.652054+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Free meal cost, no-ID/no-paperwork eligibility, service versus mailing address, weekday meals and last-Thursday monthly dinner",
+      "verificationMethod": "substantive official-page review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "sourcePublicationNote": "Meal times marked updated July 2026; exact publication date not supplied",
+      "htmlSha256": "d966c4a15fa5d035bea6d64ae33083017faabb416f3157161f2d40c197cb1dca",
+      "reuse": {
+        "mode": "bounded factual summary with attribution and source link",
+        "limits": "No bulk feed, copyrighted page text, imagery, logos or private data republished. No open-data licence or provider endorsement asserted. Further automated refresh needs a source-specific access/terms review."
+      }
+    },
+    {
+      "id": "tact-mission",
+      "url": "https://www.tactmealcenter.org/our-mission.html",
+      "successfulFetchAt": "2026-11-07T05:42:58.867476+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Independent confirmation of no-charge meals and no forms required",
+      "verificationMethod": "substantive official-page review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "sourcePublicationNote": null,
+      "htmlSha256": "0b06cf66d20242c71c21038e2c7182cdc9a761b0c4b8c6dd0200b291bc148ce0",
+      "reuse": {
+        "mode": "bounded factual summary with attribution and source link",
+        "limits": "No bulk feed, copyrighted page text, imagery, logos or private data republished. No open-data licence or provider endorsement asserted. Further automated refresh needs a source-specific access/terms review."
+      }
+    },
+    {
+      "id": "imss-registro",
+      "url": "https://registro.imssbienestar.gob.mx/",
+      "successfulFetchAt": "2026-11-07T05:48:37.195442+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Free-care eligibility for people without social security coverage; Baja California participation; registration requirements",
+      "verificationMethod": "substantive official-page and bounded clinic-record review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "documentSha256": "20e291492ba9ef674b42fe455a5c57448975c104081f2a93918f67cc4ed25437",
+      "reuse": {
+        "mode": "bounded factual summary with CLUES attribution and official source links",
+        "limits": "Two clinic records only; no full dataset or copyrighted prose republished. The general gob.mx terms endpoint returned 403, so no open-data licence or blanket future scrape permission is asserted. Explicit review is required for every source update."
+      }
+    },
+    {
+      "id": "imss-clinics",
+      "url": "https://www.imssbienestar.gob.mx/02_ubica_clinica.html",
+      "successfulFetchAt": "2026-11-07T05:49:21.044655+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Official clinic finder and its linked bounded postal-prefix source",
+      "verificationMethod": "substantive official-page and bounded clinic-record review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "documentSha256": "ab91bdb906e3194f2bf68efdb9bb6a744fa57cc71f3bcdd2904b475e7969e39d",
+      "reuse": {
+        "mode": "bounded factual summary with CLUES attribution and official source links",
+        "limits": "Two clinic records only; no full dataset or copyrighted prose republished. The general gob.mx terms endpoint returned 403, so no open-data licence or blanket future scrape permission is asserted. Explicit review is required for every source update."
+      }
+    },
+    {
+      "id": "imss-clinic-postal22",
+      "url": "https://www.imssbienestar.gob.mx/assets/json/clinicas_cp/clinicas_cp_22.json",
+      "successfulFetchAt": "2026-11-07T05:50:09.888173+00:00",
+      "substantiveReviewDate": "2026-11-07",
+      "checkScope": "Two CLUES identities, clinic coordinates (latitud/longitud), addresses, phones and partial time ranges; postal ylat/xlong are not site coordinates",
+      "verificationMethod": "substantive official-page and bounded clinic-record review",
+      "verificationState": "source-reviewed",
+      "providerConfirmation": null,
+      "sourcePublishedAt": null,
+      "documentSha256": "ee64a6886b73b59851c5d780f473c6a0057f4ecb045daa8237d66d1fd8c5e5a2",
+      "reuse": {
+        "mode": "bounded factual summary with CLUES attribution and official source links",
+        "limits": "Two clinic records only; no full dataset or copyrighted prose republished. The general gob.mx terms endpoint returned 403, so no open-data licence or blanket future scrape permission is asserted. Explicit review is required for every source update."
+      }
+    }
+  ],
+  "excludedCandidates": [
+    {
+      "city": "Brockton",
+      "name": "Smith Family Housing Resource Center",
+      "urls": [
+        "https://helpfbms.org/help/",
+        "https://helpfbms.org/faqs/",
+        "https://helpfbms.org/termsofuse/"
+      ],
+      "reason": "Physical address, adult intake and meal distribution are published, but explicit no-cost wording was not established on reviewed pages; terms restrict content reuse. No new public record."
+    },
+    {
+      "city": "Brockton",
+      "name": "The Charity Guild downtown pantry",
+      "urls": [
+        "https://thecharityguild.org/food-programs/"
+      ],
+      "reason": "Destination, start times, daily supply limit and mail/BAHN-card intake are published. Explicit no-cost wording not established; no public addition."
+    },
+    {
+      "city": "Tijuana",
+      "name": "Desayunador y Albergue Padre Chava",
+      "urls": [
+        "https://www.salesianostijuanapst.org/desayunadorpadrechava"
+      ],
+      "reason": "Official provider publishes address, services, general office hours and men-only shelter description. No explicit no-cost claim or service-specific serving/intake hours established. General office hours must not become meal or shelter hours."
+    },
+    {
+      "city": "Tijuana",
+      "name": "DIF food/community services",
+      "urls": [
+        "https://dif.tijuana.gob.mx/alimentario.aspx",
+        "https://dif.tijuana.gob.mx/comunidad.aspx"
+      ],
+      "reason": "Eligibility/documents and programs published, but no-cost status of each service not established. Municipal office is not assumed to be a meal distribution location."
+    },
+    {
+      "city": "Playas de Rosarito",
+      "name": "DIF assistance",
+      "urls": [
+        "https://dif.rosarito.gob.mx/",
+        "https://www.difrosarito.gob.mx/",
+        "https://www.rosarito.gob.mx/10mo/"
+      ],
+      "reason": "DIF requests denied before upstream by environment proxy; municipality page alone does not establish a free service/access site. No bypass attempted."
+    }
+  ],
+  "limits": [
+    "No providers contacted; no live availability, inventory or bed-capacity verification.",
+    "Unknown fields remain unknown. Saturday/monthly exceptions remain visible text where the machine schedule is incomplete.",
+    "No source refresh runs during builds. Evidence hashes identify downloaded documents; they are not signed attestations.",
+    "This tranche does not establish comprehensive coverage of any city or need.",
+    "IMSS official pages disagree on the number of participating states and telephone desk hours; neither aggregate state count nor desk schedule is copied. Baja California inclusion is explicit. No clinic registration or personal-information form was submitted."
+  ]
+}

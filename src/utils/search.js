@@ -26,7 +26,7 @@ for (const group of [
   "hygiene shower showers laundry toilet toilets toiletries ducha duchas bano banos lavanderia banho douche douches hygene",
   "clothing clothes coat coats shoes blanket blankets ropa roupas vetement vetements clohtes",
   "health doctor doctors clinic clinics dental dentist medical mental healthcare salud saude sante medico medica clinica clinique",
-  "referral directory directories locator navigation benefits advice casework",
+  "referral directory directories locator navigation advice casework",
   "diaper diapers panales",
   "charging chargers charger",
 ]) {
@@ -73,7 +73,7 @@ for (const group of [
   "meal meals",
   "water agua eau watre",
   "dental dentist dentists dentistry",
-  "pantry pantries foodbank foodbanks",
+  "pantry pantries foodbank foodbanks groceries grocery despensa despensas",
   "mental",
   "shower showers ducha duchas douche douches",
   "laundry lavanderia",
@@ -82,19 +82,22 @@ for (const group of [
   for (const term of terms) specificNeeds.set(term, terms);
 }
 
+// Time language is intent, never evidence of today's opening or availability.
+export const searchTimeIntent = query => querySearchTokens(query).time || "";
+
 export function querySearchTokens(query) {
   const key = String(query || "");
   if (!queries.has(key)) {
     if (queries.size >= 64) queries.delete(queries.keys().next().value);
-    // Keep the literal term too: “Bed Road” must remain a valid address query.
-    queries.set(
-      key,
-      // Keep complete postcodes together so NR2 1RF cannot match NR23 1RF.
-      // Every other term retains ordinary word-prefix behavior.
-      (normalizeSearch(key).match(/united states of america\b|united states\b|united kingdom\b|[a-z]{1,2}\d[a-z\d]? \d[abd-hjlnp-uw-z]{2}(?= |$)|\S+/g) || [])
-        .filter((token) => !noise.has(token))
-        .map((token) => [token, aliases.get(token) || token]),
-    );
+    const parsed = normalizeSearch(key).match(/united states of america\b|united states\b|united kingdom\b|[a-z]{1,2}\d[a-z\d]? \d[abd-hjlnp-uw-z]{2}(?= |$)|\S+/g) || [];
+    const timing = parsed.some(term => /^(?:food|water|shelter|hygiene|clothing|health|referral)$/.test(aliases.get(term) || term))
+      && /\b(?:today|tonight|now|hoy|ahora|esta noche)\b/.test(parsed.join(" "));
+    // Literal provider/address words remain recoverable; only recognized need
+    // queries interpret these time phrases. No live availability is inferred.
+    const tokens = parsed.filter(token => !noise.has(token) && !(timing && /^(?:today|tonight|now|right|hoy|ahora|esta|noche)$/.test(token)))
+      .map(token => [token, aliases.get(token) || token]);
+    if (timing) tokens.time = "requested";
+    queries.set(key, tokens);
   }
   return queries.get(key);
 }
@@ -104,6 +107,7 @@ export function resourceSearchText(resource) {
   const values = [
     resource.name,
     resource.city,
+    ...(resource.country === "United States" && resource.city === "New York" ? ["New York City"] : []),
     resource.country,
     resource.region,
     resource.address,
@@ -164,7 +168,7 @@ function prepareResourceSearch(resource) {
     // helper below still exposes named fields to its existing callers.
     entry = [address, regions, parts[2] ?? null, parts[3] || "",
       normalizeSearch(resource.name), normalizeSearch(resource.city ?? legacyCity),
-      normalizeSearch(country), resource.category,
+      normalizeSearch(country), resource.category || resource.categories?.[0],
       resource.categories || [resource.category, ...(resource.secondaryCategories || [])],
       parts.slice(0, 3).join(" ")];
     fields.set(resource, entry);
@@ -196,6 +200,7 @@ function resourceSearchScore(resource, query) {
         : region
         ? !regionMatch
         : regionMatch ? false
+        : /^benefits?$/.test(literal) ? !/\b(?:wic|snap|benefits?)\b/.test(searchText)
         : literal.includes(" ")
         ? !whole(address || searchText, literal)
         : specific
@@ -212,7 +217,7 @@ function resourceSearchScore(resource, query) {
         : specific
         ? whole(needs, specific[0]) ? 40 : whole(name, literal) ? 16 : 10
         : primary === alias
-        ? 40
+        ? alias === "food" && /\b(?:wic|snap)\b/.test(searchText) && !whole(needs,"meal") && !whole(needs,"pantry") && !tokens.some(([term]) => /^(?:wic|snap|benefits?)$/.test(term)) ? 5 : 40
         : types.includes(alias)
           ? 30
           : city === literal || resourceCountry === literal
@@ -248,7 +253,7 @@ function resourceSearchScore(resource, query) {
         ),
     )
   )
-    score += 40;
+    score += 40 + (resource.kind === "direct" && tokens.some(([, alias]) => types.includes(alias)) ? 12 : 0);
   if ((tokens.length > 1 || /\d/.test(phrase)) && prefix(address, phrase))
     score += 32;
   return entry[11] = score;
@@ -287,4 +292,19 @@ function geographyChoicesForSource(resourceList, query) {
     places.set(entry[6], entry[6] === city ? { city: resource.country, country: resource.country, countryMatch: true } : { city: resource.city || resource.place?.slice(0, -(String(resource.country).length + 2)), country: resource.country });
   }
   return places.size < 2 ? [] : [...places.values()].sort((a, b) => a.country.localeCompare(b.country));
+}
+
+// A separately entered place constrains geographic fields, never incidental
+// mentions in service descriptions, provider names, or unrelated street names.
+export function resourceMatchesManualPlace(resource, place) {
+  const tokens=querySearchTokens(place);
+  if(!tokens.length)return true;
+  const {city,country,regions}=prepareResourceSearch(resource);
+  const cityName=country==='united states'&&/^(?:new york|new york city)$/.test(city)?'new york city':city;
+  return tokens.every(([literal,alias])=>{
+    const qualified=countryQualifier(literal);
+    if(qualified)return qualified===country;
+    if(regions.includes(literal))return true;
+    return [cityName,country,...regions.map(code=>stateNames.get(code)||code)].some(value=>literal.includes(' ')?whole(value,literal):prefix(value,literal)||whole(value,alias));
+  });
 }

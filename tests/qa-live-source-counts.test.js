@@ -238,6 +238,20 @@ test("the fixture records trusted About location, Use and Clear activations", ()
   assert.deepEqual(JSON.parse(JSON.stringify(f.probe.clicks)), ["about", "locateMe", "clearLocation"].map(id => ({ id, trusted: true })));
 });
 
+test("the fixture observes native globe exploration without mutating location or releasing geometry", () => {
+  const f = fixture();
+  const wheel = f.listeners.find(listener => listener.type === "wheel").callback;
+  wheel({ isTrusted: false, deltaY: 300 });
+  wheel({ isTrusted: true, deltaY: 800 });
+  assert.deepEqual(JSON.parse(JSON.stringify(f.probe.globeScrolls)), [
+    { trusted: false, deltaY: 300 }, { trusted: true, deltaY: 800 },
+  ]);
+  assert.equal(f.probe.locationCalls, 0);
+  assert.equal(f.probe.detailReleased, false);
+  assert.equal(f.probe.requests.length, 0);
+  assert.equal(f.probe.geometryLoads.length, 0);
+});
+
 for (const name of ["countries.geojson", "countries-detail.geojson"]) {
   test(`the complete ${name} fixture preserves original map bytes and country order`, async () => {
     const bytes = await readFile(new URL(`../public/data/${name}`, import.meta.url), "utf8");

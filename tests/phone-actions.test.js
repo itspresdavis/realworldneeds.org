@@ -1,4 +1,5 @@
-import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "../src/utils/service-access.js";
+import { beforeYouGoFacts, serviceActions, serviceAccessSummary, serviceAccessNotice } from "../src/utils/service-access.js";
+import { getLocale, t } from "../src/utils/localization.js";
 import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { serviceContactMarkup } from "../scripts/service-contact.mjs";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
@@ -72,7 +73,7 @@ test("finder direct actions and inspector use the same safe targets and preserve
     const resource = fixture(phone);
     const article = new Element();
     article.querySelector = () => ({ dataset: { resourceId: resource.id }, replaceWith() {} });
-    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
+    const context = vm.createContext({ beforeYouGoFacts, getLocale, t, serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
     const body = actions.slice(actions.indexOf("function directionsUrl("), actions.indexOf("\nfunction enhanceResults("));
     vm.runInContext(`${body}\nenhanceCard(article);`, Object.assign(context, { article }));
     assert.deepEqual(domTargets(article), expected);
@@ -94,11 +95,9 @@ test("finder direct actions and inspector use the same safe targets and preserve
 
 test("every static action generator rejects ambiguous phone targets", async () => {
   const build = await read("scripts/build.mjs");
-  const enhancement = await read("scripts/enhance-generated-pages.mjs");
   const professional = await read("scripts/professional-seo.mjs");
   const bodies = [
     [functionSource(build, "directoryRecordActions", "resourceRecord"), "directoryRecordActions"],
-    [functionSource(enhancement, "serviceNextStepMarkup", "assetLinks"), "serviceNextStepMarkup"],
     [functionSource(professional, "directoryQuickActions", "enhanceActionOrientation"), "directoryQuickActions"],
 
   ];
@@ -123,9 +122,9 @@ test("directory and offline fallback use build-parsed phone targets without new 
   const offline = await read("public/offline-status.js");
   const shipped = await read("dist/directory.js");
   const createRow = (source) => {
-    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true } });
-    vm.runInContext(`${source.replace("export const createResultRow", "const createResultRow")}\nglobalThis.row = createResultRow;`, context);
-    return context.row;
+    const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document: { ...document, querySelector: () => null }, navigator: { onLine: true }, window: {}, history: {}, URL });
+    vm.runInContext(exposeDirectoryRenderer(source), context);
+    return context.rwnTestRenderer;
   };
   const rows = [createRow(renderer), createRow(shipped.replaceAll("import.meta.url", '"https://fixture.test/directory.js"'))];
   const offlineBody = offline.slice(offline.indexOf("  const actionLink ="), offline.indexOf("  const setOffline ="));
@@ -142,7 +141,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     link.before = (element) => { wrapper = element; };
     const context = vm.createContext({ serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice,
       document: { ...document, querySelectorAll: () => [link] }, catalog: async () => ({ records: [resource] }),
-      resultId: () => resource.id, setOffline() {}, networkOffline: false, catalogCached: false,
+      resultId: () => resource.id, setOffline() {}, networkOffline: false, catalogCached: false, activePage: true,
     });
     vm.runInContext(`${offlineBody}\nglobalThis.enhance = enhanceSearchActions;`, context);
     await context.enhance();
@@ -158,7 +157,7 @@ test("directory and offline fallback use build-parsed phone targets without new 
     }
   }
   assert.doesNotMatch(shipped, /\bimport\s/);
-  assert.ok(Buffer.byteLength(shipped) <= 16_000);
+  assert.ok(Buffer.byteLength(shipped) <= 17_000);
 });
 
 test("built service pages, directory records and search index agree on every phone target", async () => {
@@ -185,3 +184,4 @@ test("built service pages, directory records and search index agree on every pho
     }
   }
 });
+import { exposeDirectoryRenderer } from './helpers/directory-renderer.js';

@@ -5,6 +5,7 @@ import { resources } from "../src/data/resources.js";
 import { sourceClosureNotice } from "../src/utils/source-status.js";
 import { relatedResources } from "../scripts/related-resources.mjs";
 import { formatResourcePlace, isExactServiceSite } from "../src/utils/geo.js";
+import { resourceScope } from "../src/utils/resource-scope.js";
 
 const byId = new Map(resources.map((resource) => [resource.id, resource]));
 const types = (resource) => [resource.category, ...(resource.secondaryCategories || [])];
@@ -42,7 +43,7 @@ test("every generated service page keeps related-card geography and scope truthf
     } else assert.doesNotMatch(section, /related-services__broader/, resource.id);
     if (!ids.length) assert.match(section, /Explore more help/, resource.id);
     else if (resource.country === "Global") assert.match(section, /Related networks and finders/, resource.id);
-    else assert.ok(section.includes(`Related help in ${resource.country.replaceAll("&", "&amp;").replaceAll("'", "&#39;")}`), resource.id);
+    else assert.match(section, /Related help and wider finders/, resource.id);
     if (/Other help near/.test(section)) violations.push(`${resource.id}: unsupported nearby heading`);
     if (ids.length > 6 || new Set(ids).size !== ids.length || ids.includes(resource.id)) violations.push(`${resource.id}: invalid card set`);
     for (const id of ids) {
@@ -50,7 +51,7 @@ test("every generated service page keeps related-card geography and scope truthf
       const card = section.match(new RegExp(`<a href="/service/${encodeURIComponent(id)}">[\\s\\S]*?</a>`))?.[0];
       const place = candidate.kind === "direct" && isExactServiceSite(candidate)
         ? formatResourcePlace(candidate)
-        : candidate.country === "Global" ? "Check provider coverage" : candidate.country;
+        : resourceScope(candidate).label;
       assert.ok(card?.includes(`<span>${escaped(place)}</span>`), `${resource.id}: truthful card place for ${id}`);
       if (!candidate || candidate.country !== resource.country || sourceClosureNotice(candidate)
         || !types(candidate).some((type) => types(resource).includes(type))) violations.push(`${resource.id}: out-of-scope ${id}`);
@@ -63,7 +64,7 @@ test("sparse, no-match and Global pages expose honest useful browse paths", asyn
   const capuchin = await readRelated(byId.get("capuchin-day-centre"));
   assert.deepEqual(capuchin.ids, ["unhcr-help-ireland"]);
   assert.match(capuchin.section, /Resource finder/);
-  assert.match(capuchin.section, /<span>Ireland<\/span>/);
+  assert.match(capuchin.section, /<span>Ireland — nationwide information or referral<\/span>/);
   assert.doesNotMatch(capuchin.section, /Dublin/);
   const noMatch = await readRelated(byId.get("unhcr-help-austria"));
   assert.deepEqual(noMatch.ids, []);

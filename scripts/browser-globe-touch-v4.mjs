@@ -146,6 +146,25 @@ async function inspectFailedGlobeState(client) {
   }
 }
 
+// Serialized into the page. A capability-probe context can be live before the
+// deferred renderer has loaded or published its first zoom readout. Reveal the
+// returned canvas once, then observe initialization within the existing Back
+// readiness deadline instead of sampling after a fixed 350ms delay.
+function returnedGlobeReady(expectedQuery) {
+  const canvas = document.getElementById("globeCanvas");
+  const stage = document.querySelector(".globe-stage");
+  if (document.getElementById("resourceSearch")?.value !== expectedQuery || !canvas || !stage) return false;
+  if (!canvas.dataset.rwnQaReturnRevealed) {
+    canvas.dataset.rwnQaReturnRevealed = "true";
+    canvas.scrollIntoView({ block: "center", behavior: "auto" });
+  }
+  const zoom = Number((document.getElementById("globeReadout")?.innerText.match(/([0-9.]+)×/) || [0, 0])[1]);
+  return document.documentElement.dataset.globeStartup === "ready"
+    && canvas.dataset.rwnContextRecovery === "true"
+    && !stage.classList.contains("is-globe-unavailable")
+    && Number.isFinite(zoom) && zoom > 0;
+}
+
 async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-globe-touch-"));
   const server = spawn(process.execPath, ["scripts/serve.mjs", "4178"], { stdio: "ignore" });
@@ -409,9 +428,7 @@ async function run() {
     await evaluate(client, "document.querySelector('[data-service-save]').click()");
     if (!await evaluate(client, "document.querySelector('[data-service-save]').getAttribute('aria-pressed') === 'true'")) throw new Error("Service could not be saved after map exploration.");
     await evaluate(client, "history.back()");
-    await waitForExpression(client, "document.getElementById('resourceSearch')?.value === 'London'", "Back did not restore the search after leaving the map.");
-    await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
-    await sleep(350);
+    await waitForExpression(client, `(${returnedGlobeReady.toString()})('London')`, "Back did not restore the search and initialized globe readout after leaving the map.");
     const returnedMap = await evaluate(client, `(() => {
       const canvas=document.getElementById('globeCanvas');
       const gl=canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -419,6 +436,7 @@ async function run() {
       return {live:!!gl && !gl.isContextLost() && !document.querySelector('.globe-stage').classList.contains('is-globe-unavailable'),zoom};
     })()`);
     if (!returnedMap.live || !returnedMap.zoom) throw new Error(`Returning from a service left the globe unavailable: ${JSON.stringify(returnedMap)}`);
+    observations.returnedGlobe = returnedMap;
     await evaluate(client, `document.getElementById('${returnedMap.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
     await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${returnedMap.zoom}) > .02`, "The restored globe did not respond to zoom after Back.");
     phase = "real-context-recovery";

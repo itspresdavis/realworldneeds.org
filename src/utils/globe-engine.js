@@ -11,7 +11,9 @@ export async function loadGlobeEngine(canvas, load = () => Promise.all([
   } catch {
     return null;
   }
-  if (!context) return null;
+  // A capability probe can precede actual exploration. GPU resources may have
+  // been lost during that interval; do not import an engine for a dead context.
+  if (!context || context.isContextLost?.()) return null;
   const [THREE, points] = await load();
   return { THREE, points, context };
 }

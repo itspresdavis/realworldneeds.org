@@ -44,10 +44,12 @@
   {
     "id": "S05",
     "query": "Taunton MA help",
-    "expectation": "Manual city/state search can retrieve the actual MA WIC office without location permission.",
+    "expectation": "Manual city/state search retrieves both the existing eligible WIC office and source-reviewed free walk-in meal service without location permission.",
     "exactIds": [
-      "ma-wic-tauntonattleboro-wic-program-main-clinic"
-    ]
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "taunton-community-table-meals"
+    ],
+    "evidenceReference": "docs/catalog-reviews/2026-11-07-priority-access.json"
   },
   {
     "id": "S06",
@@ -65,8 +67,8 @@
   {
     "id": "S07",
     "query": "Providence showers",
-    "expectation": "Do not fabricate a Providence shower site when no Providence listing exists.",
-    "coverageOrCapabilityGap": "No Providence listings in current catalog; authoritative shower/service sourcing and review are needed. The empty-state referral UI was not exercised.",
+    "expectation": "Do not substitute the reviewed Providence meal service for an unverified shower site.",
+    "coverageOrCapabilityGap": "No reviewed Providence shower service in the current catalog. Amos House meal coverage does not establish shower access.",
     "exactIds": []
   },
   {
@@ -257,24 +259,27 @@
   {
     "id": "S31",
     "query": "Rosarito food",
-    "expectation": "Do not fabricate a Rosarito provider absent verified catalog coverage.",
-    "coverageOrCapabilityGap": "No Rosarito listing; authoritative local sources/reuse review and operator review needed.",
+    "expectation": "Do not substitute a reviewed Rosarito health clinic for an unverified food service.",
+    "coverageOrCapabilityGap": "No reviewed free-food service in Rosarito. The source-reviewed local health clinic must not be substituted for food.",
     "exactIds": []
   },
   {
     "id": "S32",
     "query": "Tijuana shelter",
     "expectation": "Do not fabricate Tijuana shelter intake or silently substitute another city.",
-    "coverageOrCapabilityGap": "No Tijuana listing; authoritative intake sources/reuse review and source-backed routes needed.",
+    "coverageOrCapabilityGap": "No reviewed shelter-intake destination in Tijuana. The source-reviewed local health clinic must not be substituted for shelter.",
     "exactIds": []
   },
   {
     "id": "S33",
     "query": "comida Taunton MA",
-    "expectation": "Spanish food alias finds the same reviewed MA nutrition office as English food.",
+    "expectation": "Spanish food alias finds reviewed free meals and eligible food benefits, ranking the meal service first.",
     "exactIds": [
-      "ma-wic-tauntonattleboro-wic-program-main-clinic"
-    ]
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "taunton-community-table-meals"
+    ],
+    "evidenceReference": "docs/catalog-reviews/2026-11-07-priority-access.json",
+    "firstId": "taunton-community-table-meals"
   },
   {
     "id": "S34",
@@ -358,11 +363,13 @@
   {
     "id": "S44",
     "query": "Taunton MA help",
-    "expectation": "Actual browser location-denial prompt and manual-search recovery need rendered testing.",
-    "coverageOrCapabilityGap": "No browser workloads authorized for this diagnostic; actual geolocation-denial UI behavior not retested here.",
+    "expectation": "Location denial retains manual access to the reviewed Taunton meal service and existing WIC office.",
+    "coverageOrCapabilityGap": "Location-denial UI is separately exercised by browser-tests/search-safety.spec.js; the deterministic matcher diagnostic alone cannot establish it.",
     "exactIds": [
-      "ma-wic-tauntonattleboro-wic-program-main-clinic"
-    ]
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "taunton-community-table-meals"
+    ],
+    "evidenceReference": "docs/catalog-reviews/2026-11-07-priority-access.json"
   },
   {
     "id": "S45",
@@ -373,8 +380,8 @@
   {
     "id": "S46",
     "query": "duchas Providence",
-    "expectation": "Spanish showers query must not invent local services when Providence coverage is absent.",
-    "coverageOrCapabilityGap": "Same verified coverage gap as Providence showers; Spanish alias cannot supply missing providers.",
+    "expectation": "Spanish showers query must not substitute Providence meal coverage for unverified shower access.",
+    "coverageOrCapabilityGap": "No reviewed Providence shower service; a translated need does not add provider coverage.",
     "exactIds": []
   }
 ]

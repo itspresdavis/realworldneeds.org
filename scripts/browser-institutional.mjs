@@ -432,6 +432,9 @@ async function run() {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: mobileViewport, screenWidth: width, screenHeight: height });
       await navigate(client, `${HOST}/`);
       const fallback = await evaluate(client, `(async () => {
+        // Explore the map before testing renderer loss: an offscreen mobile
+        // map deliberately leaves the optional engine unloaded.
+        document.getElementById("globeCanvas").scrollIntoView({ block: "center", behavior: "auto" });
         await (${waitForGlobeRendererReady.toString()})();
         const stage = document.querySelector(".globe-stage");
         const originalHeight = stage.getBoundingClientRect().height;

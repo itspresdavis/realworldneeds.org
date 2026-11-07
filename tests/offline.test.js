@@ -121,7 +121,7 @@ async function runInstall({ failedPath = null } = {}) {
 }
 
 test("offline installation fails closed and removes a partial cache when a required core asset fails", async () => {
-  for (const failedPath of ["/directory.js", "/directory-startup.js", "/page-menu.js", "/navigation-actions.css"]) {
+  for (const failedPath of ["/directory.js", "/directory-startup.js", "/page-menu.js", "/navigation-actions.css", "/language.js", "/task-controls.css"]) {
   const result = await runInstall({ failedPath });
   assert.ok(result.error, "a failed required asset must reject installation");
   assert.equal(result.skipped, false, "an incomplete cache must never activate");
@@ -135,7 +135,13 @@ test("offline installation activates only after every required core asset is cac
   assert.equal(result.error, null);
   assert.equal(result.deleted, false);
   assert.equal(result.skipped, true, "a complete cache can activate immediately");
-  assert.equal(result.stored.size, 15, "all required offline assets must be stored");
+  assert.deepEqual([...result.stored.keys()].map(url => new URL(url).pathname).sort(), [
+    "/directory", "/legal.css", "/page-menu.js", "/directory-enhancements.css",
+    "/professional-pages.css", "/navigation-actions.css", "/directory.js",
+    "/directory-startup.js", "/saved-loader.js", "/saved-services.js",
+    "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css",
+    "/brand/rwn-logo-192.png", "/rwn-mark.svg", "/site.webmanifest"
+  ].sort(), "only the explicit public core is stored; optional postal data is not installed");
 });
 
 test("production CSP permits only same-origin workers and service worker revalidates", async () => {

@@ -7,22 +7,48 @@ import {
   requireUser,
   sameOrigin,
 } from "../server/supabase.js";
-import { correctionFailure, validateDecision } from "../server/corrections.js";
+import { correctionFailure, validateDecision, validateCorrectionAction, correctionConfig, correctionClient } from "../server/corrections.js";
+import { verifyCorrectionPublication, CorrectionPublicationError } from "../server/correction-publication.js";
 import { CORRECTION_STATUSES } from "../public/correction-contract.js";
 
 export default async function handler(req, res) {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   try {
-    if (!["GET", "PATCH"].includes(req.method)) {
-      res.setHeader("Allow", "GET, PATCH");
+    if (!["GET", "PATCH", "POST"].includes(req.method)) {
+      res.setHeader("Allow", "GET, PATCH, POST");
       return json(res, 405, { error: "Method not allowed." });
     }
-    if (req.method === "PATCH" && !sameOrigin(req))
+    if (req.method !== "GET" && !sameOrigin(req))
       return json(res, 403, { error: "Request origin was not accepted." });
     const client = clientFor(req, res);
-    if (!(await requireUser(client, res))) return;
+    const user = await requireUser(client, res);
+    if (!user) return;
     let result;
-    if (req.method === "PATCH") {
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const invalid = validateCorrectionAction(body);
+      if (invalid) return json(res, 400, { error: invalid });
+      if (body.action === "apply") {
+        result = await client.rpc("rwn_apply_correction", {
+          p_id: body.id, p_revision: body.revision, p_catalog_revision: body.catalogUpdatedAt,
+          p_changes: body.changes, p_reason: body.reason.trim(), p_evidence_url: body.evidenceUrl,
+        });
+      } else {
+        const queue = await client.rpc("rwn_correction_queue", { p_page: 0, p_status: "all", p_id: body.id });
+        if (queue.error) result = queue;
+        else {
+          const report = queue.data?.report;
+          if (!report || ![body.revision, body.revision + 1].includes(report.revision))
+            return json(res, 409, { error: "Reopen the report before verifying publication." });
+          const config = correctionConfig({ requireEnabled: false });
+          if (!config) return json(res, 503, { error: "Publication verification is unavailable until the approved correction configuration is active." });
+          const verified = await verifyCorrectionPublication(report);
+          result = await correctionClient(config).rpc("rwn_resolve_correction", {
+            p_id: body.id, p_revision: body.revision, p_actor: user.id, p_record: verified.record, p_release: verified.release,
+          });
+        }
+      }
+    } else if (req.method === "PATCH") {
       const body = await readBody(req);
       const invalid = validateDecision(body);
       if (invalid) return json(res, 400, { error: invalid });
@@ -72,6 +98,8 @@ export default async function handler(req, res) {
       });
     return json(res, 200, result.data);
   } catch (error) {
+    if (error instanceof CorrectionPublicationError)
+      return json(res, error.status, { error: error.status === 409 ? "The public release does not yet match the reviewed catalog. The report remains unresolved." : "The public release could not be verified. Retry after publication; the report remains unresolved." });
     if (error instanceof RequestBodyError)
       return json(res, error.status, { error: error.message });
     return json(res, 503, {

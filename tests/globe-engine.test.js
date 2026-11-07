@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { loadGlobeEngine } from "../src/utils/globe-engine.js";
 
 test("unavailable WebGL never imports the rendering engine", async () => {
-  for (const canvas of [null, { getContext: () => null }, { getContext() { throw Error("blocked"); } }]) {
+  for (const canvas of [null, { getContext: () => null }, { getContext() { throw Error("blocked"); } }, { getContext: () => ({ isContextLost: () => true }) }]) {
     let imports = 0;
     assert.equal(await loadGlobeEngine(canvas, () => { imports++; }), null);
     assert.equal(imports, 0);

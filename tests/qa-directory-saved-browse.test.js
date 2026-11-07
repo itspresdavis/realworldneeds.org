@@ -223,7 +223,7 @@ test('WIC commitment uses private entry history and exact current catalog summar
   const closure = verifyDirectorySavedBrowse.toString().match(/  const committed = \(s, fixture\) => \{[\s\S]*?\n  \};/)[0];
   const committed = vm.runInNewContext(`${closure}; committed`);
   const expected = directoryWicFixture(60, 'All help');
-  const state = { ...base(), category: 'All help', href: 'https://rwn.test/directory#directory-results',
+  const state = { ...base(), count: expected.count, summary: expected.summary, category: 'All help', href: 'https://rwn.test/directory#directory-results',
     history: { path: '/directory', query: 'WIC', country: 'United States', category: '' } };
   assert.equal(committed(state, expected), true);
   assert.equal(new URL(state.href).search, '');

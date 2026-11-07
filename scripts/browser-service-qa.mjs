@@ -162,6 +162,9 @@ async function run() {
       const interactive = [...(next?.querySelectorAll("a") || [])].find((link) => link.getAttribute("href")?.startsWith("/#resource="));
       const rect = next?.getBoundingClientRect();
       const links = [...(next?.querySelectorAll("a") || [])];
+      const isMap = link => link.hostname === "maps.apple.com" || link.hostname === "www.google.com" && link.pathname.startsWith("/maps/");
+      const choice = next?.querySelector('a[href="#before-you-go-title"]');
+      const access = document.getElementById("before-you-go-title");
       return {
         title: document.querySelector("#service h1")?.textContent?.trim() || "",
         nextSteps: Boolean(next),
@@ -172,7 +175,9 @@ async function run() {
         interactiveHref: interactive?.getAttribute("href") || "",
         aboveFold: Boolean(rect && rect.top < innerHeight - 70 && rect.bottom > 0),
         beforePolicy: Boolean(next && policy && (next.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING)),
-        mapActions: links.filter((link) => /Maps|Directions/.test(link.textContent || "")).length,
+        mapActions: links.filter(isMap).length,
+        pageMapDestinations: [...new Set([...document.querySelectorAll('#service a[href]')].filter(isMap).map(link => new URL(link.href).searchParams.get('destination')))].sort(),
+        serviceChoice: Boolean(choice && access?.tabIndex === -1 && (next.compareDocumentPosition(access) & Node.DOCUMENT_POSITION_FOLLOWING)),
         overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
       };
     })()`);
@@ -181,8 +186,14 @@ async function run() {
     const expectedPhones = phoneLinks(resource.phone);
     const phoneAction = expectedPhones.length ? expectedPhones.some(({ href }) => desktop.phoneHref === href) : !desktop.phoneHref;
     const privateMapLink = desktop.interactiveHref.startsWith("/#resource=") && !desktop.interactiveHref.includes("?resource=");
-    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || desktop.mapActions !== 1 || desktop.overflow > 8) {
-      throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink })}`);
+    const expectedDestinations = [...new Set(resource.serviceAccess
+      ? resource.serviceAccess.filter(route => route.mode === 'walk-in' && route.directions !== false || route.mode === 'intake' && route.directions === true).map(route => route.address)
+      : [`${resource.lat},${resource.lng}`])].sort();
+    const safeDirections = JSON.stringify(desktop.pageMapDestinations) === JSON.stringify(expectedDestinations)
+      && desktop.mapActions === (resource.serviceAccess ? 0 : expectedDestinations.length)
+      && desktop.serviceChoice === Boolean(resource.serviceAccess);
+    if (!desktop.nextSteps || desktop.actionCount < 3 || !desktop.primaryExternal || !sourceMatches || !phoneAction || !privateMapLink || !desktop.aboveFold || !desktop.beforePolicy || !safeDirections || desktop.overflow > 8) {
+      throw new Error(`Desktop service landing page failed: ${JSON.stringify({ ...desktop, sourceMatches, phoneAction, privateMapLink, safeDirections, expectedDestinations })}`);
     }
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -298,7 +309,7 @@ async function run() {
       };
     })()`);
     await capture(client, "directory-mobile.png");
-    const expectedMenu = ["Find help", "Directory", "Saved", "How listings are checked", "Sources", "Transparency"];
+    const expectedMenu = ["Find help", "Directory", "Saved", "About RWN", "How listings are checked", "Sources", "Transparency"];
     // Bowery is a source-reviewed multisite organization: generic maps would
     // incorrectly imply that shelter intake shares the meal entrance.
     const expectedActions = ["Directions to meal service", "Shelter intake details", "Showers and clothing details", "Mobile medical care details", "View details"];
@@ -307,10 +318,13 @@ async function run() {
     const mealAction = directoryMobile.actionLinks?.find(action => action.label === "Directions to meal service");
     const mealUrl = mealAction ? new URL(mealAction.href) : null;
     const correctMealDestination = mealUrl?.origin === "https://www.google.com" && mealUrl.pathname === "/maps/dir/" && mealUrl.searchParams.get("destination") === "227 Bowery, New York, NY 10002";
+    const shelterAction = directoryMobile.actionLinks?.find(action => action.label === "Directions to shelter intake");
+    const shelterUrl = shelterAction ? new URL(shelterAction.href) : null;
+    const correctShelterDestination = shelterUrl?.origin === "https://www.google.com" && shelterUrl.pathname === "/maps/dir/" && shelterUrl.searchParams.get("destination") === "90 Lafayette Street, New York, NY 10013";
     const correctIntakeDetails = directoryMobile.actionLinks?.filter(action => expectedActions.slice(1, 4).includes(action.label)).every(action => action.href === "https://www.bowery.org/get-help/");
     const genericMapsAbsent = !directoryMobile.actionLabels?.some(label => ["Apple Maps", "Google Maps", "Directions"].includes(label));
-    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || !correctMealDestination || !correctIntakeDetails || !genericMapsAbsent || directoryMobile.overflow > 8) {
-      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions, correctMealDestination, correctIntakeDetails, genericMapsAbsent })}`);
+    if (!directoryMobile.ok || !directoryMobile.searchAboveFold || directoryMobile.needHeight < 44 || !directoryMobile.completeNeeds || !directoryMobile.hiddenChipsInert || !directoryMobile.found || !directoryMobile.actionsReady || directoryMobile.minimumActionHeight < 44 || directoryMobile.visibleMenuLinks !== expectedMenu.length || JSON.stringify(directoryMobile.menuLabels) !== JSON.stringify(expectedMenu) || !hasAllActions || !hasCall || !correctMealDestination || !correctShelterDestination || !correctIntakeDetails || !genericMapsAbsent || directoryMobile.overflow > 8) {
+      throw new Error(`Mobile directory failed: ${JSON.stringify({ ...directoryMobile, hasCall, hasAllActions, correctMealDestination, correctShelterDestination, correctIntakeDetails, genericMapsAbsent })}`);
     }
 
     // Long names, readable metadata, and action groups must reflow together.

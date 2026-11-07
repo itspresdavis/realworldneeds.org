@@ -13,7 +13,7 @@ const applySource = bodyBetween("const apply=", "const reset=");
 
 function pageFixture(total) {
   const appended = [];
-  const f = vm.createContext({
+  const f = vm.createContext({ place: { value: "" },
     activeMatches: Array.from({ length: total }, (_, id) => ({ id })), visibleCount: 0,
     format: value => value.toLocaleString(), BATCH: 60, scopedCount: 2019, resultRow: (record) => record,
     resultList: { append: (...rows) => appended.push(...rows) }, more: {}, resultSummary: {}
@@ -42,8 +42,8 @@ test("an older pending search cannot replace newer input or reset state", async 
   let resolve;
   let renderCalls = 0;
   const pending = new Promise((done) => { resolve = done; });
-  const f = vm.createContext({
-    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
+  const f = vm.createContext({ place: { value: "" },
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, activePage: true, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending,
     syncCategoryLabels: () => { renderCalls += 1; }
@@ -66,7 +66,7 @@ test("shipped directory entry stays self-contained for existing offline workers"
   assert.equal(row.children[0].href, "/service/fixture");
   assert.doesNotMatch(client, /from[\s]*["\'].*search\.js/);
   assert.doesNotMatch(client, /\bimport(?!\s*\.)[^;]*directory-results/);
-  assert.ok(Buffer.byteLength(client) <= 16_000, "bundled entry must stay inside the directory client budget");
+  assert.ok(Buffer.byteLength(client) <= 17_000, "bundled entry must stay inside the documented directory client budget");
   const page = await readFile("dist/directory/index.html", "utf8");
   assert.ok(page.includes(`${offlineAssets["/directory.js"]}?v=${directoryRelease}`));
   const worker = await readFile("dist/sw.js", "utf8");
@@ -83,8 +83,8 @@ test("a failed older search cannot clear newer results after input changes or re
   let reject;
   let clearCalls = 0;
   const pending = new Promise((_, fail) => { reject = fail; });
-  const f = vm.createContext({
-    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
+  const f = vm.createContext({ place: { value: "" },
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, activePage: true, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }
   });

@@ -6,7 +6,7 @@ import { resourceSearchScore, resourceSearchText, createIndexedSearchMatcher, se
 import { geographyChoices, renderGeographyHint } from '../public/directory-geography.js';
 
 const cases = JSON.parse(await readFile(new URL('./fixtures/search-safety-cases.json', import.meta.url)));
-const compact = r => ({ id:r.id, name:r.name, place:`${r.city}, ${r.country}`, country:r.country, category:r.category, categories:[r.category,...r.secondaryCategories||[]], search:resourceSearchText(r) });
+const compact = r => ({ id:r.id, name:r.name, place:`${r.city}, ${r.country}`, country:r.country, kind:r.kind, category:r.category, categories:[r.category,...r.secondaryCategories||[]], search:resourceSearchText(r) });
 const index=resources.map(compact), matcher=createIndexedSearchMatcher();
 const rank=(items,q,score=resourceSearchScore)=>items.filter(r=>score(r,q)>=0).sort((a,b)=>score(b,q)-score(a,q)||a.name.localeCompare(b.name));
 const ids=rows=>rows.map(r=>r.id);

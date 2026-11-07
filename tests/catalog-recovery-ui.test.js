@@ -12,8 +12,8 @@ function searchFixture(fetch) {
   const retry = { hidden: true, attributes: {}, focus() { document.activeElement = retry; },
     setAttribute(key, value) { this.attributes[key] = value; }, getAttribute(key) { return this.attributes[key]; } };
   const results = { hidden: true }, shellClasses = new Set(), events = {};
-  const context = vm.createContext({
-    document, input, retry, geography: undefined, releaseVersion: "fixture", country: { value: "US" }, activeCategory: "food", composing: false, generation: 0,
+  const context = vm.createContext({ place: { value: "" },
+    document, input, retry, geography: undefined, releaseVersion: "fixture", country: { value: "US" }, activeCategory: "food", composing: false, activePage: true, generation: 0,
     clear: {}, root: { classList: { toggle() {} } }, navigator: { onLine: true },
     queryTokens: text => text ? [text] : [], normalize: text => text, scoreRecord: () => 1,
     loadCatalog: catalog.load, results, resultList: { replaceChildren() {}, append() {} },

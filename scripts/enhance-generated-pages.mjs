@@ -1,8 +1,9 @@
-import { serviceActions } from "../src/utils/service-access.js";
+import { serviceContactMarkup } from "./service-contact.mjs";
 import { relatedResources } from "./related-resources.mjs";
-import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
+import { resourceScope } from "../src/utils/resource-scope.js";
+import { serviceBeforeYouGoMarkup } from "./service-before-you-go.mjs";
+import { isContactOnly } from "../src/utils/resource-location.js";
 import { minify } from "terser";
-import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -56,7 +57,7 @@ function relatedMarkup(resource) {
   const country = String(resource.country || "").trim();
   const isCountry = Boolean(country && country !== "Global");
   const heading = related.length
-    ? isCountry ? `Related help in ${country}` : "Related networks and finders"
+    ? isCountry ? "Related help and wider finders" : "Related networks and finders"
     : "Explore more help";
   const countryHref = isCountry ? `/directory/${slugify(country)}` : "/directory/global";
   const note = related.length
@@ -74,7 +75,7 @@ function relatedMarkup(resource) {
       const label = [kind, categories[candidate.category]?.label || "Essential help"].filter(Boolean).join(" · ");
       const place = candidate.kind === "direct" && isExactServiceSite(candidate)
         ? formatResourcePlace(candidate)
-        : candidate.country === "Global" ? "Check provider coverage" : candidate.country;
+        : resourceScope(candidate).label;
       return `<a href="/service/${encodeURIComponent(candidate.id)}"><strong>${escapeHtml(candidate.name)}</strong><span>${escapeHtml(place)}</span><small>${escapeHtml(label)}</small></a>`;
     }).join("")}</div>` : ""}
     ${broader}
@@ -86,30 +87,8 @@ function accessibilityMarkup(resource) {
   return `<aside class="service-accessibility" aria-label="Accessibility information"><strong>Accessibility</strong><p>${escapeHtml(resource.accessibilityNote)}</p></aside>`;
 }
 
-function serviceNextStepMarkup(resource) {
-  const links = [`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`];
-  const phones = phoneLinks(resource.phone);
-  const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
-    ? `<span class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`
-    : "";
-  for (const { label, href } of phones) {
-    links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
-  }
-  for (const action of serviceActions(resource)) {
-    links.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer"><strong>${escapeHtml(action.label)}</strong><span>${escapeHtml(action.address || "Check access with the provider")}</span></a>`);
-  }
-  if (hasMapCoordinates(resource)) links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  if (isContactOnly(resource) && resource.accessUrl) {
-    links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer"><strong>Get help online</strong><span>Use the reviewed access link</span></a>`);
-  }
-  const contactContext = isContactOnly(resource)
-    ? `<span class="service-next-steps__context">${escapeHtml(contactOnlyNotice(resource))}</span>${resource.phone ? `<span class="service-next-steps__context">Phone dialing scope: ${escapeHtml(resource.phoneAccess)}</span>` : ""}`
-    : "";
-  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong>${phoneContext}${contactContext}</div><div>${links.join("")}</div></nav>`;
-}
-
 function assetLinks(release, includeScript) {
-  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
+  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script><script type="module" src="/src/utils/search-intent-entry.js?v=${releaseInfo.release}"></script>` : ""}`;
 }
 
 function directorySearchMarkup(scope) {
@@ -130,6 +109,7 @@ function directorySearchMarkup(scope) {
   </section><section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
       <label class="directory-search-control"><span>Search this directory</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Service, place, or organization" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="Alt+/ Escape" /></span></label>
+      <label class="directory-place-field"><span>Place (city, region, country or postal code)</span><input type="search" data-directory-place aria-label="Place (city, region, country or postal code)" autocomplete="off" enterkeyhint="search" /></label>
       ${countryControl}
     </div>
     <label class="directory-need-field"><span>Type of help</span><select data-directory-need disabled><option value="">All help</option>${needs.map(need => `<option value="${escapeHtml(need)}">${escapeHtml(need)}</option>`).join("")}</select></label>
@@ -177,8 +157,8 @@ function enhanceServicePage(html, resource, release) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n  ${assetLinks(release, false)}`);
   }
   if (!html.includes("service-next-steps")) {
-    const nextSteps = serviceNextStepMarkup(resource);
-    html = html.replace('<div class="policy-note">', `${nextSteps}\n      <div class="policy-note">`);
+    const nextSteps = serviceContactMarkup(resource);
+    html = html.replace('<div class="policy-note">', `${nextSteps}\n${serviceBeforeYouGoMarkup(resource)}\n      <div class="policy-note">`);
   }
   const accessibility = accessibilityMarkup(resource);
   if (accessibility && !html.includes("service-accessibility")) {
@@ -217,10 +197,13 @@ const searchImport = 'import { normalizeSearch as normalize, querySearchTokens a
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
 const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n{\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}\n}`;
-// Keep the complete offline entry under its 16 KB ceiling, without
-// another runtime request. Terser uses its safe defaults (no unsafe transforms),
-// including declaration joining; rendered CI tests exercise the shipped bundle.
-const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow"] } });
+// Keep one complete offline entry, without another runtime request. A lexical
+// wrapper lets the compiler shorten repeated references to stable browser objects;
+// their mutable properties (history state, online status) are still read live.
+// Fetch and timers remain global so transport recovery/testing can replace them.
+// Terser keeps its safe transforms; real rendered/upgrade tests exercise this output.
+const scopedDirectoryBundle = `((document,window,navigator,history)=>{${directoryBundle}})(document,window,navigator,history);`;
+const { code: directoryCode } = await minify(scopedDirectoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow"] } });
 await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search

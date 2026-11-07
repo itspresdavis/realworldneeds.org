@@ -379,6 +379,7 @@ class WorkflowContract(unittest.TestCase):
             self.assertRegex(body, r"(?m)^    timeout-minutes: 24$")
             self.assertIn("run: npm ci", body)
             self.assertIn("node-version: 24", body)
+            self.assertIn('chrome-version: "157.0.8103.38"', body)
             self.assertNotIn("continue-on-error", body)
             self.assertNotRegex(body, r"(?m)^    needs:")
             combined += [match for match in re.findall(r"(?m)^          (node scripts/browser-[a-z0-9-]+\.mjs)$", body)

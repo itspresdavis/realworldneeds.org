@@ -42,6 +42,8 @@ jobs:
       - name: Install Chrome
         id: chrome
         uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
+        with:
+          chrome-version: "157.0.8103.38"
       - name: Crash-test real globe touch input
         run: |
           mkdir -p qa-screenshots
@@ -54,8 +56,6 @@ jobs:
         run: |
           node scripts/browser-service-qa.mjs
           node scripts/browser-asset-upgrade.mjs
-          node scripts/browser-saved-services.mjs
-          node scripts/browser-chaos.mjs
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Upload visual QA
@@ -91,8 +91,12 @@ jobs:
       - name: Install Chrome
         id: chrome
         uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
+        with:
+          chrome-version: "157.0.8103.38"
       - name: Verify globe, offline, handoff and cache upgrades
         run: |
+          node scripts/browser-saved-services.mjs
+          node scripts/browser-chaos.mjs
           node scripts/browser-institutional.mjs
           node scripts/browser-globe-v2.mjs
           node scripts/browser-offline.mjs

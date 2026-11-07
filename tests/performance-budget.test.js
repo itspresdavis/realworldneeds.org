@@ -6,6 +6,7 @@ const budgets = [
   ["src/app.js", 180_000],
   ["src/globe-points.js", 20_000],
   ["src/utils/globe-clustering.js", 16_000],
+  ["src/utils/globe-demand.js", 3_000],
   ["src/data/generated/massachusetts-wic.js", 300_000],
   ["src/data/generated/new-york-wic.js", 750_000],
   ["src/data/generated/trussell-foodbanks.js", 600_000]
