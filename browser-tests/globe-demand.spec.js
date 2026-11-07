@@ -46,3 +46,33 @@ test('unavailable graphics immediately offer the text path even when the map is 
   await expect(page.locator('.resource-card').first()).toContainText('Boston');
   expect(graphics).toEqual([]);
 });
+
+test('context loss before exploration preserves text search without loading the engine', async ({ page, browserName }, info) => {
+  await page.setViewportSize({ width: 390, height: 500 });
+  const graphics = [], errors = [], initializationWarnings = [];
+  page.on('request', request => { if (/\/vendor\/three|\/media\/earth|\/data\/countries/.test(request.url())) graphics.push(request.url()); });
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (/WebGL globe could not be initialized/.test(message.text())) initializationWarnings.push(message.text()); });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-globe-startup', /deferred|unavailable/);
+  const supported = await page.locator('html').getAttribute('data-globe-startup') === 'deferred';
+  if (browserName === 'chromium') expect(supported).toBe(true);
+  test.skip(!supported, 'This engine has no usable WebGL; the immediate text fallback is separately mandatory.');
+  const injected = await page.locator('#globeCanvas').evaluate(canvas => new Promise(resolve => {
+    const extension = canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context');
+    if (!extension) return resolve(false);
+    canvas.addEventListener('webglcontextlost', () => resolve(true), { once: true });
+    extension.loseContext();
+  }));
+  await info.attach('deferred-context-loss-capability', { body: JSON.stringify({ injected, browserName }), contentType: 'application/json' });
+  if (browserName === 'chromium') expect(injected).toBe(true);
+  test.skip(!injected, 'This engine does not expose the context-loss testing extension.');
+  await page.locator('#globeCanvas').scrollIntoViewIfNeeded();
+  await expect(page.locator('html')).toHaveAttribute('data-globe-startup', 'unavailable');
+  await expect(page.locator('#globeFallback')).toBeVisible();
+  await page.locator('#resourceSearch').fill('Boston');
+  await expect(page.locator('.resource-card').first()).toContainText('Boston');
+  expect(graphics).toEqual([]);
+  expect(initializationWarnings).toEqual([]);
+  expect(errors).toEqual([]);
+});
