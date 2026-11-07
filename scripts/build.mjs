@@ -537,12 +537,14 @@ await writeFile("dist/directory.csv", `${directoryCsv}\n`);
 
 await mkdir("dist/data/resources/by-country", { recursive: true });
 await mkdir("dist/data/resources/by-category", { recursive: true });
-await writeFile("dist/data/resources.json", `${JSON.stringify({
+const catalogJson = `${JSON.stringify({
   schemaVersion: "1.4",
   license: "Public service facts with source attribution; see https://www.realworldneeds.org/editorial-policy",
   resourceCount: resources.length,
   resources
-}, null, 2)}\n`);
+}, null, 2)}\n`;
+await writeFile("dist/data/resources.json", catalogJson);
+const catalogSha256 = createHash("sha256").update(catalogJson).digest("hex");
 await writeFile("dist/data/map-index.json", `${JSON.stringify({
   schemaVersion: "1.0",
   resourceCount: mapResources.length,
@@ -569,7 +571,7 @@ await writeFile("dist/data/sources.json", `${JSON.stringify({
   note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
-await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, snapshotReviewedThrough: latestReview })}\n`);
+await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, catalogSha256, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, snapshotReviewedThrough: latestReview })}\n`);
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
 await writeFile("dist/sitemap.xml", sitemap);

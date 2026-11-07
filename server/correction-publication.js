@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 // Verification is an explicit reviewer action, never a build-time source fetch.
 // The destination is fixed, sends no credentials, rejects redirects and bounds
 // the complete streamed response. Reports cannot supply a fetch URL.
@@ -31,16 +33,24 @@ export async function verifyCorrectionPublication(report, { fetchImpl = globalTh
         if (length > maxBytes) { await reader.cancel(); throw new CorrectionPublicationError(); }
         chunks.push(part.value);
       }
-      return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      return Buffer.concat(chunks);
     } finally { reader.releaseLock(); }
   };
   try {
     return await Promise.race([
       (async () => {
-        const before = await read("/data/release.json", 64000);
-        const catalog = await read("/data/resources.json", 8000000);
-        const after = await read("/data/release.json", 64000);
-        if (!/^[0-9a-f]{12}$/.test(before.release || "") || !equal(before, after) || !Array.isArray(catalog.resources)
+        const before = JSON.parse((await read("/data/release.json", 64000)).toString("utf8"));
+        const catalogBytes = await read("/data/resources.json", 8000000);
+        const after = JSON.parse((await read("/data/release.json", 64000)).toString("utf8"));
+        // The catalog and no-store manifest may come from different cache
+        // generations. Bind the exact bytes before parsing or trusting facts.
+        // This is unsigned release integrity evidence, not an attestation.
+        if (!/^[0-9a-f]{12}$/.test(before?.release || "") || !equal(before, after)
+          || !/^[0-9a-f]{64}$/.test(before?.catalogSha256 || "")
+          || createHash("sha256").update(catalogBytes).digest("hex") !== before.catalogSha256)
+          throw new CorrectionPublicationError(409);
+        const catalog = JSON.parse(catalogBytes.toString("utf8"));
+        if (!Array.isArray(catalog.resources)
           || catalog.resources.length > 50000 || catalog.resourceCount !== catalog.resources.length || before.resourceCount !== catalog.resources.length
           || new Set(catalog.resources.map(record => record.id)).size !== catalog.resources.length)
           throw new CorrectionPublicationError(409);
