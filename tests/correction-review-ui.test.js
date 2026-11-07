@@ -47,6 +47,7 @@ test("source-backed decision requires evidence, coalesces requests, and confirms
   pending.resolve(detail({ ...report, revision: 2, status: "ready" })); await save;
   assert.match(f.root.textContent, /No public listing was changed or published/);
   assert.match(f.root.textContent, /Ready for catalog review/); assert.equal(f.field("reason").value, "");
+  assert.match(walk(f.root).find(node => node.className === "correction-review__list").textContent, /Ready for catalog review/);
 });
 test("revision conflict retains draft and cannot overwrite until explicit reload and another save", async () => {
   let revision = 1, patches = 0;

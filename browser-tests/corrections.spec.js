@@ -110,6 +110,7 @@ test('reviewed values require separate catalog application and an actual publica
   fixture.state.publicationPending=true;
   await page.goto(fixture.url+'/review-fixture');
   await page.getByRole('button',{name:'Review correction for The Bowery Mission'}).click();
+  await page.getByRole('textbox',{name:'Verified replacement value'}).waitFor();
   await expect(page.getByRole('textbox',{name:'Verified replacement value'})).toHaveValue('');
   const application=page.locator('form').filter({has:page.locator('[name=catalogValue]')});
   await application.getByRole('textbox',{name:'Verified replacement value'}).fill('Independently verified fixture facts.');
@@ -118,13 +119,22 @@ test('reviewed values require separate catalog application and an actual publica
   await page.evaluate(async()=>{const {setLocale}=await import('/src/utils/localization.js');setLocale('es');});
   await expect(application.locator('[name=catalogValue]')).toHaveValue('Independently verified fixture facts.');
   await application.getByRole('button',{name:'Aplicar al catálogo',exact:true}).click();
+  await page.getByRole('button',{name:'Verificar la publicación pública'}).waitFor();
   await expect(page.getByRole('button',{name:'Verificar la publicación pública'})).toBeVisible();
   expect(fixture.state.actions[0].changes).toEqual({summary:'Independently verified fixture facts.'});
   await page.getByRole('button',{name:'Verificar la publicación pública'}).click();
+  await page.locator('.correction-review__detail').getByText('El catálogo público todavía no coincide. Completa la publicación aprobada y vuelve a verificar.', {exact:true}).waitFor();
   await expect(page.locator('.correction-review__detail')).toContainText('El catálogo público todavía no coincide');
   expect(fixture.state.report.status).toBe('applied');
   await page.getByRole('button',{name:'Verificar la publicación pública'}).click();
+  // Playwright #43967: a failed expect poll snapshots the temporarily loading
+  // section in an isolated world; axe later reads its ARIA reference in the
+  // page world and crashes Firefox. Wait for the real resolved state first,
+  // then retain both the text assertion and whole-page accessibility scan.
+  await page.locator('.correction-review__detail').getByText('Publicación pública verificada', {exact:true}).waitFor();
   await expect(page.locator('.correction-review__detail')).toContainText('Publicación pública verificada');
+  await expect(page.locator('.correction-review__list')).toContainText('Publicación pública verificada');
+  await expect(page.locator('#correction-detail-title')).toBeFocused();
   for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:900});await overflow(page);}
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   await page.setViewportSize({width:390,height:844});await capture(page,'correction-reviewed-release-mobile');

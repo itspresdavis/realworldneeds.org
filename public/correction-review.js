@@ -56,13 +56,21 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
   const detail = node("section", null, "correction-review__detail");
   detail.hidden = true;
   root.replaceChildren(heading, explanation, tools, status, list, pages, detail);
+  const queueStatusNodes = new Map();
+  const updateQueueStatus = report => {
+    const target = queueStatusNodes.get(report.id);
+    if (target) setText(target, "{status} · {priority}", {
+      status: statusLabels[report.status] || "Unknown status",
+      priority: ({ urgent: "Urgent", normal: "Normal", low: "Low" })[report.priority] || "Unknown status",
+    });
+  };
   let page = 0, sequence = 0, detailSequence = 0, loading = false, selectedId;
 
   const clearPrivate = () => {
     sequence += 1;
     detailSequence += 1;
     selectedId = undefined;
-    list.replaceChildren();
+    list.replaceChildren(); queueStatusNodes.clear();
     detail.replaceChildren();
     detail.hidden = true;
   };
@@ -181,7 +189,7 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
         const { data } = await api("/api/correction-review", { method: "PATCH", body: { id: report.id, revision: report.revision, ...values } });
         if (current !== detailSequence) return;
         if (!data.report || data.report.id !== report.id || !Number.isInteger(data.report.revision) || data.report.revision <= report.revision) throw new Error("Save not confirmed");
-        report = data.report;
+        report = data.report; updateQueueStatus(report);
         setText(factValues.Status, statusLabels[report.status] || "Unknown status");
         setText(factValues.Priority, ({ urgent: "Urgent", normal: "Normal", low: "Low" })[report.priority] || "Unknown status");
         if (report.assignedTo) { factValues["Assigned reviewer account"].removeAttribute("data-correction-message"); factValues["Assigned reviewer account"].textContent = report.assignedTo; }
@@ -211,7 +219,7 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
           return response;
         } catch (error) { denied(error); throw error; }
       }, draft: catalogDraft,
-        onComplete: () => { if (renderedSequence === detailSequence && selectedId === report.id) inspect(report.id, { focus: false }); },
+        onComplete: updated => { if (renderedSequence === detailSequence && selectedId === report.id) { updateQueueStatus(updated); inspect(report.id); } },
         onReload: nextDraft => inspect(report.id, { preserveCatalogDraft: nextDraft }),
       });
     };
@@ -238,10 +246,11 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
       if (current !== sequence) return;
       if (!Array.isArray(data.reports) || typeof data.hasMore !== "boolean") throw new Error("Invalid queue");
       root.hidden = false; tools.hidden = pages.hidden = false;
-      list.replaceChildren();
+      list.replaceChildren(); queueStatusNodes.clear();
       for (const report of data.reports) {
         const card = node("article", null, "correction-review__card");
-        card.append(node("h3", report.listingName || report.resourceId), uiNode("p", CORRECTION_CATEGORIES.find(item => item.value === report.category)?.label || "Unrecognized issue"), uiNode("p", "{status} · {priority}", undefined, { status: statusLabels[report.status] || "Unknown status", priority: ({ urgent: "Urgent", normal: "Normal", low: "Low" })[report.priority] || "Unknown status" }));
+        const currentStatus = node("p"); queueStatusNodes.set(report.id, currentStatus); updateQueueStatus(report);
+        card.append(node("h3", report.listingName || report.resourceId), uiNode("p", CORRECTION_CATEGORIES.find(item => item.value === report.category)?.label || "Unrecognized issue"), currentStatus);
         const open = uiNode("button", "Review correction"); open.type = "button";
         setLabel(open, "Review correction for {listing}", { listing: report.listingName || report.resourceId });
         open.addEventListener("click", () => inspect(report.id)); card.append(open); list.append(card);
@@ -251,7 +260,7 @@ export function initCorrectionReview(root, { request = correctionRequest } = {})
       previous.disabled = page === 0; next.disabled = !data.hasMore;
     } catch (error) {
       if (current !== sequence || denied(error)) return;
-      root.hidden = false; list.replaceChildren();
+      root.hidden = false; list.replaceChildren(); queueStatusNodes.clear();
       setText(status, "The correction queue is unavailable. Use Refresh correction queue to try again.");
     } finally {
       loading = false; refresh.setAttribute("aria-disabled", "false");
