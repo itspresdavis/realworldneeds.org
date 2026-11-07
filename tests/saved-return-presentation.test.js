@@ -77,7 +77,10 @@ test("every directory scope gets honest, initially hidden guidance and scope-pre
 });
 
 test("Saved hero treatment is scoped to its fragment and preserves the directory heading for assistive technology", () => {
-  const rules = [...savedCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].includes(".legal-hero"));
+  const heroRules = [...savedCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].includes(".legal-hero"));
+  const motionRule = heroRules.find((rule) => rule[1].trim().split("\n").at(-1) === "#directory>.legal-hero");
+  assert.equal(motionRule?.[2], "transition:none!important", "return layout must be immediate, including under reduced motion");
+  const rules = heroRules.filter((rule) => rule !== motionRule);
   assert.equal(rules.length, 1);
   assert.equal(rules[0][1].trim().split("\n").at(-1), "#directory:has(#saved:target)>.legal-hero");
   assert.match(rules[0][2], /position:absolute/);
