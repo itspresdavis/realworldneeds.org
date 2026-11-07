@@ -9,7 +9,7 @@ Baseline: `bfd53f5ed88cf50cb987eaba2fac6fb6f867cd75`, preserving the cumulative 
 - Both public hosts still serve release `0b2bd1f1b798`, deployment `dpl_AU7kzmhb258wa6nBeLEcdLUhrEs1`. The public artifact has previously been reproduced from #97 (`574447c8`); the CLI deployment metadata does not expose a Git SHA, so exact backend source identity remains unproven.
 - Existing preview `dpl_FFDjiLQyCscEb2FS8Y7AXPcZ3MXx`, https://rwn-28866oid8-anlos.vercel.app, identifies `bfd53f5e` and serves release `a8555440c322`. Fresh sampled homepage/Bowery/locality hashes match the baseline build.
 - Supabase `cytfrxldixdapjaxcqzf` now reports `ACTIVE_HEALTHY`, PostgreSQL 17.6.1.155. The previous inactive state is historical. Recovery was not performed by this work; its cause and recovery/backup history remain unverified.
-- Bounded hosted aggregates: 2,033 catalog rows, 1,992 published, zero `rwn_members`. Anonymous table-wide SELECT and anonymous/authenticated `editorial_note` SELECT are denied. November 7 hosted migrations apply the three historical November 6 restrictions under different timestamps; do not reapply by filename. Correction tables were absent at baseline; subsequent applied changes are recorded below. Other unrelated hosted tables are out of scope.
+- Baseline bounded hosted aggregates were 2,033 catalog rows, 1,992 published and zero `rwn_members`. Post-repair read-only verification found exactly 2,038 rows: 1,997 published and all 41 withheld records retained; memberships and correction reports remain zero. Anonymous table-wide SELECT and anonymous/authenticated `editorial_note` SELECT are denied. November 7 hosted migrations apply the three historical November 6 restrictions under different timestamps; do not reapply by filename. Correction tables were absent at baseline; subsequent applied changes are recorded below. Other unrelated hosted tables are out of scope.
 - Main protection is not enforced. Ruleset inspection is plan/visibility blocked; protection inspection is integration-permission blocked. Vercel project responses omit the automatic-domain-assignment setting; an earlier update acknowledgement is not independent enforcement evidence.
 - Runtime: Node 24.22.1, npm 11.9.0, locked dependencies. Browser-control tool is absent despite listed skill; this assignment explicitly permits Playwright. Physical-device/assistive-technology evidence remains unavailable.
 
@@ -157,6 +157,29 @@ correction function-body hashes to source, with all matching, fixed search paths
 zero private client table grants and intake still disabled. It found no
 reproduced blocking defect within that scope; hosted auth and operator acceptance
 remain separate incomplete requirements.
+
+At `33d49153`, local validation passed 1,868 tests and reproduced all 2,894 files.
+Exact-source run `42354841437` passed five required jobs but failed WebKit;
+PR run `42354845921` also exposed an early-edit viewport race during slow reload.
+The WebKit trace showed a worker controller change starting a new catalog fetch
+from a departing document. Directory, Saved and offline fallback now cancel work
+on pagehide and recover on pageshow. The controlled pre-fix failure is retained;
+the repair passed 1,871 Node tests and 119 browser/upgrade cases, with four
+explicit graphics capability skips. No CORS or error assertions were relaxed.
+The early-edit viewport failure had two causes: a delayed native history restore
+and smooth movement already pending when typing began. The repair owns native
+restoration during the early edit, preserves the original visible-input motion
+cancellation, and restores the prior mode before ordinary navigation or departure.
+Cancelled links, downloads and new-tab actions retain ownership. The smaller
+manual-only candidate failed the unchanged native journey and is retained as
+failed evidence. The combined fix passed the full desktop/mobile startup helper
+at fourfold CPU slowdown, both with and without passive tracing, plus 15/15
+independent Chromium/Firefox/WebKit history cases and 83 focused Node tests.
+Before/after images were inspected. The necessary startup cost is 367 raw / 171
+gzip bytes, with no added request; the narrow served-file limits are documented
+in the performance report and aggregate runtime limits remain unchanged. These
+component passes do not certify a new integrated release: all six Quality jobs
+and the hosted candidate checks must pass on the resulting exact source.
 
 Images include Rosie/Bridge narrow cards before and after, Spanish Beacon access,
 private correction/workspace fixtures, short-height focused navigation and the
