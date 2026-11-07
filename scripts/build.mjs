@@ -363,7 +363,7 @@ function resourcePage(resource) {
       <article class="directory-record" aria-labelledby="service-details-heading">
         <header><div><p>${escapeHtml(kindLabel(resource))}</p><h2 id="service-details-heading" tabindex="-1">Service details</h2><span>${escapeHtml(place)}</span></div><time datetime="${escapeHtml(resource.lastChecked)}">Source checked ${escapeHtml(resource.lastChecked)}</time></header>
         <dl class="service-facts">
-          <div data-service-location-facts><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
+          <div${resource.serviceAccess ? ' data-service-location-facts' : ''}><dt>${resource.serviceAccess ? "Service locations" : direct ? "Address" : "Coverage"}</dt><dd>${serviceLocationFacts(resource)}</dd></div>
           ${contactOnly ? `<div><dt>Coverage details</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
           ${phone}
           ${contactOnly && resource.phone ? `<div><dt>Phone dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}
