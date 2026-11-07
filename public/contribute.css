@@ -617,3 +617,10 @@ summary {
     margin-bottom: 14px;
   }
 }
+
+/* Account-only language controls; private drafts stay in their existing inputs. */
+.contributor-language{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;padding:.75rem clamp(1rem,4vw,3rem);border-bottom:1px solid var(--line)}
+.contributor-language label{display:flex;gap:.75rem;align-items:center}
+.contributor-language select{min-height:44px;font:inherit;padding:.5rem;border:1px solid #a8b9ad;border-radius:7px;background:#fff;color:var(--ink)}
+.contributor-language select:focus-visible{outline:3px solid #b07628;outline-offset:4px}
+.contributor-language p{margin:0;color:var(--muted);font-size:.875rem;max-width:55ch}
