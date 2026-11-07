@@ -3,9 +3,14 @@ const CACHE_NAME = "rwn-offline-__RWN_OFFLINE_RELEASE__";
 const RUNTIME_CACHE = "rwn-offline-runtime-v1";
 const RUNTIME_LIMIT = 64;
 const RUNTIME_ASSETS = /* __RWN_RUNTIME_ASSETS__ */ {};
+const OPTIONAL_ASSETS = /* __RWN_OPTIONAL_ASSETS__ */ {};
 const RUNTIME_ID = /* __RWN_RUNTIME_ID__ */ "";
 const runtimePaths = Object.values(RUNTIME_ASSETS);
-const runtimePattern = /^\/(?:legal|page-menu|directory-enhancements|professional-pages|navigation-actions|directory|directory-startup|directory-geography|saved-loader|saved-services|offline-status)\.([a-f0-9]{12})\.(?:css|js)$/;
+const optionalPaths = Object.values(OPTIONAL_ASSETS);
+// Only the built manifest's public dependency graph and legacy public runtime
+// names are eligible. Never make all /src paths or arbitrary JSON cacheable.
+const runtimeCanonicals = [...new Set([...Object.keys(RUNTIME_ASSETS), ...Object.keys(OPTIONAL_ASSETS), "/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory.js", "/directory-startup.js", "/directory-geography.js", "/saved-loader.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css"])];
+const runtimePattern = new RegExp(`^(?:${runtimeCanonicals.map(path => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\.(css|js|json)$/, "\\.[a-f0-9]{12}\\.$1")).join("|")})$`);
 
 const CORE_ASSETS = [
   "/directory",
@@ -20,6 +25,8 @@ const CORE_ASSETS = [
   "/saved-services.js",
   "/saved-services.css",
   "/offline-status.js",
+  "/language.js",
+  "/task-controls.css",
   "/brand/rwn-logo-192.png",
   "/rwn-mark.svg",
   "/site.webmanifest"
@@ -42,7 +49,7 @@ async function putIfUsable(cache, key, response) {
 
 async function verifiedRuntime(response, path) {
   if (!response?.ok || response.type === "opaque") return false;
-  const expected = path.match(runtimePattern)?.[1];
+  const expected = runtimePattern.test(path) && path.match(/\.([a-f0-9]{12})\.(?:css|js|json)$/)?.[1];
   if (!expected) return false;
   const digest = await crypto.subtle.digest("SHA-256", await response.clone().arrayBuffer());
   const actual = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 12);
@@ -81,10 +88,10 @@ async function warmCore() {
 }
 
 async function archiveRuntime() {
-  if (!runtimePaths.length) return;
+  if (!runtimePaths.length && !optionalPaths.length) return;
   const archive = await caches.open(RUNTIME_CACHE);
   const current = await caches.open(CACHE_NAME);
-  for (const path of runtimePaths) {
+  for (const path of [...runtimePaths, ...optionalPaths]) {
     const key = cacheKeyFor(path);
     const response = await current.match(key).catch(() => null);
     if (response) await archive.put(key, response).catch(() => {});
@@ -93,7 +100,7 @@ async function archiveRuntime() {
   let excess = keys.length - RUNTIME_LIMIT;
   for (const key of keys) {
     const path = new URL(key.url).pathname;
-    if (!runtimePattern.test(path) || (excess > 0 && !runtimePaths.includes(path))) {
+    if (!runtimePattern.test(path) || (excess > 0 && !runtimePaths.includes(path) && !optionalPaths.includes(path))) {
       await archive.delete(key);
       excess -= 1;
     }
@@ -110,7 +117,8 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     // Keep a bounded archive of code/styles for already-open older pages.
-    // No HTML, catalog, searches or saved items are copied into this cache.
+    // No HTML, service catalog, user searches or saved items enter this cache.
+    // Optional public postal reference data is archived only if it was used.
     await archiveRuntime().catch(() => {});
     const names = await caches.keys();
     await Promise.all(names
@@ -363,14 +371,15 @@ async function immutableRuntime(request) {
     const cache = await caches.open(name).catch(() => null);
     if (name === CACHE_NAME) currentCache = cache;
     const saved = await cache?.match(key).catch(() => null);
-    if (saved) return saved;
+    if (saved && await verifiedRuntime(saved, path).catch(() => false)) return saved;
+    if (saved) await cache?.delete(key).catch(() => {});
   }
   try {
     const response = await fetch(request);
     if (!await verifiedRuntime(response, path)) return new Response("Asset version unavailable", { status: 503 });
     // Only this release's manifest can add entries. Unknown/older versions can
     // use the bounded archive, but cannot fill it with arbitrary URL variants.
-    if (runtimePaths.includes(path) && currentCache) {
+    if ((runtimePaths.includes(path) || optionalPaths.includes(path)) && currentCache) {
       // Keep the original handle: an old in-flight request must not recreate
       // its retired release cache after another worker has activated.
       await putIfUsable(currentCache, key, response).catch(() => {});
@@ -411,6 +420,8 @@ self.addEventListener("fetch", (event) => {
     || url.pathname === "/saved-services.js"
     || url.pathname === "/saved-services.css"
     || url.pathname === "/offline-status.js"
+    || url.pathname === "/language.js"
+    || url.pathname === "/task-controls.css"
     || url.pathname === "/directory-enhancements.css"
     || url.pathname === "/professional-pages.css"
     || url.pathname === "/navigation-actions.css"

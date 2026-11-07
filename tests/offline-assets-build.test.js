@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { requiredOfflineAssets, offlineModuleEntries, optionalOfflineData, moduleDependencies } from "../scripts/version-offline-assets.mjs";
 
 const read = (path) => readFile(path, "utf8");
 const release = JSON.parse(await read("dist/data/release.json"));
@@ -23,15 +24,23 @@ test("new HTML cannot request the canonical paths intercepted by the legacy work
 });
 
 test("offline manifest and lazy saved entry reference actual byte-addressed artifacts", async () => {
-  assert.equal(Object.keys(release.offlineAssets || {}).length, 12);
+  const expected = new Set(requiredOfflineAssets);
+  async function collect(path) {
+    if (expected.has(path)) return;
+    expected.add(path);
+    for (const child of moduleDependencies(await read(`dist${path}`), path)) await collect(child.canonical);
+  }
+  for (const entry of offlineModuleEntries) await collect(entry);
+  assert.deepEqual(Object.keys(release.offlineAssets || {}).sort(), [...expected].sort());
+  assert.deepEqual(Object.keys(release.offlineOptionalAssets || {}).sort(), [...optionalOfflineData].sort());
   const worker = await read("dist/sw.js");
   assert.match(release.offlineAssetRelease, /^[a-f0-9]{12}$/);
   assert.ok(worker.includes(`const RUNTIME_ID = "${release.offlineAssetRelease}"`));
   assert.ok((await read("dist/directory/index.html")).includes(`<meta name="rwn-offline-assets" content="${release.offlineAssetRelease}"`));
-  for (const [canonical, path] of Object.entries(release.offlineAssets)) {
+  for (const [canonical, path] of Object.entries({ ...release.offlineAssets, ...release.offlineOptionalAssets })) {
     const bytes = await readFile(`dist${path}`);
     const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 12);
-    assert.equal(path, canonical.replace(/\.(css|js)$/, `.${hash}.$1`));
+    assert.equal(path, canonical.replace(/\.(css|js|json)$/, `.${hash}.$1`));
     assert.ok(worker.includes(JSON.stringify(path)), path);
   }
   const directory = await read(`dist${release.offlineAssets["/directory.js"]}`);
