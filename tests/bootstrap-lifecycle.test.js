@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { startGlobeWhenNeeded } from '../src/utils/globe-demand.js';
 
 const source = await readFile(new URL("../src/bootstrap.js", import.meta.url), "utf8");
 const installedOrder = ["installProfessionalPresentation", "installRefinements", "installAccessibility", "installResultActions"];
@@ -42,6 +43,7 @@ function fixture({ readyState = "interactive", delayed, supported = true, secure
     "./accessibility.js": { installAccessibility: installer("installAccessibility") },
     "./result-actions.js": { installResultActions: installer("installResultActions") },
     "./telemetry.js": { startTelemetry() {} },
+    "./utils/globe-demand.js": { startGlobeWhenNeeded: start => startGlobeWhenNeeded(start, { document, window }) },
   };
   const loadModule = async specifier => {
     imports.push(specifier);
@@ -212,8 +214,17 @@ test("graphics starts only after completed finder installation and its next pain
   f.frames.shift()();
   assert.deepEqual(f.graphics, [], "render work must not run inside the pre-paint animation callback");
   assert.equal(f.tasks.length, 1);
-  f.tasks.shift()();
+  await f.tasks.shift()();
   assert.deepEqual(f.graphics, [{ state: "ready", installed: installedOrder }]);
+});
+
+test('a missing map scheduling module preserves optional graphics startup', async () => {
+  const f = fixture({ moduleErrors: ['./utils/globe-demand.js'] });
+  await f.done;
+  f.frames.shift()();
+  await f.tasks.shift()();
+  assert.deepEqual(f.graphics, [{ state: 'ready', installed: installedOrder }]);
+  assert.equal(f.document.documentElement.dataset.finderStartup, 'ready');
 });
 
 test("failed core never queues graphics startup", async () => {
