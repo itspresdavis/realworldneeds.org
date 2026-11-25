@@ -58,6 +58,10 @@ const records = resources.map((resource, index) => {
   const labels = types.map((type) => categories[type]?.label || type);
   const place = formatResourcePlace(resource);
   const search = resourceSearchText(resource);
+  const phones = phoneLinks(resource.phone);
+  // The call label already carries an unannotated number. Retain separate text
+  // only for additional context or contact-only dialing instructions.
+  const phoneContext = resource.phone && (isContactOnly(resource) || phones.length !== 1 || phones[0].label !== resource.phone);
 
   for (const scope of scopesFor(resource, types)) {
     (scopes[scope] ||= []).push(index);
@@ -72,8 +76,8 @@ const records = resources.map((resource, index) => {
     categoryLabels: labels,
     kind: resource.kind,
     ...(resource.kind !== "direct" ? { coverageScope: resourceScope(resource).type } : {}),
-    ...(resource.phone ? { phone: resource.phone } : {}),
-    phoneLinks: phoneLinks(resource.phone),
+    ...(phoneContext ? { phone: resource.phone } : {}),
+    phoneLinks: phones,
     lat: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
     lng: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,

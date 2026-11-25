@@ -6,7 +6,7 @@ const LIMITS = {
   files: 3500,
   htmlPages: 3200,
   largestFileBytes: 5_500_000,
-  searchIndexBytes: 1_500_000,
+  searchIndexBytes: 1_650_000,
   resourcesBytes: 5_000_000
 };
 

@@ -166,7 +166,8 @@ test("built service pages, directory records and search index agree on every pho
   for (const record of index.records) {
     const resource = byId.get(record.id);
     assert.deepEqual(record.phoneLinks, phoneLinks(resource.phone));
-    assert.equal(record.phone ?? "", resource.phone || "");
+    assert.equal(record.phone ?? (record.phoneLinks.length === 1 ? record.phoneLinks[0].label : ""), resource.phone || "",
+      "every original number and annotation remains available in text or its call label");
     const html = await read(`dist/service/${record.id}/index.html`);
     assert.deepEqual([...new Set(targets(html))].sort(), [...new Set(record.phoneLinks.map(({ href }) => href))].sort(), record.id);
     if (resource.phone) assert.ok(html.includes(`<dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd>`));
