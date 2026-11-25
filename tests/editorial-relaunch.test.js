@@ -37,7 +37,9 @@ test("homepage supplies a direct text directory route without geolocation, WebGL
 test("story and contact are independently useful and do not publish private records", async () => {
   const story = await read("dist/our-story.html");
   const contact = await read("dist/contact.html");
-  assert.match(story, /Why we started/);
+  assert.match(story, /<h1>Why RWN\?<\/h1>/);
+  assert.match(story, /<title>Why RWN\? \| Real World Needs<\/title>/);
+  assert.match(story, /href="\/our-story" aria-current="page">Why RWN\?/);
   assert.match(story, /Pastor Donn Fisher/);
   assert.match(story, /Calvary Chapel Raynham/);
   assert.match(story, /Michael Basiliere joined RWN as a partner in August 2026/);

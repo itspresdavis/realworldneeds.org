@@ -141,25 +141,25 @@ position: absolute;top: .9rem;right: 1rem;left: 1rem;z-index: 8;display: flex;mi
 .rwn-professional .region-menu select {
 -webkit-appearance: none;appearance: none;height: 44px;min-height: 44px;padding: .45rem 2rem .45rem .7rem;border: 1px solid #b8ccbe;border-radius: 7px;background-color: #fffefb;color: var(--rwn-ink-strong);font-size: .8125rem;backdrop-filter: none;background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%2324583e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-position: right .65rem center;background-size: 1rem;background-repeat: no-repeat;}
 .rwn-professional .globe-controls {
-position: absolute;right: .9rem;top: auto;bottom: 5.5rem;transform: none;height: auto;grid-auto-rows: 44px;z-index: 9;display: grid;overflow: hidden;border: 1px solid #b8ccbe;border-radius: 9px;background: #fffefb;box-shadow: 0 2px 6px rgba(21,60,48,.05);backdrop-filter: blur(8px);}
+position: absolute;right: .9rem;top: auto;bottom: 5.5rem;transform: none;height: auto;grid-auto-rows: 44px;z-index: 9;display: grid;overflow: hidden;border: 1px solid #6c9382;border-radius: 8px;background: #163e34;box-shadow: none;}
 .rwn-professional .globe-controls button {
-width: 44px;height: 44px;min-height: 44px;border: 0;border-bottom: 1px solid #d4dfd7;border-radius: 0;background: transparent;color: var(--rwn-green-dark);}
+width: 44px;height: 44px;min-height: 44px;border: 0;border-bottom: 1px solid #547b6c;border-radius: 0;background: transparent;color: #eef4ec;}
 .rwn-professional .globe-controls button:last-child { border-bottom: 0;}
 .rwn-professional :is(.globe-controls,.panel-utilities,.panel-map-actions) :focus-visible { outline-offset: -4px !important;}
 .rwn-professional .globe-controls button:hover,
-.rwn-professional .globe-controls button:focus-visible { background: #edf4ee;color: var(--rwn-ink-strong);}
-/* Preserve the live map status for */
+.rwn-professional .globe-controls button:focus-visible { background: #275243;color: #fff;}
+.rwn-professional .globe-controls button:focus-visible { outline-color: #c2e5cc !important;}
+/* Keep live map status available to screen readers. */
 .rwn-professional .globe-readout {
 display: block !important;position: absolute;width: 1px;height: 1px;padding: 0;margin: -1px;overflow: hidden;clip-path: inset(50%);white-space: nowrap;border: 0;}
 .rwn-professional .globe-gesture-hint { display: none !important;}
 .rwn-professional .globe-meta .status-dot { display: none;}
 .rwn-professional #globeCount { display: none;}
 .atlas-key {
-position: absolute;left: 1rem;right: 1rem;bottom: 1rem;z-index: 8;display: flex;flex-wrap: wrap;gap: .45rem 1rem;padding-top: .8rem;border-top: 1px solid #547362;color: #d3e2d8;font-size: .75rem;pointer-events: none;}
+position: absolute;left: 1rem;right: 1rem;bottom: 1rem;z-index: 8;display: flex;flex-wrap: wrap;gap: .45rem 1rem;padding-top: .65rem;border-top: 1px solid #547362;color: #d3e2d8;font-size: .75rem;pointer-events: none;}
 .atlas-key span { display: inline-flex;align-items: center;gap: .4rem;}
 .atlas-key i { width: 8px;height: 8px;border-radius: 50%;background: #45b64a;border: 1px solid #245639;}
 .atlas-key .atlas-key__area { background: transparent;border: 2px solid #8acaf3;}
-.atlas-key small { flex-basis: 100%;color: #b7cfc0;font-size: .6875rem;}
 .globe-stage.has-gpu-points .globe-pin:not(.is-selected):not(:hover):not(:focus-visible) > strong { opacity: 0;visibility: hidden;}
 .globe-stage.has-gpu-points .globe-pin:not(.is-selected):not(.globe-cluster) > span { opacity: .001;}
 .globe-stage.has-gpu-points.is-globe-moving .globe-pin-layer { pointer-events: none;}
@@ -375,7 +375,6 @@ width: auto;min-width: 44px;flex: 0 1 auto;justify-content: center;white-space: 
 .rwn-professional .globe-meta strong { font-size: .8125rem;}
 .rwn-professional .region-menu select { max-width: 8rem;font-size: .75rem;}
 .rwn-professional .atlas-key { left: .75rem;right: .75rem;font-size: .6875rem;}
-.rwn-professional .atlas-key small { font-size: .625rem;}
 }
 .rwn-professional .results-empty strong { font-size: .9375rem;}
 .rwn-professional .results-empty p { color: var(--rwn-muted);font-size: .875rem;line-height: 1.6;}

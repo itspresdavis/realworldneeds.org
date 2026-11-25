@@ -33,8 +33,8 @@ test('finder composition reuses each existing interactive node exactly once', ()
 });
 
 test('forest hero, map legend and warning colors retain normal text contrast', () => {
-  const luminance = hex => hex.match(/../g).map(c=>parseInt(c,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
-  for (const [foreground,background] of [['f9f8ef','102f27'],['c6d7cc','102f27'],['bfd1c5','102f27'],['d3e2d8','2b5948'],['b7cfc0','2b5948'],['153c30','fffefb']]) {
+  const luminance = hex => (hex.length === 3 ? [...hex].map(v => v + v).join('') : hex).match(/../g).map(c=>parseInt(c,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+  for (const [foreground,background] of [['f9f8ef','102f27'],['c6d7cc','102f27'],['bfd1c5','102f27'],['d3e2d8','2b5948'],['eef4ec','163e34'],['fff','275243'],['c2e5cc','275243'],['153c30','fffefb']]) {
     const levels = [luminance(foreground),luminance(background)].sort((a,b)=>a-b);
     assert.ok((levels[1]+.05)/(levels[0]+.05)>=4.5, `${foreground} on ${background}`);
     assert.ok(css.includes('#'+foreground), 'the tested foreground is used');
