@@ -394,3 +394,9 @@ display: inline-flex;flex-wrap: wrap;align-items: center;gap: .25rem .45rem;min-
 @media (forced-colors: active) {
 #directory :is(.directory-country-field, .directory-need-field) select { -webkit-appearance: auto;appearance: auto;background-image: none;}
 }
+
+/* Keep the directory introduction in the reading flow, not in a separate card. */
+#directory .directory-guide { margin:0 0 1.25rem;padding:.15rem 0 .85rem;border:0;border-bottom:1px solid var(--page-line);border-radius:0;background:transparent;color:var(--page-ink); }
+#directory .directory-guide p { margin:0; }
+#directory .directory-guide nav { display:flex;flex-wrap:wrap;column-gap:.75rem;margin-top:.15rem; }
+#directory .directory-guide a { display:inline-flex;align-items:center;min-height:44px;padding:0 .12rem;color:var(--page-green-dark);text-underline-offset:.2em; }

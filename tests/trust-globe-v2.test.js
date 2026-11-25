@@ -55,8 +55,12 @@ test("homepage uses one final presentation system and plain organizational langu
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(presentation, /href=\"\/src\/professional\.css/);
   assert.match(copy, /Find essential services near you\./);
-  assert.match(copy, /Practical help, with contact details and sources you can check\./);
-  assert.match(copy, /Everyone deserves a clear next step\./);
+  const helpCopy = /Look for food, shelter, clothing and other essentials\. Contact the provider directly\./;
+  assert.match(copy, helpCopy);
+  assert.match(html, helpCopy);
+  assert.match(copy, /Browse the directory/);
+  assert.match(copy, /A quick call can save you a trip\./);
+  assert.doesNotMatch(copy, /care-drawing\.svg/);
   assert.doesNotMatch(refinement, /No account|No paywall|Original sources/);
 });
 

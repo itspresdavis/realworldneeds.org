@@ -14,7 +14,6 @@ function rewriteNavigation() {
   const desktop = document.querySelector(".primary-nav");
   const mobile = document.querySelector(".site-menu nav");
   const links = `
-    <a href="/" aria-current="page">Home</a>
     <a href="/directory">Find Help</a>
     <a href="/our-story">Our Story</a>
     <a href="/get-involved">Get Involved</a>
@@ -28,7 +27,7 @@ function rewriteNavigation() {
   const menuSummary = document.querySelector(".site-menu > summary");
   if (menuSummary) {
     menuSummary.textContent = "Menu";
-    menuSummary.setAttribute("aria-label", "Open navigation menu");
+    menuSummary.setAttribute("aria-label", "Navigation menu");
     menuSummary.setAttribute("title", "Menu");
   }
 
@@ -54,49 +53,51 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Practical help, with contact details and sources you can check."
+    "Look for food, shelter, clothing and other essentials. Contact the provider directly."
   );
   const intro = document.querySelector(".finder-intro");
   if (intro && !intro.querySelector(".finder-directory-entry")) {
     const link = document.createElement("a");
     link.className = "finder-directory-entry";
     link.href = "/directory";
-    link.textContent = "Find Help";
+    link.textContent = "Browse the directory";
     intro.append(link);
   }
 
   const status = document.getElementById("locationStatus");
-  if (status) status.textContent = "Nearby service locations appear first when you choose to share your location.";
+  if (status) status.textContent = "See nearby services first.";
 
   const live = document.getElementById("liveSourceStatus");
   if (live) live.textContent = "In the United States, location search can also load current USDA summer meal sites.";
 
   const privacy = document.querySelector(".location-privacy");
-  if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Read how location works</a>.`;
+  if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Location privacy</a>.`;
 
   const safety = document.querySelector(".finder-safety");
-  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. RWN is a directory, not an emergency service.`;
+  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services.`;
 }
 
 function rewriteMethodSections() {
-  setText(".about-rwn__heading h2", "Everyone deserves a clear next step.");
+  setText(".about-rwn__heading h2", "Before you go");
   setText(
     ".about-rwn__heading p",
-    "Find practical support. Review the details. Reach the people who can help. The provider confirms eligibility and availability."
+    "A quick call can save you a trip. Ask the provider to confirm its hours and whether you’re eligible."
   );
 
-  const heading = document.querySelector('.about-rwn__heading');
-  if (heading && !heading.querySelector('.mission-drawing')) {
-    const drawing = document.createElement('img');
-    drawing.className = 'mission-drawing'; drawing.src = '/care-drawing.svg'; drawing.alt = ''; drawing.width = 420; drawing.height = 150; drawing.loading = 'lazy';
-    heading.append(drawing);
-    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/our-story'; invitation.textContent = 'Read our story →'; heading.append(invitation);
+  const heading = document.querySelector(".about-rwn__heading");
+  if (heading && !heading.querySelector(".contributor-invitation")) {
+    const link = document.createElement("a");
+    link.className = "contributor-invitation";
+    link.href = "/our-story";
+    link.textContent = "Why we started RWN";
+    heading.append(link);
   }
+  document.querySelectorAll(".about-rwn .section-kicker, .source-band .section-kicker, .results-heading .section-kicker").forEach(node => node.remove());
 
   const stepCopy = [
-    ["Search", "Look by need or place. Use location only if you want nearby services sorted first."],
-    ["Review", "Check the source, review date, hours, eligibility and contact information we have."],
-    ["Contact", "Call the provider, open its official site, or get directions before you travel."]
+    ["Search", "Enter a city or choose the kind of help you need."],
+    ["Review", "Look for the hours, address and any rules about who can use the service."],
+    ["Contact", "Contact the provider to check what’s available."]
   ];
   document.querySelectorAll(".mission-steps article").forEach((article, index) => {
     const copy = stepCopy[index];
@@ -107,18 +108,18 @@ function rewriteMethodSections() {
     if (paragraph) paragraph.textContent = copy[1];
   });
 
-  setText(".source-band__heading h2", "Check the source before you go.");
+  setText(".source-band__heading h2", "Where the listings come from");
   setText(
     ".source-band__heading p",
-    "Listings include the source and the date we reviewed it. Hours, capacity and eligibility can change, so the provider remains the final authority."
+    "We use public information from providers and official networks. You can follow the source link on each listing."
   );
 
   const principles = document.getElementById("principleGrid");
   if (principles) {
     principles.innerHTML = `
-      <article><span>01</span><div><h3>Source</h3><p>We name and link the public source used for the listing.</p></div></article>
-      <article><span>02</span><div><h3>Review date</h3><p>We show when the source was last checked by RWN.</p></div></article>
-      <article><span>03</span><div><h3>Provider authority</h3><p>The provider is responsible for current hours, eligibility, capacity and service decisions.</p></div></article>
+      <article><span>01</span><div><h3>Source</h3><p>Open the original page for more details.</p></div></article>
+      <article><span>02</span><div><h3>Review date</h3><p>See when we last reviewed the source.</p></div></article>
+      <article><span>03</span><div><h3>Changes</h3><p>Hours and availability can change between reviews.</p></div></article>
     `;
   }
 }

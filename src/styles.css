@@ -5157,7 +5157,7 @@ svg {
 .globe-stage.is-globe-unavailable .globe-gesture-hint { display: none; }
 
 /* Editorial invitation uses a small original line illustration with fixed dimensions. */
-.mission-drawing{display:block;width:min(100%,300px);height:auto;margin:20px 0 2px}.contributor-invitation{display:inline-flex;align-items:center;min-height:44px;color:#205944;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:4px}.contributor-invitation:focus-visible{outline:3px solid #9b6b28;outline-offset:4px}
+.contributor-invitation{display:inline-flex;align-items:center;min-height:44px;color:#205944;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:4px}.contributor-invitation:focus-visible{outline:3px solid #9b6b28;outline-offset:4px}
 .result-direct-actions {
   display: flex;
   flex-wrap: wrap;
