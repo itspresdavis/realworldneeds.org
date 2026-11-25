@@ -85,6 +85,33 @@ try:
     sql((ROOT / "supabase/tests/correction-workflow.sql").read_text())
     sql((ROOT / "supabase/tests/address-only.sql").read_text())
     sql((ROOT / "supabase/tests/resource-preferences.sql").read_text())
+    sql((ROOT / "supabase/tests/source-identity.sql").read_text())
+    # Exercise the actual prepared-import SQL, not a second handwritten importer.
+    import_record = {**record, "id": "qa-import-1", "costModel": "free",
+                     "datasetId": "isolated-import", "sourceRecordId": "1",
+                     "summary": "Literal apostrophe ' and $rwn_import$ and \\ text"}
+    def import_sql(records):
+        return run("node", "--input-type=module", "-e",
+                   "import {readFileSync} from 'node:fs'; "
+                   "import {prepareCatalogImport} from './scripts/prepare-catalog-import.mjs'; "
+                   "process.stdout.write(prepareCatalogImport(JSON.parse(readFileSync(0,'utf8'))));",
+                   input=json.dumps(records)).stdout
+    batch = import_sql([import_record])
+    sql(batch)
+    sql(batch)
+    sql("do $$ begin if (select count(*) from public.rwn_location_history where location_id='qa-import-1')<>1 "
+        "then raise exception 'Repeat import added audit noise'; end if; end $$;")
+    sql("update public.rwn_locations set published=false where id='qa-import-1';")
+    try:
+        sql(import_sql([import_record, {**import_record, "id": "qa-import-2", "sourceRecordId": "2"}]))
+    except RuntimeError:
+        print("EXPECTED: insert-only batch refused a withheld identity")
+    else:
+        raise RuntimeError("Import restored a withheld record")
+    sql("do $$ begin if exists(select 1 from public.rwn_locations where id='qa-import-2' or (id='qa-import-1' and published)) "
+        "then raise exception 'Failed import was not atomic'; end if; end $$;")
+    sql("delete from public.rwn_locations where id='qa-import-1';")
+    print("PASS: actual insert SQL, repeat-run idempotence, literal text and atomic withholding protection")
     # Genuine competing connections: a shared durable quota permits exactly one.
     sql("update rwn_private.correction_config set enabled=true, "
         "capability_sha256=encode(sha256(convert_to('synthetic-test-capability-never-configured-remotely-123456','UTF8')),'hex'), "

@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 const ROOT = "dist";
 const LIMITS = {
-  files: 3200,
-  htmlPages: 2900,
+  files: 3500,
+  htmlPages: 3200,
   largestFileBytes: 5_500_000,
   searchIndexBytes: 1_500_000,
   resourcesBytes: 5_000_000

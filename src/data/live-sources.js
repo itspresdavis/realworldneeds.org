@@ -12,6 +12,24 @@ const usdaCircuit = {
 
 export const sourceRegistry = [
   {
+    id: "melbourne-drinking-fountains",
+    title: "City of Melbourne drinking fountains and refill taps",
+    owner: "City of Melbourne",
+    sourceUrl: "https://data.melbourne.vic.gov.au/explore/dataset/drinking-fountains/",
+    dataUrl: "https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/drinking-fountains/exports/json",
+    mode: "reviewed-open-data-snapshot",
+    updateFrequency: "City states weekly source updates. Explicit candidate review before import; never downloaded during builds.",
+    recordCount: 280,
+    sourceReportedRecordsAtAudit: 338,
+    sourceParsedRecordsAtAudit: 338,
+    excludedForPublicationAtAudit: 58,
+    auditedAt: "2026-11-25",
+    sourceUpdatedAt: "2026-11-04",
+    accessStandard: "Human drinking-water fixtures owned by the city. Excludes dog bowls, non-city ownership and two nearby duplicate candidates. No live operating-status claim.",
+    fields: ["stable asset ID", "city coordinates", "written fixture destination", "human-use subtype", "asset evaluation date when supplied"],
+    reuseBasis: "City of Melbourne Drinking fountains, CC BY 4.0: https://creativecommons.org/licenses/by/4.0/. RWN filters assets and writes original access summaries. Attribution and changes are retained in every record and export. Publisher processing date is shown separately from RWN's source review; neither proves current water flow."
+  },
+  {
     id: "imss-bienestar-reviewed-clinics",
     title: "IMSS-Bienestar — bounded Baja California clinic review",
     owner: "IMSS-Bienestar, Government of Mexico",

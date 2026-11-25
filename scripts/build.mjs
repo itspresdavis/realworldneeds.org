@@ -548,7 +548,7 @@ const catalogJson = `${JSON.stringify({
   license: "No blanket dataset reuse license is asserted; consult source-specific notes at https://www.realworldneeds.org/sources",
   resourceCount: resources.length,
   resources
-}, null, 2)}\n`;
+})}\n`;
 await writeFile("dist/data/resources.json", catalogJson);
 const catalogSha256 = createHash("sha256").update(catalogJson).digest("hex");
 await writeFile("dist/data/map-index.json", `${JSON.stringify({
