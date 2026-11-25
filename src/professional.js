@@ -14,11 +14,11 @@ function rewriteNavigation() {
   const desktop = document.querySelector(".primary-nav");
   const mobile = document.querySelector(".site-menu nav");
   const links = `
-    <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-    <a href="/directory">Directory</a>
-    <a href="/editorial-policy">How listings are checked</a>
-    <a href="/sources">Sources</a>
-    <a href="/join">Contribute</a>
+    <a href="/" aria-current="page">Home</a>
+    <a href="/directory">Find Help</a>
+    <a href="/our-story">Our Story</a>
+    <a href="/get-involved">Get Involved</a>
+    <a href="/contact">Contact</a>
   `;
   if (desktop) desktop.innerHTML = links;
   if (mobile) mobile.innerHTML = links;
@@ -52,8 +52,16 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find essential services near you.");
   setText(
     ".finder-intro p",
-    "Practical help, with contact details and sources you can check."
+    "Search for food, shelter, clothing, health care and other essentials. Listings include contact details and a source you can check."
   );
+  const intro = document.querySelector(".finder-intro");
+  if (intro && !intro.querySelector(".finder-directory-entry")) {
+    const link = document.createElement("a");
+    link.className = "finder-directory-entry";
+    link.href = "/directory";
+    link.textContent = "Find Help";
+    intro.append(link);
+  }
 
   const status = document.getElementById("locationStatus");
   if (status) status.textContent = "Nearby service locations appear first when you choose to share your location.";
@@ -80,7 +88,7 @@ function rewriteMethodSections() {
     const drawing = document.createElement('img');
     drawing.className = 'mission-drawing'; drawing.src = '/care-drawing.svg'; drawing.alt = ''; drawing.width = 420; drawing.height = 150; drawing.loading = 'lazy';
     heading.append(drawing);
-    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/join'; invitation.textContent = 'Help keep the directory useful →'; heading.append(invitation);
+    const invitation = document.createElement('a'); invitation.className = 'contributor-invitation'; invitation.href = '/our-story'; invitation.textContent = 'Read our story →'; heading.append(invitation);
   }
 
   const stepCopy = [
@@ -124,7 +132,7 @@ function simplifyStructure() {
   if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
+  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/our-story">Our Story</a><a href="/get-involved">Get Involved</a><a href="/contact">Contact</a><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
 
   const legal = footer.querySelector('nav[aria-label="Footer legal"]');
   if (legal) {

@@ -421,7 +421,7 @@ const categoryLinks = categoryTypes.map((type) => {
 }).join("");
 const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
-const sitemapPaths = ["/", "/directory", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
+const sitemapPaths = ["/", "/directory", "/our-story", "/get-involved", "/contact", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
   title: "Free Essential Services Directory",
   heading: "Find free essential services without using the globe.",
