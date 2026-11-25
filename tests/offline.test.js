@@ -121,7 +121,7 @@ async function runInstall({ failedPath = null } = {}) {
 }
 
 test("offline installation fails closed and removes a partial cache when a required core asset fails", async () => {
-  for (const failedPath of ["/directory.js", "/directory-startup.js", "/page-menu.js", "/navigation-actions.css", "/language.js", "/task-controls.css"]) {
+  for (const failedPath of ["/directory.js", "/directory-startup.js", "/page-menu.js", "/navigation-actions.css", "/language.js", "/task-controls.css", "/directory-suggestions.css"]) {
   const result = await runInstall({ failedPath });
   assert.ok(result.error, "a failed required asset must reject installation");
   assert.equal(result.skipped, false, "an incomplete cache must never activate");
@@ -136,7 +136,7 @@ test("offline installation activates only after every required core asset is cac
   assert.equal(result.deleted, false);
   assert.equal(result.skipped, true, "a complete cache can activate immediately");
   assert.deepEqual([...result.stored.keys()].map(url => new URL(url).pathname).sort(), [
-    "/directory", "/legal.css", "/page-menu.js", "/directory-enhancements.css",
+    "/directory", "/legal.css", "/page-menu.js", "/directory-enhancements.css", "/directory-suggestions.css",
     "/professional-pages.css", "/navigation-actions.css", "/directory.js",
     "/directory-startup.js", "/saved-loader.js", "/saved-services.js",
     "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css",
