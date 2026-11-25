@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { resources } from "../src/data/resources.js";
 import {
   fetchPublishedCatalog,
   fingerprint,
   assertFreshExport,
+  summarizeCatalogDrift,
 } from "../scripts/catalog-sync-core.mjs";
 const row = (id, extra = {}) => ({
   id,
@@ -144,4 +149,62 @@ test("export cannot rewind newer source facts or resurrect old dataset rows", ()
   assert.doesNotThrow(() =>
     assertFreshExport([{ id: "new", lastChecked: "2026-10-11" }], local),
   );
+});
+
+test("catalog drift samples are bounded and IDs are not escaped into log instructions", () => {
+  const local = [
+    { id: "changed", metadata: { a: 1, b: 2 } },
+    { id: "local-z" }, { id: "local-a" },
+    { id: "same", x: { b: 1, a: 2 } },
+  ];
+  const remote = [
+    { id: "remote" }, { id: "bad\nsecret" },
+    { id: "same", x: { a: 2, b: 1 } },
+    { id: "changed", metadata: { b: 3, a: 1 } },
+  ];
+  assert.deepEqual(summarizeCatalogDrift(local, remote, 1), {
+    releaseOnly: { count: 2, sample: ["local-a"] },
+    databaseOnly: { count: 2, sample: ["remote"] },
+    changed: { count: 1, sample: ["changed"] },
+  });
+  assert.deepEqual(summarizeCatalogDrift(local, local).changed, { count: 0, sample: [] });
+});
+
+test("actual verify CLI is GET-only, reports all three drift classes, and fails closed", async (t) => {
+  const first = resources[0];
+  const snapshots = [
+    row(first.id, { record: { ...first, name: "PRIVATE_FIXTURE_VALUE_DO_NOT_LOG" } }),
+    row("fixture-db-only"),
+  ];
+  const requests = [];
+  const mock = createServer((req, res) => {
+    requests.push([req.method, req.url]);
+    res.setHeader("Content-Range", "0-1/2");
+    res.end(JSON.stringify(snapshots));
+  });
+  await new Promise((ok) => mock.listen(0, "127.0.0.1", ok));
+  t.after(() => new Promise((ok) => mock.close(ok)));
+  const url = `http://127.0.0.1:${mock.address().port}`;
+  await assert.rejects(
+    promisify(execFile)(process.execPath, ["scripts/catalog-sync.mjs", "verify"], {
+      env: { SUPABASE_URL: url, SUPABASE_PUBLISHABLE_KEY: "local-fixture-only" },
+      timeout: 5000,
+    }),
+    (err) => {
+      assert.equal(err.code, 1);
+      assert.match(err.stderr, new RegExp(`Release only: ${resources.length - 1}`));
+      assert.match(err.stderr, /database only: 1 \(sample: fixture-db-only\)/);
+      assert.match(err.stderr, new RegExp(`changed shared IDs: 1 \\(sample: ${first.id}\\)`));
+      assert.match(err.stderr, /Read-only preflight: nothing changed/);
+      assert.doesNotMatch(err.stderr, /PRIVATE_FIXTURE_VALUE|local-fixture-only/);
+      return true;
+    },
+  );
+  assert.equal(requests.length, 2);
+  for (const [method, path] of requests) {
+    assert.equal(method, "GET");
+    const u = new URL(path, url);
+    assert.equal(u.pathname, "/rest/v1/rwn_locations");
+    assert.equal(u.searchParams.get("published"), "eq.true");
+  }
 });

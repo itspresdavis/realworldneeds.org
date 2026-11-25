@@ -5,7 +5,7 @@ import { phoneLinks } from "./utils/phone.js";
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
 
 function directionsUrl(resource) {
-  const coordinate = `${resource.lat},${resource.lng}`;
+  const coordinate = resource.locationPrecision === "address" ? resource.address : `${resource.lat},${resource.lng}`;
   if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
     return `https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&dirflg=d`;
   }
@@ -54,7 +54,7 @@ function enhanceCard(article) {
     for (const { label, href } of phones) {
       actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
-    if (resource.kind === "direct" && hasMapCoordinates(resource)) {
+    if (resource.kind === "direct" && (hasMapCoordinates(resource) || resource.locationPrecision === "address")) {
       actions.append(createAction("Directions", directionsUrl(resource), `Get directions to ${resource.name}`, { newTab: true }));
     }
     if (isContactOnly(resource) && resource.accessUrl) {

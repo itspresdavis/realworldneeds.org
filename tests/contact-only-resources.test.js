@@ -42,7 +42,7 @@ test("contact-only validation rejects coordinate fabrication, missing scope and 
 test("legacy coordinates remain mandatory and every current record keeps its map semantics", () => {
   for (const record of resources) {
     assert.equal(validateResourceLocation(record), null, record.id);
-    assert.equal(hasMapCoordinates(record), true, record.id);
+    assert.equal(hasMapCoordinates(record), !["address", "contact-only"].includes(record.locationPrecision), record.id);
   }
   for (const changes of [{ lat: null }, { lng: undefined }, { lat: "0" }, { lat: Infinity }, { lng: -181 }])
     assert.ok(validateResourceLocation({ ...resources[0], ...changes }));

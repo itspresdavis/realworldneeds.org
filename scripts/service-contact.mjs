@@ -50,8 +50,8 @@ export function serviceContactMarkup(resource) {
   }
   links.push(`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>${hasFinder && !contactOnly ? "Open resource finder" : "Official source"}</strong><span>${hasFinder && !contactOnly ? "Official source · Check local options" : "Verify current details"}</span></a>`);
   const locations = [];
-  if (directLocation) {
-    const coordinate = `${resource.lat},${resource.lng}`;
+  if (directLocation || resource.locationPrecision === "address") {
+    const coordinate = directLocation ? `${resource.lat},${resource.lng}` : resource.address;
     locations.push(`<a class="is-map is-directions" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(coordinate)}" rel="noopener noreferrer">Directions<span class="service-contact-link-note">Google Maps</span></a>`);
   }
   if (hasMapCoordinates(resource)) locations.push(`<a href="/#resource=${encodeURIComponent(resource.id)}">Interactive map<span class="service-contact-link-note">View on RWN</span></a>`);

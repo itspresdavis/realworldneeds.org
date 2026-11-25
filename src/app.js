@@ -366,6 +366,7 @@ function distanceLabel(resource) {
 
 function locationResultLabel(resource) {
   if (isContactOnly(resource)) return `${contactOnlyLabel} · check coverage`;
+  if (resource.locationPrecision === "address") return resource.accessType;
   if (!state.userLocation) return resource.accessType;
   if (isExactServiceSite(resource)) return distanceLabel(resource);
   if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Worldwide resource finder";
@@ -374,17 +375,17 @@ function locationResultLabel(resource) {
 }
 
 function googleMapsUrl(resource, directions = false) {
-  const coordinate = `${resource.lat},${resource.lng}`;
+  const coordinate = resource.locationPrecision === "address" ? resource.address : `${resource.lat},${resource.lng}`;
   return directions
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordinate)}`;
 }
 
 function appleMapsUrl(resource, directions = false) {
-  const coordinate = `${resource.lat},${resource.lng}`;
+  const coordinate = resource.locationPrecision === "address" ? resource.address : `${resource.lat},${resource.lng}`;
   const params = directions
     ? `daddr=${encodeURIComponent(coordinate)}&dirflg=d`
-    : `q=${encodeURIComponent(resource.name)}&ll=${encodeURIComponent(coordinate)}`;
+    : resource.locationPrecision === "address" ? `q=${encodeURIComponent(coordinate)}` : `q=${encodeURIComponent(resource.name)}&ll=${encodeURIComponent(coordinate)}`;
   return `https://maps.apple.com/?${params}`;
 }
 
@@ -881,6 +882,8 @@ function renderResourcePanel() {
   const category = categories[resource.category];
   const saved = state.savedIds.has(resource.id);
   const exact = isExactServiceSite(resource);
+  const addressOnly = resource.locationPrecision === "address";
+  const physical = exact || addressOnly;
   const resourceIndex = state.filtered.findIndex((item) => item.id === resource.id);
   const previous = resourceIndex > 0 ? state.filtered[resourceIndex - 1] : null;
   const next = resourceIndex >= 0 ? state.filtered[resourceIndex + 1] : null;
@@ -888,14 +891,14 @@ function renderResourcePanel() {
   const freeModel = freeAccessModels[resource.costModel];
   const contactOnly = isContactOnly(resource);
   const actionUrl = resource.accessUrl || resource.providerUrl || resource.sourceUrl;
-  const sourceAction = contactOnly ? "Open contact website" : resource.providerUrl ? "Visit organization website" : exact ? "Visit service website" : "Find a local service";
+  const sourceAction = contactOnly ? "Open contact website" : resource.providerUrl ? "Visit organization website" : physical ? "Visit service website" : "Find a local service";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
     <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
     <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
     <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
     ${sourceClosureMarkup(resource)}
-    <p class="panel-precision ${exact ? "is-exact" : "is-coverage"}">${contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
+    <p class="panel-precision ${physical ? "is-exact" : "is-coverage"}">${contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : addressOnly ? `${icon.check}<span><strong>Service location</strong>. Directions use the reviewed street address. No map pin or distance is shown.</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
     <p class="panel-summary">${resource.summary}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
@@ -904,7 +907,7 @@ function renderResourcePanel() {
         <dl class="panel-facts">
           <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
           <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${resource.costNote}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
-          <div><dt>${exact ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
+          <div><dt>${physical ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
           ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : ""}
           ${contactOnly && resource.phoneAccess ? `<div><dt>Dialing scope</dt><dd>${resource.phoneAccess}</dd></div>` : ""}
@@ -919,23 +922,23 @@ function renderResourcePanel() {
     <div class="availability-note"><span>${icon.info}</span><p><strong>${contactOnly ? "Check before contacting" : "Confirm before you go"}</strong>${availabilityInstructions(resource)}</p></div>
     <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${!contactOnly && resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
-      ${exact ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+      ${physical ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
       <a class="secondary-button" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
     </div>
-    ${exact ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
+    ${physical ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
       ${live ? "" : `<button type="button" id="saveResource" ${state.savedStorageUnavailable ? 'disabled aria-label="Saving unavailable" aria-describedby="savedStorageStatus"' : `aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}"`}>${icon.bookmark}<span>${state.savedStorageUnavailable ? "Save unavailable" : saved ? "Saved" : "Save"}</span></button>`}
       <button type="button" id="shareResource" aria-label="Share service">${icon.share}<span>Share</span></button>
-      <button type="button" id="copyAddress" aria-label="${exact ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${exact ? "Copy address" : "Copy coverage"}</span></button>
+      <button type="button" id="copyAddress" aria-label="${physical ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${physical ? "Copy address" : "Copy coverage"}</span></button>
     </div>
   `;
 
   document.getElementById("copyAddress")?.addEventListener("click", async () => {
     try {
       await copyText(resource.address);
-      notify(exact ? "Address copied" : "Coverage copied");
+      notify(physical ? "Address copied" : "Coverage copied");
     } catch {
-      notify(`${exact ? "The address" : "The coverage"} could not be copied. Select and copy it from Service details.`);
+      notify(`${physical ? "The address" : "The coverage"} could not be copied. Select and copy it from Service details.`);
     }
   });
   document.getElementById("saveResource")?.addEventListener("click", () => toggleSavedResource(resource.id));
@@ -960,7 +963,7 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
-  const listingType = isContactOnly(resource) ? contactOnlyLabel : isExactServiceSite(resource) ? "Service location" : "Resource finder";
+  const listingType = isContactOnly(resource) ? contactOnlyLabel : resource.locationPrecision === "address" || isExactServiceSite(resource) ? "Service location" : "Resource finder";
   const sourcePrefix = resource.sourceName === resource.name ? "" : `${resource.sourceName} · `;
   const costLabel = freeAccessLabel(resource, true);
   const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
@@ -2684,7 +2687,7 @@ function bindEvents() {
       const nearest = state.filtered.find((resource) => {
         const distance = resourceDistanceKm(state.userLocation, resource);
         return distance !== null && distance <= 250;
-      }) || state.filtered.find((resource) => !isExactServiceSite(resource) && resource.country === state.userCountry) || state.filtered[0];
+      }) || state.filtered.find((resource) => resource.locationPrecision !== "address" && !isExactServiceSite(resource) && resource.country === state.userCountry) || state.filtered[0];
       if (nearest) setSelected(nearest.id, false, false);
       focusGlobeNearUser();
       const nearby = nearbyExactCount();

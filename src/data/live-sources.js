@@ -12,6 +12,19 @@ const usdaCircuit = {
 
 export const sourceRegistry = [
   {
+    id: "imss-bienestar-reviewed-clinics",
+    title: "IMSS-Bienestar — bounded Baja California clinic review",
+    owner: "IMSS-Bienestar, Government of Mexico",
+    sourceUrl: "https://www.imssbienestar.gob.mx/02_ubica_clinica.html",
+    dataUrl: "https://www.imssbienestar.gob.mx/assets/json/clinicas_cp/clinicas_cp_22.json",
+    mode: "reviewed-bounded-source-selection",
+    updateFrequency: "Explicit bounded candidate review; never fetched during builds or automatically published.",
+    recordCount: 2,
+    auditedAt: "2026-11-07",
+    fields: ["CLUES identity", "clinic address", "clinic coordinates distinct from postal points", "phone", "partial hours"],
+    reuseBasis: "Two factual clinic summaries from the public official finder with CLUES attribution and direct links. No bulk feed, page text, images or open-data licence is asserted. Changes require a reviewed publication decision."
+  },
+  {
     id: "usda-summer-meals-2026",
     title: "USDA Summer Meals for Kids Site Finder — 2026",
     owner: "U.S. Department of Agriculture, Food and Nutrition Service",

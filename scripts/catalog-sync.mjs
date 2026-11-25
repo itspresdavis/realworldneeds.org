@@ -5,6 +5,7 @@ import {
   fingerprint,
   fetchPublishedCatalog,
   assertFreshExport,
+  summarizeCatalogDrift,
 } from "./catalog-sync-core.mjs";
 
 // Explicit operations only: builds never silently publish or overwrite database edits.
@@ -63,11 +64,17 @@ if (action === "seed") {
   }
   const local = fingerprint(resources.map(canonical));
   const remote = fingerprint(records.map(canonical));
-  if (local !== remote)
-    throw new Error(
-      `Catalog drift: local ${resources.length}/${local}; database ${records.length}/${remote}. Review and export approved changes before release.`,
+  if (local !== remote) {
+    const { releaseOnly, databaseOnly, changed } = summarizeCatalogDrift(resources, records);
+    const describe = ({ count, sample }) => count + (sample.length
+      ? ` (sample: ${sample.join(", ")})` : "");
+    console.error(`Catalog drift: release source ${resources.length}/${local}; public database ${records.length}/${remote}.`);
+    console.error(`Release only: ${describe(releaseOnly)}; database only: ${describe(databaseOnly)}; changed shared IDs: ${describe(changed)}.`);
+    console.error("Read-only preflight: nothing changed. Reconcile against reviewed source and editorial history before release.");
+    process.exitCode = 1;
+  } else {
+    console.log(
+      `Verified all ${records.length} database records match the globe and directory catalog. SHA-256 ${remote}`,
     );
-  console.log(
-    `Verified all ${records.length} database records match the globe and directory catalog. SHA-256 ${remote}`,
-  );
+  }
 } else throw new Error("Use: node scripts/catalog-sync.mjs seed|verify|export");
