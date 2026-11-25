@@ -1,3 +1,4 @@
+import { CdpClient } from "./qa-cdp-client.mjs";
 import { waitForScrollStability, sameCaptureGeometry } from "./qa-scroll-stability.mjs";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -41,42 +42,6 @@ async function stop(child) {
   }
 }
 
-class CdpClient {
-  constructor(url) { this.url = url; this.id = 1; this.pending = new Map(); this.listeners = new Map(); }
-  async connect() {
-    this.ws = new WebSocket(this.url);
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Timed out connecting to DevTools.")), 5000);
-      this.ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-      this.ws.addEventListener("error", reject, { once: true });
-    });
-    this.ws.addEventListener("message", (event) => {
-      const message = JSON.parse(String(event.data));
-      if (message.id) {
-        const pending = this.pending.get(message.id);
-        if (!pending) return;
-        this.pending.delete(message.id);
-        if (message.error) pending.reject(new Error(`${pending.method}: ${message.error.message}`));
-        else pending.resolve(message.result || {});
-        return;
-      }
-      for (const listener of this.listeners.get(message.method) || []) listener(message.params || {});
-    });
-  }
-  call(method, params = {}) {
-    const id = this.id++;
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
-      this.ws.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  on(method, listener) {
-    const list = this.listeners.get(method) || [];
-    list.push(listener);
-    this.listeners.set(method, list);
-  }
-  close() { this.ws?.close(); }
-}
 
 async function evaluate(client, expression) {
   const result = await client.call("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture: true });
@@ -179,6 +144,25 @@ async function inspectFailedGlobeState(client) {
     if (breakpoint) await client.call("Debugger.removeBreakpoint", { breakpointId: breakpoint }).catch(() => {});
     await client.call("Debugger.disable").catch(() => {});
   }
+}
+
+// Serialized into the page. A capability-probe context can be live before the
+// deferred renderer has loaded or published its first zoom readout. Reveal the
+// returned canvas once, then observe initialization within the existing Back
+// readiness deadline instead of sampling after a fixed 350ms delay.
+function returnedGlobeReady(expectedQuery) {
+  const canvas = document.getElementById("globeCanvas");
+  const stage = document.querySelector(".globe-stage");
+  if (document.getElementById("resourceSearch")?.value !== expectedQuery || !canvas || !stage) return false;
+  if (!canvas.dataset.rwnQaReturnRevealed) {
+    canvas.dataset.rwnQaReturnRevealed = "true";
+    canvas.scrollIntoView({ block: "center", behavior: "auto" });
+  }
+  const zoom = Number((document.getElementById("globeReadout")?.innerText.match(/([0-9.]+)×/) || [0, 0])[1]);
+  return document.documentElement.dataset.globeStartup === "ready"
+    && canvas.dataset.rwnContextRecovery === "true"
+    && !stage.classList.contains("is-globe-unavailable")
+    && Number.isFinite(zoom) && zoom > 0;
 }
 
 async function run() {
@@ -444,9 +428,7 @@ async function run() {
     await evaluate(client, "document.querySelector('[data-service-save]').click()");
     if (!await evaluate(client, "document.querySelector('[data-service-save]').getAttribute('aria-pressed') === 'true'")) throw new Error("Service could not be saved after map exploration.");
     await evaluate(client, "history.back()");
-    await waitForExpression(client, "document.getElementById('resourceSearch')?.value === 'London'", "Back did not restore the search after leaving the map.");
-    await evaluate(client, "document.getElementById('globeCanvas').scrollIntoView({block:'center',behavior:'auto'})");
-    await sleep(350);
+    await waitForExpression(client, `(${returnedGlobeReady.toString()})('London')`, "Back did not restore the search and initialized globe readout after leaving the map.");
     const returnedMap = await evaluate(client, `(() => {
       const canvas=document.getElementById('globeCanvas');
       const gl=canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -454,6 +436,7 @@ async function run() {
       return {live:!!gl && !gl.isContextLost() && !document.querySelector('.globe-stage').classList.contains('is-globe-unavailable'),zoom};
     })()`);
     if (!returnedMap.live || !returnedMap.zoom) throw new Error(`Returning from a service left the globe unavailable: ${JSON.stringify(returnedMap)}`);
+    observations.returnedGlobe = returnedMap;
     await evaluate(client, `document.getElementById('${returnedMap.zoom < 7.9 ? "zoomIn" : "zoomOut"}').click()`);
     await waitForExpression(client, `Math.abs(Number((document.getElementById('globeReadout').innerText.match(/([0-9.]+)×/) || [0,0])[1]) - ${returnedMap.zoom}) > .02`, "The restored globe did not respond to zoom after Back.");
     phase = "real-context-recovery";

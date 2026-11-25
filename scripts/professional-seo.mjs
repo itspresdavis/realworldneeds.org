@@ -1,3 +1,4 @@
+import { serviceActions } from "../src/utils/service-access.js";
 import { serviceContactMarkup } from "./service-contact.mjs";
 import { isContactOnly, hasMapCoordinates } from "../src/utils/resource-location.js";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -60,7 +61,7 @@ const escapeAttribute = (value) => String(value || "")
 const escapeHtml = (value) => escapeAttribute(value).replaceAll("'", "&#39;");
 
 function titleFrom(html) {
-  return decodeEntities(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() || "Real World Needs");
+  return decodeEntities(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() || "Real World Needs");
 }
 
 function descriptionFrom(html) {
@@ -116,6 +117,7 @@ function navKey(path) {
   if (path === "/editorial-policy") return "checks";
   if (path === "/sources") return "sources";
   if (path === "/transparency") return "transparency";
+  if (["/about", "/our-work", "/get-involved", "/contact"].includes(path)) return "about";
   return path === "/" ? "find" : null;
 }
 
@@ -125,6 +127,7 @@ function navigationLinks(path) {
     ["find", "/", "Find help"],
     ["directory", "/directory", "Directory"],
     ["saved", "/directory#saved", "Saved"],
+    ["about", "/about", "About RWN"],
     ["checks", "/editorial-policy", "How listings are checked"],
     ["sources", "/sources", "Sources"],
     ["transparency", "/transparency", "Transparency"]
@@ -135,7 +138,7 @@ function navigationLinks(path) {
 function unifiedHeader(path) {
   const links = navigationLinks(path);
   return `<header class="legal-header rwn-unified-header">
-    <a class="legal-brand" href="/" aria-label="Real World Needs home"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
+    <a class="legal-brand" href="/"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
     <nav class="rwn-page-nav" aria-label="Primary navigation">${links}</nav>
     <details class="rwn-page-menu"><summary aria-label="Navigation menu">Menu</summary><nav aria-label="Mobile navigation">${links}</nav></details>
   </header>`;
@@ -144,19 +147,11 @@ function unifiedHeader(path) {
 function unifiedFooter() {
   return `<footer class="legal-footer rwn-unified-footer">
     <p><strong>Real World Needs</strong><br />Essential services directory</p>
-    <nav aria-label="Footer find help"><strong>Find help</strong><a href="/">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a></nav>
-    <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a></nav>
-    <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav>
+    <nav aria-label="Footer find help"><strong>Find help</strong><a href="/">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a><a href="/account">Your resources</a></nav>
+    <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/our-story">Why RWN?</a><a href="/donate">Donations</a><a href="/our-work">Our work</a><a href="/get-involved">Get involved</a><a href="/contact">Contact and help</a><a href="/transparency">Transparency</a></nav>
+    <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a></nav>
     <nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse by need</strong><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Water</a></nav>
   </footer>`;
-}
-
-function mapsFor(resource) {
-  const coordinate = `${resource.lat},${resource.lng}`;
-  return {
-    apple: `https://maps.apple.com/?daddr=${encodeURIComponent(coordinate)}&q=${encodeURIComponent(resource.name)}`,
-    google: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(coordinate)}`
-  };
 }
 
 function directoryQuickActions(resource) {
@@ -165,10 +160,8 @@ function directoryQuickActions(resource) {
   for (const { label, href } of phones) {
     links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
-  if (resource.kind === "direct" && hasMapCoordinates(resource)) {
-    const maps = mapsFor(resource);
-    links.push(`<a href="${escapeHtml(maps.apple)}" rel="noopener noreferrer">Apple Maps</a>`);
-    links.push(`<a href="${escapeHtml(maps.google)}" rel="noopener noreferrer">Google Maps</a>`);
+  for (const action of serviceActions(resource)) {
+    links.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`);
   }
   if (isContactOnly(resource) && resource.accessUrl) {
     links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>`);

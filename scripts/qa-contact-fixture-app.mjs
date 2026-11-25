@@ -140,7 +140,9 @@ async function staticServer(root, catalogControl, navigationControl) {
 /** Full normal build in an automatically cleaned, isolated local/CI workspace. */
 export async function createContactFixtureApp({ serve = true, sourceDir = sourceRoot, catalogControl, navigationControl } = {}) {
   sourceDir = resolve(sourceDir);
-  const directory = await mkdtemp(join(tmpdir(), "rwn-contact-fixture-"));
+  // macOS /tmp and configured temporary parents may be symlinks. Keep the
+  // serving root canonical so containment checks compare like-for-like paths.
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "rwn-contact-fixture-")));
   const dist = join(directory, "dist");
   let server, cleaned = false;
   const cleanup = async () => {

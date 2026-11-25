@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { directoryStartupSnapshot, directoryStartupStaticReady, isDirectoryStartupNavigationError, focusDirectoryStartupBlurTarget, directoryStartupClickPoint, directoryStartupRequestLeaksQuery } from '../scripts/qa-directory-startup.mjs';
+import { directoryStartupSnapshot, directoryStartupStaticReady, isDirectoryStartupNavigationError, focusDirectoryStartupBlurTarget, directoryStartupClickPoint, directoryStartupRequestLeaksQuery, verifyDirectoryStartupEditingViewport } from '../scripts/qa-directory-startup.mjs';
 
 // Run the same serialized expression as the CDP harness, without a browser,
 // network, or a substitute snapshot implementation.
@@ -199,6 +199,34 @@ test('native click setup requires a visible in-viewport center and the actual hi
     await assert.rejects(() => clickPoint(clickFixture(options)), /not visibly clickable/);
   }
   await assert.rejects(() => clickPoint(clickFixture({ covered: true })), /covered or clipped/);
+});
+
+test('early editing viewport rejects obscured first focus without waiting for recovery', async () => {
+  let waits = 0;
+  await assert.rejects(() => verifyDirectoryStartupEditingViewport({
+    sample: async () => ({ focusedInput: true, meaningfulFocus: false, query: 'London', selection: [6, 6] }),
+    query: 'London', caret: 6, wait: async () => { waits++; }
+  }), /lost its visible focused input/);
+  assert.equal(waits, 0);
+});
+
+test('early editing viewport rejects a late scroll that obscures the still-focused caret', async () => {
+  let elapsed = 0;
+  await assert.rejects(() => verifyDirectoryStartupEditingViewport({
+    sample: async () => ({ focusedInput: true, meaningfulFocus: elapsed < 150, query: 'London', selection: [6, 6], scroll: elapsed }),
+    query: 'London', caret: 6, wait: async ms => { elapsed += ms; }, now: () => elapsed
+  }), /lost its visible focused input/);
+  assert.equal(elapsed, 150);
+});
+
+test('early editing viewport observes visible focus through the whole motion interval', async () => {
+  let elapsed = 0;
+  const trace = await verifyDirectoryStartupEditingViewport({
+    sample: async () => ({ focusedInput: true, meaningfulFocus: true, query: 'London', selection: [6, 6], scroll: 0 }),
+    query: 'London', caret: 6, wait: async ms => { elapsed += ms; }, now: () => elapsed
+  });
+  assert.equal(trace.length, 11);
+  assert.equal(elapsed, 500);
 });
 
 test('privacy checks include candidate text and form/URLSearchParams decoding', () => {

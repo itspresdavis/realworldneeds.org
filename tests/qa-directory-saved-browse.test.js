@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
+import { directoryWicFixture } from '../scripts/qa-catalog-expectations.mjs';
 import { readFile } from 'node:fs/promises';
 import {
   directorySavedBrowseSnapshot, directorySavedBrowseStateMatches, waitForDirectorySavedBrowseSettled,
@@ -8,7 +9,7 @@ import {
 } from '../scripts/qa-directory-discovery.mjs';
 
 const base = () => ({ documentPresent: true, ready: true, timeOrigin: 100, path: '/directory', query: 'WIC', country: 'United States', category: 'Food',
-  count: '395 matching listings', summary: 'Showing 60 of 395 matches across 439 listings', more: true,
+  count: '395 matching listings', summary: '60 of 395 matches · 437 listings', more: true,
   rows: Array.from({ length: 60 }, (_, i) => ({ href: `/service/wic-${i}`, text: `WIC ${i} — United States · Food · Source checked 2026-10-01` })),
   staticHrefs: ['/service/static'], scroll: 900, focus: '/service/wic-12', focusedId: '', focusKind: 'service', focusName: 'WIC 12',
   focusBox: { x: 20, y: 150, width: 300, height: 60 }, meaningfulFocus: true, menuOpen: false, saved: false, panelVisible: false, overflow: false });
@@ -21,7 +22,7 @@ test('Saved Browse compares complete exact result identity, order, metadata, cou
   const expected = base();
   assert.equal(directorySavedBrowseStateMatches(structuredClone(expected), expected), true);
   for (const change of [{ ready: false }, { path: '/directory/united-states' }, { query: '' }, { country: '' }, { category: 'All help' },
-    { count: '396 matching listings' }, { summary: 'Showing 60 of 395 matches across 440 listings' }, { more: false },
+    { count: '396 matching listings' }, { summary: '60 of 395 matches · 438 listings' }, { more: false },
     { rows: expected.rows.slice(1) }, { rows: [...expected.rows].reverse() },
     { rows: expected.rows.map((row, i) => i === 0 ? { ...row, text: 'Stale text' } : row) }, { staticHrefs: [] }]) {
     assert.equal(directorySavedBrowseStateMatches({ ...expected, ...change }, expected), false, JSON.stringify(change));
@@ -215,4 +216,23 @@ test('Browse navigation witness requires one trusted null-state popstate before 
   }
   assert.equal(directorySavedBrowseNavigationWasNative([popstate, hashchange], 'not a URL'), false);
   assert.equal(directorySavedBrowseNavigationWasNative([popstate, hashchange], 'https://rwn.test/directory#saved'), false);
+});
+
+
+test('WIC commitment uses private entry history and exact current catalog summary, without URL filters', () => {
+  const closure = verifyDirectorySavedBrowse.toString().match(/  const committed = \(s, fixture\) => \{[\s\S]*?\n  \};/)[0];
+  const committed = vm.runInNewContext(`${closure}; committed`);
+  const expected = directoryWicFixture(60, 'All help');
+  const state = { ...base(), count: expected.count, summary: expected.summary, category: 'All help', href: 'https://rwn.test/directory#directory-results',
+    history: { path: '/directory', query: 'WIC', country: 'United States', category: '' } };
+  assert.equal(committed(state, expected), true);
+  assert.equal(new URL(state.href).search, '');
+  for (const change of [
+    { summary: 'Showing 60 of 395 matches across 437 listings' },
+    { summary: '60 of 394 matches · 437 listings' },
+    { count: '394 matching listings' },
+    { history: { ...state.history, country: '' } },
+    { history: { ...state.history, query: '' } },
+    { rows: state.rows.slice(1) },
+  ]) assert.equal(committed({ ...state, ...change }, expected), false, JSON.stringify(change));
 });

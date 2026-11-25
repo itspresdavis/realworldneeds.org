@@ -53,17 +53,22 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   const saveButton = utility.querySelector("[data-service-save]");
   const serviceId = document.querySelector("#service")?.dataset.serviceId;
   const storageUnavailableMessage = "Saving is unavailable in this browser. You can still copy or print this listing.";
+  let storageFailure = false;
+  const announce = (message, { storageUnavailable = false } = {}) => {
+    storageFailure = storageUnavailable;
+    status.textContent = message;
+  };
   const syncSaved = () => {
     try {
       const saved = readSavedResources().has(serviceId);
       saveButton.setAttribute("aria-pressed", String(saved));
       saveButton.textContent = saved ? "Remove from saved" : "Save";
       saveButton.disabled = !serviceId;
-      if (!serviceId) status.textContent = "Saving is unavailable for this listing. You can still copy or print it.";
-      else if (status.textContent === storageUnavailableMessage) status.textContent = "";
+      if (!serviceId) announce("Saving is unavailable for this listing. You can still copy or print it.");
+      else if (storageFailure) announce("");
     } catch {
       saveButton.disabled = true;
-      status.textContent = storageUnavailableMessage;
+      announce(storageUnavailableMessage, { storageUnavailable: true });
     }
   };
   saveButton.addEventListener("click", () => {
@@ -71,9 +76,9 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       const saved = readSavedResources().has(serviceId);
       setResourceSaved(serviceId, !saved);
       syncSaved();
-      status.textContent = saved ? "Removed from your saved services." : "Saved only in this browser. Use View saved services to return to your list.";
+      announce(saved ? "Removed from your saved services." : "Saved only in this browser. Use View saved services to return to your list.");
     } catch {
-      status.textContent = "Your saved list could not be changed. Check this browser’s storage settings and try again.";
+      announce("Your saved list could not be changed. Check this browser’s storage settings and try again.");
     }
   });
   window.addEventListener("pageshow", syncSaved);
@@ -83,14 +88,29 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
   syncSaved();
 
   const publicDetails = () => {
-    const rows = [...document.querySelectorAll("#service .directory-record dl > div")]
-      .map((row) => {
-        const label = row.querySelector("dt")?.textContent?.trim();
-        const value = row.querySelector("dd")?.textContent?.replace(/\s+/g, " ")?.trim();
-        const href = row.querySelector('dd a[href^="https://"]')?.href;
-        return label && value ? `${label}: ${value}${href && !value.includes(href) ? ` (${href})` : ""}` : "";
-      })
+    const withLinks = (value, element, selector) => {
+      const urls = [...element.querySelectorAll(selector)].map(link => link.href).filter(href => /^(?:https:\/\/|mailto:|sms:)/.test(href));
+      const missing = [...new Set(urls)].filter(href => !value.includes(href));
+      return `${value}${missing.length ? ` (${missing.join('; ')})` : ''}`;
+    };
+    const rowText = row => {
+      const label = row.querySelector("dt")?.textContent?.trim();
+      const value = row.querySelector("dd")?.textContent?.replace(/\s+/g, " ")?.trim();
+      return label && value ? `${label}: ${withLinks(value, row, 'dd a[href]')}` : "";
+    };
+    const accessRoutes = [...document.querySelectorAll("#service [data-service-before-you-go] [data-service-route]")];
+    const rows = [...document.querySelectorAll("#service .directory-record:not([data-service-before-you-go]) dl > div")]
+      .filter(row => !accessRoutes.length || !row.hasAttribute("data-service-location-facts"))
+      .map(rowText)
       .filter(Boolean);
+    const accessDetails = accessRoutes.flatMap(route => [
+      route.querySelector('h3')?.textContent?.trim() || '',
+      ...[...route.querySelectorAll('dl > div')].map(rowText),
+      ...[...route.querySelectorAll('[data-service-route-actions] a[href]')]
+        .filter(link => /^(?:https:\/\/|mailto:|sms:)/.test(link.href))
+        .map(link => `${link.textContent.replace(/\s+/g, ' ').trim()}: ${link.href}`),
+      ...[...route.querySelectorAll('details li')].map(item => withLinks(item.textContent.replace(/\s+/g, ' ').trim(), item, 'a[href]')),
+    ]).filter(Boolean);
     const sourceStatus = document.querySelector("#service > .directory-shell > .source-status-notice");
     const statusLines = sourceStatus ? [...sourceStatus.querySelectorAll("strong, p")].map((node) => node.textContent.trim()) : [];
     return [
@@ -98,6 +118,7 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
       place,
       ...statusLines,
       ...rows,
+      ...accessDetails,
       `RWN listing: ${listingUrl}`,
       officialSource ? `Official source: ${officialSource}` : "",
       document.querySelector("#service")?.dataset?.locationPrecision === "contact-only" ? "Check coverage, eligibility and current contact details." : "Confirm current details before you go."
@@ -139,28 +160,28 @@ if (nextSteps && !document.querySelector("[data-service-utility]")) {
     try {
       if (navigator.share) {
         await navigator.share(shareData);
-        status.textContent = "Share sheet opened.";
+        announce("Share sheet opened.");
       } else {
         await copyText(listingUrl);
-        status.textContent = "Link copied. You can paste it into a message.";
+        announce("Link copied. You can paste it into a message.");
       }
     } catch (error) {
       if (error?.name === "AbortError") return;
-      status.textContent = "Sharing is unavailable in this browser. Use Copy details instead.";
+      announce("Sharing is unavailable in this browser. Use Copy details instead.");
     }
   });
 
   utility.querySelector("[data-service-copy]")?.addEventListener("click", async () => {
     try {
       await copyText(publicDetails());
-      status.textContent = "Service details copied.";
+      announce("Service details copied.");
     } catch {
-      status.textContent = "Copy is unavailable in this browser. Select the service details on the page instead.";
+      announce("Copy is unavailable in this browser. Select the service details on the page instead.");
     }
   });
 
   utility.querySelector("[data-service-print]")?.addEventListener("click", () => {
-    status.textContent = "Opening the print dialog.";
+    announce("Opening the print dialog.");
     window.print();
   });
 }

@@ -63,7 +63,7 @@ function installResultLandmark() {
   grid.setAttribute("tabindex", "-1");
 
   const jump = document.getElementById("jumpResults");
-  if (jump) jump.setAttribute("aria-label", "Skip the interactive map and see matching services");
+  if (jump) jump.removeAttribute("aria-label");
 }
 
 function installAccessibleResourcePanel() {
@@ -96,7 +96,7 @@ function installResultContext() {
   const update = () => {
     const text = searchStatus.textContent?.trim();
     if (!text) return;
-    count.setAttribute("aria-label", text);
+    count.setAttribute("aria-describedby", "searchStatus");
   };
   new MutationObserver(update).observe(searchStatus, { childList: true, characterData: true, subtree: true });
   update();

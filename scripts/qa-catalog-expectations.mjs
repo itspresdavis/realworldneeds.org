@@ -13,14 +13,14 @@ export function directoryWicFixture(shown, category = "Food", catalog = resource
   return {
     query: "WIC", country: "United States", category, rows,
     count: matches.length ? `${format(matches.length)} matching ${matches.length === 1 ? "listing" : "listings"}` : "No matching listings",
-    summary: `Showing ${format(rows)} of ${format(matches.length)} matches across ${format(scoped.length)} listings`
+    summary: `${format(rows)} of ${format(matches.length)} matches · ${format(scoped.length)} listings`
   };
 }
 
 // This deliberately uses the raw country/city/category facts rather than the
 // shared locality builder or a generated scope/UI result as its own oracle.
 export function newYorkCatalogFixtures(catalog = resources) {
-  const city = catalog.filter(record => record.country === "United States" && record.city === "New York");
+  const city = catalog.filter(record => record.country === "United States" && ["New York", "New York City"].includes(record.city));
   const ids = records => records.map(record => record.id).sort();
   return {
     city: ids(city),

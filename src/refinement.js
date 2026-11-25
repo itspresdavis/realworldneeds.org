@@ -34,7 +34,7 @@ function improveSearch() {
   const input = document.getElementById("resourceSearch");
   if (!input) throw new Error("Finder search input is missing.");
   input.placeholder = "Search by service or place";
-  input.setAttribute("aria-label", "What do you need? Search by need, service, place, ZIP or postcode, or organization");
+  input.removeAttribute("aria-label");
   input.setAttribute("enterkeyhint", "search");
   input.setAttribute("spellcheck", "false");
 
@@ -108,14 +108,14 @@ function composeFinderSurface() {
     ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
   const surface = document.createElement("div");
   surface.className = "finder-surface";
-  const label = document.createElement("label");
+  const label = search.querySelector(".finder-search-label") || document.createElement("label");
   label.className = "finder-search-label";
   label.htmlFor = "resourceSearch";
   label.textContent = "What do you need?";
   search.before(surface);
   surface.append(label);
   // Reuse the live controls. Moving a focused node can blur it in older browsers.
-  for (const selector of [".finder-search", ".quick-needs", ".jump-results", ".location-actions", "#locationStatus", "#locationRecovery", ".finder-disclosures"]) {
+  for (const selector of [".finder-search", ".jump-results", ".quick-needs", ".location-actions", "#locationStatus", "#locationRecovery", ".finder-disclosures"]) {
     const node = sidebar.querySelector(selector);
     if (node) surface.append(node);
   }

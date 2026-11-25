@@ -228,6 +228,24 @@ export function directoryStartupSavedSnapshot(base) {
   };
 }
 
+// A correct query and caret are insufficient if a pending native reload/focus
+// scroll carries the active editor behind the sticky header. Observe the first
+// result frame and subsequent motion; never wait for an obscured input to recover.
+export async function verifyDirectoryStartupEditingViewport({ sample, query, caret,
+  wait = sleep, now = () => performance.now(), durationMs = 500 }) {
+  const started = now(), trace = [];
+  do {
+    const state = await sample();
+    trace.push({ elapsedMs: now() - started, scroll: state.scroll, inputBox: state.inputBox,
+      headerBox: state.headerBox, focusedInput: state.focusedInput, meaningfulFocus: state.meaningfulFocus });
+    assert(state.focusedInput && state.meaningfulFocus && state.query === query
+      && JSON.stringify(state.selection) === JSON.stringify([caret, caret]),
+    'Early directory edit lost its visible focused input', { state, trace });
+    if (now() - started >= durationMs) return trace;
+    await wait(50);
+  } while (true);
+}
+
 export async function directoryStartupSavedHeaderPoint(selector, prepare) {
   const point = await prepare(selector), node = document.querySelector(selector);
   globalThis.__rwnEarlySavedHeaderQA?.stop();
@@ -467,6 +485,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
     assert(settled.focusedInput && JSON.stringify(settled.selection) === JSON.stringify([caret, caret]) && settled.history?.query === QUERY && settled.history?.focus === '', 'Startup overwrote editing focus, caret or current history', settled);
     assertInputs(settled, { count: inputCount, early });
     assertPrivate(before, settled);
+    await verifyDirectoryStartupEditingViewport({ sample: savedState, query: QUERY, caret });
     return found;
   };
   const seedStaleHistory = async () => {
@@ -670,6 +689,50 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       assert(current.probe.catalogReads === 0 && !current.focusedInput && current.focusedBrand && current.focusedHref === blurTarget.href && current.rows.length === 0 && current.clearHidden, 'Pre-start clear fetched stale results or stole focus after blur', current);
       assertInputs(current, { count: 2 }); assertPrivate(before, current);
 
+      // Tab can focus a query while its native smooth reveal is still moving
+      // up from the bottom of the static page. Early typing must not cancel
+      // that useful motion and strand the editor outside the viewport.
+      scenario = 'early typing preserves native focus reveal';
+      before = await start();
+      const scrollingStyle = () => evaluate(client, `(() => {
+        const style = getComputedStyle(document.documentElement);
+        return { behavior: style.scrollBehavior, padding: parseFloat(style.scrollPaddingTop), scroll: scrollY };
+      })()`);
+      const ordinaryScrolling = await scrollingStyle();
+      assert(ordinaryScrolling.behavior === 'smooth', 'Native reveal fixture must exercise ordinary smooth scrolling', ordinaryScrolling);
+      await evaluate(client, `(() => {
+        const input = document.querySelector('[data-directory-query]');
+        const previous = [...document.querySelectorAll('a[href]')].filter(link =>
+          link.getBoundingClientRect().height > 0 && (link.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING)).at(-1);
+        if (!previous) throw new Error('Missing native Tab predecessor for directory input');
+        previous.focus({ preventScroll: true });
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+      })()`);
+      await client.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+      await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+      const revealing = await savedState();
+      assert(revealing.focusedInput && !revealing.meaningfulFocus && revealing.scroll > 200,
+        'Native Tab did not establish a pending offscreen query reveal', revealing);
+      await client.call('Input.insertText', { text: QUERY });
+      let revealed;
+      for (let attempt = 0; attempt < 160; attempt++) {
+        revealed = await savedState();
+        if (revealed.focusedInput && revealed.meaningfulFocus) break;
+        await sleep(50);
+      }
+      assert(revealed.focusedInput && revealed.meaningfulFocus && revealed.scroll < revealing.scroll,
+        'Early typing interrupted necessary native focus reveal', { revealing, revealed });
+      await pendingStartup(); await release('catalog');
+      await london(before, { caret: QUERY.length });
+      await capture(client, `directory-startup-native-focus-reveal-${width}.png`);
+      const focusedScrolling = await scrollingStyle();
+      assert(focusedScrolling.behavior === ordinaryScrolling.behavior && focusedScrolling.padding > ordinaryScrolling.padding,
+        'Focused query did not retain smooth motion and field clearance', { ordinaryScrolling, focusedScrolling });
+      await evaluate(client, `(${focusDirectoryStartupBlurTarget.toString()})()`);
+      const blurredScrolling = await scrollingStyle();
+      assert(blurredScrolling.behavior === ordinaryScrolling.behavior && blurredScrolling.padding === ordinaryScrolling.padding
+        && blurredScrolling.scroll === focusedScrolling.scroll, 'Blur did not restore ordinary scroll clearance without moving the page', { ordinaryScrolling, focusedScrolling, blurredScrolling });
+
       // Newer input invalidates the original async search while its real catalog
       // request is held. Releasing it must never resurrect the London query.
       scenario = 'newer input while startup catalog is pending';
@@ -737,7 +800,7 @@ export async function verifyDirectoryStartup({ client, host, navigate, evaluate,
       const earlySavedClearBeforeRuntime = await earlySavedBrowse(width, { clear: true, browseBeforeRuntime: true });
       evidence.push({ width, earlySaved, earlySavedClear, earlySavedBeforeRuntime, earlySavedClearBeforeRuntime });
       console.log(`PASS directory startup scenarios at ${width}px`);
-      evidence.push({ width, earlyInput: true, staleReload: true, earlyClearAfterBlur: true, pendingInput: true, pendingClear: true, caret: true, ime: compositionEvidence, staleShown: stale.history.shown });
+      evidence.push({ width, earlyInput: true, staleReload: true, earlyClearAfterBlur: true, nativeFocusReveal: { start: revealing.scroll, end: revealed.scroll, inputBox: revealed.inputBox, ordinaryScrolling, focusedScrolling, blurredScrolling }, pendingInput: true, pendingClear: true, caret: true, ime: compositionEvidence, staleShown: stale.history.shown });
     }
     scenario = 'cross-scenario privacy and console';
     const leaked = requests.filter(directoryStartupRequestLeaksQuery).map(request => ({ url: request.url, postData: request.postData }));

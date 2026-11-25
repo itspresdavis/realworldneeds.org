@@ -208,3 +208,14 @@ test("actual verify CLI is GET-only, reports all three drift classes, and fails 
     assert.equal(u.searchParams.get("published"), "eq.true");
   }
 });
+
+test('catalog export cannot erase reviewed service routes with an older or same-date database row', () => {
+  const serviceAccess = [{ id: 'shelter', reviewedAt: '2026-11-06', address: 'Reviewed intake address' }];
+  const local = [{ id: 'a', lastChecked: '2026-10-12', serviceAccess }];
+  for (const candidate of [
+    { id: 'a', lastChecked: '2026-10-12' },
+    { id: 'a', lastChecked: '2026-11-07', serviceAccess: [] },
+    { id: 'a', lastChecked: '2026-11-07', serviceAccess: [{ ...serviceAccess[0], address: 'Different unreviewed address' }] }
+  ]) assert.throws(() => assertFreshExport([candidate], local), /service access/i);
+  assert.doesNotThrow(() => assertFreshExport([{ ...local[0], serviceAccess: structuredClone(serviceAccess) }], local));
+});

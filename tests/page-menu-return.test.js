@@ -109,7 +109,7 @@ test('local, global, service and trust pages load the same byte-addressed contro
   const asset = release.offlineAssets['/page-menu.js'];
   assert.match(asset || '', /^\/page-menu\.[a-f0-9]{12}\.js$/);
   assert.equal(await readFile(`dist${asset}`, 'utf8'), source);
-  for (const path of ['directory/index.html', 'directory/local/united-states/new-york/help/referral/index.html',
+  for (const path of ['directory/index.html', 'directory/local/united-states/new-york-city/help/referral/index.html',
     'service/new-york-public-library-access/index.html', 'sources/index.html', 'editorial-policy.html', 'transparency.html']) {
     const html = await readFile(`dist/${path}`, 'utf8');
     assert.equal(html.split(`src="${asset}?v=`).length - 1, 1, path);

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Correction reporting availability and the review process for Real World Needs service listings." />
+  <title>Listing corrections | Real World Needs</title>
+  <link rel="icon" href="/rwn-mark.svg" />
+  <link rel="stylesheet" href="/contribute.css" />
+  <link rel="stylesheet" href="/corrections.css" />
+  <script type="module" src="/corrections.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-correction-message="Skip to content">Skip to content</a>
+  <header class="contributor-header">
+    <a class="wordmark" href="/"><img src="/rwn-mark.svg" width="38" height="38" alt="" /><span>Real World Needs<small data-correction-message="A clearer path to help.">A clearer path to help.</small></span></a>
+    <nav aria-label="Main navigation" data-correction-aria="Main navigation"><a href="/directory" data-correction-message="Find help">Find help</a></nav>
+  </header>
+  <main id="main" class="correction-page" data-correction-page>
+    <p class="eyebrow" data-correction-message="Listing accuracy">Listing accuracy</p>
+    <h1 data-correction-message="Listing corrections.">Listing corrections.</h1>
+    <p data-correction-message="This channel is for public listing information and website accessibility barriers. It cannot arrange assistance or respond to emergencies.">This channel is for public listing information and website accessibility barriers. It cannot arrange assistance or respond to emergencies.</p>
+    <p id="correction-context" hidden>Listing: <strong id="correction-listing-id"></strong> · <a id="correction-listing-link" data-correction-message="View listing">View listing</a></p>
+    <p id="correction-availability" role="status" aria-live="polite" data-correction-message="Correction reporting is not available yet. You can still check the provider’s current information from its service listing.">Correction reporting is not available yet. You can still check the provider’s current information from its service listing.</p>
+    <button id="correction-retry" type="button" hidden data-correction-message="Retry availability check">Retry availability check</button>
+    <noscript><p data-correction-message="JavaScript and a connection are needed to check whether reporting is available. No report has been sent.">JavaScript and a connection are needed to check whether reporting is available. No report has been sent.</p></noscript>
+    <form id="correction-form" hidden>
+      <fieldset id="correction-fields" disabled>
+        <legend data-correction-message="What needs to be checked?">What needs to be checked?</legend>
+        <div class="correction-trap" hidden aria-hidden="true"><label for="correction-website" data-correction-message="Leave this field empty">Leave this field empty</label><input id="correction-website" name="website" tabindex="-1" autocomplete="off" /></div>
+        <label for="correction-category" data-correction-message="Issue">Issue</label>
+        <select id="correction-category" name="category" required aria-describedby="correction-status"><option value="" data-correction-message="Choose one issue">Choose one issue</option></select>
+        <div id="correction-service-field" hidden><label for="correction-service" data-correction-message="Service (optional)">Service (optional)</label><select id="correction-service" name="serviceId"><option value="" data-correction-message="Whole listing or unsure">Whole listing or unsure</option></select></div>
+        <label for="correction-note" data-correction-message="Listing details to check (optional)">Listing details to check (optional)</label>
+        <p id="correction-guidance" data-correction-message="Describe only public provider facts or the website barrier. Do not include health information, identification, payment details or personal circumstances.">Describe only public provider facts or the website barrier. Do not include health information, identification, payment details or personal circumstances.</p>
+        <textarea id="correction-note" name="note" rows="5" maxlength="1000" aria-describedby="correction-guidance correction-status" autocomplete="off"></textarea>
+        <label for="correction-proposal" data-correction-message="Proposed correction (optional)">Proposed correction (optional)</label>
+        <textarea id="correction-proposal" name="proposedCorrection" rows="3" maxlength="1000" aria-describedby="correction-guidance correction-status" autocomplete="off"></textarea>
+        <label for="correction-source" data-correction-message="Official source URL (optional)">Official source URL (optional)</label>
+        <input id="correction-source" name="sourceUrl" type="url" maxlength="2048" inputmode="url" autocomplete="off" />
+        <label for="correction-reply" data-correction-message="Reply email (optional)">Reply email (optional)</label>
+        <p id="correction-reply-guidance" data-correction-message="An email is not required. It stays private with the review team and does not guarantee a reply.">An email is not required. It stays private with the review team and does not guarantee a reply.</p>
+        <input id="correction-reply" name="replyContact" type="email" maxlength="254" inputmode="email" autocomplete="off" aria-describedby="correction-reply-guidance" />
+      </fieldset>
+      <p><span data-correction-message="Reporting needs no account. Your report creates a private review candidate; it does not change the public listing.">Reporting needs no account. Your report creates a private review candidate; it does not change the public listing.</span> <a href="/privacy#corrections" data-correction-message="How correction reports are handled">How correction reports are handled</a>.</p>
+      <button id="correction-submit" class="primary-button" type="submit" aria-disabled="false" data-correction-message="Send correction report">Send correction report</button>
+      <p id="correction-status" role="status" aria-live="polite" tabindex="-1"></p>
+      <p id="correction-receipt" hidden></p>
+    </form>
+    <p><a href="/directory" data-correction-message="Return to the directory">Return to the directory</a> · <a href="/editorial-policy#corrections" data-correction-message="How listings are corrected">How listings are corrected</a></p>
+  </main>
+</body>
+</html>

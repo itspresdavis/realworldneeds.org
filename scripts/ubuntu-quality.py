@@ -8,6 +8,8 @@ import fcntl
 import hashlib
 import json
 import os
+import platform
+import pwd
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -20,7 +22,7 @@ import tempfile
 import time
 import uuid
 
-REPOSITORY = "iamhuvr/RWN-WEB"
+REPOSITORY = "itspresdavis/RWN-WEB"
 STAGES = (
     ("install", ["npm", "ci"], 300),
     ("check", ["/bin/sh", "-c", """set -eu
@@ -29,17 +31,27 @@ for test in tests/ubuntu-quality.test.py tests/quality-backend.test.py tests/rel
         PYTHONDONTWRITEBYTECODE=1 python3 "$test"
     fi
 done
+npm audit --audit-level=high
 exec npm run check
 """], 900),
     ("touch", ["node", "scripts/browser-globe-touch-v4.mjs"], 420),
     ("browser", ["npm", "run", "test:browser:qa"], 3600),
+    ("cross-browser", ["/bin/sh", "-c", """set -eu
+# Locked browser binaries live in this run's isolated browser cache.
+# Missing OS dependencies fail; never sudo or skip a browser engine.
+export RWN_QA_PORT=4199
+npm exec -- playwright install chromium firefox webkit
+exec npm run test:cross-browser
+"""], 1800),
 )
 TERMINAL = {"passed", "failed", "error", "interrupted"}
 BROWSER_PORTS = {
+    "cross-browser": (4199,),
     "touch": (4178, 9228),
+    # Only endpoints actually used by the sequential suite. Unchosen random
+    # candidates and unrelated ephemeral connections must not block the gate.
     "browser": (4173, 4175, 4176, 4177, 4178, 4181, 4184,
-                9222, 9224, 9225, 9226, 9228, 9231, 9234,
-                *range(9228, 9428), *range(49152, 50152)),
+                9222, 9224, 9225, 9226, 9228, 9231, 9234),
 }
 
 
@@ -53,6 +65,24 @@ def digest(path):
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             result.update(block)
     return result.hexdigest()
+
+
+def browser_library_manifest(value):
+    """Record explicitly selected browser libraries, never inherited loader settings."""
+    directory = Path(value).expanduser().resolve(strict=True)
+    if not directory.is_dir() or ":" in str(directory):
+        raise ValueError("Browser library path must be one existing directory")
+    files = []
+    for path in sorted(directory.rglob("*")):
+        resolved = path.resolve(strict=True)
+        if not resolved.is_relative_to(directory):
+            raise ValueError("Browser library symlink escapes selected directory")
+        if path.is_file():
+            files.append({"path": str(path.relative_to(directory)), "sha256": digest(path),
+                          "bytes": path.stat().st_size})
+    if not files:
+        raise ValueError("Browser library directory is empty")
+    return {"directory": str(directory), "files": files}
 
 
 def atomic_json(path, value):
@@ -71,7 +101,23 @@ def atomic_json(path, value):
         os.close(directory)
 
 
-def clean_environment(home, temp_root=None):
+def chrome_executable(system=None, override=None):
+    system = sys.platform if system is None else system
+    if system not in {"linux", "darwin"}:
+        raise RuntimeError("Local Quality supports Linux and Darwin only")
+    if override is not None:
+        path = Path(override)
+        if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError("--chrome-path must be an absolute path to an existing executable file")
+        return str(path.resolve(strict=True))
+    if system == "linux":
+        return "/usr/bin/google-chrome"
+    if system == "darwin":
+        return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    raise RuntimeError("Local Quality supports Linux and Darwin only")
+
+
+def clean_environment(home, temp_root=None, chrome_path=None):
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
     runtime_tmp = Path(temp_root) if temp_root is not None else home / "tmp"
@@ -91,7 +137,8 @@ def clean_environment(home, temp_root=None):
         "NPM_CONFIG_USERCONFIG": str(user_config),
         "NPM_CONFIG_GLOBALCONFIG": str(global_config),
         "NPM_CONFIG_CACHE": str(home / ".cache/npm"),
-        "CHROME_PATH": "/usr/bin/google-chrome",
+        "PLAYWRIGHT_BROWSERS_PATH": str(home / ".cache/ms-playwright"),
+        "CHROME_PATH": chrome_executable(override=chrome_path),
         "CI": "true", "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
     })
@@ -112,12 +159,12 @@ def resolve_ref(repo, ref, env):
         raise ValueError("Ref must be a nonempty Git revision, not an option.")
     origin = git_output(repo, env, "remote", "get-url", "origin")
     permitted = {
-        "https://github.com/iamhuvr/RWN-WEB.git",
-        "https://github.com/iamhuvr/RWN-WEB",
-        "git@github.com:iamhuvr/RWN-WEB.git",
-        "git@github.com:iamhuvr/RWN-WEB",
-        "ssh://git@github.com/iamhuvr/RWN-WEB.git",
-        "ssh://git@github.com/iamhuvr/RWN-WEB",
+        "https://github.com/itspresdavis/RWN-WEB.git",
+        "https://github.com/itspresdavis/RWN-WEB",
+        "git@github.com:itspresdavis/RWN-WEB.git",
+        "git@github.com:itspresdavis/RWN-WEB",
+        "ssh://git@github.com/itspresdavis/RWN-WEB.git",
+        "ssh://git@github.com/itspresdavis/RWN-WEB",
     }
     if origin not in permitted:
         raise ValueError("Source origin does not match " + REPOSITORY)
@@ -134,7 +181,7 @@ def allowed_member(member):
     path = PurePosixPath(member.name)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError("Unsafe path in source archive: " + member.name)
-    if path.parts and path.parts[0] in {"qa-screenshots", ".vercel"}:
+    if path.parts and path.parts[0] in {"qa-screenshots", "test-results", "playwright-report", "qa-cross-browser", ".vercel"}:
         return False
     if any(part in {"node_modules", "dist", ".git"} for part in path.parts):
         return False
@@ -189,14 +236,22 @@ def select_build_cpus(allowed, topology_reader=read_cpu_topology):
 
 
 def stage_resource_policy(name, topology_reader=read_cpu_topology):
-    allowed = sorted(os.sched_getaffinity(0))
+    system = sys.platform
+    if system not in {"linux", "darwin"}:
+        raise RuntimeError("Local Quality supports Linux and Darwin only")
     inherited_nice = os.getpriority(os.PRIO_PROCESS, 0)
-    if name in {"touch", "browser"}:
-        cpus, selection, increment = allowed, "full-inherited-affinity", 0
+    increment = 0 if name in {"touch", "browser", "cross-browser"} else 10
+    if system == "darwin":
+        # Darwin has no sched_setaffinity API. Do not claim or emulate a CPU cap.
+        cpus, selection = None, "os-managed-no-affinity"
     else:
-        cpus, selection = select_build_cpus(allowed, topology_reader)
-        increment = 10
+        allowed = sorted(os.sched_getaffinity(0))
+        if name in {"touch", "browser", "cross-browser"}:
+            cpus, selection = allowed, "full-inherited-affinity"
+        else:
+            cpus, selection = select_build_cpus(allowed, topology_reader)
     return {
+        "platform": system, "affinity_supported": system == "linux",
         "cpus": cpus, "cpu_selection": selection,
         "inherited_nice": inherited_nice, "nice_increment": increment,
         "expected_nice": min(19, inherited_nice + increment),
@@ -208,7 +263,8 @@ def child_limits(policy=None):
     policy = policy if policy is not None else stage_resource_policy("check")
     if policy["nice_increment"]:
         os.nice(policy["nice_increment"])
-    os.sched_setaffinity(0, policy["cpus"])
+    if policy["affinity_supported"]:
+        os.sched_setaffinity(0, policy["cpus"])
 
 
 def export_source(repo, sha, archive, workspace, env):
@@ -270,6 +326,27 @@ def ensure_ports_available(ports):
                            ", ".join(map(str, occupied)))
 
 
+def stage_environment(name, env):
+    stage_env = dict(env)
+    library_path = stage_env.pop("RWN_QA_BROWSER_LIBRARY_PATH", None)
+    stage_env.pop("LD_LIBRARY_PATH", None)
+    if name == "cross-browser" and library_path:
+        stage_env["LD_LIBRARY_PATH"] = library_path
+    home_policy = "isolated"
+    if sys.platform == "darwin" and name in {"touch", "browser", "cross-browser"}:
+        # macOS Chrome needs the native account home for system integration.
+        # Browser profiles, XDG state, npm and Git configuration remain isolated.
+        native_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+        if not native_home.is_absolute() or not native_home.is_dir():
+            raise RuntimeError("The native macOS account home must be an existing absolute directory")
+        stage_env["HOME"] = str(native_home)
+        home_policy = "macos-native-home-isolated-browser-profile"
+    metadata = {"home_policy": home_policy, "home": stage_env.get("HOME")}
+    if name == "cross-browser" and library_path:
+        metadata["browser_library_path"] = library_path
+    return stage_env, metadata
+
+
 def run_stage(name, argv, cwd, env, log_path, timeout):
     started = now()
     start = time.monotonic()
@@ -277,8 +354,10 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
     status = "error"
     exit_code = None
     detail = None
+    environment = None
     resources = stage_resource_policy(name)
     try:
+        stage_env, environment = stage_environment(name, env)
         with Path(log_path).open("wb") as log:
             try:
                 ensure_ports_available(BROWSER_PORTS.get(name, ()))
@@ -286,7 +365,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
                 log.write((str(error) + "\n").encode())
                 raise
             process = subprocess.Popen(
-                argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
+                argv, cwd=cwd, env=stage_env, stdout=log, stderr=subprocess.STDOUT,
                 start_new_session=True, preexec_fn=lambda: child_limits(resources),
             )
             try:
@@ -308,7 +387,7 @@ def run_stage(name, argv, cwd, env, log_path, timeout):
             stop_process(process)
     return {
         "name": name, "argv": argv, "status": status, "exit_code": exit_code,
-        "resources": resources,
+        "resources": resources, "environment": environment,
         "detail": detail, "started_at": started, "finished_at": now(),
         "duration_seconds": round(time.monotonic() - start, 3),
         "timeout_seconds": timeout, "log": str(log_path),
@@ -324,7 +403,7 @@ def execute_gates(workspace, env, run_dir, receipt, save, runner=run_stage):
     receipt["stages"] = {}
     save()
     for name, argv, timeout in STAGES:
-        if name in {"check", "touch", "browser"}:
+        if name in {"check", "touch", "browser", "cross-browser"}:
             required = ["install"] if name == "check" else ["install", "check"]
             if any(not stage_passed(receipt["stages"].get(key, {})) for key in required):
                 receipt["stages"][name] = {"name": name, "status": "skipped", "detail": "prerequisite failed"}
@@ -344,10 +423,17 @@ def execute_gates(workspace, env, run_dir, receipt, save, runner=run_stage):
 
 def collect_artifacts(workspace):
     found = []
-    directory = workspace / "qa-screenshots"
-    if directory.is_dir():
-        for path in sorted(directory.iterdir()):
-            if path.is_file() and not path.is_symlink() and path.suffix in {".png", ".json"}:
+    for folder, extensions in (
+        ("qa-screenshots", {".png", ".json"}),
+        ("test-results", {".png", ".json", ".zip", ".webm", ".txt"}),
+        ("qa-cross-browser", {".png", ".json", ".zip", ".webm", ".txt"}),
+        ("playwright-report", {".png", ".json", ".zip", ".webm", ".html"}),
+    ):
+        directory = workspace / folder
+        if not directory.is_dir() or directory.is_symlink():
+            continue
+        for path in sorted(directory.rglob("*")):
+            if path.is_file() and not path.is_symlink() and path.suffix in extensions:
                 stat = path.stat()
                 found.append({
                     "path": str(path), "sha256": digest(path), "bytes": stat.st_size,
@@ -366,6 +452,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ref", default="HEAD")
     parser.add_argument("--output-root", default="~/.local/state/rwn-web-quality/runs")
+    parser.add_argument("--chrome-path", help="Absolute path to installed Chrome (defaults to the platform browser)")
+    parser.add_argument("--browser-library-path", help="Explicit user-local browser shared-library directory; hashed and applied only to cross-browser tests")
     options = parser.parse_args(argv)
     repo = Path(__file__).resolve().parents[1]
     root = Path(options.output_root).expanduser().resolve()
@@ -381,8 +469,10 @@ def main(argv=None):
         "started_at": now(), "finished_at": None, "active_stage": "setup",
         "stages": {}, "artifacts": [], "run_directory": str(run_dir),
         "validator_source_sha256": digest(Path(__file__)),
-        "limits": {"build": stage_resource_policy("check"),
-                   "browser": stage_resource_policy("browser")},
+        "platform": {"system": sys.platform, "machine": platform.machine(),
+                     "release": platform.release()},
+        "provider": {"linux": "ubuntu", "darwin": "macos"}.get(sys.platform),
+        "limits": {},
     }
     save = lambda: atomic_json(receipt_path, receipt)
     save()
@@ -393,6 +483,11 @@ def main(argv=None):
     def interrupted(signum, frame):
         raise Interrupted(signum)
     try:
+        # Populate resource limits inside the receipt boundary so unsupported
+        # hosts or unavailable OS APIs still leave a durable failure.
+        receipt["limits"] = {"build": stage_resource_policy("check"),
+                             "browser": stage_resource_policy("browser")}
+        save()
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous[signum] = signal.signal(signum, interrupted)
         # Chrome SingletonSocket uses TMPDIR and Unix socket paths are limited.
@@ -400,7 +495,11 @@ def main(argv=None):
         runtime_tmp = Path(tempfile.mkdtemp(prefix="rwn-q-", dir="/tmp"))
         receipt["runtime_tmpdir"] = str(runtime_tmp)
         save()
-        env = clean_environment(run_dir / "home", temp_root=runtime_tmp)
+        env = clean_environment(run_dir / "home", temp_root=runtime_tmp, chrome_path=options.chrome_path)
+        if options.browser_library_path:
+            receipt["browser_libraries"] = browser_library_manifest(options.browser_library_path)
+            env["RWN_QA_BROWSER_LIBRARY_PATH"] = receipt["browser_libraries"]["directory"]
+            save()
         lock_path = Path.home() / ".local/state/rwn-web-quality/validator.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock = lock_path.open("a")
@@ -412,15 +511,17 @@ def main(argv=None):
         receipt["source_tree"] = git_output(repo, env, "rev-parse", receipt["sha"] + "^{tree}")
         save()
         node = run_stage("node", ["node", "--version"], repo, env, run_dir / "node.log", 15)
-        chrome = run_stage("chrome", ["/usr/bin/google-chrome", "--version"], repo, env, run_dir / "chrome.log", 15)
+        chrome = run_stage("chrome", [env["CHROME_PATH"], "--version"], repo, env, run_dir / "chrome.log", 15)
         receipt["prerequisites"] = {"node": node, "chrome": chrome}
         node_version = (run_dir / "node.log").read_text().strip()
         chrome_version = (run_dir / "chrome.log").read_text().strip()
         if node["status"] != "passed" or not re.fullmatch(r"v24\.\d+\.\d+", node_version):
             raise RuntimeError("Node.js major version 24 is required")
         if chrome["status"] != "passed" or not chrome_version.startswith("Google Chrome "):
-            raise RuntimeError("/usr/bin/google-chrome did not verify successfully")
-        receipt["runtime"] = {"node": node_version, "chrome": chrome_version}
+            raise RuntimeError(env["CHROME_PATH"] + " did not verify successfully")
+        receipt["runtime"] = {"node": node_version, "chrome": chrome_version,
+                              "node_path": shutil.which("node", path=env["PATH"]),
+                              "chrome_path": env["CHROME_PATH"]}
         archive = run_dir / "source.tar"
         receipt.update(export_source(repo, receipt["sha"], archive, workspace, env))
         receipt["source_archive"] = {"path": str(archive), "sha256": digest(archive), "bytes": archive.stat().st_size}
@@ -430,6 +531,8 @@ def main(argv=None):
         if qa.exists():
             raise RuntimeError("Source export unexpectedly contains old QA artifacts")
         result = execute_gates(workspace, env, run_dir, receipt, save)
+        if options.browser_library_path and browser_library_manifest(options.browser_library_path) != receipt["browser_libraries"]:
+            raise RuntimeError("Selected browser libraries changed during validation")
         receipt["artifacts"] = collect_artifacts(workspace)
         receipt["status"] = result
         exit_code = 0 if result == "passed" else 1

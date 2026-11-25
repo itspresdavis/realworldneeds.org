@@ -3,13 +3,13 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import {
-  PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, PAGE_MENU_VIEWPORTS, PAGE_MENU_SHORT_HEIGHT_LIMITATION, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
+  PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, PAGE_MENU_HREFS, pageMenuLinksUsable, PAGE_MENU_VIEWPORTS, PAGE_MENU_SHORT_HEIGHT_LIMITATION, pageMenuFixtureCacheControl, observePageMenuReturn, pageMenuReturnSnapshot,
   pageMenuRetainedState, pageMenuReturnedFromBFCache, pageMenuFreshDocument, waitForPageMenuSettled, cleanupPageMenuQA, pageMenuWorkerReady, pageMenuNativeEntryWasAdded, pageMenuHistoryTraversalClassification, verifyPageMenuReturn, pageMenuReloadSourceReady, pageMenuReloadRestored
 } from '../scripts/qa-page-menu-return.mjs';
 
 const event = (persisted, timeOrigin = 100, extra = {}) => ({ persisted, trusted: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, timeOrigin, ...extra });
 const source = () => ({ documentPresent: true, ready: true, href: `http://127.0.0.1:9999${PAGE_MENU_LOCAL}`, path: PAGE_MENU_LOCAL,
-  timeOrigin: 100, query: 'library', country: undefined, category: '', count: '1 matching listing', summary: 'Showing 1 of 1 matches across 15 listings',
+  timeOrigin: 100, query: 'library', country: undefined, category: '', count: '1 matching listing', summary: '1 of 1 matches · 15 listings',
   filtered: true, resultsHidden: false, more: false, empty: undefined,
   rows: [{ href: PAGE_MENU_SERVICE, text: 'New York Public Library access · source checked' }], staticRows: [{ href: PAGE_MENU_SERVICE, text: 'New York Public Library access' }],
   history: { path: PAGE_MENU_LOCAL, query: 'library', country: '', category: '', shown: 1, scroll: 240 },
@@ -18,6 +18,24 @@ const source = () => ({ documentPresent: true, ready: true, href: `http://127.0.
   probe: { shows: [event(false)], hides: [], inputs: [{ value: 'library', trusted: true }] } });
 const returned = () => ({ ...source(), menuOpen: false, focus: { visible: true, inMenu: false, summary: true, href: '', box: { x: 300, y: 12, width: 68, height: 44 } },
   probe: { shows: [event(false), event(true)], hides: [event(true, 100, { menuOpen: true })] } });
+const menuLinks = () => PAGE_MENU_HREFS.map(href => ({ href, visible: true, box: { height: 50 } }));
+
+test('usable menu requires the exact reviewed destinations in order and preserves visible touch targets', () => {
+  assert.deepEqual(PAGE_MENU_HREFS, ['/', '/directory', '/directory#saved', '/about', '/editorial-policy', '/sources', '/transparency']);
+  assert.equal(pageMenuLinksUsable(menuLinks()), true);
+  for (const mutate of [
+    links => links.splice(3, 1), // The old six-link menu loses About RWN.
+    links => { links[3].href = '/sources'; }, // Seven links alone can conceal a duplicate and missing destination.
+    links => { links[3].href = 'https://example.org/about'; },
+    links => links.reverse(),
+    links => { links[3].visible = false; },
+    links => { links[3].box.height = 43; },
+    links => { links[3].box = null; }
+  ]) {
+    const links = menuLinks(); mutate(links); assert.equal(pageMenuLinksUsable(links), false, JSON.stringify(links));
+  }
+  assert.equal(pageMenuLinksUsable(undefined), false);
+});
 
 test('BFCache classifier requires trusted persisted lifecycle evidence from the same exact document and entry', () => {
   assert.equal(pageMenuReturnedFromBFCache(returned(), source()), true);
@@ -51,7 +69,7 @@ test('fresh navigation/reload cannot masquerade as BFCache even when its DOM and
 test('exact retained-state oracle catches local/global widening, reordered or stale rows and dropped history', () => {
   assert.equal(pageMenuRetainedState(returned(), source()), true);
   for (const change of [{ href: 'http://127.0.0.1:9999/directory' }, { path: '/directory' }, { query: '' }, { country: '' }, { category: 'Food' },
-    { count: '15 listings on this page' }, { summary: 'Showing 1 of 1 matches across 439 listings' }, { filtered: false }, { resultsHidden: true },
+    { count: '15 listings on this page' }, { summary: '1 of 1 matches · 437 listings' }, { filtered: false }, { resultsHidden: true },
     { more: true }, { empty: 'No matching listings' }, { rows: [] }, { rows: [{ href: PAGE_MENU_SERVICE, text: 'Wrong metadata' }] },
     { staticRows: [] }, { history: null }, { history: { ...source().history, query: '' } }, { history: { ...source().history, shown: 60 } }]) {
     assert.equal(pageMenuRetainedState({ ...returned(), ...change }, source()), false, JSON.stringify(change));
@@ -337,7 +355,7 @@ test('actual round-trip orchestration preserves passed primary Back evidence whe
   const code = verifyPageMenuReturn.toString();
   const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
   const src = { ...source(), menuOpen: false, summaryVisible: true };
-  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 6 }, () => ({ visible: true, box: { height: 50 } })) };
+  const opened = { ...src, menuOpen: true, menuLinks: menuLinks() };
   const dest = { ...forwardFixture({ fresh: true }).actual, timeOrigin: 102,
     probe: { shows: [event(false, 102, { href: 'http://127.0.0.1:9999/directory#saved' })], hides: [] } };
   const back = returned();
@@ -346,7 +364,7 @@ test('actual round-trip orchestration preserves passed primary Back evidence whe
   let samples = 0, entries = 0;
   const evidence = [], navigation = [];
   const globals = { URL, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, source: src, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999',
-    evidence, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
+    evidence, pageMenuLinksUsable, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
     pageMenuHistoryTraversalClassification, historySnapshot: async () => {},
     open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
     client: { call: async (method, params) => navigation.push({ method, params }) },
@@ -409,11 +427,11 @@ test('fresh reload must retain both exact committed scroll and state, with true 
   assert.equal(pageMenuReloadRestored(fresh, { ...baseline, scroll: 219 }), false);
 });
 
-function completeRoundTripFixture(repeat) {
+function completeRoundTripFixture(repeat, openedLinks = menuLinks()) {
   const code = verifyPageMenuReturn.toString();
   const closure = code.slice(code.indexOf('  const roundTrip = async'), code.indexOf('  client.ws.addEventListener'));
   const src = { ...source(), menuOpen: false, summaryVisible: true };
-  const opened = { ...src, menuOpen: true, menuLinks: Array.from({ length: 6 }, () => ({ visible: true, box: { height: 50 } })) };
+  const opened = { ...src, menuOpen: true, menuLinks: openedLinks };
   const destinationHref = 'http://127.0.0.1:9999/directory#saved';
   const sourceEntry = historySnapshot([historyEntry(424, PAGE_MENU_LOCAL)]);
   const destinationEntry = historySnapshot([...sourceEntry.entries, historyEntry(426, '/directory#saved')]);
@@ -433,7 +451,7 @@ function completeRoundTripFixture(repeat) {
   let samples = 0, entries = 0;
   const evidence = [], calls = [];
   const globals = { URL, PAGE_MENU_LOCAL, PAGE_MENU_SERVICE, worker: {}, currentCase: '', origin: 'http://127.0.0.1:9999', evidence,
-    pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
+    pageMenuLinksUsable, pageMenuRetainedState, pageMenuFreshDocument, pageMenuReturnedFromBFCache, pageMenuNativeEntryWasAdded,
     pageMenuHistoryTraversalClassification, pageMenuReloadSourceReady, pageMenuReloadRestored, historySnapshot: async () => {},
     open: async () => src, type: async () => {}, evaluate: async () => {}, nativeClick: async () => ({ trusted: true }), capture: async () => {},
     client: { call: async (method, params) => calls.push({ method, params }) },
@@ -445,6 +463,14 @@ function completeRoundTripFixture(repeat) {
   };
   return { run: vm.runInNewContext(`${closure}; roundTrip`, globals), evidence, calls };
 }
+
+test('actual round-trip rejects seven visible links when About RWN is replaced by a duplicate', async () => {
+  const links = menuLinks(); links[3].href = '/sources';
+  const fixture = completeRoundTripFixture(false, links);
+  await assert.rejects(fixture.run({ path: PAGE_MENU_LOCAL, target: '/directory#saved', query: 'library', name: 'wrong-menu' }), /Menu remains usable before real navigation/);
+  assert.equal(fixture.evidence.length, 0, 'A wrong menu must not produce a primary Back receipt');
+  assert.equal(fixture.calls.length, 0, 'A wrong menu must fail before native history traversal');
+});
 
 for (const repeat of [true, false]) test(`actual orchestration separates committed reload from native Tab (repeat=${repeat})`, async () => {
   const fixture = completeRoundTripFixture(repeat);

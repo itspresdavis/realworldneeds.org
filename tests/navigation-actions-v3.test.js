@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -17,12 +18,12 @@ test("public pages share one task-first navigation order and an explicit mobile 
     text("dist/transparency.html"),
     text("dist/editorial-policy.html")
   ]);
-  const expected = ["Find help", "Directory", "Saved", "How listings are checked", "Sources", "Transparency"];
+  const expected = ["Find help", "Directory", "Saved", "About RWN", "How listings are checked", "Sources", "Transparency"];
   for (const html of pages) {
     assert.deepEqual(primaryLabels(html), expected);
     assert.match(html, /class="rwn-page-menu"/);
     assert.match(html, /<summary[^>]*>Menu<\/summary>/);
-    assert.match(html, /\/navigation-actions\.css\?v=[a-f0-9]{12}/);
+    assert.match(html, /\/navigation-actions\.[a-f0-9]{12}\.css\?v=[a-f0-9]{12}/);
     assert.match(html, /class="legal-footer rwn-unified-footer"/);
   }
 });
@@ -43,13 +44,16 @@ test("directory rows put urgent actions first and keep verification detail one d
   assert.doesNotMatch(record, /directory-quick-actions/);
 });
 
-test("service pages make call and one clear directions choice immediate while preserving source verification", async () => {
+test("service pages make contact and a safe service choice immediate while preserving source verification", async () => {
   const resource = resources.find((item) => item.kind === "direct" && item.phone) || resources.find((item) => item.kind === "direct");
   assert.ok(resource);
   const html = await text(`dist/service/${resource.id}/index.html`);
   const next = html.match(/<nav class="service-next-steps"[\s\S]*?<\/nav>/)?.[0] || "";
   if (resource.phone) assert.match(next, /class="is-call"[^>]+href="tel:/);
-  assert.match(next, /class="is-map is-directions"[^>]+google\.com\/maps\/dir\/\?api=1&amp;destination=/);
+  if (resource.serviceAccess) {
+    assert.match(next, /href="#before-you-go-title"/);
+    assert.doesNotMatch(next, /class="is-map is-directions"/);
+  } else assert.match(next, /class="is-map is-directions"[^>]+google\.com\/maps\/dir\/\?api=1&amp;destination=/);
   assert.doesNotMatch(next, /maps\.apple\.com\/\?daddr=/);
   assert.match(next, /class="is-primary"[^>]*>[\s\S]*?<strong>Official source<\/strong>/);
   assert.match(next, /href="\/#resource=/);
@@ -68,7 +72,7 @@ test("resource-finder service pages do not promise directions and explain their 
 
 test("whole-directory search index carries only the fields needed for immediate actions", async () => {
   const payload = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(payload.schemaVersion, "1.5");
+  assert.equal(payload.schemaVersion, SEARCH_CATALOG_SCHEMA);
   const direct = payload.records.find((record) => record.kind === "direct");
   assert.ok(direct);
   assert.ok(Object.hasOwn(direct, "phone"));

@@ -1,7 +1,8 @@
 /* Saved listings stay text-first, device-local and usable without a map. */
 .saved-services:not(:target),.saved-services [hidden]{display:none!important}
 .has-saved-view>:not(.saved-services):not(#offlineDirectoryNotice):not([aria-label="Breadcrumb"]){display:none!important}
-/* Keep the directory's page heading available to assistive technology. */
+/* Keep the heading accessible; prevent padding transitions during return. */
+#directory>.legal-hero{transition:none!important}
 #directory:has(#saved:target)>.legal-hero{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%)}
 .saved-services{margin:.5rem 0 3rem;scroll-margin-top:6rem;color:#153c30}
 .saved-services__heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;padding:.5rem 0 1.5rem;border-bottom:1px solid #c5d0cc}

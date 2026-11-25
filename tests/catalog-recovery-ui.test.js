@@ -12,8 +12,8 @@ function searchFixture(fetch) {
   const retry = { hidden: true, attributes: {}, focus() { document.activeElement = retry; },
     setAttribute(key, value) { this.attributes[key] = value; }, getAttribute(key) { return this.attributes[key]; } };
   const results = { hidden: true }, shellClasses = new Set(), events = {};
-  const context = vm.createContext({
-    document, input, retry, country: { value: "US" }, activeCategory: "food", composing: false, generation: 0,
+  const context = vm.createContext({ place: { value: "" },
+    document, input, retry, geography: undefined, releaseVersion: "fixture", country: { value: "US" }, activeCategory: "food", composing: false, activePage: true, generation: 0,
     clear: {}, root: { classList: { toggle() {} } }, navigator: { onLine: true },
     queryTokens: text => text ? [text] : [], normalize: text => text, scoreRecord: () => 1,
     loadCatalog: catalog.load, results, resultList: { replaceChildren() {}, append() {} },
@@ -99,4 +99,16 @@ test("directory Back/newer navigation supersedes a timeout without changing its 
   f.advance(8000); await settle();
   assert.equal(f.effects.message, "Restored previous page");
   assert.equal(f.retry.hidden, true);
+});
+
+// This Script VM intentionally has no importModuleDynamically capability. The
+// optional geography request therefore fails, exercising the real catch path.
+test("unavailable optional geography guidance cannot interrupt core search results", async () => {
+  const f = searchFixture(async () => response());
+  await f.search(); await settle();
+  assert.equal(f.results.hidden, false);
+  assert.equal(f.retry.hidden, true);
+  assert.equal(f.effects.rendered, 1);
+  assert.match(f.effects.message, /matching listing/);
+  assert.ok(f.context.activeMatches.length > 0);
 });

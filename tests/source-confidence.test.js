@@ -49,7 +49,8 @@ test("all static directory entry paths identify source checks and distinguish se
 test("service pages explain the review boundary and reuse existing location and finder cost evidence", async () => {
   for (const resource of resources) {
     const html = await read(`dist/service/${resource.id}/index.html`);
-    const hero = html.match(/<section class="legal-hero">([\s\S]*?)<\/section>/)?.[1];
+    const hero = html.match(/<section class="legal-hero"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+    assert.ok(hero, `${resource.id}: the visible service introduction is present`);
     assert.ok(hero.includes(`Source checked ${resource.lastChecked}`), resource.id);
     assert.match(html, /class="service-source-review"/);
     assert.match(html, /This date records a review of the linked source, not a confirmation of current service availability\./);

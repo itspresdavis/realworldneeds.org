@@ -1,14 +1,17 @@
+import { serviceActions, serviceAccessSummary, validateServiceAccess } from "../src/utils/service-access.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { resourceDescription } from "../scripts/resource-description.mjs";
 import { categories, resources } from "../src/data/resources.js";
+import { platformStatus } from "../src/data/platform.js";
 import { freeAccessLabel, freeAccessModels } from "../src/data/free-access.js";
 import { formatResourcePlace } from "../src/utils/geo.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { sourceClosureNotice, sourceClosureMarkup, availabilityInstructions } from "../src/utils/source-status.js";
+import { summarizeCoverage } from '../scripts/coverage-report.mjs';
 
 const flagged = resources.filter(sourceClosureNotice);
 const closed = flagged[0];
@@ -61,20 +64,25 @@ test("contact-only warnings keep contact-route guidance rather than travel advic
   assert.doesNotMatch(description, /before travel/);
 });
 
-test("the actual service template escapes source/name text in metadata and JSON-LD", async () => {
-  const fixture = { ...closed, name: 'Example "centre" & </script><script>alert(1)</script>', sourceName: 'Publisher "quoted" & <unsafe>' };
+async function renderService(fixture, platform = platformStatus) {
   const source = await readFile("scripts/build.mjs", "utf8");
   // Exercise the production template without running its filesystem build.
   const start = source.indexOf("// A page of");
   const end = source.indexOf("const three = createThreeAssets(");
   assert.ok(start >= 0 && end > start, "template extraction must stop before build execution");
   const templates = source.slice(start, end);
-  const html = vm.runInNewContext(`${templates}\nresourcePage(fixture)`, {
-    fixture, resources: [fixture], categories, sourceRegistry: [],
+  return vm.runInNewContext(`${templates}\nresourcePage(fixture)`, {
+    platformStatus: platform,
+    fixture, resources: [fixture], categories, sourceRegistry: [], serviceActions, serviceAccessSummary, validateServiceAccess,
     freeAccessLabel, freeAccessModels, formatResourcePlace, phoneLinks, phoneMarkup,
     isContactOnly, hasMapCoordinates, contactOnlyNotice,
-    sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription
+    sourceClosureNotice, sourceClosureMarkup, availabilityInstructions, resourceDescription, summarizeCoverage
   });
+}
+
+test("the actual service template escapes source/name text in metadata and JSON-LD", async () => {
+  const fixture = { ...closed, name: 'Example "centre" & </script><script>alert(1)</script>', sourceName: 'Publisher "quoted" & <unsafe>' };
+  const html = await renderService(fixture);
   const expected = resourceDescription(fixture);
   assert.equal(metadata(html, "name", "description"), expected);
   assert.equal(metadata(html, "property", "og:description"), expected);
@@ -86,6 +94,27 @@ test("the actual service template escapes source/name text in metadata and JSON-
     assert.equal(Object.hasOwn(node, "availability"), false);
     assert.equal(Object.hasOwn(node, "status"), false);
   }
+});
+
+test("listing correction links stay closed by default and prefill only public identity when approved", async () => {
+  assert.equal(platformStatus.publicCorrectionLinksEnabled, false);
+  const fixture = { ...closed, id: "example-service" };
+  const disabled = await renderService(fixture);
+  assert.doesNotMatch(disabled, /href="\/corrections\?/);
+  const enabled = await renderService(fixture, { ...platformStatus, publicCorrectionLinksEnabled: true });
+  const links = [...enabled.matchAll(/href="(\/corrections\?[^"]*)"/g)];
+  assert.equal(links.length, 1);
+  const url = new URL(links[0][1], "https://www.realworldneeds.org");
+  assert.deepEqual([...url.searchParams], [["resourceId", fixture.id]]);
+});
+
+test('structured data does not turn a physical site country into a promised national catchment', async () => {
+  const physical = { ...closed, kind: 'direct', country: 'United States', city: 'Example City', coverageNote: undefined };
+  const service = graph(await renderService(physical)).find(entry => entry['@type'] === 'Service');
+  assert.equal(Object.hasOwn(service, 'areaServed'), false, 'an operating location does not establish who is eligible across the country');
+  const contact = { ...physical, kind: 'locator', locationPrecision: 'contact-only', lat: null, lng: null, coverageNote: 'Residents of Massachusetts only; check provider eligibility.', accessUrl: 'https://example.org/intake', phone: '', phoneAccess: '' };
+  const remote = graph(await renderService(contact)).find(entry => entry['@type'] === 'Service');
+  assert.equal(remote.areaServed, contact.coverageNote, 'explicit reviewed coverage remains intact');
 });
 
 test("every source-flagged final page carries the full warning in search, share and schema descriptions", async () => {

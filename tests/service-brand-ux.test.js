@@ -1,3 +1,4 @@
+import { serviceActions } from "../src/utils/service-access.js";
 import { phoneLinks } from "../src/utils/phone.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -79,7 +80,13 @@ test("service landing pages surface reviewed next steps before the caution/detai
     for (const { href } of phoneLinks(resource.phone)) {
       assert.ok(html.includes(`href="${href}"`), `${resource.id} should expose its unambiguous phone numbers as call actions`);
     }
-    if (resource.kind === "direct") {
+    if (resource.serviceAccess) {
+      for (const action of serviceActions(resource)) {
+        assert.ok(html.includes(`href="${escapeHtml(action.href)}"`));
+        assert.ok(html.includes(escapeHtml(action.label)));
+      }
+      assert.doesNotMatch(html, /(?:destination|query|ll|daddr)=40\.7219/);
+    } else if (resource.kind === "direct") {
       assert.match(html, /maps\.apple\.com/);
       assert.match(html, /google\.com\/maps\/search/);
     }

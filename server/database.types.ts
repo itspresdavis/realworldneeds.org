@@ -69,8 +69,8 @@ export type Database = {
           id: string
           kind: string
           last_checked: string
-          latitude: number
-          longitude: number
+          latitude: number | null
+          longitude: number | null
           name: string
           published: boolean
           record: Json
@@ -84,8 +84,8 @@ export type Database = {
           id: string
           kind?: string
           last_checked?: string
-          latitude?: number
-          longitude?: number
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           published?: boolean
           record: Json
@@ -99,8 +99,8 @@ export type Database = {
           id?: string
           kind?: string
           last_checked?: string
-          latitude?: number
-          longitude?: number
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           published?: boolean
           record?: Json
@@ -244,8 +244,22 @@ export type Database = {
         Relationships: []
       }
     }
+    // Prepared correction RPCs; hosted application remains separately gated.
+    // Queue tables remain in the unexposed rwn_private schema.
     Functions: {
-      [_ in never]: never
+      rwn_correction_status: { Args: Record<PropertyKey, never>; Returns: boolean }
+      rwn_submit_correction: {
+        Args: { p_resource_id: string; p_category: string; p_note: string; p_submission_id: string; p_actor: string }
+        Returns: Json
+      }
+      rwn_correction_queue: {
+        Args: { p_page?: number; p_status?: string; p_id?: string | null }
+        Returns: Json
+      }
+      rwn_decide_correction: {
+        Args: { p_id: string; p_revision: number; p_status: string; p_priority: string; p_assignment: string; p_reason: string; p_evidence_url: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

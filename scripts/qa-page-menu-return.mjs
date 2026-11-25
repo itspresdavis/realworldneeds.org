@@ -1,3 +1,5 @@
+import { PAGE_MENU_HREFS } from './qa-page-menu-contract.mjs';
+export { PAGE_MENU_HREFS } from './qa-page-menu-contract.mjs';
 import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { newYorkCatalogFixtures } from './qa-catalog-expectations.mjs';
@@ -6,8 +8,13 @@ import { directorySavedBrowseHeaderPoint, isDirectoryStartupNavigationError } fr
 // CI-only native history regression. The ordinary QA server remains no-store.
 // A separate origin forwards unchanged public bytes and adjusts Cache-Control
 // only for the exact HTML fixtures below. No production behavior is replaced.
-export const PAGE_MENU_LOCAL = '/directory/local/united-states/new-york/help/referral';
+export const PAGE_MENU_LOCAL = '/directory/local/united-states/new-york-city/help/referral';
 export const PAGE_MENU_SERVICE = '/service/new-york-public-library-access';
+export function pageMenuLinksUsable(links) {
+  return Array.isArray(links) && links.length === PAGE_MENU_HREFS.length
+    && links.every((link, index) => link?.href === PAGE_MENU_HREFS[index]
+      && link.visible === true && Number.isFinite(link.box?.height) && link.box.height >= 44);
+}
 export const PAGE_MENU_VIEWPORTS = [
   { name: '390', width: 390, height: 844, mobile: true, deviceScaleFactor: 1 },
   { name: '320', width: 320, height: 780, mobile: true, deviceScaleFactor: 1 },
@@ -349,7 +356,7 @@ export async function verifyPageMenuReturn({ client, host, navigate, evaluate, c
     assert(!new URL(source.href).search && !new URL(source.href).hash, 'Local query escaped into URL', source.href);
     const sourceEntry = await entry();
     const openedBy = await nativeClick('.rwn-page-menu > summary');
-    const opened = await settled(s => s.path === path && s.menuOpen && s.menuLinks.length === 6 && s.menuLinks.every(link => link.visible && link.box.height >= 44)
+    const opened = await settled(s => s.path === path && s.menuOpen && pageMenuLinksUsable(s.menuLinks)
       && Math.abs(s.scroll - source.scroll) <= 1 && pageMenuRetainedState(s, source, { requireHistory: false }), 'Menu remains usable before real navigation');
     await capture(client, `page-menu-${name}-opened.png`);
     const leftBy = await nativeClick(`.rwn-page-menu a[href="${target}"]`);

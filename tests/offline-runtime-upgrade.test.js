@@ -11,8 +11,8 @@ const asset = (body, name = "directory-enhancements", extension = "css") => {
   const hash = createHash("sha256").update(body).digest("hex").slice(0, 12);
   return { body, path: `/${name}.${hash}.${extension}`, canonical: `/${name}.${extension}` };
 };
-const runtimeId = assets => createHash("sha256").update(JSON.stringify(Object.fromEntries(assets.map(item => [item.canonical, item.path])))).digest("hex").slice(0, 12);
-const htmlFor = (assets, title = "fixture") => `<title>${title}</title><meta name="rwn-offline-assets" content="${runtimeId(assets)}" />`;
+const runtimeId = (assets, optional = []) => createHash("sha256").update(JSON.stringify({ required: Object.fromEntries(assets.map(item => [item.canonical, item.path])), optional: Object.fromEntries(optional.map(item => [item.canonical, item.path])) })).digest("hex").slice(0, 12);
+const htmlFor = (assets, title = "fixture", optional = []) => `<title>${title}</title><meta name="rwn-offline-assets" content="${runtimeId(assets, optional)}" />`;
 const deferred = () => {
   let resolve;
   const promise = new Promise(done => { resolve = done; });
@@ -40,16 +40,16 @@ function storage() {
   };
 }
 
-function worker(release, caches, assets, fetch) {
+function worker(release, caches, assets, fetch, optional = []) {
   const handlers = new Map();
   const effects = { skipped: false, claimed: false };
   const manifest = Object.fromEntries(assets.map(item => [item.canonical, item.path]));
-  const manifestId = createHash("sha256").update(JSON.stringify(manifest)).digest("hex").slice(0, 12);
+  const manifestId = runtimeId(assets, optional);
   const network = fetch || (async request => {
     const path = new URL(typeof request === "string" ? request : request.url, origin).pathname;
-    return new Response(assets.find(item => item.path === path)?.body || `core ${release}${path === "/directory" ? `<meta name="rwn-offline-assets" content="${manifestId}" />` : ""}`);
+    return new Response([...assets, ...optional].find(item => item.path === path)?.body || `core ${release}${path === "/directory" ? `<meta name="rwn-offline-assets" content="${manifestId}" />` : ""}`);
   });
-  vm.runInNewContext(source.replaceAll("__RWN_OFFLINE_RELEASE__", release).replace("/* __RWN_RUNTIME_ASSETS__ */ {}", JSON.stringify(manifest)).replace('/* __RWN_RUNTIME_ID__ */ ""', JSON.stringify(manifestId)), {
+  vm.runInNewContext(source.replaceAll("__RWN_OFFLINE_RELEASE__", release).replace("/* __RWN_RUNTIME_ASSETS__ */ {}", JSON.stringify(manifest)).replace("/* __RWN_OPTIONAL_ASSETS__ */ {}", JSON.stringify(Object.fromEntries(optional.map(item => [item.canonical, item.path])))).replace('/* __RWN_RUNTIME_ID__ */ ""', JSON.stringify(manifestId)), {
     URL, Request, Response, AbortController, TextDecoder, setTimeout, clearTimeout, Uint8Array, crypto: webcrypto, caches, fetch: network,
     self: { location: { origin }, addEventListener(name, fn) { handlers.set(name, fn); },
       async skipWaiting() { effects.skipped = true; }, clients: { async claim() { effects.claimed = true; } } }
@@ -246,4 +246,51 @@ test("intermittent archive write failure still prunes older entries and complete
   assert.equal(caches.entries.get(archiveName).size, 64);
   const offline = worker("new", caches, [active], async () => { throw new Error("Offline"); });
   assert.equal(await (await offline.request(active.path)).text(), active.body);
+});
+
+
+test("locale and transitive search dependencies upgrade atomically and preserve exact old-tab bytes", async () => {
+  const caches = storage();
+  const before = [asset("old locale", "language", "js"), asset("old intent", "src/utils/search-intent-entry", "js"), asset("old matcher", "src/utils/search", "js")];
+  const after = before.map(item => asset(item.body.replace("old", "new"), item.canonical.slice(1, -3), "js"));
+  await activate(worker("old-graph", caches, before));
+  const interrupted = worker("new-graph", caches, after, async path => new Response(path === after[2].path ? "wrong dependency" : path === "/directory" ? htmlFor(after) : after.find(item => item.path === path)?.body || "core"));
+  await assert.rejects(interrupted.lifecycle("install"));
+  assert.equal(interrupted.effects.skipped, false);
+  assert.equal(caches.entries.has("rwn-offline-new-graph"), false);
+  assert.equal(caches.entries.has("rwn-offline-old-graph"), true);
+  await activate(worker("new-graph", caches, after));
+  const offline = worker("new-graph", caches, after, async () => { throw new Error("offline"); });
+  for (const item of [...before, ...after]) assert.equal(await (await offline.request(item.path)).text(), item.body);
+  assert.equal(offline.request("/src/private.account.0123456789ab.js"), undefined);
+  assert.equal(offline.request("/api/account.0123456789ab.json"), undefined);
+  assert.equal(offline.request("/src/utils/search.js"), undefined);
+  assert.equal(offline.request(after[1].path.replace(/\.js$/, ".json")), undefined);
+  assert.equal(offline.request(after[0].path.replace(/\.js$/, ".css")), undefined);
+});
+
+test("optional postal data is not warmed, is byte-verified on demand, and can survive old-tab upgrades", async () => {
+  const caches = storage(), runtime = asset("intent", "src/utils/search-intent-entry", "js"), postal = asset('{"02108":[42.36,-71.06]}', "data/postal-areas", "json");
+  const calls = [];
+  const current = worker("postal-a", caches, [runtime], async path => {
+    const requested = typeof path === "string" ? path : new URL(path.url).pathname;
+    calls.push(requested);
+    return new Response(requested === postal.path ? postal.body : requested === runtime.path ? runtime.body : requested === "/directory" ? htmlFor([runtime], "fixture", [postal]) : "core");
+  }, [postal]);
+  await activate(current);
+  assert.equal(calls.includes(postal.path), false);
+  assert.equal(current.request(postal.path.replace(/\.json$/, ".js")), undefined);
+  assert.equal(await (await current.request(postal.path)).text(), postal.body);
+  const cached = await caches.open("rwn-offline-postal-a");
+  await cached.put(new Request(origin + postal.path), new Response("mismatched cached bytes"));
+  const noNetwork = worker("postal-a", caches, [runtime], async () => { throw new Error("offline"); }, [postal]);
+  assert.equal((await noNetwork.request(postal.path)).status, 503);
+  assert.equal(await cached.match(new Request(origin + postal.path)), undefined);
+  await current.request(postal.path);
+  await current.lifecycle("activate");
+  const nextPostal = asset('{"02108":[42.361,-71.06]}', "data/postal-areas", "json");
+  await activate(worker("postal-b", caches, [runtime], undefined, [nextPostal]));
+  const oldTab = worker("postal-b", caches, [runtime], async () => { throw new Error("offline"); }, [nextPostal]);
+  assert.equal(await (await oldTab.request(postal.path)).text(), postal.body);
+  assert.equal((await oldTab.request(nextPostal.path)).status, 503, "an unused optional reference is truthfully unavailable offline");
 });

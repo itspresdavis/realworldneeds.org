@@ -54,7 +54,7 @@ test("homepage uses one final presentation system and plain organizational langu
   assert.match(html, /\/src\/clarity\.css\?v=/);
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(presentation, /href=\"\/src\/professional\.css/);
-  assert.match(copy, /Find essential services near you\./);
+  assert.match(copy, /Find help/);
   const helpCopy = /Look for food, shelter, clothing and other essentials\. Contact the provider directly\./;
   assert.match(copy, helpCopy);
   assert.match(html, helpCopy);
@@ -72,6 +72,6 @@ test("generated public pages use the same official mark and compact shared prese
   assert.match(directory, /\/professional-pages\.[a-f0-9]{12}\.css\?v=/);
   assert.match(directory, /Find a service in the directory\./);
   assert.doesNotMatch(directory, /Text directory/);
-  assert.match(pages, /--page-blue: #24583e/);
+  assert.match(pages, /--page-blue:\s*#24583e/);
   assert.match(pages, /font-size:\s*clamp\(2\.35rem,4\.3vw,3\.8rem\)/);
 });

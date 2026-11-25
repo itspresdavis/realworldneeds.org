@@ -1,3 +1,7 @@
+import { resourceScope } from "../src/utils/resource-scope.js";
+import { postalAreas } from "../src/data/generated/postal-areas.js";
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
+import { serviceActions, serviceAccessSummary } from "../src/utils/service-access.js";
 import { isContactOnly, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { resourceSearchText } from "../src/utils/search.js";
 import { phoneLinks } from "../src/utils/phone.js";
@@ -64,15 +68,16 @@ const records = resources.map((resource, index) => {
     name: resource.name,
     place,
     country: resource.country,
-    category: resource.category,
     categories: types,
     categoryLabels: labels,
     kind: resource.kind,
-    phone: resource.phone || "",
+    ...(resource.kind !== "direct" ? { coverageScope: resourceScope(resource).type } : {}),
+    ...(resource.phone ? { phone: resource.phone } : {}),
     phoneLinks: phoneLinks(resource.phone),
-    lat: !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
-    lng: !isContactOnly(resource) && Number.isFinite(resource.lng) ? resource.lng : null,
+    lat: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
+    lng: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,
+    ...(resource.serviceAccess ? { serviceActions: serviceActions(resource).map(({ label, href, kind }) => ({ label, href, kind })), serviceAccessSummary: serviceAccessSummary(resource) } : {}),
     ...(isContactOnly(resource) ? {
       locationPrecision: "contact-only",
       coverageNote: resource.coverageNote,
@@ -88,9 +93,13 @@ const records = resources.map((resource, index) => {
 
 await mkdir("dist/data", { recursive: true });
 await writeFile("dist/data/search-index.json", `${JSON.stringify({
-  schemaVersion: "1.5",
+  schemaVersion: SEARCH_CATALOG_SCHEMA,
   resourceCount: records.length,
   privacy: "Static search index. Search terms remain in the visitor's browser and are not included in requests.",
   records,
   scopes
 })}\n`);
+
+// Postal reference is optional and fetched only after postal input, never as a
+// provider lookup. The offline versioner addresses these exact bytes separately.
+await writeFile("dist/data/postal-areas.json", `${JSON.stringify({schemaVersion: "1.0", source: "US Census 2025 Gazetteer ZCTA", areas: postalAreas})}\n`);

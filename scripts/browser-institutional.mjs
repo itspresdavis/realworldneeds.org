@@ -1,3 +1,5 @@
+import { waitForGlobeRendererReady } from "./qa-globe-readiness.mjs";
+import { verifyGlobeCoordinates } from "./qa-globe-coordinate-fidelity.mjs";
 import { verifyPageInteractions } from "./qa-page-interactions.mjs";
 import { verifyFinderEditing } from "./qa-search-editing.mjs";
 import { verifyMenuReflow } from "./qa-menu-reflow.mjs";
@@ -331,58 +333,8 @@ async function run() {
     if (Object.values(locationInterruption).some((passed) => !passed)) {
       throw new Error(`Interrupted location recovery failed: ${JSON.stringify(locationInterruption)}`);
     }
-    const coordinateFidelity = await evaluate(client, `(async () => {
-      const version = new URL(document.querySelector('script[src*="bootstrap"]').src).search;
-      const { resources } = await import('/src/data/resources.js' + version);
-      const { createGlobePointLayer, updateGlobePointLayer } = await import('/src/globe-points.js' + version);
-      // Derive the expected cohort from the public catalog and the location
-      // policy, not from the renderer's own filter or vertex count.
-      const unmappedPrecision = new Set(["address", "contact-only"]);
-      const excluded = resources.filter(row => unmappedPrecision.has(row.locationPrecision));
-      const mapped = resources.filter(row => !unmappedPrecision.has(row.locationPrecision));
-      const knownUnmapped = new Map([
-        ["amos-house-providence-meals", "address"],
-        ["taunton-community-table-meals", "address"],
-        ["imss-bienestar-mexico-finder", "contact-only"],
-      ]);
-      const badLocation = resources.filter(row => unmappedPrecision.has(row.locationPrecision)
-        ? row.lat !== null || row.lng !== null
-        : !Number.isFinite(row.lat) || Math.abs(row.lat) > 90 || !Number.isFinite(row.lng) || Math.abs(row.lng) > 180)
-        .map(row => row.id);
-      const missingUnmapped = [...knownUnmapped].filter(([id, precision]) =>
-        !excluded.some(row => row.id === id && row.locationPrecision === precision)).map(([id]) => id);
-      const catalogIds = new Set(resources.map(row => row.id));
-      const response = await fetch('/data/map-index.json' + version);
-      if (!response.ok) throw new Error('Cannot verify the public map index');
-      const mapIndex = await response.json();
-      const mapMatch = mapIndex.resourceCount === mapped.length && mapIndex.resources.length === mapped.length
-        && mapIndex.resources.every((row, i) => row.id === mapped[i].id && row.lat === mapped[i].lat && row.lng === mapped[i].lng);
-
-      const points = createGlobePointLayer(resources, {});
-      let maximumError = 0, invalidVertices = 0;
-      const samples = [1, 3, 8, 12].map(zoom => {
-        updateGlobePointLayer(points, { zoom });
-        const positions = points.geometry.attributes.position;
-        const ids = points.userData.resources;
-        for (let i = 0; i < Math.min(mapped.length, positions.count); i++) {
-          const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
-          const lat = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
-          const lng = Math.atan2(x, z) * 180 / Math.PI;
-          if (![x, y, z, lat, lng].every(Number.isFinite) || Math.hypot(x, y, z) === 0) invalidVertices++;
-          else maximumError = Math.max(maximumError, Math.abs(lat - mapped[i].lat), Math.abs(lng - mapped[i].lng));
-        }
-        return { zoom, count: positions.count, exactIds: ids.length === mapped.length && ids.every((row, i) => row.id === mapped[i].id) };
-      });
-      points.geometry.dispose(); points.material.dispose();
-      return { catalog: resources.length, uniqueIds: catalogIds.size, mapped: mapped.length, excluded: excluded.map(row => row.id),
-        badLocation, missingUnmapped, mapMatch, samples, invalidVertices, maximumError };
-    })()`);
-    if (!coordinateFidelity.catalog || coordinateFidelity.catalog !== coordinateFidelity.uniqueIds || !coordinateFidelity.mapped
-      || coordinateFidelity.badLocation.length || coordinateFidelity.missingUnmapped.length || !coordinateFidelity.mapMatch
-      || coordinateFidelity.samples.some(sample => sample.count !== coordinateFidelity.mapped || !sample.exactIds)
-      || coordinateFidelity.invalidVertices || !Number.isFinite(coordinateFidelity.maximumError) || coordinateFidelity.maximumError > 0.00001) {
-      throw new Error(`Catalog coordinates changed in the renderer: ${JSON.stringify(coordinateFidelity)}`);
-    }
+    const coordinateFidelity = await verifyGlobeCoordinates({ client, evaluate });
+    console.log("Catalog coordinate fidelity passed: " + JSON.stringify(coordinateFidelity));
     await capture(client, "institutional-desktop.png");
 
     await client.call("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true, screenWidth: 390, screenHeight: 844 });
@@ -480,6 +432,10 @@ async function run() {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: mobileViewport, screenWidth: width, screenHeight: height });
       await navigate(client, `${HOST}/`);
       const fallback = await evaluate(client, `(async () => {
+        // Explore the map before testing renderer loss: an offscreen mobile
+        // map deliberately leaves the optional engine unloaded.
+        document.getElementById("globeCanvas").scrollIntoView({ block: "center", behavior: "auto" });
+        await (${waitForGlobeRendererReady.toString()})();
         const stage = document.querySelector(".globe-stage");
         const originalHeight = stage.getBoundingClientRect().height;
         const input = document.getElementById("resourceSearch");

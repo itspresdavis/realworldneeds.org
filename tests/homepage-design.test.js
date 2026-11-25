@@ -1,3 +1,4 @@
+import { escapeHtml } from "../src/utils/html.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -9,9 +10,11 @@ const refinement = await readFile('src/refinement.js', 'utf8');
 
 // Tests the rearrangement itself, rather than relying on a static markup claim.
 test('finder composition reuses each existing interactive node exactly once', () => {
-  const selectors = ['.finder-search', '.quick-needs', '.jump-results', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
+  const selectors = ['.finder-search', '.jump-results', '.quick-needs', '.location-actions', '#locationStatus', '#locationRecovery', '.finder-disclosures'];
   const nodes = new Map(selectors.map(selector => [selector, {selector, marker:Symbol(selector)}]));
   const search = nodes.get('.finder-search');
+  const label = { marker: Symbol("existing visible label") };
+  search.querySelector = selector => selector === ".finder-search-label" ? label : null;
   const appended = [];
   let surface;
   search.before = node => { surface = node; };
@@ -20,11 +23,12 @@ test('finder composition reuses each existing interactive node exactly once', ()
     querySelector: selector => selector === '.finder-sidebar' ? sidebar : nodes.get(selector),
     createElement: tag => ({tag, append: (...values) => appended.push(...values), contains: () => false})
   };
-  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,document});
+  const context = vm.createContext({ escapeHtml, isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,document});
   const source = refinement.slice(refinement.indexOf('function composeFinderSurface()'), refinement.indexOf('function improveFilterSummary()'));
   vm.runInContext(source, context);
   context.composeFinderSurface();
   assert.equal(surface.className, 'finder-surface');
+  assert.equal(appended[0], label, 'reuse the single existing label rather than creating a second one');
   assert.equal(appended[0].htmlFor, 'resourceSearch');
   assert.equal(appended[0].textContent, 'What do you need?');
   assert.deepEqual(appended.slice(1), [...nodes.values()]);
@@ -42,29 +46,32 @@ test('forest hero, map legend and warning colors retain normal text contrast', (
 });
 
 test('compact fallback removes the empty column and source review remains visible on phones', () => {
-  assert.match(css, /\.finder__grid:has\(\.is-globe-unavailable\) \{ grid-template-columns: minmax\(0,1fr\);/);
-  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:4;/);
+  assert.match(css, /\.finder__grid:has\(\.is-globe-unavailable\) \{ grid-template-columns:\s*minmax\(0,1fr\);/);
+  assert.match(css, /\.resource-row__reviewed \{ display:block; grid-column:1 \/ -1; grid-row:5;/);
   assert.match(css, /\.resource-row__reviewed::before \{ content:"Source checked ";/);
   assert.match(refinement, /groupFinderDisclosures\(\);\s*composeFinderSurface\(\);/);
 });
 
 
-test('visible search prompt is included in the accessible name', () => {
-  assert.match(refinement, /input\.setAttribute\("aria-label", "What do you need\? Search by need, service, place, ZIP or postcode, or organization"\)/);
+test('visible search prompt is the single native label for the search input', async () => {
+  const app = await readFile('src/app.js','utf8');
+  assert.equal((app.match(/<label class="finder-search-label" for="resourceSearch">What do you need\?/g)||[]).length,1);
+  assert.doesNotMatch(app.match(/<input id="resourceSearch"[^>]+>/)?.[0]||'',/aria-label/);
+  assert.doesNotMatch(refinement, /input\.setAttribute\("aria-label"/);
 });
 
 test('regrouping restores a focused search and its selected text without scrolling', () => {
   let current, surface, restored;
   const input = {selectionStart:2, selectionEnd:6, selectionDirection:'backward', focus: options => {current=input; assert.deepEqual(JSON.parse(JSON.stringify(options)), {preventScroll:true});}, setSelectionRange: (...args) => {restored=args;}};
   current=input;
-  const search = {before: node => {surface=node;}};
+  const search = {querySelector: () => null, before: node => {surface=node;}};
   const sidebar = {querySelector: selector => selector === '.finder-surface' ? surface : selector === '.finder-search' ? search : null};
   const document = {
     get activeElement() { return current; },
     querySelector: selector => selector === '.finder-sidebar' ? sidebar : search,
     createElement: tag => ({tag, append: node => {if(node===search) current=null;}, contains: node => node===input})
   };
-  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,document});
+  const context = vm.createContext({ escapeHtml, isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,document});
   vm.runInContext(refinement.slice(refinement.indexOf('function composeFinderSurface()'), refinement.indexOf('function improveFilterSummary()')), context);
   context.composeFinderSurface();
   assert.equal(current,input);
@@ -73,21 +80,21 @@ test('regrouping restores a focused search and its selected text without scrolli
 
 
 test('location and clear controls can share the narrower grouped phone surface', () => {
-  assert.match(css, /\.finder-surface \.location-button \{ flex-basis: 10rem; \}/);
+  assert.match(css, /\.finder-surface \.location-button \{ flex-basis:\s*10rem; \}/);
 });
 
-test('all needs is first in DOM order and compact rows are balanced without smaller targets', () => {
+test('all needs is first and balanced compact rows retain intrinsic enlarged labels', () => {
   const markup = refinement.slice(refinement.indexOf('container.innerHTML ='), refinement.indexOf('search.insertAdjacentElement'));
   assert.ok(markup.indexOf('data-quick-type="all"') < markup.indexOf('QUICK_TYPES.map'));
-  assert.match(css, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(css, /data-quick-type="health"\] \{ grid-column:span 2;/);
-  assert.match(css, /\.quick-need \{[^}]*min-height: 44px;/);
+  assert.match(css, /@container\s*\(max-width:31rem\)\s*\{[^}]*\.quick-needs\s*\{[^}]*display:flex;flex-wrap:wrap;/);
+  assert.match(css, /\.quick-need\s*\{\s*flex:1 1 20%;min-width:min-content;/);
+  assert.match(css, /\.quick-need\s*\{[^}]*min-height:\s*44px;/);
 });
 
 test('empty results distinguish unsaved, filtered-saved, ordinary and unavailable requests', async () => {
   const app = await readFile('src/app.js','utf8');
   const source = app.slice(app.indexOf('function emptyResultsCopy('), app.indexOf('function renderResults()'));
-  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,});
+  const context = vm.createContext({ escapeHtml, isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,});
   vm.runInContext(source, context);
   const inspect = state => JSON.parse(JSON.stringify(context.emptyResultsCopy({viewMode:'aid',savedOnly:false,savedCount:0,...state})));
   assert.equal(inspect({savedOnly:true}).title,'No saved services yet.');
@@ -108,7 +115,7 @@ test('actual resource finders show their type once and retain meaningful cost la
   const { isExactServiceSite } = await import('../src/utils/geo.js');
   const app = await readFile('src/app.js','utf8');
   const source = app.slice(app.indexOf('function resourceCard('), app.indexOf('function emptyResultsCopy('));
-  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,categories, freeAccessLabel, isExactServiceSite, state:{}, allTypes:r=>[r.category], formatResourcePlace:r=>r.city, locationResultLabel:()=>'', reviewLabel:r=>r.lastChecked, icon:{arrow:''}, sourceClosureMarkup:()=>''});
+  const context = vm.createContext({ escapeHtml, isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,categories, freeAccessLabel, isExactServiceSite, state:{}, allTypes:r=>[r.category], formatResourcePlace:r=>r.city, locationResultLabel:()=>'', reviewLabel:r=>r.lastChecked, icon:{arrow:''}, sourceClosureMarkup:()=>''});
   vm.runInContext(source, context);
   const locator = resources.find(r=>r.id==='feeding-america');
   assert.ok(locator, 'the real catalog fixture exists');
@@ -135,5 +142,5 @@ test('expanded filter groups do not clip keyboard focus outlines', () => {
 
 
 test('native focus scrolling reserves space for outer rings at the viewport bottom', () => {
-  assert.match(css, /scroll-padding-top: var\(--rwn-header-clearance, 5rem\); scroll-padding-bottom:\.75rem;/);
+  assert.match(css, /scroll-padding-top:\s*var\(--rwn-header-clearance, 5rem\); scroll-padding-bottom:\.75rem;/);
 });

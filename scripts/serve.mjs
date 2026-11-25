@@ -3,8 +3,12 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import accountHandler from '../api/account.js';
+import preferencesHandler from '../api/preferences.js';
 import catalogHandler from '../api/catalog.js';
 import workspaceHandler from '../api/workspace.js';
+import correctionsHandler from '../api/corrections.js';
+import correctionReviewHandler from '../api/correction-review.js';
+import deploymentConfig from '../vercel.json' with { type: 'json' };
 
 const root = resolve("dist");
 const port = Number(process.argv[2] || 5173);
@@ -61,7 +65,21 @@ async function existingFile(candidates) {
 
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname;
-  const handler = { '/api/account': accountHandler, '/api/catalog': catalogHandler, '/api/workspace': workspaceHandler, '/workspace': workspaceHandler }[pathname];
+  if (pathname === '/api/preferences') return preferencesHandler(request, response);
+  // Mirror the explicit public legacy routes locally. Host-conditional account
+  // redirects remain a deployed-origin check; localhost must retain dev auth.
+  for (const rule of deploymentConfig.redirects || []) {
+    if (rule.has || !rule.source.endsWith('/:path*') || !rule.destination.startsWith('/directory/')) continue;
+    const prefix = rule.source.replace(/\/:path\*$/, '');
+    if (pathname !== prefix && !pathname.startsWith(prefix + '/')) continue;
+    const suffix = pathname.slice(prefix.length).replace(/^\//, '');
+    const destination = rule.destination.replace('/:path*', suffix ? '/' + suffix : '');
+    response.writeHead(rule.permanent ? 308 : 307, { Location: destination, 'Cache-Control': 'no-store' });
+    response.end();
+    return;
+  }
+  const handler = { '/api/account': accountHandler, '/api/catalog': catalogHandler, '/api/workspace': workspaceHandler, '/workspace': workspaceHandler,
+    '/api/corrections': correctionsHandler, '/api/correction-review': correctionReviewHandler }[pathname];
   if (handler) return handler(request, response);
   const candidates = candidatePaths(request.url || "/");
   if (!candidates.length) {
@@ -73,7 +91,8 @@ const server = createServer(async (request, response) => {
   const match = await existingFile(candidates);
   if (match) {
     response.writeHead(200, {
-      "Cache-Control": "no-store",
+      "Cache-Control": /^\/corrections(?:\/|\.html)?$/.test(pathname) ? "private, no-store" : "no-store",
+      ...(/^\/corrections(?:\/|\.html)?$/.test(pathname) ? { "X-Robots-Tag": "noindex, nofollow" } : {}),
       "Content-Length": match.info.size,
       "Content-Type": contentTypes[extname(match.candidate)] || "application/octet-stream"
     });

@@ -77,7 +77,7 @@ export const sourceRegistry = [
     excludedForPublicationAtAudit: 15,
     auditedAt: "2026-10-10",
     fields: ["Trussell-published coordinates", "public address", "town and postcode", "phone and email when supplied", "referral route", "collection or delivery status", "provider page"],
-    reuseBasis: "Official Trussell finder snapshot with record-level UUIDs and attribution. RWN excludes hidden-address records and records that fail exact-location or publication checks."
+    reuseBasis: "Official finder snapshot with record-level attribution; hidden addresses are excluded. Bulk-reuse permission is not established in RWN's recorded evidence and requires a source-specific decision before further refresh or expansion."
   }
 ];
 

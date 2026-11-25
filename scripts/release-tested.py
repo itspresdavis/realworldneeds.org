@@ -11,7 +11,7 @@ import sys
 import tarfile
 import tempfile
 
-REPO = "iamhuvr/RWN-WEB"
+REPO = "itspresdavis/RWN-WEB"
 PROJECT = "prj_504G7M2lhnU5NlmfSAEyY4UdA4DX"
 TEAM = "anlos"
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -22,6 +22,18 @@ def run(args, **kwargs):
 def git(*args):
     return run(["git", "-C", str(ROOT), *args]).stdout
 
+def receipt_provider(receipt):
+    execution = receipt.get("platform")
+    if not isinstance(execution, dict):
+        raise ValueError("Receipt has no execution platform")
+    provider = {"linux": "ubuntu", "darwin": "macos"}.get(execution.get("system"))
+    if provider is None or receipt.get("provider") != provider:
+        raise ValueError("Receipt platform and provider do not agree")
+    if not isinstance(execution.get("machine"), str) or not execution["machine"]:
+        raise ValueError("Receipt has no machine architecture")
+    return provider
+
+
 def verify_receipt(receipt, sha, tree, archive_hash, validator_hash, now=None):
     if receipt.get("schema_version") != 1 or receipt.get("repository") != REPO:
         raise ValueError("Wrong receipt schema or repository")
@@ -31,12 +43,23 @@ def verify_receipt(receipt, sha, tree, archive_hash, validator_hash, now=None):
         raise ValueError("Receipt source does not match the selected Git commit")
     if receipt.get("validator_source_sha256") != validator_hash:
         raise ValueError("Validator changed since testing; run the tests again")
+    receipt_provider(receipt)
+    system = receipt["platform"]["system"]
     stages = receipt.get("stages", {})
-    if set(stages) != {"install", "check", "touch", "browser"}:
+    if set(stages) != {"install", "check", "touch", "browser", "cross-browser"}:
         raise ValueError("Incomplete test stages")
     for name, stage in stages.items():
         if stage.get("status") != "passed" or stage.get("exit_code") != 0:
             raise ValueError("Test stage did not pass: " + name)
+        resources = stage.get("resources", {})
+        if resources.get("platform") != system or resources.get("affinity_supported") is not (system == "linux"):
+            raise ValueError("Test stage platform does not match receipt: " + name)
+        cpus = resources.get("cpus")
+        if system == "darwin":
+            if cpus is not None:
+                raise ValueError("Darwin receipt must not claim CPU affinity")
+        elif not isinstance(cpus, list) or not cpus or any(type(cpu) is not int or cpu < 0 for cpu in cpus):
+            raise ValueError("Linux receipt must identify its allowed CPUs")
     finished = dt.datetime.fromisoformat(receipt["finished_at"].replace("Z", "+00:00"))
     current = now or dt.datetime.now(dt.timezone.utc)
     if finished.tzinfo is None or not 0 <= (current-finished).total_seconds() <= 86400:
@@ -54,7 +77,7 @@ def export_source(data, destination):
             path = pathlib.PurePosixPath(member.name)
             if path.is_absolute() or ".." in path.parts or not path.parts:
                 raise ValueError("Unsafe source archive path")
-            if path.parts[0] in {"node_modules", "dist", ".vercel", "qa-screenshots"}:
+            if path.parts[0] in {"node_modules", "dist", ".vercel", "qa-screenshots", "test-results", "playwright-report", "qa-cross-browser"}:
                 continue
             if member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
                 raise ValueError("Unsupported source archive entry: " + member.name)
@@ -66,7 +89,7 @@ def export_source(data, destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ref", default="HEAD")
-    parser.add_argument("--receipt", type=pathlib.Path, help="Passed Ubuntu receipt, at most 24 hours old")
+    parser.add_argument("--receipt", type=pathlib.Path, help="Optional historical receipt for additional inspection; never replaces native GitHub qualification")
     parser.add_argument("--target", choices=["preview", "production-stage"], default="preview")
     parser.add_argument("--dry-run", action="store_true", help="Validate and inspect deploy input without uploading")
     args = parser.parse_args()
@@ -85,19 +108,14 @@ def main():
         receipt = json.loads(args.receipt.read_text())
         validator_hash = hashlib.sha256((ROOT/"scripts/ubuntu-quality.py").read_bytes()).hexdigest()
         verify_receipt(receipt, sha, tree, archive_hash, validator_hash)
-        quality = {"status": "passed", "provider": "ubuntu", "sha": sha, "receipt": str(args.receipt.resolve())}
-    else:
-        print("Checking exact commit before deployment: " + sha, file=sys.stderr, flush=True)
-        selected = subprocess.run([sys.executable, str(ROOT/"scripts/quality-backend.py"), "--ref", sha, "--output", str(quality_file)])
-        if selected.returncode:
-            raise ValueError("Quality gate did not pass; no deployment created")
-        quality = json.loads(quality_file.read_text())
-        if quality.get("status") != "passed" or quality.get("sha") != sha:
-            raise ValueError("Quality result did not pass for the selected commit")
-    if quality.get("provider") == "ubuntu":
-        local_receipt = json.loads(pathlib.Path(quality["receipt"]).read_text())
-        validator_hash = hashlib.sha256((ROOT/"scripts/ubuntu-quality.py").read_bytes()).hexdigest()
-        verify_receipt(local_receipt, sha, tree, archive_hash, validator_hash)
+        quality = {"status": "passed", "provider": receipt_provider(receipt), "platform": receipt["platform"], "sha": sha, "receipt": str(args.receipt.resolve())}
+    print("Checking native GitHub Actions for exact commit: " + sha, file=sys.stderr, flush=True)
+    selected = subprocess.run([sys.executable, str(ROOT/"scripts/quality-backend.py"), "--ref", sha, "--provider", "github", "--output", str(quality_file)])
+    if selected.returncode:
+        raise ValueError("GitHub quality gate did not pass; no deployment created")
+    quality = json.loads(quality_file.read_text())
+    if quality.get("status") != "passed" or quality.get("sha") != sha or quality.get("provider") != "github":
+        raise ValueError("Native GitHub quality result did not pass for the selected commit")
     quality_file.write_text(json.dumps(quality, indent=2)+"\n")
     project = json.loads(run(["vercel", "--scope", TEAM, "project", "inspect", PROJECT, "--json", "--non-interactive"]).stdout)
     verify_project(project)

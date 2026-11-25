@@ -2,11 +2,54 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resources } from "../src/data/resources.js";
 import { waitForScrollStability } from "./qa-scroll-stability.mjs";
 import { installSkipLinkWitness, withSkipLinkEvidence } from "./qa-skip-link-evidence.mjs";
+import { readInspectorReadiness, waitForInspectorReady } from "./qa-focus-continuity.mjs";
+
+// Reviewed against bowery.org/get-help/: meals at Bowery, shelter intake at
+// Tribeca. Keep this independent of the production action generator.
+export const reviewedBoweryActions = [
+  {label:'Directions to meal service',destination:'227 Bowery, New York, NY 10002'},
+  {label:'Shelter intake details'},
+  {label:'Directions to shelter intake',destination:'90 Lafayette Street, New York, NY 10013'},
+  {label:'Showers and clothing details'},
+  {label:'Mobile medical care details'},
+];
+
+export function hasReviewedBoweryActions({actions, generic}) {
+  return generic === 0 && actions.length === reviewedBoweryActions.length && reviewedBoweryActions.every((expected,index) => {
+    const actual = actions[index];
+    if (actual.label !== expected.label) return false;
+    if (!expected.destination) return actual.href === 'https://www.bowery.org/get-help/';
+    try {
+      const url = new URL(actual.href);
+      return url.origin === 'https://www.google.com' && url.pathname === '/maps/dir/' && url.searchParams.get('destination') === expected.destination;
+    } catch { return false; }
+  });
+}
 
 export function hasIntermediateScrollSample(start, end, samples) {
   if (!Number.isFinite(start) || !Number.isFinite(end) || Math.abs(end-start)<=2) return false;
   const low = Math.min(start,end) + 1, high = Math.max(start,end) - 1;
   return samples.some(value => Number.isFinite(value) && value > low && value < high);
+}
+
+// Native fragment alignment accounts for scroll-padding and the target's
+// scroll-margin. Capture these inputs before Enter, never from the arrival.
+export function skipLinkDestination(prepared) {
+  const { finderDocumentTop, scrollHeight, clientHeight } = prepared;
+  const padding = parseFloat(prepared.clearance), margin = parseFloat(prepared.finderMargin);
+  if (![finderDocumentTop, scrollHeight, clientHeight, padding, margin].every(Number.isFinite)) {
+    throw new Error('Skip-link destination geometry is unavailable');
+  }
+  const y = Math.max(0, Math.min(scrollHeight - clientHeight, finderDocumentTop - padding - margin));
+  return { y, target: finderDocumentTop - y, clearance: padding, margin };
+}
+
+export function hasImmediateSkipLinkArrival(actual, expected) {
+  return [actual.y, actual.target, actual.header, actual.clearance].every(Number.isFinite)
+    && Math.abs(actual.y - expected.y) <= 1 && Math.abs(actual.target - expected.target) <= 1
+    && actual.target >= actual.header && actual.clearance === expected.clearance
+    && actual.hash === '#finder' && actual.active === 'finder'
+    && actual.smooth === 'auto' && actual.overflow === false;
 }
 
 // Native browser input and rendered geometry, rather than source-string claims.
@@ -77,7 +120,7 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       for(const node of ancestors)background=blend(rgba(getComputedStyle(node).backgroundColor),background);
       const foreground=blend(rgba(style.color),background),levels=[luminance(foreground),luminance(background)].sort((a,b)=>a-b);
       const box=el.getBoundingClientRect();
-      return {id:el.id,w:box.width,h:box.height,focusVisible:el.matches(':focus-visible'),hovered:el.matches(':hover'),text:el.textContent.trim()||el.getAttribute('aria-label'),color:style.color,background,opacity:style.opacity,outlineOffset:parseFloat(style.outlineOffset),fontSize:parseFloat(style.fontSize),ratio:(levels[1]+.05)/(levels[0]+.05)};
+      return {id:el.id,w:box.width,h:box.height,focusVisible:el.matches(':focus-visible'),hovered:el.matches(':hover'),text:el.textContent.trim()||el.getAttribute('aria-label'),color:style.color,background,opacity:style.opacity,outlineOffset:parseFloat(style.outlineOffset),outlineWidth:parseFloat(style.outlineWidth),fontSize:parseFloat(style.fontSize),ratio:(levels[1]+.05)/(levels[0]+.05)};
     });
   })()`);
   const keyboardFocus = async selector => {
@@ -178,15 +221,16 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         dispose: () => evaluate(client, 'window.__rwnSkipLinkWitness?.dispose()'),
         run: async record => {
           record.prepared = await evaluate(client, `scrollTo({top:300,behavior:'instant'}); document.querySelector('.skip-link').focus({preventScroll:true}); window.__rwnSkipLinkWitness.snapshot()`);
+          record.expected = skipLinkDestination(record.prepared.state);
           await client.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
           await client.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
           const skipImmediate = await inspect();
           record.immediate = skipImmediate;
-          assert(skipImmediate.y<=1 && skipImmediate.active==='finder', 'Keyboard skip link did not arrive immediately', skipImmediate);
+          assert(hasImmediateSkipLinkArrival(skipImmediate, record.expected), 'Keyboard skip link did not arrive immediately', {expected:record.expected,actual:skipImmediate});
           await settle();
           const skipped = await inspect();
           record.settled = skipped;
-          assert(skipped.hash === '#finder' && skipped.active === 'finder' && skipped.smooth === 'auto', 'Keyboard skip link lost native focus or immediate scrolling', skipped);
+          assert(hasImmediateSkipLinkArrival(skipped, record.expected), 'Keyboard skip link lost native focus or immediate scrolling', {expected:record.expected,actual:skipped});
         },
       });
     }
@@ -403,7 +447,9 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     for (const width of [320,1440]) {
       await client.call('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
       await navigate(client,'about:blank');
-      await navigate(client,`${host}/#resource=${encodeURIComponent(resources[0].id)}`);
+      const bowery = resources.find(resource => resource.id === 'bowery-mission');
+      await navigate(client,`${host}/#resource=${encodeURIComponent(bowery.id)}`);
+      await waitForInspectorReady({id:bowery.id,name:bowery.name,read:()=>evaluate(client,`(${readInspectorReadiness.toString()})()`)});
       await evaluate(client, `document.querySelector('.panel-detail-disclosure').open=true;document.querySelector('.panel-source-note').open=true;document.querySelector('#resourcePanel').scrollIntoView({behavior:'instant',block:'start'})`);
       const selectors='.panel-source,.panel-source b,.panel-title p,.panel-precision,.panel-precision strong,.panel-facts dt,.panel-facts dd,.free-cost,.cost-scope,.panel-services h3,.panel-services li,.availability-note p,.availability-note strong,.panel-source-note p,.panel-source-note strong,#resourcePanel summary,#resourcePanel summary span,#resourcePanel button,#resourcePanel a';
       const contrast=await controlContrast(selectors);
@@ -414,7 +460,11 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       evidence.push({label:'Inspector palette and targets at '+width+'px',contrast,geometry});
       await client.call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
       await client.call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
-      for (const selector of ['.secondary-button','#saveResource','#shareResource','#copyAddress','#closeInspector','.panel-map-actions a']) {
+      const access = await evaluate(client, `({actions:[...document.querySelectorAll('.panel-actions--primary a.primary-button')].map(a=>({label:a.textContent.trim(),href:a.href})),generic:document.querySelectorAll('.panel-map-actions a').length})`);
+      const expectedAccess = reviewedBoweryActions.map(action=>action.label);
+      assert(hasReviewedBoweryActions(access), 'Multisite inspector must retain reviewed meal and shelter destinations, intake details, and no generic maps', access);
+      const serviceActionSelectors = expectedAccess.map((_,index)=>'.panel-actions--primary a.primary-button:nth-child('+(index+1)+')');
+      for (const selector of ['.secondary-button','#saveResource','#shareResource','#copyAddress','#closeInspector',...serviceActionSelectors]) {
         await evaluate(client, `(() => {const item=document.querySelector(${JSON.stringify(selector)});item.scrollIntoView({behavior:'instant',block:'center'});item.blur();})()`);
         const point=await evaluate(client, `(() => {const box=document.querySelector(${JSON.stringify(selector)}).getClientRects()[0];return {x:box.x+box.width/2,y:box.y+box.height/2};})()`);
         await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
@@ -424,7 +474,8 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
         await keyboardFocus(selector);
         const keyboardContrast=await controlContrast(selector);
         assert(keyboardContrast.some(item=>item.focusVisible)&&keyboardContrast.every(item=>item.ratio>=4.5),'Keyboard inspector action loses contrast',keyboardContrast);
-        if(['#saveResource','#shareResource','#copyAddress','.panel-map-actions a'].includes(selector))assert(keyboardContrast.filter(item=>item.focusVisible).every(item=>item.outlineOffset<=-3),'Clipped inspector action has no inset focus ring',keyboardContrast);
+        if(['#saveResource','#shareResource','#copyAddress'].includes(selector))assert(keyboardContrast.filter(item=>item.focusVisible).every(item=>item.outlineOffset<=-3),'Clipped inspector action has no inset focus ring',keyboardContrast);
+        if(serviceActionSelectors.includes(selector))assert(keyboardContrast.some(item=>item.focusVisible&&item.outlineWidth>=3), 'Service action needs a visible keyboard focus ring', keyboardContrast);
         evidence.push({label:'Hover and keyboard inspector '+selector+' at '+width+'px',hover:activeContrast,keyboard:keyboardContrast});
       }
       const savedBefore=await evaluate(client, `document.querySelector('#saveResource').getAttribute('aria-pressed')`);
@@ -438,6 +489,23 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
       await capture(client,`page-interactions-inspector-facts-${width}.png`);
       await evaluate(client, `document.querySelector('.panel-actions').scrollIntoView({behavior:'instant',block:'center'})`);
       await capture(client,`page-interactions-inspector-actions-${width}.png`);
+      // Retain the original clipped-map focus check on a genuine single-site
+      // listing; Bowery intentionally no longer has this generic map group.
+      const singleSite = resources.find(item=>item.kind==='direct'&&!item.serviceAccess&&Number.isFinite(item.lat)&&Number.isFinite(item.lng));
+      assert(!!singleSite, 'Single-site inspector fixture is required');
+      await navigate(client,'about:blank');
+      await navigate(client,`${host}/#resource=${encodeURIComponent(singleSite.id)}`);
+      for(const selector of ['.panel-map-actions a:first-child','.panel-map-actions a:last-child']) {
+        await evaluate(client, `document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'})`);
+        const point=await evaluate(client, `(() => {const box=document.querySelector(${JSON.stringify(selector)}).getClientRects()[0];return {x:box.x+box.width/2,y:box.y+box.height/2};})()`);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+        const hovered=await controlContrast(selector);
+        assert(hovered.length===1&&hovered[0].hovered&&hovered[0].ratio>=4.5, 'Single-site hovered maps retain readable contrast', hovered);
+        await client.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
+        await keyboardFocus(selector);
+        const focus = await controlContrast(selector);
+        assert(focus.length===1&&focus[0].focusVisible&&focus[0].outlineOffset<=-3&&focus[0].ratio>=4.5, 'Single-site clipped maps retain inset visible focus and contrast', focus);
+      }
     }
 
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'no-preference'}]});

@@ -9,7 +9,8 @@ import { categories, resources } from "../src/data/resources.js";
 import { groupLocalities } from "../scripts/locality-groups.mjs";
 
 const execute = promisify(execFile);
-const base = resources.find(resource => resource.kind === "direct" && resource.country === "United States");
+// Synthetic single-site fixtures must not inherit another provider’s access routes.
+const { serviceAccess: originalAccess, ...base } = resources.find(resource => resource.kind === "direct" && resource.country === "United States");
 const mapped = [1, 2, 3].map(number => ({
   ...base, id: `fixture-mapped-${number}`, name: `Reviewed service ${number}`,
   city: "Boston", country: "United States", address: `${number} Main St, MA 02101`,
@@ -102,7 +103,14 @@ test("full static pipeline preserves contact-only access without map, city or tr
       assert.ok(main.includes(resource.eligibility));
       assert.doesNotMatch(main, /maps\.apple|google\.com\/maps|\/#resource=|before (?:you )?(?:go|travel)|near Boston|legacy coordinate note/i);
       const related = main.match(/<section class="related-services"[\s\S]*?<\/section>/)?.[0];
-      assert.match(related, /Related help in United States/);
+      const relatedIds = [...related.matchAll(/href="\/service\/([^"]+)"/g)].map(match => match[1]);
+      if (!resource.city) {
+        assert.deepEqual(relatedIds, [], 'country alone cannot establish a relevant municipal service');
+        assert.match(related, /A missing listing does not mean help is unavailable/);
+      } else {
+        assert.ok(mapped.every(site => relatedIds.includes(site.id)), 'reviewed same-city food services remain available');
+        assert.ok(relatedIds.every(id => mapped.some(site => site.id === id) || id === 'fixture-online-only'), 'no distant, unscoped or closed candidate is invented');
+      }
       assert.doesNotMatch(related, /\bnear\b|\bkm\b|Directions|fixture-phone-and-online/);
       assert.ok(!related.includes(`href="/service/${resource.id}"`));
       if (resource.phone) assert.ok(main.includes(resource.phoneAccess));
@@ -131,7 +139,7 @@ test("full static pipeline preserves contact-only access without map, city or tr
       assert.ok(html.includes("google.com/maps/dir/"));
       const related = html.match(/<section class="related-services"[\s\S]*?<\/section>/)?.[0];
       assert.match(related, /Phone or online help/);
-      assert.ok(related.includes('href="/service/fixture-phone-only"'));
+      assert.ok(!related.includes('href="/service/fixture-phone-only"'), 'a country match alone does not establish a local referral route');
       assert.ok(related.includes('href="/service/fixture-online-only"'));
       assert.doesNotMatch(related, /fixture-phone-and-online|\bnear\b|\bkm\b|Directions/);
     }

@@ -1,0 +1,347 @@
+import { createNetworkGate } from "./network-gate.js";
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+const widths = [320, 360, 375, 390, 430, 600, 768, 1024, 1280, 1440, 1920];
+const noGraphics = async page => page.addInitScript(() => {
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+    return /webgl/i.test(type) ? null : original.call(this, type, ...args);
+  };
+});
+const homeReady = page => expect(page.locator('html')).toHaveAttribute('data-finder-startup', 'ready');
+const rows = page => page.locator('.directory-global-result');
+async function noOverflow(page) {
+  const measure = () => page.evaluate(() => ({
+    viewport: innerWidth, scroll: document.documentElement.scrollWidth,
+    client: document.documentElement.clientWidth,
+    headerPadding: document.querySelector(".site-header") ? getComputedStyle(document.querySelector(".site-header")).padding : null,
+  }));
+  const immediate = await measure();
+  // WebKit can acknowledge a viewport resize before viewport-relative CSS has
+  // reached its next rendering update. Measure the resulting layout, retaining
+  // any transient overflow as evidence instead of adding retries or a delay.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const size = await measure();
+  if (immediate.scroll > immediate.client + 1 || size.scroll > size.client + 1) {
+    await test.info().attach("reflow-measurements", {body: JSON.stringify({path: new URL(page.url()).pathname, immediate, settled: size}), contentType: "application/json"});
+  }
+  expect(size.scroll, `${new URL(page.url()).pathname} at ${size.client}px must reflow without horizontal scrolling`).toBeLessThanOrEqual(size.client + 1);
+}
+
+test.beforeEach(async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.__rwnErrors = errors;
+});
+test.afterEach(async ({ page }, info) => {
+  await info.attach('runtime-errors', { body: JSON.stringify(page.__rwnErrors || []), contentType: 'application/json' });
+  expect(page.__rwnErrors || [], 'uncaught browser errors').toEqual([]);
+});
+
+test('finder survives absent WebGL without requesting graphics assets', async ({ page }) => {
+  await noGraphics(page);
+  const requests = []; page.on('request', request => requests.push(new URL(request.url()).pathname));
+  await page.goto('/'); await homeReady(page);
+  await expect(page.locator('#globeFallback')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-globe-startup', 'unavailable');
+  await page.locator('#resourceSearch').fill('Boston MA');
+  await expect(page.locator('.resource-card').first()).toContainText(/Boston/);
+  await page.locator('#jumpResults').click();
+  await expect(page.locator('#resourceGrid')).toBeInViewport();
+  expect(requests.filter(url => /\/vendor\/three|\/media\/earth|\/data\/countries/.test(url))).toEqual([]);
+});
+
+test('renderer controls recover from interrupted input on a capable browser', async ({ page, browserName }, info) => {
+  await page.goto('/'); await homeReady(page);
+  await expect(page.locator('html')).toHaveAttribute('data-globe-startup', /ready|unavailable/);
+  const supported = await page.locator('html').getAttribute('data-globe-startup') === 'ready';
+  await info.attach('graphics-capability', { body: JSON.stringify({ supported, browserName }), contentType: 'application/json' });
+  if (browserName === 'chromium') expect(supported, 'configured software GPU must initialize the real renderer').toBe(true);
+  test.skip(!supported, 'This browser environment has no usable WebGL; fallback is separately mandatory.');
+  const canvas = page.locator('#globeCanvas');
+  await canvas.scrollIntoViewIfNeeded();
+  await page.locator('#zoomIn').click(); await page.locator('#zoomIn').click();
+  await page.locator('#zoomOut').click();
+  const box = await canvas.boundingBox();
+  await page.mouse.move(box.x + box.width * .45, box.y + box.height * .5);
+  await page.mouse.down(); await page.mouse.move(box.x + box.width * .7, box.y + box.height * .55, {steps: 12}); await page.mouse.up();
+  await page.locator('#resetGlobe').click();
+  for (const width of widths) {
+    await page.setViewportSize({width,height:844});
+    await noOverflow(page);
+    await expect(canvas).toBeVisible();
+    await expect(page.locator('#globeFallback')).toBeHidden();
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#zoomIn').click();
+  await page.locator('#zoomOut').click();
+  await expect(page.locator('#globeFallback')).toBeHidden();
+  if (browserName === 'chromium') {
+    const loss = await canvas.evaluate(canvas => {
+      const gl=canvas.getContext('webgl2'), extension=gl?.getExtension('WEBGL_lose_context');
+      if (!extension) return false; extension.loseContext(); return true;
+    });
+    expect(loss).toBe(true);
+    await expect(page.locator('#globeFallback')).toBeVisible();
+    await page.locator('#retryGlobe').click();
+    await expect(page.locator('#globeFallback')).toBeHidden({timeout:30000});
+  }
+  await info.attach('globe', {body:await page.screenshot(),contentType:'image/png'});
+});
+
+test('directory search, geography, empty recovery, and history remain local', async ({page}) => {
+  const requests=[];page.on('request',r=>requests.push(r.url()));
+  await page.goto('/directory');
+  const input=page.locator('[data-directory-query]');
+  await input.fill('Boston UK'); await expect(rows(page).first()).toContainText('Boston Foodbank');
+  await expect(rows(page).first()).toContainText('United Kingdom');
+  await input.fill('Boston MA'); await expect(rows(page).first()).toContainText('United States');
+  await page.locator('[data-directory-country]').selectOption({label:'United Kingdom'});
+  await expect(rows(page)).toHaveCount(0);
+  await page.locator('[data-directory-clear]').click();
+  await input.fill('zzzz-no-such-assistance'); await expect(rows(page)).toHaveCount(0);
+  await expect(page.locator('[data-directory-count]')).toContainText(/No|0/);
+  await input.fill('WIC'); await expect(rows(page).first()).toContainText(/WIC/i);
+  const first=rows(page).first(), href=await first.getAttribute('href');await first.click();
+  await expect(page).toHaveURL(new RegExp(href+'$'));
+  await page.goBack();await expect(input).toHaveValue('WIC');
+  expect(requests.some(url=>/Boston|zzzz-no-such|[?&]q=/.test(url))).toBe(false);
+});
+
+test('saved listing survives reload and can be removed', async ({page}) => {
+  await page.goto('/service/womens-lunch-place');
+  const save=page.locator('[data-service-save]');
+  await save.click();await expect(save).toHaveAttribute('aria-pressed','true');
+  await page.reload();await expect(save).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('link',{name:'View saved services',exact:true}).click();
+  await expect(page.locator('[data-saved-services]')).toContainText("Women");
+  await page.goto('/service/womens-lunch-place');await save.click();await expect(save).toHaveAttribute('aria-pressed','false');
+});
+
+test('saved services synchronize between two actual tabs', async ({page,context}) => {
+  await page.goto('/service/womens-lunch-place');
+  const directory=await context.newPage();
+  directory.on('pageerror',error=>page.__rwnErrors.push(error.message));
+  await directory.goto('/directory#saved');
+  await expect(directory.locator('[data-saved-remove]')).toHaveCount(0);
+  await page.locator('[data-service-save]').click();
+  await expect(directory.locator('[data-saved-services]')).toContainText("Women");
+  await directory.locator('[data-saved-remove]').click();
+  await expect(page.locator('[data-service-save]')).toHaveAttribute('aria-pressed','false');
+  await expect(directory.locator('[data-saved-remove]')).toHaveCount(0);
+  await directory.close();
+});
+
+test('blocked storage gives an honest recovery without breaking service details', async ({page}) => {
+  await page.addInitScript(()=>{Storage.prototype.getItem=function(){throw new DOMException('Storage denied','SecurityError')};});
+  await page.goto('/service/womens-lunch-place');
+  await expect(page.locator('[data-service-save]')).toBeDisabled();
+  await expect(page.locator('.service-utility-actions')).toContainText(/unavailable/i);
+  await expect(page.locator('h1')).toContainText(/Women/);
+  await expect(page.locator('[data-service-print]')).toBeEnabled();
+});
+
+test('directory reload and search remain usable offline', async ({page,context,baseURL,browserName}, info) => {
+  const gate = await createNetworkGate(baseURL);
+  try {
+  await page.goto(gate.url + '/directory');
+  const supported=await page.evaluate(()=> 'serviceWorker' in navigator);
+  expect(supported,'service worker capability').toBe(true);
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
+  await page.locator('[data-directory-query]').fill('Boston');
+  await expect(rows(page).first()).toBeVisible();
+  // Read cache completion rather than sleeping through an installation race.
+  await expect.poll(()=>page.evaluate(async()=>{for(const name of await caches.keys()){const cache=await caches.open(name);if((await cache.keys()).some(r=>new URL(r.url).pathname==='/data/search-index.json'))return true;}return false;})).toBe(true);
+  gate.setOffline(true);
+  await context.setOffline(true);await page.reload();
+  await expect(page.locator('[data-directory-query]')).toBeVisible();
+  await page.locator('[data-directory-query]').fill('Boston');
+  await expect(rows(page).first()).toBeVisible();
+  await expect(page.locator('body')).toContainText(/offline|cached/i);
+  await expect(page.locator('html')).toHaveAttribute('data-rwn-catalog-cached','true');
+  await expect.poll(()=>page.evaluate(()=>[...document.styleSheets].some(sheet=>/\/navigation-actions\.[a-f0-9]{12}\.css/.test(sheet.href||'')&&sheet.cssRules.length>0)),{message:'versioned mobile navigation styling remains loaded offline'}).toBe(true);
+  // Verify reconnection finishes before testing the next navigation. Reloading
+  // immediately cancels the online refresh; WebKit reports that cancellation
+  // as an access-control console exception despite the handled fetch rejection.
+  gate.setOffline(false);
+  await context.setOffline(false);
+  if (browserName === "firefox") {
+    // Playwright 1.65 / Firefox 159 restores transport after an offline reload
+    // without emitting online. Supply that missing fixture event; all catalog,
+    // worker, stale-warning and automatic recovery assertions remain real.
+    await info.attach("offline-emulation-scope", { body: "Firefox transport outage is enforced by a local 503 proxy. Playwright does not emit online after this offline reload, so the fixture dispatches it on reconnection. This is browser automation, not physical network validation.", contentType: "text/plain" });
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  }
+  await expect(page.locator('html')).toHaveAttribute('data-rwn-catalog-cached','false');
+  await expect(rows(page).first()).toBeVisible();
+  await expect(page.locator('#offlineDirectoryNotice')).toBeHidden();
+  await page.reload();await expect(page.locator('[data-directory-query]')).toBeVisible();
+  } finally { await gate.close(); }
+});
+
+test('all required widths, landscape and enlarged text reflow', async ({page},info) => {
+  test.setTimeout(180000);
+  await noGraphics(page);
+  for(const path of ['/','/directory','/service/womens-lunch-place','/sources','/join']) {
+    await page.goto(path);
+    if(path==='/')await homeReady(page);
+    for(const width of widths){await page.setViewportSize({width,height:900});await noOverflow(page);}
+    for(const [width,height] of [[844,390],[1024,600]]){await page.setViewportSize({width,height});await noOverflow(page);}
+    await page.setViewportSize({width:390,height:844});
+    await page.evaluate(()=>document.documentElement.style.fontSize='200%');await noOverflow(page);
+    if(path==='/') {
+      const boxes=await Promise.all(['.site-header .brand','.site-menu > summary','.header-action'].map(selector=>page.locator(selector).boundingBox()));
+      for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++) {
+        const a=boxes[i],b=boxes[j];expect(a).not.toBeNull();expect(b).not.toBeNull();
+        expect(a.x+a.width<=b.x+1||b.x+b.width<=a.x+1||a.y+a.height<=b.y+1||b.y+b.height<=a.y+1,'brand and navigation must not overlap at 200% text').toBe(true);
+      }
+      await page.locator('.filter-disclosure > summary').click();await noOverflow(page);
+      await page.locator('.filter-disclosure > summary').click();
+    }
+    await info.attach(`enlarged-${path.replaceAll('/','-')||'home'}`,{body:await page.screenshot(),contentType:'image/png'});
+    await page.evaluate(()=>document.documentElement.style.removeProperty('font-size'));
+    if(path==='/directory')await info.attach('mobile-directory',{body:await page.screenshot(),contentType:'image/png'});
+  }
+});
+
+test('keyboard can reach search and dismiss mobile navigation', async ({page}) => {
+  await noGraphics(page);await page.setViewportSize({width:320,height:844});
+  await page.goto('/');await homeReady(page);
+  await page.keyboard.press('Alt+/');await expect(page.locator('#resourceSearch')).toBeFocused();
+  await page.locator('#resourceSearch').fill('Boston');
+  await page.keyboard.press('Escape');await expect(page.locator('#resourceSearch')).toHaveValue('');
+  await page.locator('.site-menu > summary').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.site-menu')).not.toHaveAttribute('open','');
+  await expect(page.locator('.site-menu > summary')).toBeFocused();
+});
+
+test('short viewport navigation keeps every keyboard link fully reachable', async ({page},info) => {
+  await noGraphics(page);
+  const evidence=[];
+  const frame=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  for(const height of [250,189]) {
+    await page.setViewportSize({width:320,height});
+    await page.goto('/');await homeReady(page);await noOverflow(page);
+    const menu=page.locator('.site-menu');
+    const summary=menu.locator(':scope > summary');
+    const links=menu.locator('nav a');
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(menu).toHaveAttribute('open','');
+    await expect(links).toHaveCount(5);
+    await frame();
+    const bounds=await menu.locator('nav').evaluate(nav=>{
+      const box=nav.getBoundingClientRect();
+      return {left:box.left,right:box.right,top:box.top,bottom:box.bottom,
+        clientWidth:document.documentElement.clientWidth,height:innerHeight,
+        overflowY:getComputedStyle(nav).overflowY};
+    });
+    expect(bounds.left).toBeGreaterThanOrEqual(-1);
+    expect(bounds.right).toBeLessThanOrEqual(bounds.clientWidth+1);
+    expect(bounds.top).toBeGreaterThanOrEqual(-1);
+    expect(bounds.bottom).toBeLessThanOrEqual(bounds.height+1);
+    expect(bounds.overflowY).toBe('auto');
+    const focused=[];
+    let panelStop;
+    for(let index=0;index<5;index++) {
+      await page.keyboard.press('Tab');
+      if(index===0) {
+        panelStop=await menu.locator('nav').evaluate(nav=>({
+          focused:document.activeElement===nav,
+          scrollable:nav.scrollHeight>nav.clientHeight,
+          tabIndexAttribute:nav.getAttribute('tabindex')
+        }));
+        // Firefox includes the scrollable panel as a native keyboard stop.
+        // Permit only that actual panel, once, before the first ordered link.
+        if(panelStop.focused) {
+          expect(panelStop.scrollable,'native panel stop belongs to the scrollable menu').toBe(true);
+          await page.keyboard.press('Tab');
+        }
+      }
+      await expect(links.nth(index)).toBeFocused();
+      await frame();
+      const box=await links.nth(index).evaluate(link=>{
+        const box=link.getBoundingClientRect(),panel=link.closest('nav').getBoundingClientRect();
+        return {text:link.textContent.trim(),left:box.left,right:box.right,top:box.top,bottom:box.bottom,
+          width:box.width,height:box.height,panelLeft:panel.left,panelRight:panel.right,
+          panelTop:panel.top,panelBottom:panel.bottom,viewportHeight:innerHeight,
+          clientWidth:document.documentElement.clientWidth,scrollTop:link.closest('nav').scrollTop};
+      });
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.left).toBeGreaterThanOrEqual(Math.max(0,box.panelLeft)-1);
+      expect(box.right).toBeLessThanOrEqual(Math.min(box.clientWidth,box.panelRight)+1);
+      expect(box.top).toBeGreaterThanOrEqual(Math.max(0,box.panelTop)-1);
+      expect(box.bottom).toBeLessThanOrEqual(Math.min(box.viewportHeight,box.panelBottom)+1);
+      focused.push(box);
+    }
+    expect(focused.at(-1).scrollTop,'keyboard focus scrolls to the final short-menu link').toBeGreaterThan(0);
+    await info.attach(`short-menu-320x${height}`,{body:await page.screenshot(),contentType:'image/png'});
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open','');
+    await expect(summary).toBeFocused();
+    evidence.push({height,bounds,panelStop,focused});
+  }
+  await info.attach('short-menu-keyboard-bounds',{body:JSON.stringify(evidence),contentType:'application/json'});
+});
+
+for(const path of ['/','/directory','/service/womens-lunch-place','/transparency','/404','/join']) {
+  test(`accessibility ${path}`,async({page},info)=>{
+    await noGraphics(page);await page.setViewportSize({width:390,height:844});
+    await page.goto(path);if(path==='/')await homeReady(page);
+    const audit=await new AxeBuilder({page}).analyze();
+    await info.attach('axe',{body:JSON.stringify(audit),contentType:'application/json'});
+    expect(audit.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+    expect(audit.incomplete.filter(v=>['aria-prohibited-attr','form-field-multiple-labels'].includes(v.id)).map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))).toEqual([]);
+  });
+}
+
+
+test("finder stays usable while the graphics engine is delayed, then the globe becomes visible", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "This delayed-import regression requires the configured Chromium software GPU; other projects test capability fallback separately.");
+  let releaseImport;
+  const heldImport = new Promise(resolve => { releaseImport = resolve; });
+  let imports = 0;
+  await page.route(/\/vendor\/three\.module(?:[.-][a-f0-9]+)?\.js(?:\?|$)/, async route => {
+    imports++;
+    await heldImport;
+    await route.continue();
+  });
+  try {
+    // DOMContentLoaded does not wait for the optional dynamic import.
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await homeReady(page);
+    await expect.poll(() => imports, { message: "the capable browser requested the held engine" }).toBeGreaterThan(0);
+    await expect(page.locator("html")).toHaveAttribute("data-globe-startup", "loading");
+    await page.locator("#resourceSearch").fill("Boston MA");
+    await expect(page.locator(".resource-card").first()).toContainText("Boston");
+    // Cross several actual rendering opportunities while import remains held.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+    await expect(page.locator("#globeFallback")).toBeHidden();
+    await expect(page.locator(".globe-stage")).not.toHaveClass(/is-globe-unavailable/);
+  } finally {
+    releaseImport();
+  }
+  await expect(page.locator("html")).toHaveAttribute("data-globe-startup", "ready");
+  await expect(page.locator("#globeCanvas")).toBeVisible();
+  await expect(page.locator("#globeFallback")).toBeHidden();
+});
+
+test('normal motion can be explicitly started, paused, and resized', async ({page,browserName},info)=>{
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.goto('/');await homeReady(page);
+  await expect(page.locator('html')).toHaveAttribute('data-globe-startup',/ready|unavailable/);
+  const supported=await page.locator('html').getAttribute('data-globe-startup')==='ready';
+  if(browserName==='chromium')expect(supported).toBe(true);
+  test.skip(!supported,'Renderer unavailable in this environment; fallback tested separately.');
+  const motion=page.locator('#toggleMotion');
+  await expect(motion).toHaveAccessibleName('Resume globe rotation');
+  await motion.click();await expect(motion).toHaveAccessibleName('Pause globe rotation');
+  await page.setViewportSize({width:844,height:390});await noOverflow(page);
+  await motion.click();await expect(motion).toHaveAccessibleName('Resume globe rotation');
+  await page.locator('#resourceSearch').fill('Boston MA');
+  await expect(page.locator('.resource-card').first()).toContainText('Boston');
+  await expect(page.locator('#globeFallback')).toBeHidden();
+  await info.attach('normal-motion-landscape',{body:await page.screenshot(),contentType:'image/png'});
+});

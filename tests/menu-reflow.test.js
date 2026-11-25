@@ -4,19 +4,20 @@ import test from 'node:test';
 import { menuViewports } from '../scripts/qa-menu-reflow.mjs';
 
 const css = await readFile(new URL('../src/clarity.css', import.meta.url), 'utf8');
-const mobile = css.slice(css.indexOf('@media (max-width: 900px)'));
+const mobile = css.slice(css.search(/@media \(max-width:\s*900px\)/));
 const nav = mobile.match(/\.rwn-professional \.site-menu nav \{([^}]+)\}/)?.[1] || '';
 
 test('mobile menu is bounded by the full header instead of the summary control', () => {
-  assert.match(mobile, /\.rwn-professional \.site-menu \{ position: static;/);
-  assert.match(nav, /width: min\(17rem, calc\(100% - 2rem\)\)/);
-  assert.match(nav, /min-width: 0/);
+  assert.match(mobile, /\.rwn-professional \.site-menu \{ position:\s*static;/);
+  assert.match(nav, /width:\s*min\(17rem, calc\(100% - 2rem\)\)/);
+  assert.match(nav, /min-width:\s*0/);
 });
 
-test('short mobile menus scroll within the dynamic viewport without hiding links', () => {
-  assert.match(nav, /max-height: calc\(100vh - 6rem\)/);
-  assert.match(nav, /max-height: calc\(100dvh - 6rem\)/);
-  assert.match(nav, /overflow: auto/);
+test('short menus reserve their actual wrapped header height before scrolling links', () => {
+  assert.match(nav, /max-height:\s*calc\(100vh - 100% - \.9rem\)/);
+  assert.match(nav, /max-height:\s*calc\(100dvh - 100% - \.9rem\)/);
+  assert.match(nav, /top:\s*calc\(100% \+ \.45rem\)/);
+  assert.match(nav, /overflow:\s*auto/);
   assert.doesNotMatch(nav, /overflow[^:]*:\s*(hidden|clip)/);
   assert.match(nav, /scroll-padding-block/);
 });

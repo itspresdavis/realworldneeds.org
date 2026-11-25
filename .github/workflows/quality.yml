@@ -19,14 +19,18 @@ jobs:
     timeout-minutes: 24
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Use Node.js 24
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: npm
+      - name: Reject tracked build output and dependencies
+        run: node scripts/check-repository-artifacts.mjs
       - name: Install locked dependencies
         run: npm ci
+      - name: Audit locked dependency vulnerabilities
+        run: npm audit --audit-level=high
       - name: Verify testing and release tooling
         run: |
           python3 tests/ubuntu-quality.test.py
@@ -37,7 +41,9 @@ jobs:
         run: npm run check
       - name: Install Chrome
         id: chrome
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
+        with:
+          chrome-version: "157.0.8103.38"
       - name: Crash-test real globe touch input
         run: |
           mkdir -p qa-screenshots
@@ -47,16 +53,142 @@ jobs:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Verify rendered site
         if: ${{ !cancelled() && steps.validate.outcome == 'success' && steps.chrome.outcome == 'success' }}
-        run: npm run test:browser:qa
+        run: |
+          node scripts/browser-service-qa.mjs
+          node scripts/browser-asset-upgrade.mjs
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - name: Upload visual QA
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: rwn-visual-qa
           path: |
             qa-screenshots/*.png
             qa-screenshots/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  native-offline-globe:
+    name: Native browser / offline and globe
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    # Run 42293453337 exhausted the original job's 24-minute bound after
+    # service/Saved/chaos and almost all remaining journeys passed. Split the
+    # existing workload; neither deadlines nor assertions are relaxed.
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build generated site
+        run: npm run build
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
+        with:
+          chrome-version: "157.0.8103.38"
+      - name: Verify globe, offline, handoff and cache upgrades
+        run: |
+          node scripts/browser-saved-services.mjs
+          node scripts/browser-chaos.mjs
+          node scripts/browser-institutional.mjs
+          node scripts/browser-globe-v2.mjs
+          node scripts/browser-offline.mjs
+          node scripts/browser-service-actions.mjs
+          node scripts/browser-cache-upgrade.mjs
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Upload native offline and globe evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: rwn-native-offline-globe-qa
+          path: |
+            qa-screenshots/*.png
+            qa-screenshots/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  postgres-permissions:
+    name: PostgreSQL permission and migration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Load pinned PostgreSQL image
+        run: |
+          docker pull postgres:17.11-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
+      - name: Verify isolated permissions and migrations
+        run: python3 scripts/qa-postgres-permissions.py --image postgres:17.11-bookworm@sha256:665dc7b37ac52a17e298511414c21d23ffa4e6a6ef6225b3e5d59c7afb35e994
+
+  cross-browser:
+    name: Cross-browser / ${{ matrix.browser }}
+    # Keep the supported LTS fixed while ubuntu-latest migrates; versions and gates stay unchanged.
+    # https://github.com/actions/runner-images/issues/14748
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build generated site
+        run: npm run build
+      - name: Bound browser dependency downloads
+        # The Azure Ubuntu mirror stalled before Firefox tests in run 42225938015.
+        # Use Ubuntu's signed packages over its official HTTPS mirror; keep all
+        # browser checks, dependency validation and job deadlines unchanged.
+        run: |
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          directory = Path('/etc/apt/sources.list.d')
+          for path in [Path('/etc/apt/sources.list'), *directory.glob('*.list'), *directory.glob('*.sources')]:
+              if not path.is_file():
+                  continue
+              original = path.read_text()
+              # Current runner images use a mirror-list URI rather than a
+              # literal Azure URL; handle that and older source formats.
+              updated = original.replace('mirror+file:/etc/apt/apt-mirrors.txt', 'https://archive.ubuntu.com/ubuntu')
+              for scheme in ['http', 'https']:
+                  updated = updated.replace(scheme + '://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+              if updated != original:
+                  path.write_text(updated)
+          Path('/etc/apt/apt.conf.d/99rwn-browser-network').write_text(
+              'Acquire::Retries "1";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n'
+          )
+          PY
+      - name: Install browser and system dependencies
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Verify assistance journeys and accessibility
+        run: npm run test:cross-browser -- --project=${{ matrix.browser }}
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: rwn-cross-browser-${{ matrix.browser }}
+          path: |
+            qa-cross-browser/
+            test-results/
+            playwright-report/
           if-no-files-found: warn
           retention-days: 7

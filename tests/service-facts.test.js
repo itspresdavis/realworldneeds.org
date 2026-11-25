@@ -24,7 +24,17 @@ test("every service page exposes exact snapshot facts, missing details, and date
     const html = await read(`dist/service/${resource.id}/index.html`);
     const facts = html.match(/<dl class="service-facts">([\s\S]*?)<\/dl>/)?.[1];
     assert.ok(facts, `${resource.id}: explicit service facts`);
-    for (const [label, value] of [[resource.kind === "direct" ? "Address" : "Coverage", resource.address], ["Access", resource.accessType], ["Hours", resource.hours], ["Eligibility", resource.eligibility]]) {
+    const locationFacts = resource.serviceAccess ? [] : [[resource.kind === "direct" ? "Address" : "Coverage", resource.address]];
+    if (resource.serviceAccess) {
+      assert.ok(facts.includes('<dt>Service locations</dt>'), resource.id);
+      for (const route of resource.serviceAccess) {
+        assert.ok(facts.includes(`<strong>${escape(route.label)}</strong>`), `${resource.id}: distinct service label`);
+        if (route.address) assert.ok(facts.includes(escape(route.address)), `${resource.id}: service-specific address`);
+        assert.ok(facts.includes(escape(route.instructions)), `${resource.id}: service access instructions`);
+        assert.ok(facts.includes(escape(route.reviewedAt)), `${resource.id}: route review date`);
+      }
+    }
+    for (const [label, value] of [...locationFacts, ["Access", resource.accessType], ["Hours", resource.hours], ["Eligibility", resource.eligibility]]) {
       if (value) assert.ok(facts.includes(`<dt>${label}</dt><dd>${escape(value)}</dd>`), `${resource.id}: ${label} exact source text`);
     }
     assert.ok(facts.includes(escape(resource.costNote)), `${resource.id}: cost note`);

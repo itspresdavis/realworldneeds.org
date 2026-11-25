@@ -1,8 +1,13 @@
+import { resolveSearchIntent, resourceMatchesIntent } from "./utils/search-intent.js";
+import { mountSearchIntentControls } from "./utils/search-intent-controls.js";
+import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "./utils/service-access.js";
+import { escapeHtml, safeExternalUrl } from "./utils/html.js";
+import { searchGeographyChoices } from "./utils/search.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyLabel, contactOnlyNotice } from "./utils/resource-location.js";
 import { warmSearchIndex } from "./utils/search-warmup.js";
 import { phoneMarkup } from "./utils/phone.js";
-import * as THREE from "/vendor/three.module.js";
-import { createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } from "./globe-points.js";
+import { loadGlobeEngine } from "./utils/globe-engine.js";
+let THREE, createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer;
 import { globeHasMotion, globePointVisible, frameBufferMatches } from "./utils/globe-rendering.js";
 import { clusterProjectedEntries } from "./utils/globe-clustering.js";
 import { categories, resourceTypes, resources, trustPrinciples } from "./data/resources.js";
@@ -117,8 +122,8 @@ function globeCoordinateAtClientPoint(clientX, clientY) {
 }
 
 function initialResultCount() {
-  if (window.innerWidth <= 600) return 5;
-  if (window.innerWidth <= 900) return 6;
+  if (window.matchMedia("(max-width: 600px)").matches) return 5;
+  if (window.matchMedia("(max-width: 900px)").matches) return 6;
   return 8;
 }
 
@@ -162,9 +167,11 @@ if (requestedResource && new URL(window.location.href).searchParams.has("resourc
 let cancelPendingSearch = () => {};
 let hasPendingSearch = () => false;
 let refreshSearchPreparation = () => {};
+let finderIntentControls;
 
 const state = {
   query: sanitizeFinderQuery(initialFinderHistory?.query),
+  place: sanitizeFinderQuery(initialFinderHistory?.place),
   viewMode: "aid",
   accessMode: finderAccessFromHistory(initialFinderHistory?.accessMode),
   activeTypes: finderTypesFromHistory(initialFinderHistory?.activeTypes),
@@ -238,6 +245,9 @@ let globeLight = null;
 let globeFocusLight = null;
 let globeBaseCameraDistance = 3.2;
 let earthTextureImage = null;
+let earthTextureRequested = false;
+let landGeometryPromise = null;
+let landGeometryReady = false;
 let earthDetailTextureImage = null;
 let earthDetailTextureRequested = false;
 let earthDetailTextureReady = false;
@@ -264,10 +274,10 @@ let globeContextLost = false;
 let globeContextRecoveryExtension = null;
 let globeFrameHandle = null;
 let globeResizeObserver = null;
-const globeRaycaster = new THREE.Raycaster();
-const globePointerNdc = new THREE.Vector2();
-const globeProjectionVector = new THREE.Vector3();
-const globeInverseWorldMatrix = new THREE.Matrix4();
+let globeRaycaster = null;
+let globePointerNdc = null;
+let globeProjectionVector = null;
+let globeInverseWorldMatrix = null;
 const globeResourceVectorCache = new WeakMap();
 
 const icon = {
@@ -365,10 +375,11 @@ function distanceLabel(resource) {
 }
 
 function locationResultLabel(resource) {
+  if (resource.serviceAccess) return "Choose service access";
   if (isContactOnly(resource)) return `${contactOnlyLabel} · check coverage`;
   if (resource.locationPrecision === "address") return resource.accessType;
   if (!state.userLocation) return resource.accessType;
-  if (isExactServiceSite(resource)) return distanceLabel(resource);
+  if (isExactServiceSite(resource)) return [resource.accessType, distanceLabel(resource)].filter(Boolean).join(" · ");
   if (["global", "worldwide"].includes(String(resource.country).toLowerCase())) return "Worldwide resource finder";
   if (state.userCountry && resource.country === state.userCountry) return `${state.userCountry} resource finder`;
   return "Resource finder for this area";
@@ -399,7 +410,7 @@ function shell() {
   root.innerHTML = `
     <a class="skip-link" href="#finder">Skip to find help</a>
     <header class="site-header" id="top">
-      <a class="brand" href="#top" aria-label="Real World Needs home">
+      <a class="brand" href="#top">
         <span class="brand__mark">${icon.globe}</span>
         <span class="brand__name"><strong>RWN</strong><small>Real World Needs</small></span>
       </a>
@@ -426,20 +437,22 @@ function shell() {
         <div class="finder__grid">
           <aside class="finder-sidebar">
             <div class="finder-intro">
-              <h1>Find essential services near you.</h1>
+              <h1>Find help</h1>
               <p>Search for food, shelter, health care, showers, clothing, drinking water, and other essentials. Every listing links to the organization offering the service.</p>
             </div>
 
             <div class="finder-search" role="search">
-              <label class="search-box">
+              <label class="finder-search-label" for="resourceSearch">What do you need?</label>
+              <div class="search-box">
                 ${icon.search}
-                <span class="sr-only">Search resources</span>
                 <input id="resourceSearch" type="search" maxlength="180" placeholder="Search by service or place" autocomplete="off">
                 <button id="clearSearch" type="button" aria-label="Clear search" title="Clear search" hidden>${icon.close}</button>
-              </label>
+              </div>
+              <div class="finder-place"><label for="resourcePlace" data-i18n="place">Place (city, region, country or postal code)</label><input id="resourcePlace" type="search" maxlength="180" autocomplete="off" value="${escapeHtml(state.place)}"></div>
               <p class="sr-only" id="searchStatus" aria-live="polite"></p>
+              <p class="search-geography-hint" id="searchGeographyHint" role="status" hidden></p>
             </div>
-            <a class="jump-results" id="jumpResults" href="#results" aria-label="Skip the map and see matching services"><span>See matching services</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
+            <a class="jump-results" id="jumpResults" href="#results"><span>View results</span><small id="matchingResultCount">${resources.length.toLocaleString()} listed</small></a>
 
             <div class="location-actions">
               <button class="location-button" id="locateMe" type="button">${icon.locate}<span>Use my location</span></button>
@@ -455,10 +468,10 @@ function shell() {
               <summary>${icon.filter}<strong>Filters</strong><span id="filterSummary">All 7 types of help</span></summary>
               <div class="finder-controls">
                 <div class="filter-heading"><span>Types of help</span><button type="button" id="toggleAll">Clear</button></div>
-                <div class="layer-list" id="layerList" aria-label="Aid category filters"></div>
+                <div role="group" class="layer-list" id="layerList" aria-label="Aid category filters"></div>
 
                 <div class="filter-heading"><span>Listing type</span></div>
-                <div class="access-switch" aria-label="Resource type filter">
+                <div role="group" class="access-switch" aria-label="Resource type filter">
                   <button class="is-active" type="button" data-access="all" aria-pressed="true">All</button>
                   <button type="button" data-access="direct" aria-pressed="false">Service sites</button>
                   <button type="button" data-access="discovery" aria-pressed="false">Resource finders</button>
@@ -498,7 +511,7 @@ function shell() {
               <p>Every listing is still available as text, with the same contact details, sources and review dates.</p>
               <div class="globe-fallback__actions"><a class="globe-fallback__action" href="/directory">Open the text directory</a><button class="globe-fallback__retry" id="retryGlobe" type="button" hidden>Try the interactive map again</button></div>
             </div>
-            <div class="globe-controls" aria-label="Globe controls">
+            <div role="group" class="globe-controls" aria-label="Globe controls">
               <button class="globe-compass" id="northGlobe" type="button" title="Orient north" aria-label="Orient globe north"><span>N</span><i></i></button>
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">${icon.plus}</button>
               <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">${icon.minus}</button>
@@ -506,7 +519,7 @@ function shell() {
               <button type="button" id="toggleMotion" title="Resume globe rotation" aria-label="Resume globe rotation">${icon.play}</button>
             </div>
             <div class="globe-readout" id="globeReadout" aria-live="polite"></div>
-            <div class="globe-legend" id="globeLegend" aria-label="Visible aid layers"></div>
+            <div class="globe-legend" id="globeLegend"></div>
             <p class="globe-gesture-hint" aria-hidden="true">Drag to rotate · Double-click, pinch or + / − to zoom</p>
           </section>
 
@@ -529,7 +542,7 @@ function shell() {
           </div>
           <p id="savedStorageStatus" role="status" hidden></p>
           <div class="resource-list-head" aria-hidden="true"><span>Service</span><span>Location</span><span>Help offered</span><span>Access</span><span>Checked</span><span></span></div>
-          <div class="resource-grid resource-list" id="resourceGrid" aria-label="Available aid directory"></div>
+          <div class="resource-grid resource-list" id="resourceGrid"></div>
           <div class="results-actions"><button class="outline-button outline-button--dark" type="button" id="showMoreResults" hidden>Show more resources</button></div>
         </div>
       </section>
@@ -594,6 +607,8 @@ function notify(message) {
 function finderHistorySnapshot() {
   return {
     query: state.query,
+    place: state.place,
+    postalArea: finderIntentControls?.snapshot() || null,
     accessMode: state.accessMode,
     activeTypes: [...state.activeTypes],
     savedOnly: state.savedOnly,
@@ -623,6 +638,10 @@ function restoreFinderHistory(historyState) {
     return;
   }
   state.query = sanitizeFinderQuery(snapshot?.query);
+  state.place = sanitizeFinderQuery(snapshot?.place);
+  finderIntentControls?.restore(snapshot?.postalArea);
+  const placeInput = document.getElementById("resourcePlace");
+  if (placeInput) placeInput.value = state.place;
   state.accessMode = finderAccessFromHistory(snapshot?.accessMode);
   state.activeTypes = finderTypesFromHistory(snapshot?.activeTypes);
   state.savedOnly = Boolean(snapshot?.savedOnly);
@@ -652,6 +671,7 @@ function renderStatic() {
 
 function kindLabel(resource) {
   if (isContactOnly(resource)) return contactOnlyLabel;
+  if (resource.serviceAccess) return "Service access routes";
   if (resource.kind === "direct") return "Service location";
   if (resource.kind === "locator") return "Resource finder";
   return "Service network";
@@ -659,8 +679,11 @@ function kindLabel(resource) {
 
 function updateFilters() {
   wakeGlobe();
+  const intent = resolveSearchIntent(state.query, state.place, finderIntentControls?.snapshot());
+  const searchQuery = intent.query;
+  finderIntentControls?.render();
   const base = state.viewMode === "aid"
-    ? availableResources().filter((resource) => matchesResource(resource, state.query, state.activeTypes))
+    ? availableResources().filter((resource) => matchesResource(resource, searchQuery, state.activeTypes) && resourceMatchesIntent(resource, intent))
     : [];
   let accessFiltered = base.filter((resource) => {
     if (state.accessMode === "direct") return resource.kind === "direct";
@@ -670,10 +693,18 @@ function updateFilters() {
   if (state.savedOnly) accessFiltered = accessFiltered.filter((resource) => state.savedIds.has(resource.id));
 
   state.filtered = state.userLocation
-    ? rankResourcesForLocation(accessFiltered, state.userLocation, state.userCountry, state.query)
-    : state.query
-      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, state.query) - resourceSearchScore(a, state.query) || a.name.localeCompare(b.name))
+    ? rankResourcesForLocation(accessFiltered, state.userLocation, state.userCountry, searchQuery)
+    : searchQuery
+      ? [...accessFiltered].sort((a, b) => resourceSearchScore(b, searchQuery) - resourceSearchScore(a, searchQuery) || a.name.localeCompare(b.name))
       : accessFiltered;
+  const geographyHint = document.getElementById("searchGeographyHint");
+  if (geographyHint) {
+    const choices = searchGeographyChoices(state.filtered, searchQuery);
+    geographyHint.hidden = choices.length < 2;
+    geographyHint.textContent = choices.length < 2 ? "" : choices.some(choice => choice.countryMatch)
+      ? `This place name may mean ${choices.map(choice => choice.countryMatch ? `the country ${choice.country}` : `${choice.city}, ${choice.country}`).join(" or ")}. Add a country or region to narrow the results.`
+      : `${choices[0].city} has listings in ${choices.map(choice => choice.country).join(" and ")}. Add a country or region to narrow the results.`;
+  }
   state.visibleResults = initialResultCount();
   state.clusterIds = [];
 
@@ -890,53 +921,56 @@ function renderResourcePanel() {
   const live = resource.verificationMethod === "live-official-feed";
   const freeModel = freeAccessModels[resource.costModel];
   const contactOnly = isContactOnly(resource);
-  const actionUrl = resource.accessUrl || resource.providerUrl || resource.sourceUrl;
+  const actionUrl = safeExternalUrl(resource.accessUrl || resource.providerUrl || resource.sourceUrl);
+  const sourceUrl = safeExternalUrl(resource.sourceUrl);
+  const accessActions = resource.serviceAccess ? serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google" }) : null;
   const sourceAction = contactOnly ? "Open contact website" : resource.providerUrl ? "Visit organization website" : physical ? "Visit service website" : "Find a local service";
   panel.style.setProperty("--accent", category.color);
   panel.innerHTML = `
     <div class="panel-source"><span class="panel-source__verification">${icon.check} ${live ? "Current agency data" : "Source checked"}<b>· ${freeAccessLabel(resource, true)}</b></span><span class="panel-source__actions"><a href="#standards">Review process ${icon.arrow}</a><button id="closeInspector" type="button" title="Close service details" aria-label="Close service details">${icon.close}</button></span></div>
-    <div class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
-    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${resource.name}</h2><p>${formatResourcePlace(resource)}</p></div></div>
+    <div role="group" class="panel-navigation" aria-label="Move through matching resources"><button id="previousResource" type="button" ${previous ? "" : "disabled"} aria-label="Previous matching resource">${icon.arrow}</button><span>${resourceIndex + 1} of ${state.filtered.length}</span><button id="nextResource" type="button" ${next ? "" : "disabled"} aria-label="Next matching resource">${icon.arrow}</button></div>
+    <div class="panel-title"><span class="panel-pin">${icon.pin}</span><div><h2 id="resourcePanelHeading" tabindex="-1">${escapeHtml(resource.name)}</h2><p>${escapeHtml(formatResourcePlace(resource))}</p></div></div>
     ${sourceClosureMarkup(resource)}
-    <p class="panel-precision ${physical ? "is-exact" : "is-coverage"}">${contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : addressOnly ? `${icon.check}<span><strong>Service location</strong>. Directions use the reviewed street address. No map pin or distance is shown.</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
-    <p class="panel-summary">${resource.summary}</p>
+    <p class="panel-precision ${physical ? "is-exact" : "is-coverage"}">${Object.hasOwn(resource, "serviceAccess") ? `${icon.info}<span>${escapeHtml(serviceAccessNotice(resource))}</span>` : contactOnly ? `${icon.info}<span>${contactOnlyNotice(resource)}</span>` : addressOnly ? `${icon.check}<span><strong>Service location</strong>. Directions use the reviewed street address. No map pin or distance is shown.</span>` : exact ? `${icon.check}<span><strong>Service location</strong> — directions use the published street address.</span>` : `${icon.info}<span><strong>Resource finder</strong> — this marker shows the area served, not a place to walk in.</span>`}</p>
+    <p class="panel-summary">${escapeHtml(resource.summary)}</p>
     <div class="service-tags">${serviceLayerTags(resource)}</div>
     <details class="panel-detail-disclosure" ${window.innerWidth > 1220 ? "open" : ""}>
       <summary><strong>Service details</strong><span>Cost, contact, and eligibility</span><i>${icon.plus}</i></summary>
       <div class="panel-detail-content">
         <dl class="panel-facts">
-          <div><dt>Access</dt><dd>${resource.accessType}</dd></div>
-          <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${resource.costNote}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
-          <div><dt>${physical ? "Address" : "Coverage"}</dt><dd>${resource.address}</dd></div>
-          ${resource.hours ? `<div><dt>Hours</dt><dd>${resource.hours}</dd></div>` : ""}
+          <div><dt>Access</dt><dd>${escapeHtml(resource.accessType)}</dd></div>
+          <div><dt>Cost</dt><dd><strong class="free-cost">${freeAccessLabel(resource)}</strong><span class="cost-note">${escapeHtml(resource.costNote)}</span>${freeModel ? `<small class="cost-scope">${freeModel.description}</small>` : ""}</dd></div>
+          <div><dt>${resource.serviceAccess ? "Reference address" : physical ? "Address" : "Coverage"}</dt><dd>${escapeHtml(resource.address)}</dd></div>
+          ${resource.serviceAccess ? `<div><dt>Service access</dt><dd>${escapeHtml(serviceAccessSummary(resource))}</dd></div>` : ""}
+          ${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}
           ${resource.phone ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>` : ""}
-          ${contactOnly && resource.phoneAccess ? `<div><dt>Dialing scope</dt><dd>${resource.phoneAccess}</dd></div>` : ""}
-          ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${resource.eligibility}</dd></div>` : ""}
+          ${contactOnly && resource.phoneAccess ? `<div><dt>Dialing scope</dt><dd>${escapeHtml(resource.phoneAccess)}</dd></div>` : ""}
+          ${resource.eligibility ? `<div><dt>Eligibility</dt><dd>${escapeHtml(resource.eligibility)}</dd></div>` : ""}
           ${resource.validFrom && resource.validThrough ? `<div><dt>Active dates</dt><dd>${checkedDate(resource.validFrom)}–${checkedDate(resource.validThrough)}</dd></div>` : ""}
-          ${state.userLocation && exact ? `<div><dt>Distance</dt><dd>${distanceLabel(resource)}</dd></div>` : ""}
-          ${!exact && resource.coverageNote ? `<div><dt>${contactOnly ? "Coverage limits" : "Map note"}</dt><dd>${resource.coverageNote}</dd></div>` : ""}
+          ${state.userLocation && exact && !resource.serviceAccess ? `<div><dt>Distance</dt><dd>${escapeHtml(distanceLabel(resource))}</dd></div>` : ""}
+          ${!exact && resource.coverageNote ? `<div><dt>${contactOnly ? "Coverage limits" : "Map note"}</dt><dd>${escapeHtml(resource.coverageNote)}</dd></div>` : ""}
         </dl>
-        <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${service}</span></li>`).join("")}</ul></div>
+        <div class="panel-services"><h3>Services offered</h3><ul>${resource.services.map((service) => `<li>${icon.check}<span>${escapeHtml(service)}</span></li>`).join("")}</ul></div>
       </div>
     </details>
-    <div class="availability-note"><span>${icon.info}</span><p><strong>${contactOnly ? "Check before contacting" : "Confirm before you go"}</strong>${availabilityInstructions(resource)}</p></div>
-    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${resource.sourceName}</strong> · ${resource.sourceKind} · ${kindLabel(resource)}</p><p>${resource.sourceDetail}</p>${!contactOnly && resource.coordinateNote ? `<p>${resource.coordinateNote}</p>` : ""}${resource.providerUrl ? `<p><a href="${resource.sourceUrl}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${resource.lastChecked}">${checkedDate(resource.lastChecked)}</time></p></details>
+    <div class="availability-note"><span>${icon.info}</span><p><strong>${contactOnly ? "Check before contacting" : "Confirm before you go"}</strong>${escapeHtml(availabilityInstructions(resource))}</p></div>
+    <details class="panel-source-note"><summary>Where this information came from</summary><p><strong>${escapeHtml(resource.sourceName)}</strong> · ${escapeHtml(resource.sourceKind)} · ${kindLabel(resource)}</p><p>${escapeHtml(resource.sourceDetail)}</p>${!contactOnly && resource.coordinateNote ? `<p>${escapeHtml(resource.coordinateNote)}</p>` : ""}${resource.providerUrl && sourceUrl ? `<p><a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">View the original public data ${icon.external}</a></p>` : ""}<p>${live ? "Updated" : "Last checked"} <time datetime="${escapeHtml(resource.lastChecked)}">${checkedDate(resource.lastChecked)}</time></p></details>
     <div class="panel-actions panel-actions--primary">
-      ${physical ? `<a class="primary-button" href="${directionsUrl(resource)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
-      <a class="secondary-button" href="${actionUrl}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>
+      ${Object.hasOwn(resource, "serviceAccess") ? (accessActions || []).map(action => `<a class="primary-button" href="${escapeHtml(action.href)}" target="_blank" rel="noopener noreferrer">${icon.route}<span>${escapeHtml(action.label)}</span></a>`).join("") : physical ? `<a class="primary-button" href="${escapeHtml(directionsUrl(resource))}" target="_blank" rel="noopener noreferrer">${icon.route}<span>Directions</span></a>` : ""}
+      ${actionUrl ? `<a class="secondary-button" href="${escapeHtml(actionUrl)}" target="_blank" rel="noopener noreferrer">${sourceAction} ${icon.external}</a>` : '<span class="secondary-button">Official website unavailable</span>'}
     </div>
-    ${physical ? `<div class="panel-map-actions"><a href="${appleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${googleMapsUrl(resource)}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
+    ${physical && !Object.hasOwn(resource, "serviceAccess") ? `<div class="panel-map-actions"><a href="${escapeHtml(appleMapsUrl(resource))}" target="_blank" rel="noopener noreferrer">Apple Maps</a><a href="${escapeHtml(googleMapsUrl(resource))}" target="_blank" rel="noopener noreferrer">Google Maps</a></div>` : ""}
     <div class="panel-utilities">
       ${live ? "" : `<button type="button" id="saveResource" ${state.savedStorageUnavailable ? 'disabled aria-label="Saving unavailable" aria-describedby="savedStorageStatus"' : `aria-label="${saved ? "Remove saved service" : "Save service"}" aria-pressed="${saved}"`}>${icon.bookmark}<span>${state.savedStorageUnavailable ? "Save unavailable" : saved ? "Saved" : "Save"}</span></button>`}
       <button type="button" id="shareResource" aria-label="Share service">${icon.share}<span>Share</span></button>
-      <button type="button" id="copyAddress" aria-label="${physical ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${physical ? "Copy address" : "Copy coverage"}</span></button>
+      <button type="button" id="copyAddress" aria-label="${resource.serviceAccess ? "Copy service access" : physical ? "Copy address" : "Copy coverage"}">${icon.copy}<span>${resource.serviceAccess ? "Copy service access" : physical ? "Copy address" : "Copy coverage"}</span></button>
     </div>
   `;
 
   document.getElementById("copyAddress")?.addEventListener("click", async () => {
     try {
-      await copyText(resource.address);
-      notify(physical ? "Address copied" : "Coverage copied");
+      await copyText(resource.serviceAccess ? serviceAccessSummary(resource) : resource.address);
+      notify(resource.serviceAccess ? "Service access copied" : physical ? "Address copied" : "Coverage copied");
     } catch {
       notify(`${physical ? "The address" : "The coverage"} could not be copied. Select and copy it from Service details.`);
     }
@@ -963,19 +997,19 @@ function resourceCard(resource) {
   const category = categories[resource.category];
   const selected = resource.id === state.selectedId;
   const aidLabels = allTypes(resource).map((type) => categories[type].label).join(" · ");
-  const listingType = isContactOnly(resource) ? contactOnlyLabel : resource.locationPrecision === "address" || isExactServiceSite(resource) ? "Service location" : "Resource finder";
-  const sourcePrefix = resource.sourceName === resource.name ? "" : `${resource.sourceName} · `;
+  const listingType = resource.serviceAccess ? "Service access routes" : isContactOnly(resource) ? contactOnlyLabel : resource.locationPrecision === "address" || isExactServiceSite(resource) ? "Service location" : "Resource finder";
+  const sourcePrefix = resource.sourceName === resource.name ? "" : `<span data-provider-text lang="en">${escapeHtml(resource.sourceName)}</span> · `;
   const costLabel = freeAccessLabel(resource, true);
   const costSuffix = costLabel === listingType ? "" : ` · <b>${costLabel}</b>`;
   const openAccess = resource.openAccess === true ? `<em class="resource-row__open-access">Open access</em>` : "";
   return `
     <article class="resource-card resource-row ${selected ? "is-selected" : ""}" style="--accent:${category.color}">
-      <button type="button" data-resource-id="${resource.id}">
-        <span class="resource-row__service"><i></i><span><strong>${resource.name}</strong><small>${sourcePrefix}${listingType}${costSuffix}${openAccess}</small></span></span>
-        <span class="resource-row__place">${formatResourcePlace(resource)}</span>
+      <button type="button" data-resource-id="${escapeHtml(resource.id)}">
+        <span class="resource-row__service"><i></i><span><strong data-provider-text lang="en">${escapeHtml(resource.name)}</strong><small>${sourcePrefix}<span data-interface-text>${listingType}</span>${costSuffix}${openAccess}</small></span></span>
+        <span class="resource-row__place" data-provider-text lang="en">${escapeHtml(formatResourcePlace(resource))}</span>
         <span class="resource-row__aid">${aidLabels}</span>
-        <span class="resource-row__access">${locationResultLabel(resource)}</span>
-        <time class="resource-row__reviewed" datetime="${resource.lastChecked}">${reviewLabel(resource)}</time>
+        <span class="resource-row__access" lang="en" data-provider-text>${escapeHtml(locationResultLabel(resource))}</span>
+        <time class="resource-row__reviewed" datetime="${escapeHtml(resource.lastChecked)}">${reviewLabel(resource)}</time>
         <span class="resource-row__arrow">${icon.arrow}</span>
       </button>
       ${sourceClosureMarkup(resource)}
@@ -1111,7 +1145,7 @@ async function shareResource(resource) {
 }
 
 function downloadDirectory() {
-  const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source"];
+  const fields = ["Name", "City", "Country", "Type", "Aid", "Access", "Cost", "Address or coverage", "Reviewed", "Official source", "Service access"];
   const includeContact = state.filtered.some(isContactOnly);
   if (includeContact) fields.push("Location precision", "Coverage details", "Eligibility", "Phone", "Phone dialing scope", "Online access");
   const rows = state.filtered.map((resource) => [
@@ -1125,6 +1159,7 @@ function downloadDirectory() {
     resource.address,
     resource.lastChecked,
     resource.sourceUrl,
+    serviceAccessSummary(resource),
     ...(includeContact ? [resource.locationPrecision, resource.coverageNote, resource.eligibility, resource.phone, resource.phoneAccess, resource.accessUrl] : [])
   ]);
   const csv = [fields, ...rows].map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
@@ -1208,6 +1243,10 @@ function clearFinderFilters({ focus = true, historyMode = "push" } = {}) {
   cancelPendingSearch();
   clearUserLocation();
   state.query = "";
+  state.place = "";
+  finderIntentControls?.restore(null);
+  const placeInput = document.getElementById("resourcePlace");
+  if (placeInput) placeInput.value = "";
   state.accessMode = "all";
   state.activeTypes = createInitialTypeSet();
   state.savedOnly = false;
@@ -1354,6 +1393,8 @@ function createGlobeTexture() {
 }
 
 function loadEarthImagery() {
+  if (earthTextureImage || earthTextureRequested) return;
+  earthTextureRequested = true;
   const image = new Image();
   image.decoding = "async";
   image.onload = () => {
@@ -1364,6 +1405,10 @@ function loadEarthImagery() {
       globeSurface.material.roughness = 0.94;
     }
     refreshGlobeSurface();
+  };
+  image.onerror = () => {
+    earthTextureRequested = false;
+    console.warn("Earth imagery could not be loaded; aid locations remain available.");
   };
   image.src = "/media/earth-blue-marble.jpg";
 }
@@ -1826,6 +1871,8 @@ function recoverGlobeContext() {
       reportGlobeUnavailable("The interactive map is still unavailable. You can keep using the text directory.", true);
       return;
     }
+    loadEarthImagery();
+    loadLandGeometry();
     rebuildCountryBorders();
     syncGlobePointLayer();
     wakeGlobe();
@@ -1965,10 +2012,10 @@ function renderPins(width, height, now = performance.now()) {
       const key = cluster.members.map((item) => item.id).join(",");
       const kinds = [...new Set(cluster.members.map(kindLabel))].join(" and ");
       if (clustered) {
-        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${key}" data-cluster-ids="${key}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped listings"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} listings in this area<small>${kinds}</small></strong></button>`;
+        return `<button class="globe-pin globe-cluster" type="button" data-globe-key="${escapeHtml(key)}" data-cluster-ids="${escapeHtml(key)}" style="--pin:${color};--pin-glow:${glow}" aria-label="Explore ${cluster.members.length} grouped listings"><span><b>${cluster.members.length}</b></span><strong>${cluster.members.length} listings in this area<small>${kinds}</small></strong></button>`;
       }
       const discoveryClass = resource.kind === "direct" ? "is-direct" : "is-discovery";
-      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${key}" data-pin-id="${resource.id}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${resource.name}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${resource.name}<small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Listed service location" : kindLabel(resource)}</small></strong></button>`;
+      return `<button class="globe-pin ${discoveryClass} ${resource.id === selected?.id ? "is-selected" : ""}" type="button" data-globe-key="${escapeHtml(key)}" data-pin-id="${escapeHtml(resource.id)}" style="--pin:${color};--pin-glow:${glow}" aria-label="Select ${escapeHtml(resource.name)}, ${kindLabel(resource)}" aria-current="${resource.id === selected?.id ? "true" : "false"}"><span></span><strong>${escapeHtml(resource.name)}<small>${escapeHtml(formatResourcePlace(resource))} · ${isExactServiceSite(resource) ? "Listed service location" : kindLabel(resource)}</small></strong></button>`;
     }).join("");
     pinElements = new Map([...layer.querySelectorAll("[data-globe-key]")].map((button) => [button.dataset.globeKey, button]));
     pinSignature = signature;
@@ -2025,11 +2072,11 @@ function updateGlobeReadout(now = performance.now()) {
     ? "detailed + HD NASA"
     : state.detailGeometryReady ? "high-detail boundaries" : "standard boundaries";
   const content = state.focusedRegion
-    ? `<strong>${state.focusedRegion}</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`
+    ? `<strong>${escapeHtml(state.focusedRegion)}</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`
     : hasMapCoordinates(resource) && state.focusPoint
-    ? `<strong>${resource.country === "Global" ? resource.region : resource.country}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
+    ? `<strong>${escapeHtml(resource.country === "Global" ? resource.region : resource.country)}</strong><span>${formatCoordinate(resource.lat, "N", "S")}, ${formatCoordinate(resource.lng, "E", "W")} · ${zoomLabel}</span>`
     : state.focusedCountry && state.focusPoint
-      ? `<strong>${state.focusedCountry}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
+      ? `<strong>${escapeHtml(state.focusedCountry)}</strong><span>${formatCoordinate(state.focusPoint.lat, "N", "S")}, ${formatCoordinate(state.focusPoint.lng, "E", "W")} · ${zoomLabel}</span>`
     : `<strong>World view</strong><span>${state.filtered.filter(hasMapCoordinates).length} visible · ${zoomLabel} · ${detailLabel}</span>`;
   if (readout.innerHTML !== content) readout.innerHTML = content;
 }
@@ -2082,7 +2129,9 @@ function pauseGlobe() {
 }
 
 function wakeGlobe(resetClock = true) {
-  if (globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
+  // Finder events can arrive while the optional engine is still loading.
+  // A missing renderer is not a WebGL failure until startup has concluded.
+  if (!globeRenderer || globeFrameHandle !== null || globeContextLost || !state.globeVisible || document.hidden) return;
   // Reset only when waking from rest; moving frames include rendering time.
   if (resetClock) lastFrame = performance.now();
   globeFrameHandle = window.requestAnimationFrame((now) => {
@@ -2193,8 +2242,8 @@ function renderClusterTray() {
   tray.innerHTML = `
     <div class="globe-cluster-tray__heading"><div><strong>${members.length} listings here</strong><span>Choose a service or resource finder</span></div><button type="button" data-close-cluster aria-label="Close grouped listings">${icon.close}</button></div>
     <div class="globe-cluster-tray__list">${visible.map((resource) => `
-      <button type="button" data-cluster-resource="${resource.id}" style="--cluster-accent:${categories[resource.category].color}">
-        <i></i><span><strong>${resource.name}</strong><small>${formatResourcePlace(resource)} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"}</small></span>${icon.arrow}
+      <button type="button" data-cluster-resource="${escapeHtml(resource.id)}" style="--cluster-accent:${categories[resource.category].color}">
+        <i></i><span><strong>${escapeHtml(resource.name)}</strong><small>${escapeHtml(formatResourcePlace(resource))} · ${isExactServiceSite(resource) ? "Exact site" : "Official locator"}</small></span>${icon.arrow}
       </button>
     `).join("")}</div>
     ${members.length > visible.length ? `<p>${members.length - visible.length} more become visible as you zoom closer.</p>` : ""}
@@ -2350,7 +2399,7 @@ function selectCountryFromPointer(event) {
 }
 
 async function loadDetailGeometry() {
-  if (state.detailGeometryRequested) return;
+  if (!globeRenderer || state.detailGeometryRequested) return;
   state.detailGeometryRequested = true;
   const status = document.getElementById("globeDetailStatus");
   if (navigator.connection?.saveData) {
@@ -2370,27 +2419,46 @@ async function loadDetailGeometry() {
   }
 }
 
-async function loadLandGeometry() {
-  try {
-    const response = await fetch("/data/countries.geojson");
-    if (!response.ok) throw new Error(`Map data returned ${response.status}`);
-    const data = await response.json();
-    state.countryFeatures = data.features;
-    state.landRings = data.features.flatMap((feature) => extractRings(feature.geometry));
-    rebuildCountryBorders();
-    updateGlobeLandMask();
-    wakeGlobe();
-    if (state.userLocation && !state.userCountry) {
-      const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
-      state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
-      updateFilters();
+function loadLandGeometry() {
+  if (landGeometryReady) return Promise.resolve(true);
+  if (landGeometryPromise) return landGeometryPromise;
+  // Location lookup and map recovery share one request. Bound a stalled body as
+  // well as its headers so explicit location still works when map data is down.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  landGeometryPromise = (async () => {
+    try {
+      const response = await fetch("/data/countries.geojson", { signal: controller.signal });
+      if (!response.ok) throw new Error(`Map data returned ${response.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data.features) || !data.features.length) throw new Error("Map data has no country features");
+      const rings = data.features.flatMap((feature) => extractRings(feature.geometry));
+      state.countryFeatures = data.features;
+      state.landRings = rings;
+      landGeometryReady = true;
+      if (globeRenderer) {
+        rebuildCountryBorders();
+        updateGlobeLandMask();
+        wakeGlobe();
+      }
+      if (state.userLocation && !state.userCountry) {
+        const feature = countryAtCoordinate(state.userLocation.lat, state.userLocation.lng);
+        state.userCountry = feature ? resourceCountryForFeature(feature.properties.NAME) : null;
+        updateFilters();
+      }
+      const resource = selectedResource();
+      if (resource && state.focusPoint) focusGlobeOn(resource);
+      return true;
+    } catch (error) {
+      console.error("Natural Earth geometry could not be loaded.", error);
+      notify("Base map could not be loaded; aid locations remain available.");
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      landGeometryPromise = null;
     }
-    const resource = selectedResource();
-    if (resource && state.focusPoint) focusGlobeOn(resource);
-  } catch (error) {
-    console.error("Natural Earth geometry could not be loaded.", error);
-    notify("Base map could not be loaded; aid locations remain available.");
-  }
+  })();
+  return landGeometryPromise;
 }
 
 function bindEvents() {
@@ -2495,6 +2563,35 @@ function bindEvents() {
     document.getElementById("clearSearch").hidden = !searchInput.value;
     scheduleSearchFilter(sanitizeFinderQuery(searchInput.value));
   };
+  const placeInput = document.getElementById("resourcePlace");
+  let placeComposing = false;
+  const applyIntent = async () => {
+    if (placeComposing || composingSearch) return;
+    // A newly entered place supersedes even an unfinished device request.
+    // Cancel before awaiting preparation so late permission/provider callbacks
+    // cannot replace the visitor's more recent manual choice.
+    const manualPlace = sanitizeFinderQuery(placeInput.value);
+    if ((manualPlace || finderIntentControls?.plan().area) &&
+        (state.userLocation || document.getElementById("locateMe")?.classList.contains("is-loading"))) clearUserLocation();
+    const revision = ++searchRevision;
+    searchPreparation.prioritize();
+    await searchPreparation.ready;
+    if (revision !== searchRevision) return;
+    state.query = pendingSearchValue = sanitizeFinderQuery(searchInput.value);
+    state.place = manualPlace;
+    updateFilters();
+    writeFinderHistory("push");
+  };
+  if (placeInput) {
+  finderIntentControls = mountSearchIntentControls({container: searchInput.closest(".finder-search"), queryInput: searchInput, placeInput, onChange: applyIntent});
+  finderIntentControls.restore(initialFinderHistory?.postalArea);
+  finderIntentControls.render();
+  if (initialFinderHistory?.postalArea) updateFilters();
+  placeInput.addEventListener("compositionstart", () => { placeComposing = true; searchRevision += 1; });
+  placeInput.addEventListener("compositionend", () => { placeComposing = false; applyIntent(); });
+  placeInput.addEventListener("input", event => { if (!event.isComposing) applyIntent(); });
+  placeInput.addEventListener("keydown", event => { if (event.key === "Enter" && !event.isComposing) applyIntent(); });
+  }
   searchInput.addEventListener("compositionstart", () => {
     const wasPreparing = preparationNoticeTimer !== null;
     cancelPendingSearch();
@@ -2525,6 +2622,7 @@ function bindEvents() {
     updateFilters();
     writeFinderHistory("push");
   });
+  searchInput.addEventListener("focus", () => searchPreparation.prioritize());
   searchInput.addEventListener("blur", commitPendingSearch);
   document.getElementById("clearSearch").addEventListener("click", () => {
     cancelPendingSearch();
@@ -2670,6 +2768,9 @@ function bindEvents() {
     button.classList.add("is-loading");
     button.innerHTML = `${icon.locate}<span>Finding your location…</span>`;
     navigator.geolocation.getCurrentPosition(async (position) => {
+      if (requestGeneration !== locationRequestGeneration) return;
+      // Fallback search needs country boundaries only after location is granted.
+      await loadLandGeometry();
       if (requestGeneration !== locationRequestGeneration) return;
       state.userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.userLocationAccuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
@@ -3100,17 +3201,47 @@ function bindEvents() {
 
 }
 
+export async function startGlobe() {
+  document.documentElement.dataset.globeStartup = "loading";
+  try {
+    const engine = await loadGlobeEngine(document.getElementById("globeCanvas"));
+    if (!engine) {
+      reportGlobeUnavailable();
+      document.documentElement.dataset.globeStartup = "unavailable";
+      return;
+    }
+    THREE = engine.THREE;
+    ({ createGlobePointLayer, replaceGlobePointResources, updateGlobePointLayer } = engine.points);
+    globeRaycaster = new THREE.Raycaster();
+    globePointerNdc = new THREE.Vector2();
+    globeProjectionVector = new THREE.Vector3();
+    globeInverseWorldMatrix = new THREE.Matrix4();
+    if (!initThreeGlobe()) {
+      document.documentElement.dataset.globeStartup = "unavailable";
+      return;
+    }
+    loadEarthImagery();
+    loadLandGeometry();
+    if (requestedResource && requestedResource === initialResource) {
+      const resource = resources.find((item) => item.id === requestedResource);
+      if (resource) focusGlobeOn(resource);
+    }
+    wakeGlobe();
+    document.documentElement.dataset.globeStartup = "ready";
+  } catch (error) {
+    console.warn("Interactive map could not load; the text finder remains available.", error);
+    reportGlobeUnavailable();
+    document.documentElement.dataset.globeStartup = "unavailable";
+  }
+}
+
 shell();
 renderStatic();
 updateFilters();
 const searchPreparation = warmSearchIndex(resources);
+// Start bounded active slices after the finder can paint, so optional map work
+// does not postpone essential text-search preparation until the first keypress.
+requestAnimationFrame(() => searchPreparation.prioritize());
 bindEvents();
 writeFinderHistory();
-initThreeGlobe();
-loadEarthImagery();
-loadLandGeometry();
-if (requestedResource && requestedResource === initialResource) {
-  const resource = resources.find((item) => item.id === requestedResource);
-  if (resource) focusGlobeOn(resource);
-}
-wakeGlobe();
+// Bootstrap starts optional graphics after the enhanced finder has painted.

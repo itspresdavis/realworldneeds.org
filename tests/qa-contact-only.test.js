@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, stat, symlink } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, stat, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import vm from "node:vm";
@@ -93,8 +94,22 @@ test("fixture failure evidence includes bounded document context without capturi
 test("full isolated fixture build has complete homepage exports, local-only labels and a static loopback server", { timeout: 60_000 }, async () => {
   const tracked = ["src/data/resources.js", "src/data/live-sources.js", "dist/data/resources.json", "dist/data/map-index.json", "dist/data/search-index.json", "dist/index.html"];
   const before = await Promise.all(tracked.map(digest));
-  const app = await createContactFixtureApp();
+  // Force a symlinked temporary parent on Linux too, matching macOS /tmp.
+  const tempParent = await mkdtemp(join(tmpdir(), "rwn-fixture-parent-"));
+  const tempAlias = join(tempParent, "linked");
+  await symlink(tempParent, tempAlias, "dir");
+  const originalTmpdir = process.env.TMPDIR;
+  let app;
   try {
+    process.env.TMPDIR = tempAlias;
+    app = await createContactFixtureApp();
+  } finally {
+    if (originalTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = originalTmpdir;
+    if (!app) await rm(tempParent, { recursive: true, force: true });
+  }
+  try {
+    assert.equal(app.directory, await realpath(app.directory), "fixture root must use canonical paths without weakening containment");
     assert.match(app.host, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.ok(!app.directory.startsWith(process.cwd()));
     const fixtureModule = await import(pathToFileURL(join(app.directory, "src/data/resources.js")));
@@ -134,7 +149,7 @@ test("full isolated fixture build has complete homepage exports, local-only labe
     await symlink(join(app.directory, "package.json"), join(app.dist, "outside-dist.json"));
     assert.equal((await fetch(`${app.host}/outside-dist.json`)).status, 400);
     assert.equal((await fetch(`${app.host}/package.json`)).status, 404);
-  } finally { await app.cleanup(); }
+  } finally { await app.cleanup(); await rm(tempParent, { recursive: true, force: true }); }
   await app.cleanup();
   await assert.rejects(stat(app.directory), { code: "ENOENT" });
   assert.deepEqual(await Promise.all(tracked.map(digest)), before, "fixture generation must not modify the source catalog or shared production dist");

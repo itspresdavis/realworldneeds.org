@@ -25,7 +25,8 @@ function storage() {
       const files = entries.get(name);
       return {
         async put(request, response) { if (failPut) throw new Error("Quota exceeded"); files.set(request.url, response.clone()); },
-        async match(request) { return files.get(request.url)?.clone(); }
+        async match(request) { return files.get(request.url)?.clone(); },
+        async delete(request) { return files.delete(request.url); }
       };
     }
   };
@@ -164,4 +165,58 @@ test("a cache write already in flight cannot finish after and overwrite the newe
   await Promise.all([first, second]);
   const cache = await caches.open("rwn-offline-new");
   assert.equal(await (await cache.match(new Request(indexUrl))).text(), catalogText("current-only"));
+});
+
+for (const status of [401, 403, 404, 410]) test("authoritative catalog denial/removal HTTP " + status + " retires the cached index", async () => {
+  const caches = storage(), cache = await caches.open("rwn-offline-new");
+  await cache.put(new Request(indexUrl), new Response(catalogText("withdrawn")));
+  let mode = "removed";
+  const next = worker("new", caches, async () => {
+    if (mode === "offline") throw Error("Offline");
+    return mode === "fresh" ? new Response(catalogText("current")) : new Response("Removed", { status });
+  });
+  assert.equal((await next.request()).status, status);
+  assert.equal(await cache.match(new Request(indexUrl)), undefined);
+  mode = "offline";
+  assert.equal((await next.request()).status, 503, "later transport failure cannot resurrect removed data");
+  mode = "fresh";
+  assert.equal(await (await next.request()).text(), catalogText("current"));
+});
+
+test("temporary catalog fallback is explicitly marked, without poisoning the stored or refreshed response", async () => {
+  const caches = storage(), cache = await caches.open("rwn-offline-new");
+  await cache.put(new Request(indexUrl), new Response(catalogText("saved"), { headers: { "Content-Type": "application/json", "Content-Length": "1", "Content-Encoding": "gzip" } }));
+  let failure = true;
+  const next = worker("new", caches, async () => failure ? new Response("Unavailable", { status: 503 }) : new Response(catalogText("fresh")));
+  const fallback = await next.request();
+  assert.equal(fallback.status, 200);
+  assert.equal(fallback.headers.get("X-RWN-Catalog-Cache"), "stale");
+  assert.equal(fallback.headers.get("Content-Length"), null);
+  assert.equal(fallback.headers.get("Content-Encoding"), null);
+  assert.equal(await fallback.text(), catalogText("saved"));
+  assert.equal((await cache.match(new Request(indexUrl))).headers.get("X-RWN-Catalog-Cache"), null);
+  failure = false;
+  const fresh = await next.request();
+  assert.equal(fresh.headers.get("X-RWN-Catalog-Cache"), null);
+  assert.equal(await fresh.text(), catalogText("fresh"));
+});
+
+test("withdrawal waits behind an already-started catalog write and cannot leave the old payload cached", async () => {
+  const caches = storage(), writing = deferred(), release = deferred();
+  const open = caches.open;
+  caches.open = async name => {
+    const cache = await open(name), put = cache.put;
+    cache.put = async (request, response) => { writing.resolve(); await release.promise; return put(request, response); };
+    return cache;
+  };
+  let attempt = 0;
+  const next = worker("new", caches, async () => ++attempt === 1 ? new Response(catalogText("old")) : new Response("Removed", { status: 410 }));
+  const old = next.request();
+  await writing.promise;
+  const removed = next.request();
+  await new Promise(setImmediate);
+  release.resolve();
+  await old;
+  assert.equal((await removed).status, 410);
+  assert.equal(await (await caches.open("rwn-offline-new")).match(new Request(indexUrl)), undefined);
 });

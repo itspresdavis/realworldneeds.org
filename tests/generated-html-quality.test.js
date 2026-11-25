@@ -30,7 +30,7 @@ test("every generated HTML document keeps a clean crawl/index structure", async 
     const html = await readFile(file, "utf8");
     const isNotFound = file.endsWith("/404.html") || file.endsWith("\\404.html") || file === "dist/404.html";
     const reviewedNoticeId = reviewedNoticeIds.find((id) => file === join("dist", "service", id, "index.html"));
-    const titles = captures(html, /<title>([\s\S]*?)<\/title>/gi);
+    const titles = captures(html, /<title\b[^>]*>([\s\S]*?)<\/title>/gi);
     const canonicals = captures(html, /<link\b[^>]*\brel=["']canonical["'][^>]*\bhref=["']([^"']+)["'][^>]*>/gi);
     const h1s = captures(html, /<h1\b[^>]*>([\s\S]*?)<\/h1>/gi);
     const ids = captures(html, /\bid=["']([^"']+)["']/gi);
@@ -51,9 +51,9 @@ test("every generated HTML document keeps a clean crawl/index structure", async 
       if (!html.includes(`data-rwn-service-notice="${reviewedNoticeId}"`)) failures.push(`${file}: missing reviewed notice marker`);
       if (!noindex) failures.push(`${file}: withheld location notice must be noindex`);
       if (canonicals.length !== 1 || canonicals[0] !== `https://www.realworldneeds.org/service/${reviewedNoticeId}`) failures.push(`${file}: invalid notice self-canonical`);
-    } else if (file === "dist/join.html") {
-      if (!noindex) failures.push(`${file}: account entry must be noindex`);
-      if (canonicals.length) failures.push(`${file}: account entry must not declare an indexable canonical`);
+    } else if (["dist/join.html", "dist/corrections.html"].includes(file)) {
+      if (!noindex) failures.push(`${file}: account/correction entry must be noindex`);
+      if (canonicals.length) failures.push(`${file}: account/correction entry must not declare an indexable canonical`);
     } else if (isNotFound) {
       if (!noindex) failures.push(`${file}: 404 must be noindex`);
       if (canonicals.length) failures.push(`${file}: 404 should not declare an indexable canonical`);

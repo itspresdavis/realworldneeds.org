@@ -26,8 +26,9 @@ test('matrix includes exact short-height widths, landscape, inclusive mobile bre
     assert.ok(PAGE_MENU_REFLOW_VIEWPORTS.some(viewport => viewport[0] === width && viewport[1] === height));
   }
   for (const viewport of [[568, 250], [900, 250], [390, 844]]) assert.ok(PAGE_MENU_REFLOW_VIEWPORTS.some(value => JSON.stringify(value) === JSON.stringify(viewport)));
-  assert.equal(PAGE_MENU_REFLOW_VIEWPORTS.length, 9);
-  assert.deepEqual(PAGE_MENU_REFLOW_LINKS.map(([href]) => href), ['/', '/directory', '/directory#saved', '/editorial-policy', '/sources', '/transparency']);
+  assert.ok(PAGE_MENU_REFLOW_VIEWPORTS.some(value => JSON.stringify(value) === '[320,422,false]'), 'Narrow desktop reflow must retain real scrollbars');
+  assert.equal(PAGE_MENU_REFLOW_VIEWPORTS.length, 10);
+  assert.deepEqual(PAGE_MENU_REFLOW_LINKS.map(([href]) => href), ['/', '/directory', '/directory#saved', '/about', '/editorial-policy', '/sources', '/transparency']);
 });
 
 test('strict document identity rejects stale contexts, wrong routes, blank/loading/error documents and wrong viewports', () => {
@@ -63,6 +64,9 @@ const mutations = [
   ['link-order', s => { s.links[2].href = '/directory'; }],
   ['link-order', s => { s.links.reverse(); }],
   ['link-order', s => { s.links.pop(); }],
+  ['link-order', s => { s.links.splice(3, 1); }],
+  ['link-order', s => { s.links[3] = { ...s.links[5] }; }],
+  ['link-order', s => { s.links[3].href = 'https://example.invalid/about'; }],
   ['link-order', s => { s.links[0].text = 'Find'; }],
   ['summary-unreachable', s => { s.summary.box.height = 43; }],
   ['summary-unreachable', s => { s.summary.hit = false; }],
@@ -114,16 +118,16 @@ test('baseline rule fixture fingerprint preserves the exact reviewed main declar
   assert.ok(PAGE_MENU_BASELINE_RULES.every(rule => !/max-height|scroll-padding|overscroll-behavior/.test(rule.declarations)));
 });
 
-function styleFixture() {
+function styleFixture(path = '/navigation-actions.css') {
   const rules = PAGE_MENU_BASELINE_RULES.map((entry, index) => ({ selectorText: entry.selector, style: { cssText: `fixed-rule-${index};max-height:154px;overflow:auto` } }));
-  const document = { styleSheets: [{ href: 'http://127.0.0.1:4175/navigation-actions.css?v=abc', cssRules: [rules[0], { conditionText: '(max-width: 900px)', cssRules: [rules[1]] }] }] };
+  const document = { styleSheets: [{ href: 'http://127.0.0.1:4175' + path + '?v=abc', cssRules: [rules[0], { conditionText: '(max-width: 900px)', cssRules: [rules[1]] }] }] };
   const context = vm.createContext({ document, URL });
   const run = (mode, fixture = PAGE_MENU_BASELINE_RULES) => vm.runInContext(`(${pageMenuBaselineStyle.toString()})(${JSON.stringify(mode)}, ${JSON.stringify(fixture)})`, context);
   return { rules, document, context, run };
 }
 
-test('baseline fixture replaces exact rules, removes added properties, and restores fixed declarations verbatim', () => {
-  const { rules, run, context } = styleFixture(), before = rules.map(rule => rule.style.cssText);
+for (const path of ['/navigation-actions.css', '/navigation-actions.012345abcdef.css']) test(`baseline fixture ${path} restores fixed declarations verbatim`, () => {
+  const { rules, run, context } = styleFixture(path), before = rules.map(rule => rule.style.cssText);
   const applied = run('apply');
   assert.equal(applied.length, 2);
   assert.deepEqual(rules.map(rule => rule.style.cssText), PAGE_MENU_BASELINE_RULES.map(rule => rule.declarations));
@@ -329,7 +333,7 @@ test('baseline keyboard motion must become quiet before wheel can claim separate
   const quiet = source.indexOf('const keyboard = await waitForPageMenuReflowQuiet');
   const wheel = source.indexOf('const pointer = await wheel(panel, 800');
   assert.ok(quiet >= 0 && wheel > quiet);
-  assert.match(source.slice(quiet, wheel), /pageMenuReflowIdentity\(state, baselineExpected\) && state.links\[5\].focused/);
+  assert.match(source.slice(quiet, wheel), /pageMenuReflowIdentity\(state, baselineExpected\) && state.links\.at\(-1\).focused/);
   assert.match(source.slice(wheel), /state.nav.scrollTop === 0 && state.scrollY > keyboard.scrollY/);
 });
 
@@ -434,7 +438,7 @@ test('summary arrival has its own quiet focus gate and invalid keyboard targets 
   const result = await waitForPageMenuFocus({ sample: async () => state, expected: expected(), target: 'summary',
     now: () => time, wait: async ms => { time += ms; } });
   assert.equal(result.summary.focused, true); assert.equal(result.scrollY, 16); assert.ok(time >= 200);
-  for (const target of [undefined, null, -1, 6, .5, 'wheel']) await assert.rejects(
+  for (const target of [undefined, null, -1, PAGE_MENU_REFLOW_LINKS.length, .5, 'wheel']) await assert.rejects(
     waitForPageMenuFocus({ sample: async () => state, expected: expected(), target }), /Invalid expected/);
   state.summary.focused = false; time = 0;
   await assert.rejects(waitForPageMenuFocus({ sample: async () => state, expected: expected(), target: 'summary',

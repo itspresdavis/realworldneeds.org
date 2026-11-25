@@ -1,13 +1,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { isDirectoryStartupNavigationError } from './qa-directory-startup.mjs';
 
-export const PAGE_MENU_REFLOW_LINKS = [
-  ['/', 'Find help'], ['/directory', 'Directory'], ['/directory#saved', 'Saved'],
-  ['/editorial-policy', 'How listings are checked'], ['/sources', 'Sources'], ['/transparency', 'Transparency']
-];
+import { PAGE_MENU_LINKS as PAGE_MENU_REFLOW_LINKS } from './qa-page-menu-contract.mjs';
+export { PAGE_MENU_LINKS as PAGE_MENU_REFLOW_LINKS } from './qa-page-menu-contract.mjs';
 export const PAGE_MENU_REFLOW_VIEWPORTS = [
   [320, 422], [390, 422], [320, 250], [390, 250], [320, 189], [390, 189],
-  [568, 250], [900, 250], [390, 844]
+  [568, 250], [900, 250], [390, 844],
+  // Desktop scrollbars reduce clientWidth at the narrow reflow size.
+  [320, 422, false]
 ];
 // Exact declarations from main 7e68bc3102f52d1304a905b2bfc871c6a6a0437d.
 // Original public/navigation-actions.css SHA-256:
@@ -133,7 +133,7 @@ export function pageMenuBaselineStyle(mode, baselineRules) {
     delete globalThis[key]; return restored;
   }
   if (mode !== 'apply' || globalThis[key]) throw new Error('Invalid baseline CSS fixture lifecycle');
-  const sheets = [...document.styleSheets].filter(sheet => sheet.href && new URL(sheet.href).pathname === '/navigation-actions.css');
+  const sheets = [...document.styleSheets].filter(sheet => sheet.href && /^\/navigation-actions(?:\.[a-f0-9]{12})?\.css$/.test(new URL(sheet.href).pathname));
   if (sheets.length !== 1) throw new Error('Expected one real navigation-actions.css stylesheet');
   const candidates = [];
   const visit = (rules, media = null) => {
@@ -233,8 +233,8 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
     await frame();
     return waitForPageMenuReflowQuiet({ sample, predicate });
   };
-  const load = async (href, width, height) => {
-    await client.call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width <= 650, screenWidth: width, screenHeight: height });
+  const load = async (href, width, height, mobile = width <= 650) => {
+    await client.call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile, screenWidth: width, screenHeight: height });
     const previousTimeOrigin = await evaluate(client, 'performance.timeOrigin');
     assert(Number.isFinite(previousTimeOrigin), 'Missing previous document');
     await navigate(client, href);
@@ -265,12 +265,12 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
     evidence.baseline = await withPageMenuBaseline({ client, evaluate, run: async rules => {
       await click((await snapshot()).summary.box);
       const opened = await snapshot();
-      for (let index = 0; index < 6; index++) await key('Tab');
+      for (let index = 0; index < PAGE_MENU_REFLOW_LINKS.length; index++) await key('Tab');
       const keyboard = await waitForPageMenuReflowQuiet({ sample: snapshot,
-        predicate: state => pageMenuReflowIdentity(state, baselineExpected) && state.links[5].focused });
-      const issues = pageMenuReflowViolations(keyboard, baselineExpected, { focusedIndex: 5 });
-      assert(pageMenuReflowIdentity(keyboard, baselineExpected) && keyboard.links[5].focused
-        && keyboard.links[5].box.bottom > keyboard.height && issues.includes('panel-outside-viewport')
+        predicate: state => pageMenuReflowIdentity(state, baselineExpected) && state.links.at(-1).focused });
+      const issues = pageMenuReflowViolations(keyboard, baselineExpected, { focusedIndex: PAGE_MENU_REFLOW_LINKS.length - 1 });
+      assert(pageMenuReflowIdentity(keyboard, baselineExpected) && keyboard.links.at(-1).focused
+        && keyboard.links.at(-1).box.bottom > keyboard.height && issues.includes('panel-outside-viewport')
         && issues.includes('focused-link-clipped'), 'Real baseline did not reproduce the short-height defect', { keyboard, issues });
       await capture(client, 'page-menu-reflow-baseline-320x250.png');
       const panel = { ...opened.nav.box, bottom: Math.min(opened.nav.box.bottom, opened.height - 1) };
@@ -278,31 +278,31 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
         predicate: state => pageMenuReflowIdentity(state, baselineExpected) && state.nav.scrollTop === 0 && state.scrollY > keyboard.scrollY
       });
       assert(pageMenuReflowIdentity(pointer, baselineExpected) && keyboard.nav.scrollTop === 0 && pointer.nav.scrollTop === 0
-        && pointer.scrollY > keyboard.scrollY && pointer.links[5].box.bottom > pointer.height,
+        && pointer.scrollY > keyboard.scrollY && pointer.links.at(-1).box.bottom > pointer.height,
         'Baseline wheel did not reproduce page-scroll leakage', { keyboard, pointer });
       return { sourceCommit: '7e68bc3102f52d1304a905b2bfc871c6a6a0437d', rules, opened, keyboard, issues, pointer };
     } });
     evidence.baseline.fixedCSSRestored = true;
     const pages = [['directory', `${host}/directory`], ['service', serviceUrl], ['trust', `${host}/editorial-policy`]];
-    for (const [name, href] of pages) for (const [width, height] of PAGE_MENU_REFLOW_VIEWPORTS) {
-      current = `${name}-${width}x${height}`;
-      const expected = await load(href, width, height), record = { name, width, height, expected, forward: [], backward: [] };
+    for (const [name, href] of pages) for (const [width, height, mobile = width <= 650] of PAGE_MENU_REFLOW_VIEWPORTS) {
+      current = `${name}-${width}x${height}${width <= 650 && !mobile ? '-desktop-scrollbar' : ''}`;
+      const expected = await load(href, width, height, mobile), record = { name, width, height, mobile, expected, forward: [], backward: [] };
       evidence.cases.push(record);
       await click((await snapshot()).summary.box);
       record.opened = check(await snapshot(), expected);
-      for (let index = 0; index < 6; index++) {
+      for (let index = 0; index < PAGE_MENU_REFLOW_LINKS.length; index++) {
         await key('Tab');
         record.forward.push(await waitForPageMenuFocus({ sample: snapshot, expected, target: index }));
       }
       await capture(client, `page-menu-reflow-${current}.png`);
-      // Move beyond the final item, then reverse through all six links. This
-      // proves Shift+Tab reaches the last link as well as the preceding five.
+      // Move beyond the final item, then reverse through all reviewed links. This
+      // proves Shift+Tab reaches the last link as well as every preceding link.
       await key('Tab');
       record.outside = await waitForPageMenuReflowQuiet({ sample: snapshot,
         predicate: state => pageMenuReflowIdentity(state, expected) && !state.summary.focused && state.links.every(link => !link.focused) });
       await key('Tab', true);
-      for (let index = 5; index >= 0; index--) {
-        if (index < 5) await key('Tab', true);
+      for (let index = PAGE_MENU_REFLOW_LINKS.length - 1; index >= 0; index--) {
+        if (index < PAGE_MENU_REFLOW_LINKS.length - 1) await key('Tab', true);
         record.backward.push(await waitForPageMenuFocus({ sample: snapshot, expected, target: index }));
       }
       await key('Tab', true);
@@ -344,7 +344,7 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
         assert(record.top.nav.scrollTop === 0, `${current} wheel cannot reach first link`, record.top.nav);
         record.pointer = await menuWheel(record.top, 2000);
       } else record.pointer = check(await snapshot(), expected, { scrollY: wheelScrollY });
-      const final = record.pointer.links[5], viewport = { left: 0, top: 0, right: width, bottom: height };
+      const final = record.pointer.links.at(-1), viewport = { left: 0, top: 0, right: width, bottom: height };
       assert(final.hit && contained(final.box, record.pointer.nav.port) && contained(final.box, viewport)
         && (!scrollable || record.pointer.nav.scrollTop > 0), `${current} pointer cannot reach Transparency`, record.pointer);
       if (scrollable) {
@@ -352,8 +352,8 @@ export async function verifyPageMenuReflow({ client, host, serviceUrl, navigate,
         assert(record.boundary.nav.scrollTop === record.pointer.nav.scrollTop, `${current} wheel did not settle at bottom`, record.boundary.nav);
       }
       const input = (record.boundary || record.pointer).inputs;
-      assert(input.filter(event => event.type === 'keydown' && event.key === 'Tab' && !event.shift && event.trusted).length === 7
-        && input.filter(event => event.type === 'keydown' && event.key === 'Tab' && event.shift && event.trusted).length === 7
+      assert(input.filter(event => event.type === 'keydown' && event.key === 'Tab' && !event.shift && event.trusted).length === PAGE_MENU_REFLOW_LINKS.length + 1
+        && input.filter(event => event.type === 'keydown' && event.key === 'Tab' && event.shift && event.trusted).length === PAGE_MENU_REFLOW_LINKS.length + 1
         && (!scrollable || input.filter(event => event.type === 'wheel' && event.trusted).length >= 3), `${current} missing native input evidence`, input);
       await click(final.box, false);
       record.destination = await sampleUntil(actual => pageMenuReflowIdentity(actual, {

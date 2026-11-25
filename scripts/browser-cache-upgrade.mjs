@@ -1,3 +1,5 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
+import { assertCatalogFailure } from "./qa-catalog-recovery.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -126,9 +128,9 @@ async function capture(client, name) {
 // Serve only synthetic catalog rows, using the production directory entry and
 // worker. No real record, source-hidden address, or production cache is touched.
 const fixtureRecord = (id) => ({ id, name: `Fixture ${id}`, place: "Synthetic test place", category: "food", categoryLabels: ["Food"], kind: "coverage", checked: "2026-10-10", search: `fixture ${id} food` });
-const fixtureCatalog = (removed) => ({ records: [fixtureRecord("survivor"), ...(removed ? [fixtureRecord("removed")] : [])], scopes: {} });
+const fixtureCatalog = (removed) => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [fixtureRecord("survivor"), ...(removed ? [fixtureRecord("removed")] : [])], scopes: {} });
 const fixtureHtml = `<!doctype html><html lang="en"><meta charset="utf-8"><title>Directory upgrade fixture</title><body>
-<main class="directory-shell"><section data-directory-search><input aria-label="Search" data-directory-query><button data-directory-clear hidden>Clear</button><div data-directory-categories></div><p data-directory-count></p></section><section class="directory-records"></section></main>
+<main class="directory-shell"><section data-directory-search><input aria-label="Search" data-directory-query><button data-directory-clear hidden>Clear</button><div data-directory-categories></div><p data-directory-count role="status" aria-live="polite"></p><button type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button></section><section class="directory-records"></section></main>
 <script type="module" src="/directory.js?v=fixture-initial"></script></body></html>`;
 
 async function waitExpression(client, expression, label) {
@@ -160,7 +162,17 @@ async function updateWorker(client) {
 async function pageState(client) {
   return evaluate(client, `(async () => {
     const input = document.querySelector("[data-directory-query]");
+    const retry = document.querySelector("[data-directory-retry]");
+    const status = document.querySelector("[data-directory-count]");
     return {
+      controller: navigator.serviceWorker.controller?.scriptURL,
+      retry: {
+        visible: Boolean(retry && !retry.hidden && retry.getClientRects().length && getComputedStyle(retry).visibility !== "hidden"),
+        busy: retry?.getAttribute("aria-disabled") === "true",
+        actionable: Boolean(retry && !retry.disabled && retry.tabIndex >= 0 && retry.textContent.trim())
+      },
+      liveStatus: status?.getAttribute("role") === "status" && status.getAttribute("aria-live") === "polite",
+      resultsHidden: document.querySelector(".directory-global-results")?.hidden,
       text: input.value,
       category: document.querySelector('[data-directory-category="Food"]')?.getAttribute("aria-pressed"),
       focused: document.activeElement === input,
@@ -185,7 +197,7 @@ async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-cache-upgrade-"));
   const swSource = await readFile("public/sw.js", "utf8");
   const fixtureFiles = new Map();
-  for (const path of ["directory.js", "directory-startup.js", "page-menu.js", "saved-loader.js", "saved-services.js", "saved-services.css", "legal.css", "directory-enhancements.css", "professional-pages.css", "offline-status.js", "brand/rwn-logo-192.png", "rwn-mark.svg", "site.webmanifest"]) {
+  for (const path of ["directory.js", "directory-startup.js", "page-menu.js", "saved-loader.js", "saved-services.js", "saved-services.css", "legal.css", "directory-enhancements.css", "professional-pages.css", "navigation-actions.css", "offline-status.js", "language.js", "task-controls.css", "brand/rwn-logo-192.png", "rwn-mark.svg", "site.webmanifest"]) {
     fixtureFiles.set(`/${path}`, await readFile(`dist/${path}`));
   }
   let release = "fixture-old", includeRemoved = true, failedCore = null, failIndex = false;
@@ -242,8 +254,25 @@ async function run() {
 
     failedCore = null; release = "fixture-new"; includeRemoved = false; failIndex = true;
     if (await updateWorker(client) !== "activated") throw new Error("Complete replacement did not activate");
-    await waitExpression(client, 'document.querySelector("[data-directory-count]").textContent.includes("temporarily unavailable")', "safe refresh failure");
+    // Match the safe failure state, not an obsolete sentence fragment.
+    // A completed failed refresh must offer recovery without exposing old rows.
+    try {
+      await waitExpression(client, `(() => {
+        const retry = document.querySelector("[data-directory-retry]");
+        const status = document.querySelector("[data-directory-count]");
+        return retry && !retry.hidden && retry.getClientRects().length && !retry.disabled
+          && retry.getAttribute("aria-disabled") === "false" && retry.tabIndex >= 0
+          && /unavailable/i.test(status?.textContent) && /retry/i.test(status?.textContent)
+          && document.querySelector(".directory-global-results")?.hidden
+          && document.querySelectorAll(".directory-global-result").length === 0;
+      })()`, "safe refresh failure");
+    } catch (error) {
+      throw new Error(error.message + "; page state: " + JSON.stringify(await pageState(client)));
+    }
     const unavailable = await pageState(client);
+    assertCatalogFailure({ controller: unavailable.controller, retry: unavailable.retry, rows: unavailable.ids, message: unavailable.status });
+    if (!unavailable.liveStatus || !unavailable.retry.actionable || !unavailable.resultsHidden)
+      throw new Error("Failed refresh lacks accessible recovery: " + JSON.stringify(unavailable));
     assertPreserved(unavailable);
     if (unavailable.controllers !== 1 || unavailable.ids.length || unavailable.caches.includes("rwn-offline-fixture-old") || !unavailable.caches.includes("unrelated-fixture")) {
       throw new Error(`Failed refresh restored old results or purged unrelated data: ${JSON.stringify(unavailable)}`);

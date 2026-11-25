@@ -50,7 +50,7 @@ function rewriteBrandText() {
 }
 
 function rewriteFinderCopy() {
-  setText(".finder-intro h1", "Find essential services near you.");
+  setText(".finder-intro h1", "Find help");
   setText(
     ".finder-intro p",
     "Look for food, shelter, clothing and other essentials. Contact the provider directly."
@@ -74,10 +74,13 @@ function rewriteFinderCopy() {
   if (privacy) privacy.innerHTML = `Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead. <a href="/privacy#location">Location privacy</a>.`;
 
   const safety = document.querySelector(".finder-safety");
-  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services.`;
+  if (safety) safety.innerHTML = `<strong>Immediate danger?</strong> Contact local emergency services. This directory is not an emergency service.`;
 }
 
 function rewriteMethodSections() {
+  // These authored explanations remain English until a reviewed translation is
+  // supplied. Translated navigation and labels declare their own language.
+  document.querySelectorAll('.about-rwn, .source-band').forEach(section => { section.lang = 'en'; });
   setText(".about-rwn__heading h2", "Before you go");
   setText(
     ".about-rwn__heading p",
@@ -132,7 +135,7 @@ function simplifyStructure() {
   if (!footer) return;
 
   const explore = footer.querySelector('nav[aria-label="Footer explore"]');
-  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a>`;
+  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a><a href="/account">Your resources</a>`;
 
   const standards = footer.querySelector('nav[aria-label="Footer standards"]');
   if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/our-story">Why RWN?</a><a href="/get-involved">Get Involved</a><a href="/impact">Impact</a><a href="/donate">Donations</a><a href="/contact">Contact</a><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
@@ -165,6 +168,7 @@ export function installProfessionalPresentation() {
   if (globe && !globe.querySelector('.atlas-key')) {
     const key = document.createElement('div');
     key.className = 'atlas-key';
+    key.setAttribute('role', 'group');
     key.setAttribute('aria-label', 'Map marker key');
     key.innerHTML = '<span><i class="atlas-key__site"></i>Service location</span><span><i class="atlas-key__area"></i>Regional finder</span>';
     globe.append(key);
