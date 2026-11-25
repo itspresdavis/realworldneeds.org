@@ -259,7 +259,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   document.body.append(panel, search, results, ...navigation, outsideNavigation);
   const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
   let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
-  const timers = new Map(); let now = 0, nextTimer = 0;
+  const timers = new Map(), frames = []; let now = 0, nextTimer = 0;
   const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 }, requests = [];
   const navigator = { onLine: true, serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } };
   const location = { hash }, history = { state: null }, restores = [];
@@ -272,6 +272,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     clearTimeout(id) { timers.delete(id); }, SAVED_RESOURCES_KEY: "saved",
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
+      requestAnimationFrame: callback => frames.push(callback),
       addEventListener: (name, handler) => { events[name] = handler; },
       dispatchEvent: (event) => {
         if (event.type === "rwn-directory-restore") restores.push(event);
@@ -288,6 +289,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   vm.runInContext(catalogLoader + "\n" + saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
   return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle,
+    frame() { frames.splice(0).forEach(callback => callback()); },
     timers, workerEvents, requests, navigator, savedIds: () => [...currentIds],
     advance(ms) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.callback(); } },
     setIds: (count) => { currentIds = ids.slice(0, count); },
@@ -601,7 +603,7 @@ test("Saved identical fresh catalog keeps row identity, pagination and focus thr
   const f = await savedFixture(61, { fetchCatalog: () => ++attempts === 1 ? catalogResponse(records) : refresh });
   f.more.click();
   const rows = [...f.list.children], link = rows[0].querySelector("a"), summary = f.summary.textContent;
-  link.focus(); f.workerEvents.controllerchange(); await settle();
+  link.focus(); f.workerEvents.controllerchange(); f.frame(); await settle();
   assert.equal(f.requests.length, 2);
   assert.equal(f.requests[1][0], "/data/search-index.json");
   assert.equal(f.requests[1][1].cache, "reload", "identity preservation must not skip a fresh release fetch");
@@ -627,7 +629,7 @@ for (const [label, change] of [
     const f = await savedFixture(1, { fetchCatalog: () => catalogResponse(records) });
     const old = f.list.children[0]; old.querySelector("a").focus();
     records = [{ ...records[0], ...change }];
-    f.workerEvents.controllerchange(); await settle();
+    f.workerEvents.controllerchange(); f.frame(); await settle();
     const current = f.list.children[0];
     assert.notEqual(current, old);
     assert.equal(old.isConnected, false);
@@ -643,7 +645,7 @@ test("Saved withdrawn record becomes an unavailable row without deleting its sav
   let records = [{ id: "service-0", name: "Withdrawn service" }];
   const f = await savedFixture(1, { fetchCatalog: () => catalogResponse(records) });
   const old = f.list.children[0]; records = [];
-  f.workerEvents.controllerchange(); await settle();
+  f.workerEvents.controllerchange(); f.frame(); await settle();
   assert.notEqual(f.list.children[0], old);
   assert.equal(f.list.children[0].querySelector("a"), null);
   assert.match(f.summary.textContent, /1 no longer in the directory/);
@@ -656,7 +658,7 @@ test("Saved failed fresh reload clears old rows and identical-data recovery rest
   let attempts = 0;
   const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 2 ? { ok: false } : catalogResponse(records) });
   const old = f.list.children[0];
-  f.workerEvents.controllerchange(); await settle();
+  f.workerEvents.controllerchange(); f.frame(); await settle();
   assert.equal(f.list.children.length, 0);
   assert.match(f.summary.textContent, /could not load/);
   assert.equal(f.retry.hidden, false);
@@ -693,7 +695,7 @@ test("Saved cancels a departing request, ignores late worker/storage refresh and
   const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : catalogResponse(current) });
   f.events.pagehide(); await settle();
   assert.equal(f.requests[0][1].signal.aborted, true);
-  f.workerEvents.controllerchange(); await f.refresh();
+  f.workerEvents.controllerchange(); f.frame(); await f.refresh();
   assert.equal(f.requests.length, 1);
   finishOld(catalogResponse([{ id: "service-0", name: "Superseded service" }])); await settle();
   assert.equal(f.list.children.length, 0);
