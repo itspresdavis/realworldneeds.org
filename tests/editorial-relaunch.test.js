@@ -14,7 +14,12 @@ test("editorial routes have static, crawlable clean-URL navigation and the origi
     assert.match(html, /src="\/brand\/rwn-logo-192\.png"/);
     assert.match(html, /class="editorial-skip" href="#main"/);
     assert.match(html, /<main id="main" tabindex="-1">/);
-    assert.equal((html.match(/aria-current="page"/g) || []).length, 1);
+    for (const label of ["Primary navigation", "Mobile navigation"]) {
+      const nav = html.split(`aria-label="${label}">`)[1]?.split("</nav>")[0];
+      assert.equal((nav?.match(/aria-current="page"/g) || []).length, 1, label);
+    }
+    assert.match(html, /<details class="editorial-mobile-menu">\s*<summary>Menu<\/summary>/);
+    assert.doesNotMatch(html, /care-drawing\.svg|editorial-graphic/);
     for (const path of ["/", "/directory", ...routes.map((route) => `/${route}`)]) {
       assert.ok(html.includes(`href="${path}"`));
     }
@@ -53,8 +58,8 @@ test("impact page has explicit units and a truthful no-script empty state", asyn
   assert.match(html, /type="module" src="\/impact\.js"/);
   assert.match(html, /data-impact-value>Not yet published/);
   assert.match(html, /<details class="editorial-impact-details" open>/);
-  assert.match(html, /Shoes<\/dt><dd data-count="shoes">Not yet published<\/dd><small>Pairs/);
-  assert.match(html, /Clean socks<\/dt><dd data-count="socks">Not yet published<\/dd><small>Pairs/);
+  assert.match(html, /Shoes<small>Pairs<\/small><\/dt><dd data-count="shoes">Not yet published<\/dd>/);
+  assert.match(html, /Clean socks<small>Pairs<\/small><\/dt><dd data-count="socks">Not yet published<\/dd>/);
   assert.match(html, /Individual bottles/);
   assert.match(html, /Individual food units, not meals/);
   assert.doesNotMatch(html, /\$0\b/);

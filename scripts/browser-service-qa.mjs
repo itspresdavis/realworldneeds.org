@@ -185,19 +185,23 @@ async function run() {
         await navigate(client, `${HOST}/${route}`);
         const actual = await evaluate(client, `(() => {
           const doc = document.documentElement;
-          const nav = document.querySelector("header nav [aria-current='page']");
+          const nav = document.querySelector("header nav.editorial-primary [aria-current='page']");
+          const mobile = document.querySelector(".editorial-mobile-menu");
           const impact = document.querySelector("[data-impact]");
           const probe = {
             heading: document.querySelector("h1")?.textContent,
             current: nav?.getAttribute("href"),
             overflow: doc.scrollWidth - doc.clientWidth,
             logo: document.querySelector("header img")?.naturalWidth > 0,
+            mobile: Boolean(mobile?.getClientRects().length && !mobile.open && !nav?.getClientRects().length),
+            desktop: Boolean(nav?.getClientRects().length && !mobile?.getClientRects().length),
             disabledDonation: document.querySelector("main button:disabled")?.textContent.includes("Coming soon"),
             impactReady: Boolean(impact && !impact.querySelector("[data-impact-refresh]").hidden && impact.querySelector("[data-impact-value]").textContent === "Not yet published" && impact.querySelector("details[open]") && impact.querySelectorAll("[data-count]").length === 7),
           };
           return probe;
         })()`);
         if (actual.heading !== heading || actual.current !== `/${route}` || actual.overflow > 1 || !actual.logo ||
+          !(width < 600 ? actual.mobile : actual.desktop) ||
           (route === "donate" && !actual.disabledDonation) || (route === "impact" && !actual.impactReady)) {
           throw new Error(`Editorial route failed at ${width}px: ${route} ${JSON.stringify(actual)}`);
         }
