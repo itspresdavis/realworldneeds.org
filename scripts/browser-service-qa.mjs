@@ -181,7 +181,7 @@ async function run() {
     // Check the actual static routes before the more expensive atlas fixtures.
     for (const width of [1440, 390, 320]) {
       await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
-      for (const [route, heading] of [["our-story", "Why we started."], ["donate", "Online giving is coming soon."], ["impact", "What we’ve distributed."]]) {
+      for (const [route, heading] of [["our-story", "Why RWN?"], ["donate", "Online giving is coming soon."], ["impact", "What we’ve distributed."]]) {
         await navigate(client, `${HOST}/${route}`);
         const actual = await evaluate(client, `(() => {
           const doc = document.documentElement;

@@ -15,15 +15,15 @@ test("preboot and initialized finder use one canonical task message and need ord
   assert.match(app, /<h1>Find essential services near you\.<\/h1>/);
   assert.match(app, /placeholder="Search by service or place"/);
   assert.match(index, /<h1>Find essential services near you\.<\/h1>/);
-  assert.match(index, /Practical help, with contact details and sources you can check\./);
+  assert.match(index, /Look for food, shelter, clothing and other essentials\. Contact the provider directly\./);
   assert.match(refinement, /Search by service or place/);
-  assert.match(professional, /Practical help, with contact details and sources you can check\./);
+  assert.match(professional, /Look for food, shelter, clothing and other essentials\. Contact the provider directly\./);
   assert.match(index, /Food[\s\S]*Water[\s\S]*Shelter[\s\S]*Clothing[\s\S]*Hygiene[\s\S]*Health care/);
 });
 
 test("static preboot needs wrap on narrow screens and explain the short initialization handoff", () => {
   assert.match(index, /preboot-finder__status/);
-  assert.match(index, /Preparing the interactive finder/);
+  assert.match(index, /Loading the map/);
   assert.doesNotMatch(index, /\.preboot-finder nav \{ flex-wrap:nowrap; overflow-x:auto/);
 });
 

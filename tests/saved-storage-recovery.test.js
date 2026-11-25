@@ -174,14 +174,15 @@ test("a failed mutation preserves an expanded Saved view when persisted membersh
 for (const stillDenied of [false, true]) {
   test(`explicit Clear rereads availability when reads ${stillDenied ? 'remain denied' : 'recover'}`, () => {
     const f = finderFixture({ denied: "read" });
+    f.values.set("rwn-resource-topics-v1", '["food"]');
     if (!stillDenied) f.deny("");
     f.click("clearBrowserData");
-    assert.equal(f.values.has("rwn-saved-resources"), false); assert.equal(f.values.get("unrelated"), "keep");
+    assert.equal(f.values.has("rwn-saved-resources"), false); assert.equal(f.values.has("rwn-resource-topics-v1"), false); assert.equal(f.values.get("unrelated"), "keep");
     assert.equal(f.state.savedIds.size, 0); assert.equal(f.state.savedOnly, false);
     assert.equal(f.state.savedStorageUnavailable, stillDenied);
     assert.equal(f.node("savedCount").textContent, stillDenied ? "Unavailable" : "0");
     assert.equal(f.node("retrySavedServices").hidden, !stillDenied);
-    assert.equal(f.writes(), 1); assert.match(f.messages.at(-1), /cleared/);
+    assert.equal(f.writes(), 2); assert.match(f.messages.at(-1), /cleared/);
   });
 }
 

@@ -107,8 +107,6 @@ display:inline-flex;min-height:42px;align-items:center;justify-content:center;pa
 .directory-page-list > li { margin:0;padding:0;}
 .directory-page-list a,
 .directory-page-list [aria-current="page"] { display:flex;min-width:44px;min-height:44px;align-items:center;justify-content:center;padding:.5rem;border:1px solid var(--page-line-strong);border-radius:7px;font-size:.8125rem;line-height:1.2;}
-/* Reserve room for the outer keyboard focus ring during native scrolling. */
-.directory-page-list a { scroll-margin-block:8px;}
 .directory-page-list a:first-of-type { background:#fff;color:var(--page-blue-dark);}
 .directory-page-list a:hover { background:var(--page-green-soft);}
 .directory-page-list [aria-current="page"] { border-color:var(--page-blue);background:var(--page-blue);color:#fff;font-weight:750;}
@@ -394,9 +392,3 @@ display: inline-flex;flex-wrap: wrap;align-items: center;gap: .25rem .45rem;min-
 @media (forced-colors: active) {
 #directory :is(.directory-country-field, .directory-need-field) select { -webkit-appearance: auto;appearance: auto;background-image: none;}
 }
-
-/* Keep the directory introduction in the reading flow, not in a separate card. */
-#directory .directory-guide { margin:0 0 1.25rem;padding:.15rem 0 .85rem;border:0;border-bottom:1px solid var(--page-line);border-radius:0;background:transparent;color:var(--page-ink); }
-#directory .directory-guide p { margin:0; }
-#directory .directory-guide nav { display:flex;flex-wrap:wrap;column-gap:.75rem;margin-top:.15rem; }
-#directory .directory-guide a { display:inline-flex;align-items:center;min-height:44px;padding:0 .12rem;color:var(--page-green-dark);text-underline-offset:.2em; }

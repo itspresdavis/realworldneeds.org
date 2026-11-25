@@ -1,0 +1,17 @@
+.directory-suggestions { margin: .9rem 0; border-block: 1px solid var(--dir-line); color: var(--dir-ink); }
+.directory-suggestions > summary { display: list-item; padding: .8rem .2rem; min-height: 44px; cursor: pointer; font-weight: 700; }
+.directory-suggestions form { display: grid; gap: .6rem; margin-block: .2rem .8rem; }
+.directory-suggestions p { margin: .3rem 0; max-width: 65ch; }
+.directory-suggestions fieldset { min-width: 0; padding: .35rem .6rem; border: 1px solid var(--dir-line); border-radius: 6px; }
+.directory-suggestions fieldset div, .directory-suggestions .suggestion-actions { display: flex; flex-wrap: wrap; gap: .2rem .7rem; }
+.directory-suggestions label { min-height: 44px; display: flex; align-items: center; gap: .35rem; }
+.directory-suggestions input[type="checkbox"] { width: 1.15rem; height: 1.15rem; accent-color: var(--dir-blue); }
+.directory-suggestions input[type="text"] { display: block; width: min(28rem, 100%); padding: .6rem .5rem; min-height: 44px; color: inherit; border: 1px solid var(--dir-line-strong); border-radius: 6px; font: inherit; }
+.directory-suggestions .suggestion-area-label { min-height: auto; }
+.directory-suggestions small { display: block; color: var(--dir-text); }
+.directory-suggestions [data-suggestion-error] { color: #8b301b; }
+.directory-suggestions :is([data-suggestion-results], [data-suggestion-status], [data-suggestion-error]):empty { margin: 0; }
+.directory-suggestions [data-suggestion-results] { padding-inline-start: 1.5rem; }
+.directory-suggestions [data-suggestion-results] li { margin-block: .5rem; }
+.directory-suggestions [data-suggestion-results] span { display: block; color: var(--dir-text); font-size: .875rem; }
+.directory-suggestions :is(summary, button, input, a):focus-visible { outline: 2px solid var(--dir-blue-dark); outline-offset: 3px; }

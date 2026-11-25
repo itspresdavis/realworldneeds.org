@@ -38,7 +38,8 @@ import {
   SAVED_RESOURCES_KEY,
   readSavedResources,
   setResourceSaved,
-  clearSavedResources
+  clearSavedResources,
+  RESOURCE_TOPICS_KEY
 } from "./utils/privacy.js";
 
 const DEFAULT_RESOURCE = null;
@@ -2619,15 +2620,18 @@ function bindEvents() {
   document.getElementById("retrySavedServices").addEventListener("click", refreshSavedResources);
   document.getElementById("downloadDirectory").addEventListener("click", downloadDirectory);
   document.getElementById("clearBrowserData").addEventListener("click", () => {
-    try { clearSavedResources(); } catch {
-      notify("Saved services could not be cleared. Check this browser’s storage settings and try again.");
+    try {
+      clearSavedResources();
+      window.localStorage.removeItem(RESOURCE_TOPICS_KEY);
+    } catch {
+      notify("Browser data could not be cleared. Check this browser’s storage settings and try again.");
       return;
     }
     state.savedIds.clear();
     state.savedIds = loadSavedResources();
     state.savedOnly = false;
     clearUserLocation();
-    notify("Saved services and location sorting cleared");
+    notify("Saved services, topics and location sorting cleared");
   });
   window.addEventListener("rwn:offline-unavailable", () => {
     notify("Offline saving is unavailable. The directory still works online.");

@@ -141,6 +141,30 @@ function directorySearchMarkup(scope) {
   </section>`;
 }
 
+function suggestionsMarkup() {
+  return `<details class="directory-suggestions" data-directory-suggestions hidden>
+    <summary>Get resource suggestions</summary>
+    <p>No account needed. Choose topics to find listings in a city or ZIP, or resource finders and networks with wider coverage. These choices stay in your browser.</p>
+    <form autocomplete="off" aria-label="Resource suggestions">
+      <fieldset><legend>What kind of help are you looking for?</legend><div>
+        ${Object.entries(categories).map(([id, { label }]) => `<label><input type="checkbox" data-suggestion-topic value="${escapeHtml(id)}" /> ${escapeHtml(label)}</label>`).join("")}
+      </div></fieldset>
+      <div><label class="suggestion-area-label" for="suggestion-area">City or U.S. ZIP (optional)</label>
+        <input id="suggestion-area" data-suggestion-area type="text" maxlength="80" autocomplete="off" spellcheck="false" aria-describedby="suggestion-area-hint suggestion-area-error" />
+        <small id="suggestion-area-hint">Use the exact city name or listed ZIP, not a street address. If cities share a name, enter city and country separated by a comma.</small>
+        <p id="suggestion-area-error" data-suggestion-error role="status"></p>
+      </div>
+      <div><label><input type="checkbox" data-suggestion-remember aria-describedby="suggestion-remember-hint" /> Remember topics on this device</label>
+        <small id="suggestion-remember-hint">Only Food, Water, Hygiene and Clothing can be saved. Never your location. Anyone using this browser can see saved topics.</small>
+      </div>
+      <div class="suggestion-actions"><button type="submit" class="directory-search-tools__clear">Find suggestions</button><button type="button" class="directory-search-tools__clear" data-suggestion-reset>Reset suggestions</button></div>
+    </form>
+    <p data-suggestion-status role="status" aria-live="polite"></p>
+    <ul data-suggestion-results aria-label="Suggested listings"></ul>
+    <p>Listings may offer free services, free options, or free ways to find help. Check cost, coverage, eligibility, hours and availability with the provider before relying on a suggestion.</p>
+  </details>`;
+}
+
 function localLinksMarkup(country, entries) {
   if (!entries.length) return "";
   return `<section class="directory-local-browse"><details><summary><strong>Browse local directories</strong><span>${entries.length} ${entries.length === 1 ? "place" : "places"}</span></summary>
@@ -245,10 +269,25 @@ try {
   // Local pages are an enhancement; the global directory must still build without them.
 }
 
+const suggestionEntry = (await readFile("public/directory-suggestions.js", "utf8")).replace(/^import[^;]+;\s*/gm, "").replaceAll("export ", "");
+const { code: suggestionCode } = await minify(`${catalogSource}\n${privacySource}\n${suggestionEntry}`, { module: true });
+const suggestionAssets = {};
+for (const [type, content] of [["js", `${suggestionCode}\n`], ["css", await readFile("public/directory-suggestions.css")]]) {
+  const hash = createHash("sha256").update(content).digest("hex").slice(0, 12);
+  const path = `/directory-suggestions.${hash}.${type}`;
+  await writeFile(`dist${path}`, content);
+  suggestionAssets[type] = path;
+}
+
 const searchIndex = JSON.parse(await readFile("dist/data/search-index.json", "utf8"));
 for (const path of await walkHtml("dist/directory")) {
   const html = await readFile(path, "utf8");
-  await writeFile(path, enhanceCollectionPage(html, directoryRelease, path.replace(/^dist/, "").replace(/\/index\.html$/, "").replace(/\/page\/\d+$/, "")));
+  let enhanced = enhanceCollectionPage(html, directoryRelease, path.replace(/^dist/, "").replace(/\/index\.html$/, "").replace(/\/page\/\d+$/, ""));
+  if (path === "dist/directory/index.html") {
+    enhanced = enhanced.replace('<template data-directory-empty>', `${suggestionsMarkup()}<template data-directory-empty>`)
+      .replace("</head>", `<link rel="stylesheet" href="${suggestionAssets.css}" /><script type="module" src="${suggestionAssets.js}?v=${directoryRelease}"></script>\n</head>`);
+  }
+  await writeFile(path, enhanced);
 }
 
 const localByCountry = new Map();

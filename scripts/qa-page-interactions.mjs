@@ -431,8 +431,8 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
 
     await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
     await loadHome();
-    const found = await evaluate(client, `(() => { const found=window.find('Everyone deserves a clear next step.');const item=document.querySelector('#about h2');return {found,selected:String(getSelection()),opacity:Number(getComputedStyle(item).opacity),display:getComputedStyle(item).display}; })()`);
-    assert(found.found && found.selected.includes('Everyone deserves') && found.opacity === 1 && found.display !== 'none', 'Browser find could not reach readable editorial text', found);
+    const found = await evaluate(client, `(() => { const found=window.find('Before you go');const item=document.querySelector('#about h2');return {found,selected:String(getSelection()),opacity:Number(getComputedStyle(item).opacity),display:getComputedStyle(item).display}; })()`);
+    assert(found.found && found.selected.includes('Before you go') && found.opacity === 1 && found.display !== 'none', 'Browser find could not reach readable editorial text', found);
     completed = true;
     console.log('Page interactions QA passed: native smooth anchors, history/focus, header clearance, once-only arrivals, live reduced motion, controlled4x CPU check, readable find targets and44px controls at four widths.');
   } finally {
