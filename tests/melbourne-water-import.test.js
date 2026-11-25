@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { prepareMelbourneWater } from '../scripts/import-melbourne-water.mjs';
 import { melbourneWaterResources } from '../src/data/generated/melbourne-water.js';
 import { novemberExpansionResources } from '../src/data/november-expansion.js';
@@ -50,4 +51,13 @@ test('reviewed expansion preserves source identities and honest physical access 
   }
   const ri = novemberExpansionResources.find(r => r.id === 'rhode-island-free-clinic');
   assert.match(ri.availabilityNote, /waitlist/);
+});
+
+test('redistributed CSV retains city attribution, licence and adaptation notice', async () => {
+  const csv = await readFile('dist/directory.csv', 'utf8');
+  assert.match(csv.split('\n')[0], /Source owner.*Source attribution and reuse notes.*Source updated/);
+  const row = csv.split('\n').find(line => line.includes('melbourne-water-1075229'));
+  assert.match(row, /City of Melbourne/);
+  assert.match(row, /creativecommons\.org\/licenses\/by\/4\.0\/legalcode/);
+  assert.match(row, /RWN selects human drinking-water assets and writes access summaries/);
 });

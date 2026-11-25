@@ -526,6 +526,9 @@ const csvRows = resources.map((resource) => [
   resource.lastChecked,
   resource.sourceUrl
 ]);
+// Keep attribution, reuse terms and transformation notes with redistributed data.
+csvFields.push("Source owner", "Source attribution and reuse notes", "Source updated");
+resources.forEach((resource, index) => csvRows[index].push(resource.sourceName, resource.sourceDetail, resource.sourceUpdatedAt || ""));
 if (resources.some(resource => resource.serviceAccess)) {
   csvFields.push("Service-specific access", "Service access contract (JSON)");
   resources.forEach((resource, index) => csvRows[index].push(serviceAccessSummary(resource), resource.serviceAccess ? JSON.stringify(resource.serviceAccess) : ""));
