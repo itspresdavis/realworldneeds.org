@@ -74,7 +74,7 @@ test("finder direct actions and inspector use the same safe targets and preserve
     const article = new Element();
     article.querySelector = () => ({ dataset: { resourceId: resource.id }, replaceWith() {} });
     const context = vm.createContext({ beforeYouGoFacts, getLocale, t, serviceActions, serviceAccessSummary, serviceAccessNotice, isContactOnly, hasMapCoordinates, contactOnlyNotice, document, phoneLinks, navigator: { userAgent: "" }, resourceById: new Map([[resource.id, resource]]) });
-    const body = actions.slice(actions.indexOf("function directionsUrl("), actions.indexOf("\nfunction enhanceResults("));
+    const body = actions.slice(actions.indexOf("function createAction("), actions.indexOf("\nfunction enhanceResults("));
     vm.runInContext(`${body}\nenhanceCard(article);`, Object.assign(context, { article }));
     assert.deepEqual(domTargets(article), expected);
     vm.runInContext("enhanceCard(article)", context);

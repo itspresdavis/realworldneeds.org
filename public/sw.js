@@ -9,7 +9,7 @@ const runtimePaths = Object.values(RUNTIME_ASSETS);
 const optionalPaths = Object.values(OPTIONAL_ASSETS);
 // Only the built manifest's public dependency graph and legacy public runtime
 // names are eligible. Never make all /src paths or arbitrary JSON cacheable.
-const runtimeCanonicals = [...new Set([...Object.keys(RUNTIME_ASSETS), ...Object.keys(OPTIONAL_ASSETS), "/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory.js", "/directory-startup.js", "/directory-geography.js", "/saved-loader.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css"])];
+const runtimeCanonicals = [...new Set([...Object.keys(RUNTIME_ASSETS), ...Object.keys(OPTIONAL_ASSETS), "/legal.css", "/page-menu.js", "/directory-enhancements.css", "/directory-suggestions.css", "/professional-pages.css", "/navigation-actions.css", "/directory.js", "/directory-startup.js", "/directory-geography.js", "/saved-loader.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css"])];
 const runtimePattern = new RegExp(`^(?:${runtimeCanonicals.map(path => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\.(css|js|json)$/, "\\.[a-f0-9]{12}\\.$1")).join("|")})$`);
 
 const CORE_ASSETS = [
@@ -17,6 +17,7 @@ const CORE_ASSETS = [
   "/legal.css",
   "/page-menu.js",
   "/directory-enhancements.css",
+  "/directory-suggestions.css",
   "/professional-pages.css",
   "/navigation-actions.css",
   "/directory.js",
