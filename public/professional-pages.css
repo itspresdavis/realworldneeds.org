@@ -107,6 +107,8 @@ display:inline-flex;min-height:42px;align-items:center;justify-content:center;pa
 .directory-page-list > li { margin:0;padding:0;}
 .directory-page-list a,
 .directory-page-list [aria-current="page"] { display:flex;min-width:44px;min-height:44px;align-items:center;justify-content:center;padding:.5rem;border:1px solid var(--page-line-strong);border-radius:7px;font-size:.8125rem;line-height:1.2;}
+/* Reserve room for the outer keyboard focus ring during native scrolling. */
+.directory-page-list a { scroll-margin-block:8px;}
 .directory-page-list a:first-of-type { background:#fff;color:var(--page-blue-dark);}
 .directory-page-list a:hover { background:var(--page-green-soft);}
 .directory-page-list [aria-current="page"] { border-color:var(--page-blue);background:var(--page-blue);color:#fff;font-weight:750;}
