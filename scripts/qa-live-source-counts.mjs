@@ -215,6 +215,12 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
       await navigate(client, `${host}/`);
       await wait("document.querySelector('.finder-location-notes') && !document.getElementById('locateMe')?.disabled", "finder ready");
       await wait("window.__rwnLiveCountQA.countryState?.coarseFeatures > 1", "complete coarse geometry applied");
+      const globeReady = await evaluate(client, `(() => {
+        const stage = document.querySelector(".globe-stage");
+        const zoom = document.getElementById("zoomIn");
+        return { visible: Boolean(zoom?.getClientRects().length), hasFallback: stage?.classList.contains("is-globe-unavailable"), status: document.getElementById("globeFallbackMessage")?.textContent };
+      })()`);
+      check(globeReady.visible && !globeReady.hasFallback, "USDA detail fixture requires a real WebGL renderer", globeReady);
       const initial = await snapshot();
       check(initial.href === `${host}/` && initial.title && initial.reach === undefined && !initial.disclosureOpen && !initial.statusVisible, "Enhanced finder must retain its collapsed disclosure and removed base reach strip", initial);
       check(initial.probe.countryState.detailGeometryReady === false && initial.probe.countryState.userCountry === null, "The first location must start with coarse geometry and no country", initial);

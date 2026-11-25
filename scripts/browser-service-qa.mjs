@@ -162,6 +162,10 @@ async function run() {
       "--disable-extensions",
       "--disable-sync",
       "--no-first-run",
+      // The USDA fixture exercises real detailed globe geometry on headless CI.
+      // Match the already passing globe-touch harness; no production flags change.
+      "--ignore-gpu-blocklist",
+      "--use-angle=swiftshader",
       `--remote-debugging-port=${CDP_PORT}`,
       `--user-data-dir=${profile}`,
       "about:blank"
