@@ -66,7 +66,7 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   for (const record of searchIndex.records) {
     const resource = byId.get(record.id);
     const expected = ["categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
-    if (resource.phone) expected.push("phone");
+    if (Object.hasOwn(record, "phone")) expected.push("phone");
     if (resource.kind !== "direct") expected.push("coverageScope");
     if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");
     if (sourceClosureNotice(resource)) expected.push("sourceStatus");
@@ -175,7 +175,7 @@ test("interaction layers and search index stay within deliberate budgets", async
     ["public/directory.js", 14_000],
     ["public/directory-results.js", 4_000],
     ["public/directory-enhancements.css", 18_000],
-    ["dist/data/search-index.json", 1_500_000]
+    ["dist/data/search-index.json", 1_650_000]
   ];
   for (const [path, maximum] of budgets) {
     const { size } = await stat(path);

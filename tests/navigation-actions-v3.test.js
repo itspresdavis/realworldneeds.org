@@ -75,7 +75,7 @@ test("whole-directory search index carries only the fields needed for immediate 
   assert.equal(payload.schemaVersion, SEARCH_CATALOG_SCHEMA);
   const direct = payload.records.find((record) => record.kind === "direct");
   assert.ok(direct);
-  assert.ok(Object.hasOwn(direct, "phone"));
+  assert.ok(direct.phoneLinks.some(link => link.href.startsWith('tel:') && link.label), 'Immediate calling retains its number and target');
   assert.ok(Object.hasOwn(direct, "lat"));
   assert.ok(Object.hasOwn(direct, "lng"));
 });

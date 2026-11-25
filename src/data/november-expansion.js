@@ -3,7 +3,7 @@
 const checked = '2026-11-25';
 const dycd = 'https://www.nyc.gov/site/dycd/services/runaway-homeless-youth/borough-based-drop-in-centers.page';
 const tb = 'https://www.nyc.gov/site/doh/services/tuberculosis-chest-centers.page';
-const physical = ({ accessMode, routeLabel, ...record }) => ({
+const physical = ({ accessMode, routeLabel, intakeInstructions, ...record }) => ({
   country: 'United States', region: 'North America', kind: 'direct',
   lat: null, lng: null, locationPrecision: 'address', secondaryCategories: [],
   sourceKind: 'Official provider or public agency', lastChecked: checked,
@@ -12,7 +12,7 @@ const physical = ({ accessMode, routeLabel, ...record }) => ({
   serviceAccess: [{
     id: 'access', label: routeLabel || record.name, categories: [record.category, ...(record.secondaryCategories || [])],
     mode: accessMode || 'intake', address: record.address,
-    instructions: record.availabilityNote, eligibility: record.eligibility, hours: record.hours,
+    instructions: intakeInstructions || record.availabilityNote, eligibility: record.eligibility, hours: record.hours,
     sourceUrl: record.sourceUrl, reviewedAt: checked,
   }],
 });
@@ -34,6 +34,7 @@ const youthCenters = [
   summary: 'A youth drop-in center for everyday essentials and help arranging further support.',
   services: ['Clothing', 'Food', 'Showers and laundry', 'Case management and crisis-service referrals'],
   eligibility: 'Young people ages 14–24. Call the center about intake and the support you need.',
+  intakeInstructions: 'Call to confirm drop-in hours and intake. Staff can arrange crisis-service referrals; this listing covers food, clothing and hygiene.',
   availabilityNote: 'Call to confirm opening hours and intake. This is a drop-in service, not a promise of an overnight bed; staff can help with crisis-service referrals.',
   sourceName: 'NYC Department of Youth and Community Development', sourceUrl: dycd,
   sourceDetail: 'Current DYCD runaway/homeless-youth location list; free access confirmed by NYC311: https://portal.311.nyc.gov/article/?kanumber=KA-01619 . Older family-directory addresses are not used. Brooklyn ZIP omitted because the city list appears inconsistent. No coordinates inferred.',
