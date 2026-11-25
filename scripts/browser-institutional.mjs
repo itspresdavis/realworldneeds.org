@@ -335,23 +335,52 @@ async function run() {
       const version = new URL(document.querySelector('script[src*="bootstrap"]').src).search;
       const { resources } = await import('/src/data/resources.js' + version);
       const { createGlobePointLayer, updateGlobePointLayer } = await import('/src/globe-points.js' + version);
+      // Derive the expected cohort from the public catalog and the location
+      // policy, not from the renderer's own filter or vertex count.
+      const unmappedPrecision = new Set(["address", "contact-only"]);
+      const excluded = resources.filter(row => unmappedPrecision.has(row.locationPrecision));
+      const mapped = resources.filter(row => !unmappedPrecision.has(row.locationPrecision));
+      const knownUnmapped = new Map([
+        ["amos-house-providence-meals", "address"],
+        ["taunton-community-table-meals", "address"],
+        ["imss-bienestar-mexico-finder", "contact-only"],
+      ]);
+      const badLocation = resources.filter(row => unmappedPrecision.has(row.locationPrecision)
+        ? row.lat !== null || row.lng !== null
+        : !Number.isFinite(row.lat) || Math.abs(row.lat) > 90 || !Number.isFinite(row.lng) || Math.abs(row.lng) > 180)
+        .map(row => row.id);
+      const missingUnmapped = [...knownUnmapped].filter(([id, precision]) =>
+        !excluded.some(row => row.id === id && row.locationPrecision === precision)).map(([id]) => id);
+      const catalogIds = new Set(resources.map(row => row.id));
+      const response = await fetch('/data/map-index.json' + version);
+      if (!response.ok) throw new Error('Cannot verify the public map index');
+      const mapIndex = await response.json();
+      const mapMatch = mapIndex.resourceCount === mapped.length && mapIndex.resources.length === mapped.length
+        && mapIndex.resources.every((row, i) => row.id === mapped[i].id && row.lat === mapped[i].lat && row.lng === mapped[i].lng);
+
       const points = createGlobePointLayer(resources, {});
-      let maximumError = 0;
-      for (let i = 0; i < resources.length; i++) {
-        const positions = points.geometry.attributes.position;
-        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
-        const lat = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
-        const lng = Math.atan2(x, z) * 180 / Math.PI;
-        maximumError = Math.max(maximumError, Math.abs(lat - resources[i].lat), Math.abs(lng - resources[i].lng));
-      }
-      const counts = [1, 3, 8, 12].map((zoom) => {
+      let maximumError = 0, invalidVertices = 0;
+      const samples = [1, 3, 8, 12].map(zoom => {
         updateGlobePointLayer(points, { zoom });
-        return points.geometry.attributes.position.count;
+        const positions = points.geometry.attributes.position;
+        const ids = points.userData.resources;
+        for (let i = 0; i < Math.min(mapped.length, positions.count); i++) {
+          const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+          const lat = Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI;
+          const lng = Math.atan2(x, z) * 180 / Math.PI;
+          if (![x, y, z, lat, lng].every(Number.isFinite) || Math.hypot(x, y, z) === 0) invalidVertices++;
+          else maximumError = Math.max(maximumError, Math.abs(lat - mapped[i].lat), Math.abs(lng - mapped[i].lng));
+        }
+        return { zoom, count: positions.count, exactIds: ids.length === mapped.length && ids.every((row, i) => row.id === mapped[i].id) };
       });
       points.geometry.dispose(); points.material.dispose();
-      return { catalog: resources.length, counts, maximumError };
+      return { catalog: resources.length, uniqueIds: catalogIds.size, mapped: mapped.length, excluded: excluded.map(row => row.id),
+        badLocation, missingUnmapped, mapMatch, samples, invalidVertices, maximumError };
     })()`);
-    if (coordinateFidelity.counts.some((count) => count !== coordinateFidelity.catalog) || coordinateFidelity.maximumError > 0.00001) {
+    if (!coordinateFidelity.catalog || coordinateFidelity.catalog !== coordinateFidelity.uniqueIds || !coordinateFidelity.mapped
+      || coordinateFidelity.badLocation.length || coordinateFidelity.missingUnmapped.length || !coordinateFidelity.mapMatch
+      || coordinateFidelity.samples.some(sample => sample.count !== coordinateFidelity.mapped || !sample.exactIds)
+      || coordinateFidelity.invalidVertices || !Number.isFinite(coordinateFidelity.maximumError) || coordinateFidelity.maximumError > 0.00001) {
       throw new Error(`Catalog coordinates changed in the renderer: ${JSON.stringify(coordinateFidelity)}`);
     }
     await capture(client, "institutional-desktop.png");

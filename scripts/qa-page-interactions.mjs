@@ -212,31 +212,42 @@ export async function verifyPageInteractions({ client, host, navigate, evaluate,
     await capture(client, 'page-interactions-editorial.png');
 
     // Change the live preference while a real arrival is still playing.
-    await loadHome();
-    await enhancementReady();
-    await observeArrivals();
-    let startPromise;
-    const readStart=()=>startPromise??=evaluate(client, `(async () => {
-      window.__rwnMotionPreference = matchMedia('(prefers-reduced-motion: reduce)');
-      window.__rwnMotionPreferenceChanges = [];
-      window.__rwnMotionPreference.addEventListener('change',event=>window.__rwnMotionPreferenceChanges.push({matches:event.matches,at:performance.now()}));
-      let timer;
-      const started=new Promise(resolve=>{
-        window.__rwnMotionReady=()=>{clearTimeout(timer);resolve(true)};
-        timer=setTimeout(()=>resolve(false),2000);
-      });
-      scrollTo({top:document.querySelector('#about h2').getBoundingClientRect().top+scrollY-innerHeight+160,behavior:'instant'});
-      const observedStart=await started;
-      return {started:observedStart,timeoutMs:2000,arrivals:window.__rwnArrivals,y:scrollY,count:window.__rwnArrivals.length,running:document.querySelector('#about h2').getAnimations().some(animation=>animation.playState==='running'),preference:window.__rwnMotionPreference.matches,timeline:document.timeline.currentTime,visibility:document.visibilityState,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))};
-    })()`);
-    const running=await arrive(state=>typeof state.started==='boolean', 'Active editorial start event', readStart, false);
-    assert(running.started && running.running && !running.preference, 'Preference-change test never observed an active editorial animation with motion allowed', running);
-    await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
-    // The CDP override acknowledges before the browser renders and dispatches
-    // MediaQueryList change/cancel events. Await those real signals; stationary
-    // scrolling says nothing about whether this preference change was delivered.
-    const cancellationState = () => evaluate(client, `({y:scrollY,matches:window.__rwnMotionPreference.matches,changes:window.__rwnMotionPreferenceChanges,cancelled:window.__rwnArrivals.some(item=>item.target==='about-heading'&&item.cancelled&&!item.finished),arrivals:window.__rwnArrivals,transform:getComputedStyle(document.querySelector('#about h2')).transform,visibility:document.visibilityState,timeline:document.timeline.currentTime,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))})`);
-    const cancelled = await arrive(state=>state.matches&&state.changes.some(event=>event.matches)&&state.cancelled&&state.transform==='none', 'Live reduced-motion event and cancellation', cancellationState, false);
+    // Slow the browser's actual animation clock for this one experiment so
+    // scheduler stalls between the two CDP commands cannot finish the 280 ms
+    // effect first. The earlier normal-speed check still verifies its duration.
+    await client.call('Animation.enable');
+    let running, cancelled;
+    try {
+      await loadHome();
+      await client.call('Animation.setPlaybackRate', {playbackRate:0.01});
+      await enhancementReady();
+      await observeArrivals();
+      let startPromise;
+      const readStart=()=>startPromise??=evaluate(client, `(async () => {
+        window.__rwnMotionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+        window.__rwnMotionPreferenceChanges = [];
+        window.__rwnMotionPreference.addEventListener('change',event=>window.__rwnMotionPreferenceChanges.push({matches:event.matches,at:performance.now()}));
+        let timer;
+        const started=new Promise(resolve=>{
+          window.__rwnMotionReady=()=>{clearTimeout(timer);resolve(true)};
+          timer=setTimeout(()=>resolve(false),2000);
+        });
+        scrollTo({top:document.querySelector('#about h2').getBoundingClientRect().top+scrollY-innerHeight+160,behavior:'instant'});
+        const observedStart=await started;
+        return {started:observedStart,timeoutMs:2000,arrivals:window.__rwnArrivals,y:scrollY,count:window.__rwnArrivals.length,running:document.querySelector('#about h2').getAnimations().some(animation=>animation.playState==='running'),preference:window.__rwnMotionPreference.matches,timeline:document.timeline.currentTime,visibility:document.visibilityState,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))};
+      })()`);
+      running=await arrive(state=>typeof state.started==='boolean', 'Active editorial start event', readStart, false);
+      assert(running.started && running.running && !running.preference, 'Preference-change test never observed an active editorial animation with motion allowed', running);
+      await client.call('Emulation.setEmulatedMedia', {features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+      // The CDP override acknowledges before the browser renders and dispatches
+      // MediaQueryList change/cancel events. Await those real signals; stationary
+      // scrolling says nothing about whether this preference change was delivered.
+      const cancellationState = () => evaluate(client, `({y:scrollY,matches:window.__rwnMotionPreference.matches,changes:window.__rwnMotionPreferenceChanges,cancelled:window.__rwnArrivals.some(item=>item.target==='about-heading'&&item.cancelled&&!item.finished),arrivals:window.__rwnArrivals,transform:getComputedStyle(document.querySelector('#about h2')).transform,visibility:document.visibilityState,timeline:document.timeline.currentTime,animations:document.getAnimations().map(animation=>({state:animation.playState,time:animation.currentTime,pending:animation.pending}))})`);
+      cancelled = await arrive(state=>state.matches&&state.changes.some(event=>event.matches)&&state.cancelled&&state.transform==='none', 'Live reduced-motion event and cancellation', cancellationState, false);
+    } finally {
+      await client.call('Animation.setPlaybackRate', {playbackRate:1});
+      await client.call('Animation.disable');
+    }
     evidence.push({label:'Live reduced-motion cancellation',running,cancelled});
     assert(cancelled.cancelled && cancelled.transform==='none' && Math.abs(cancelled.y-running.y)<=1, 'Live reduced motion did not cancel in place', {running,cancelled});
     // Controlled CPU throttle is a resilience check, not a hardware speed claim.
