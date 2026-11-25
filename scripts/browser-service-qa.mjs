@@ -174,6 +174,33 @@ async function run() {
     client = new CdpClient(target.webSocketDebuggerUrl);
     await client.connect();
     await Promise.all([client.call("Page.enable"), client.call("Runtime.enable")]);
+    // Check the actual static routes before the more expensive atlas fixtures.
+    for (const width of [1440, 390, 320]) {
+      await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
+      for (const [route, heading] of [["our-story", "Why we started."], ["donate", "Online giving is coming soon."], ["impact", "What we’ve distributed."]]) {
+        await navigate(client, `${HOST}/${route}`);
+        const actual = await evaluate(client, `(() => {
+          const doc = document.documentElement;
+          const nav = document.querySelector("header nav [aria-current='page']");
+          const impact = document.querySelector("[data-impact]");
+          const probe = {
+            heading: document.querySelector("h1")?.textContent,
+            current: nav?.getAttribute("href"),
+            overflow: doc.scrollWidth - doc.clientWidth,
+            logo: document.querySelector("header img")?.naturalWidth > 0,
+            disabledDonation: document.querySelector("main button:disabled")?.textContent.includes("Coming soon"),
+            impactReady: Boolean(impact && !impact.querySelector("[data-impact-refresh]").hidden && impact.querySelector("[data-impact-value]").textContent === "Not yet published" && impact.querySelector("details[open]") && impact.querySelectorAll("[data-count]").length === 7),
+          };
+          return probe;
+        })()`);
+        if (actual.heading !== heading || actual.current !== `/${route}` || actual.overflow > 1 || !actual.logo ||
+          (route === "donate" && !actual.disabledDonation) || (route === "impact" && !actual.impactReady)) {
+          throw new Error(`Editorial route failed at ${width}px: ${route} ${JSON.stringify(actual)}`);
+        }
+        if (width !== 320) await capture(client, `editorial-${route}-${width}.png`);
+      }
+    }
+    console.log("Editorial routes passed: desktop, 390px and 320px; truthful empty impact and disabled giving.");
     await verifyContactOnly({ client, navigate, evaluate, capture, qaDir: QA_DIR });
     await verifyConnectivityRecovery({ client, navigate, evaluate, capture, qaDir: QA_DIR });
     await verifyCatalogRecovery({ client, navigate, evaluate, capture, qaDir: QA_DIR });

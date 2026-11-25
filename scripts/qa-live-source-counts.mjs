@@ -139,7 +139,7 @@ export function installLiveSourceCountFixture(origin) {
   document.addEventListener("click", event => {
     const control = event.target.closest?.("button, summary");
     const id = control?.matches(".finder-location-notes summary") ? "about" : control?.id;
-    if (["locateMe", "clearLocation", "about"].includes(id)) probe.clicks.push({ id, trusted: event.isTrusted });
+    if (["locateMe", "clearLocation", "about", "zoomIn"].includes(id)) probe.clicks.push({ id, trusted: event.isTrusted });
   }, true);
   document.addEventListener("DOMContentLoaded", () => {
     const banner = document.createElement("aside");
@@ -261,6 +261,11 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
         check(/In the United States, location search/.test(cleared.status) && !/active nationally today/.test(cleared.status), "Clear retained a current-count claim", cleared);
         evidence.push({ label: `clear-${scenario.label}-${width}`, ...cleared });
         if (scenario.label === "zero") {
+          // This fetch is demand-driven. Use the real controls to reach the detail
+          // zoom threshold even when clearing location interrupted auto-zoom.
+          await activate("zoomIn");
+          await activate("zoomIn");
+          await wait("window.__rwnLiveCountQA.geometryLoads.some(({path}) => path === '/data/countries-detail.geojson')", "full detailed map requested by native zoom input", 200);
           await evaluate(client, "window.__rwnLiveCountQA.releaseDetail(); document.querySelector('.globe-stage').scrollIntoView({block:'center'})");
           await wait("window.__rwnLiveCountQA.countryState?.detailGeometryReady === true", "real detailed geometry applied before repeated Use", 200);
           const detailed = await snapshot();

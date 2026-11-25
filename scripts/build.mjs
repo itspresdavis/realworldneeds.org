@@ -1,3 +1,4 @@
+import { validImpact } from "../public/impact.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
 import { phoneLinks, phoneMarkup } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
@@ -219,6 +220,7 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
       <div class="directory-shell">
         ${breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
+        ${canonicalPath === "/directory" ? `<div class="policy-note directory-guide"><p><strong>Start with a need or a place.</strong> Browse a category below, narrow it by region or country, or search for a service or organization. Listings show whether you can visit a location or need to call or use a provider’s online finder.</p><p><a href="/directory/help/food">Food</a> · <a href="/directory/help/shelter">Shelter</a> · <a href="/directory/help/clothing">Clothing</a> · <a href="/directory/help/hygiene">Hygiene</a> · <a href="/directory/help/health">Health care</a> · <a href="/directory/help/water">Water</a></p></div>` : ""}
         <a class="directory-results-jump" href="#directory-results"><span><strong>View listings</strong><small>${items.length.toLocaleString()} ${items.length === 1 ? "listing" : "listings"} on this page · page ${page} of ${totalPages}</small></span><span aria-hidden="true">↓</span></a>
         <div class="directory-browse-tools">
           <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
@@ -382,7 +384,11 @@ await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
 await cp("index.html", "dist/index.html");
 await cp("src", "dist/src", { recursive: true });
+const publicImpact = JSON.parse(await readFile("public/impact-summary.json", "utf8"));
+if (!validImpact(publicImpact)) throw new Error("Rejecting invalid public impact aggregate");
 await cp("public", "dist", { recursive: true });
+// Publish only the validated, serialized aggregate, not the original source bytes.
+await writeFile("dist/impact-summary.json", `${JSON.stringify(publicImpact)}\n`);
 
 let builtIndex = await readFile("dist/index.html", "utf8");
 builtIndex = versionThreeReferences(versionIndexAssets(builtIndex, release), three);
@@ -421,7 +427,7 @@ const categoryLinks = categoryTypes.map((type) => {
 }).join("");
 const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
-const sitemapPaths = ["/", "/directory", "/our-story", "/get-involved", "/contact", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
+const sitemapPaths = ["/", "/directory", "/our-story", "/get-involved", "/contact", "/impact", "/donate", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
   title: "Free Essential Services Directory",
   heading: "Find free essential services without using the globe.",
