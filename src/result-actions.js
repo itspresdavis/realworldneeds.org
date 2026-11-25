@@ -1,4 +1,4 @@
-import { isContactOnly, hasMapCoordinates } from "./utils/resource-location.js";
+import { isContactOnly } from "./utils/resource-location.js";
 import { beforeYouGoFacts, serviceActions } from "./utils/service-access.js";
 import { getLocale, t } from "./utils/localization.js";
 import { resources } from "./data/resources.js";
@@ -6,9 +6,6 @@ import { phoneLinks } from "./utils/phone.js";
 
 const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
 
-function directionsUrl(resource) {
-  return serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google" })[0]?.href || "";
-}
 
 function createAction(label, href, ariaLabel, { primary = false, newTab = false } = {}) {
   const anchor = document.createElement("a");

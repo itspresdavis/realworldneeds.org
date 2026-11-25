@@ -51,7 +51,7 @@ test("every generated HTML document keeps a clean crawl/index structure", async 
       if (!html.includes(`data-rwn-service-notice="${reviewedNoticeId}"`)) failures.push(`${file}: missing reviewed notice marker`);
       if (!noindex) failures.push(`${file}: withheld location notice must be noindex`);
       if (canonicals.length !== 1 || canonicals[0] !== `https://www.realworldneeds.org/service/${reviewedNoticeId}`) failures.push(`${file}: invalid notice self-canonical`);
-    } else if (["dist/join.html", "dist/corrections.html"].includes(file)) {
+    } else if (["dist/join.html", "dist/account.html", "dist/corrections.html"].includes(file)) {
       if (!noindex) failures.push(`${file}: account/correction entry must be noindex`);
       if (canonicals.length) failures.push(`${file}: account/correction entry must not declare an indexable canonical`);
     } else if (isNotFound) {

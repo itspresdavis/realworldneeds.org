@@ -317,7 +317,7 @@ max-height:calc(100vh - 100% - .9rem);max-height:calc(100dvh - 100% - .9rem);ove
 .rwn-professional .brand small { font-size:.59rem;}
 .rwn-professional .finder__grid,
 .rwn-professional .finder__grid.is-panel-collapsed,
-.rwn-professional .finder__grid:not(.is-panel-collapsed) { padding: 1.15rem .8rem 1.5rem;gap: 1rem;}
+.rwn-professional .finder__grid:not(.is-panel-collapsed) { padding: .65rem .8rem 1.5rem;gap: 1rem;}
 .rwn-professional .finder-intro h1 { max-width: 17ch;font-size: clamp(2rem,9.6vw,2.8rem);line-height:1.06;}
 .rwn-professional .finder-intro p { margin-top:.65rem;font-size:.9375rem;line-height:1.5;}
 .rwn-professional .finder-surface { margin-top:.5rem;padding:.8rem;}

@@ -17,7 +17,7 @@ const LEGACY_RELEASE = "fixture-legacy-query";
 const VARIANT_RELEASE = "fixture-hashed-next";
 const FAILED_RELEASE = "fixture-hashed-failed";
 const SAVED = JSON.stringify(["survivor", "removed"]);
-const LEGACY_RUNTIME = ["/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory.js", "/directory-startup.js", "/directory-geography.js", "/saved-loader.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css"];
+const LEGACY_RUNTIME = ["/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory.js", "/directory-startup.js", "/directory-geography.js", "/saved-loader.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/language.js", "/task-controls.css", "/directory-suggestions.css"];
 const escapePattern = value => value.replace(/[.*+?^$()|[\]{}\\]/g, "\\$&");
 
 // Admitted stems come only from the actual public dependency graph and the

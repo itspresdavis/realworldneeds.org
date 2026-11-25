@@ -25,7 +25,7 @@ jobs:
     # Scheduled runs allocate no runner until all owner approvals are configured.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'schedule' && github.repository == 'iamhuvr/RWN-WEB' &&
+      (github.event_name == 'schedule' && github.repository == 'itspresdavis/RWN-WEB' &&
        vars.RWN_CATALOG_MONITOR_ENABLED == 'true' &&
        vars.RWN_CATALOG_MONITOR_OWNER != '' &&
        vars.RWN_CATALOG_MONITOR_ESCALATION_OWNER != '' &&

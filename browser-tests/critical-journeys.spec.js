@@ -229,7 +229,7 @@ test('short viewport navigation keeps every keyboard link fully reachable', asyn
     await summary.focus();
     await page.keyboard.press('Enter');
     await expect(menu).toHaveAttribute('open','');
-    await expect(links).toHaveCount(5);
+    await expect(links).toHaveText(["Find Help", "Why RWN?", "Get Involved", "Impact", "Donations", "Contact"]);
     await frame();
     const bounds=await menu.locator('nav').evaluate(nav=>{
       const box=nav.getBoundingClientRect();
@@ -244,7 +244,7 @@ test('short viewport navigation keeps every keyboard link fully reachable', asyn
     expect(bounds.overflowY).toBe('auto');
     const focused=[];
     let panelStop;
-    for(let index=0;index<5;index++) {
+    for(let index=0;index<await links.count();index++) {
       await page.keyboard.press('Tab');
       if(index===0) {
         panelStop=await menu.locator('nav').evaluate(nav=>({

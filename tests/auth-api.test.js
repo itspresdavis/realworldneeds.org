@@ -582,6 +582,8 @@ test("deployment canonicalizes only the apex hostname and keeps live release met
     "/corrections",
     "/api/corrections",
     "/api/correction-review",
+    "/account",
+    "/api/preferences",
   ];
   assert.deepEqual(
     config.redirects.filter(rule => rule.has),

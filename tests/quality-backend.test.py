@@ -41,13 +41,12 @@ class Decisions(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.evidence_path = Path(self.temporary.name) / "allowance.json"
         self.calls = []
         self.responses = {
             "user": {"login": "itspresdavis"},
             RUNS: {"total_count": 1, "workflow_runs": [run()]},
             JOBS: {"total_count": 1, "jobs": [job()]},
-            ANNOTATIONS: [{"message": backend.BILLING_MARKER + ". Please check Billing & plans."}],
+            ANNOTATIONS: [{"message": "Billing blocked before tests."}],
         }
         self.mock = patch.object(backend.subprocess, "run", side_effect=self.subprocess)
         self.mock.start()
@@ -64,21 +63,12 @@ class Decisions(unittest.TestCase):
             return value
         return subprocess.CompletedProcess(args, 0, json.dumps(value), "")
 
-    def decide(self, provider="auto"):
-        return backend.select_backend(provider, SHA, ROOT, self.evidence_path, NOW)
+    def decide(self, provider="github"):
+        return backend.select_backend(provider, SHA, ROOT)
 
     def no_runs(self):
         self.responses[RUNS] = {"total_count": 0, "workflow_runs": []}
 
-    def evidence(self, **updates):
-        payload = {
-            "schema_version": 1, "owner": backend.OWNER, "repository": backend.REPOSITORY,
-            "authenticated_login": backend.OWNER, "source": "github-billing-dashboard",
-            "url": "https://github.com/settings/billing/usage", "exhausted": True,
-            "observed_at": (NOW - timedelta(hours=1)).isoformat(),
-            "valid_until": "2026-11-01T00:00:00Z", **updates,
-        }
-        self.evidence_path.write_text(json.dumps(payload))
 
     def failed(self):
         self.responses[RUNS]["workflow_runs"] = [run(conclusion="failure")]
@@ -107,8 +97,7 @@ class Decisions(unittest.TestCase):
         payload = self.successful_jobs()
         payload["jobs"].pop(1)
         payload["total_count"] -= 1
-        self.evidence()
-        for provider in ("auto", "github"):
+        for provider in ("github",):
             with self.assertRaisesRegex(backend.BackendError, "required jobs"):
                 self.decide(provider)
         self.assertTrue(all(item[4] != ANNOTATIONS for item in self.calls))
@@ -155,10 +144,9 @@ class Decisions(unittest.TestCase):
         result = self.decide()
         self.assertEqual([item["name"] for item in result["github_required_jobs"]], list(REQUIRED_JOBS))
 
-    def test_pr_success_alone_remains_pending_even_with_allowance_evidence(self):
+    def test_pr_success_alone_remains_pending(self):
         self.responses[RUNS]["workflow_runs"] = [run(event="pull_request")]
-        self.evidence()
-        for provider in ("auto", "github"):
+        for provider in ("github",):
             result = self.decide(provider)
             self.assertEqual(result["status"], "pending")
             self.assertIn("merge-checkout", result["reason"])
@@ -203,11 +191,17 @@ class Decisions(unittest.TestCase):
             with self.assertRaises(backend.BackendError):
                 self.decide()
 
-    def test_unstarted_billing_blocked_pr_can_authorize_exact_local_validation(self):
-        self.responses[RUNS]["workflow_runs"] = [run(event="pull_request", conclusion="failure")]
-        result = self.decide()
-        self.assertEqual((result["status"], result["provider"]), ("selected", "ubuntu"))
-        self.assertEqual(result["source"], "github-billing-block")
+
+    def test_removed_backends_are_rejected_without_any_machine_access(self):
+        for provider in ("auto", "ubuntu", "macos", "ssh"):
+            with self.assertRaisesRegex(backend.BackendError, "Only native GitHub"):
+                self.decide(provider)
+        self.assertEqual(self.calls, [])
+
+    def test_billing_failure_never_authorizes_a_local_or_paid_fallback(self):
+        self.failed()
+        self.assertEqual(self.decide()["status"], "failed")
+        self.assertEqual(len(self.calls), 2)
 
     def test_latest_failure_wins_over_old_success(self):
         self.responses[RUNS] = {"total_count": 2, "workflow_runs": [run(100), run(conclusion="failure")]}
@@ -221,41 +215,12 @@ class Decisions(unittest.TestCase):
         self.responses[endpoint] = {"total_count": 1, "jobs": [job(steps=[{"conclusion": "failure"}])]}
         self.assertEqual(self.decide()["status"], "failed")
 
-    def test_pending_does_not_fall_back_even_with_evidence(self):
+    def test_pending_does_not_fall_back(self):
         for state in ("queued", "in_progress", "waiting", "requested", "pending"):
             self.responses[RUNS]["workflow_runs"] = [run(status=state, conclusion=None)]
-            self.evidence()
             self.assertEqual(self.decide()["status"], "pending")
         self.assertTrue(all(item[4] != JOBS for item in self.calls))
 
-    def test_billing_failure_without_steps_selects_ubuntu(self):
-        self.failed()
-        result = self.decide()
-        self.assertEqual((result["provider"], result["source"]), ("ubuntu", "github-billing-block"))
-
-    def test_old_billing_block_requires_current_allowance_evidence(self):
-        self.failed()
-        self.responses[RUNS]["workflow_runs"][0]["updated_at"] = "2026-10-20T00:00:00Z"
-        with self.assertRaises(backend.BackendError):
-            self.decide()
-        self.evidence()
-        self.assertEqual(self.decide()["allowance_evidence"]["exhausted"], True)
-
-    def test_old_october_billing_block_cannot_authorize_november_backup(self):
-        self.failed()
-        self.responses[RUNS]["workflow_runs"][0]["updated_at"] = "2026-10-31T23:30:00Z"
-        self.evidence()
-        november = datetime(2026, 11, 1, 0, 30, tzinfo=timezone.utc)
-        with self.assertRaises(backend.BackendError):
-            backend.select_backend("auto", SHA, ROOT, self.evidence_path, november)
-        self.assertFalse(backend.recent_billing_run(self.responses[RUNS]["workflow_runs"][0], november))
-
-    def test_missing_or_future_billing_timestamp_requires_evidence(self):
-        self.failed()
-        for observed in (None, "invalid", (NOW + timedelta(minutes=1)).isoformat()):
-            self.responses[RUNS]["workflow_runs"][0]["updated_at"] = observed
-            with self.assertRaises(backend.BackendError):
-                self.decide()
 
     def test_started_steps_block_fallback_even_with_billing_text(self):
         self.failed()
@@ -279,58 +244,21 @@ class Decisions(unittest.TestCase):
         self.assertEqual(self.decide("github")["status"], "failed")
         self.assertEqual(len(self.calls), 2)
 
-    def test_explicit_ubuntu_does_not_probe_github(self):
-        result = self.decide("ubuntu")
-        self.assertEqual(result["source"], "explicit-machine-verification")
-        self.assertEqual(self.calls, [])
-
-    def test_no_run_with_fresh_evidence_selects_backup(self):
-        self.no_runs()
-        self.evidence()
-        result = self.decide()
-        self.assertEqual(result["source"], "verified-allowance-evidence")
-        self.assertEqual(result["allowance_evidence"]["exhausted"], True)
 
     def test_no_run_github_remains_pending(self):
         self.no_runs()
         self.assertEqual(self.decide("github")["status"], "pending")
 
-    def test_no_run_without_evidence_fails_closed(self):
-        self.no_runs()
-        with self.assertRaises(backend.BackendError):
-            self.decide()
 
-    def test_expired_future_wrong_owner_and_unverified_evidence_rejected(self):
+    def test_identity_failure_stops_verification(self):
         self.no_runs()
-        bad_values = [
-            {"valid_until": NOW.isoformat()},
-            {"observed_at": (NOW + timedelta(minutes=1)).isoformat()},
-            {"owner": "other"},
-            {"repository": "other/RWN-WEB"},
-            {"authenticated_login": "other"},
-            {"source": "guess"},
-            {"exhausted": False},
-            {"url": "https://github.com/settings/billing.evil"},
-            {"valid_until": (NOW + timedelta(days=8)).isoformat()},
-            {"observed_at": "2026-10-29T00:00:00"},
-        ]
-        for values in bad_values:
-            with self.subTest(values=values):
-                self.evidence(**values)
-                with self.assertRaises(backend.BackendError):
-                    self.decide()
-
-    def test_identity_failure_never_uses_evidence(self):
-        self.no_runs()
-        self.evidence()
         self.responses["user"] = {"login": "someone-else"}
         with self.assertRaises(backend.BackendError):
             self.decide()
         self.assertEqual(len(self.calls), 1)
 
-    def test_api_error_never_uses_evidence(self):
+    def test_api_error_is_sanitized(self):
         self.no_runs()
-        self.evidence()
         self.responses[RUNS] = subprocess.CompletedProcess([], 1, "", "private token must not leak")
         with self.assertRaises(backend.BackendError) as caught:
             self.decide()
@@ -352,20 +280,6 @@ class Decisions(unittest.TestCase):
             with self.assertRaises(backend.BackendError):
                 self.decide()
 
-    def test_empty_or_partial_job_list_fails_closed(self):
-        self.failed()
-        for payload in ({"total_count": 0, "jobs": []}, {"total_count": 2, "jobs": [job()]}):
-            self.responses[JOBS] = payload
-            with self.assertRaises(backend.BackendError):
-                self.decide()
-
-    def test_untrusted_check_url_rejected_without_request(self):
-        self.failed()
-        self.responses[JOBS]["jobs"][0]["check_run_url"] = "https://evil.example/private"
-        with self.assertRaises(backend.BackendError):
-            self.decide()
-        self.assertEqual(len(self.calls), 3)
-
 
 class WorkflowContract(unittest.TestCase):
     def test_native_split_preserves_every_existing_script_and_deadline(self):
@@ -385,7 +299,7 @@ class WorkflowContract(unittest.TestCase):
             combined += [match for match in re.findall(r"(?m)^          (node scripts/browser-[a-z0-9-]+\.mjs)$", body)
                          if "browser-globe-touch-v4" not in match]
         full = json.loads((root / "package.json").read_text())["scripts"]["test:browser:qa"].split(" && ")
-        self.assertEqual(combined, full, "CI shards must preserve the complete fallback workload exactly once and in order")
+        self.assertEqual(combined, full, "CI shards must preserve the complete browser workload exactly once and in order")
         self.assertEqual(len(combined), len(set(combined)))
         self.assertIn("run: npm run check", jobs["test"])
         self.assertIn("node scripts/browser-globe-touch-v4.mjs", jobs["test"])
@@ -404,12 +318,6 @@ class LocalBoundaries(unittest.TestCase):
         platform.start()
         self.addCleanup(platform.stop)
 
-    def test_darwin_cannot_silently_replace_configured_ubuntu_fallback(self):
-        with patch.object(backend.sys, "platform", "darwin"), \
-             patch.object(backend.subprocess, "run") as command:
-            with self.assertRaisesRegex(backend.BackendError, "Ubuntu fallback requires Linux"):
-                backend.run_ubuntu(ROOT, SHA, None)
-            command.assert_not_called()
 
     def test_origin_and_branch_reachability_are_required(self):
         good = [str(ROOT), "git@github.com:itspresdavis/RWN-WEB.git", SHA, "refs/heads/main", TREE]
@@ -428,30 +336,6 @@ class LocalBoundaries(unittest.TestCase):
                 with self.assertRaises(backend.BackendError):
                     backend.trusted_commit("refs/pull/1/head", ROOT)
 
-    def test_local_pass_requires_matching_sha_and_durable_receipt(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            receipt = Path(temporary) / "receipt.json"
-            receipt.write_text("{}")
-            result = {"status": "passed", "sha": SHA, "receipt": str(receipt)}
-            with patch.object(backend.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(result))):
-                self.assertEqual(backend.run_ubuntu(ROOT, SHA, None)["status"], "passed")
-            result["sha"] = "c" * 40
-            with patch.object(backend.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(result))):
-                with self.assertRaises(backend.BackendError):
-                    backend.run_ubuntu(ROOT, SHA, None)
-            result["sha"] = SHA
-            receipt.unlink()
-            with patch.object(backend.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(result))):
-                with self.assertRaises(backend.BackendError):
-                    backend.run_ubuntu(ROOT, SHA, None)
-
-    def test_local_nonzero_cannot_be_reported_as_passed(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            receipt = Path(temporary) / "receipt.json"
-            receipt.write_text("{}")
-            result = {"status": "passed", "sha": SHA, "receipt": str(receipt)}
-            with patch.object(backend.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, json.dumps(result))):
-                self.assertEqual(backend.run_ubuntu(ROOT, SHA, None)["status"], "failed")
 
     def test_output_is_atomic_json(self):
         with tempfile.TemporaryDirectory() as temporary:

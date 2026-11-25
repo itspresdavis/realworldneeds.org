@@ -197,7 +197,7 @@ async function run() {
   const profile = await mkdtemp(join(tmpdir(), "rwn-cache-upgrade-"));
   const swSource = await readFile("public/sw.js", "utf8");
   const fixtureFiles = new Map();
-  for (const path of ["directory.js", "directory-startup.js", "page-menu.js", "saved-loader.js", "saved-services.js", "saved-services.css", "legal.css", "directory-enhancements.css", "professional-pages.css", "navigation-actions.css", "offline-status.js", "language.js", "task-controls.css", "brand/rwn-logo-192.png", "rwn-mark.svg", "site.webmanifest"]) {
+  for (const path of ["directory.js", "directory-startup.js", "page-menu.js", "saved-loader.js", "saved-services.js", "saved-services.css", "legal.css", "directory-enhancements.css", "professional-pages.css", "navigation-actions.css", "offline-status.js", "language.js", "task-controls.css", "directory-suggestions.css", "brand/rwn-logo-192.png", "rwn-mark.svg", "site.webmanifest"]) {
     fixtureFiles.set(`/${path}`, await readFile(`dist/${path}`));
   }
   let release = "fixture-old", includeRemoved = true, failedCore = null, failIndex = false;
