@@ -209,6 +209,11 @@ export function initSavedServices() {
   });
   const reconnect = () => { loadCatalog.retry(); render(); };
   for (const type of ["online", "offline", "rwn-connection-restored"]) window.addEventListener(type, reconnect);
-  navigator.serviceWorker?.addEventListener("controllerchange", () => { loadCatalog.reset(); render(); });
+  navigator.serviceWorker?.addEventListener("controllerchange", () => {
+    loadCatalog.reset();
+    // WebKit may revoke fetch access before pagehide during navigation.
+    // A live page refreshes on its next frame; a departing page does not.
+    window.requestAnimationFrame(() => { if (activePage) render(); });
+  });
   syncView(active());
 }

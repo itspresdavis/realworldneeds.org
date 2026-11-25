@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { frameBufferMatches, globeHasMotion, globePointVisible } from '../src/utils/globe-rendering.js';
@@ -24,8 +26,6 @@ test('perspective horizon excludes far-side controls, including close zoom', () 
 
 
 test('moving frames keep elapsed rendering time while waking from rest resets it', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const { runInNewContext } = await import('node:vm');
   const source = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
   const scheduler = source.slice(source.indexOf('function wakeGlobe('), source.indexOf('function focusRegion('));
   const callbacks = [];
@@ -55,4 +55,34 @@ test('moving frames keep elapsed rendering time while waking from rest resets it
   context.wakeGlobe();
   callbacks.shift()(5016);
   assert.deepEqual(context.deltas, [16, 16, 16], 'resuming must not integrate time spent asleep');
+});
+
+
+test('returning to the globe replaces stale frame state and observes current layout', async () => {
+  const source = await readFile('src/app.js', 'utf8');
+  const scheduler = source.slice(source.indexOf('function pauseGlobe()'), source.indexOf('function applyPendingGlobeDetail()'));
+  const cancelled = [], frames = [], rendered = [];
+  let box = { left: 0, right: 390, top: 250, bottom: 600, width: 390, height: 350 };
+  const context = {
+    globeFrameHandle: 41, globeContextLost: false, globeRenderer: {}, lastFrame: 0,
+    globeStageElement: { getBoundingClientRect: () => box },
+    state: { globeVisible: false }, document: { hidden: false },
+    window: { innerWidth: 390, innerHeight: 844, cancelAnimationFrame: id => cancelled.push(id), requestAnimationFrame: callback => { frames.push(callback); return 42; } },
+    performance: { now: () => 1000 }, animateGlobe: now => rendered.push(now),
+  };
+  runInNewContext(scheduler, context);
+  context.resumeGlobe();
+  assert.deepEqual(cancelled, [41]);
+  assert.equal(context.state.globeVisible, true);
+  assert.equal(frames.length, 1, 'a visible returned map gets a fresh frame');
+  frames.shift()(1016);
+  assert.deepEqual(rendered, [1016]);
+  box = { ...box, top: 900, bottom: 1250 };
+  context.resumeGlobe();
+  assert.equal(context.state.globeVisible, false);
+  assert.equal(frames.length, 0, 'offscreen maps stay paused');
+  box = { ...box, top: 250, bottom: 600 };
+  context.document.hidden = true;
+  context.resumeGlobe();
+  assert.equal(frames.length, 0, 'hidden documents stay paused');
 });

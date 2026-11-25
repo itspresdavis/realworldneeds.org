@@ -167,10 +167,12 @@ test("pending engine cannot schedule a false-failure frame; initialized renderer
   const f = fixture(), pending = deferred(), frames = [], renders = [];
   const EngineObject = class {};
   Object.assign(f.context, {
-    globeFrameHandle: null, globeContextLost: false, lastFrame: 0,
-    document: { hidden: false, documentElement: { dataset: {} }, getElementById() { return {}; } },
+    globeFrameHandle: null, globeContextLost: false, lastFrame: 0, globeStageElement: null,
+    pauseGlobe() { f.context.globeFrameHandle = null; },
+    document: { hidden: false, documentElement: { dataset: {} }, getElementById() { return {}; },
+      querySelector() { return { getBoundingClientRect: () => ({ left: 0, right: 390, top: 100, bottom: 500, width: 390, height: 400 }) }; } },
     performance: { now: () => 12 },
-    window: { requestAnimationFrame(callback) { frames.push(callback); return frames.length; } },
+    window: { innerWidth: 390, innerHeight: 844, requestAnimationFrame(callback) { frames.push(callback); return frames.length; } },
     loadGlobeEngine: () => pending.promise,
     initThreeGlobe() { f.context.globeRenderer = {}; return true; },
     animateGlobe: now => renders.push(now),
@@ -178,7 +180,7 @@ test("pending engine cannot schedule a false-failure frame; initialized renderer
     requestedResource: null, initialResource: null,
   });
   f.context.state.globeVisible = true;
-  vm.runInContext(between("function wakeGlobe(", "function applyPendingGlobeDetail()") + between("async function startGlobe()", "shell();\nrenderStatic();"), f.context);
+  vm.runInContext(between("function resumeGlobe()", "function applyPendingGlobeDetail()") + between("async function startGlobe()", "shell();\nrenderStatic();"), f.context);
   f.context.wakeGlobe(); // Initial updateFilters runs before startGlobe.
   const startup = f.context.startGlobe();
   f.context.wakeGlobe(); // Search, resize and observer events during the import.

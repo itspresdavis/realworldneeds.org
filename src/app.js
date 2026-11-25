@@ -2128,6 +2128,17 @@ function pauseGlobe() {
   globeFrameHandle = null;
 }
 
+function resumeGlobe() {
+  // History restores layout independently of queued observer/frame callbacks.
+  // Reconcile the actual viewport before scheduling the first returned frame.
+  pauseGlobe();
+  const box = (globeStageElement || document.querySelector(".globe-stage"))?.getBoundingClientRect();
+  state.globeVisible = Boolean(box && box.width > 0 && box.height > 0
+    && box.bottom > 0 && box.top < window.innerHeight
+    && box.right > 0 && box.left < window.innerWidth);
+  if (state.globeVisible) wakeGlobe();
+}
+
 function wakeGlobe(resetClock = true) {
   // Finder events can arrive while the optional engine is still loading.
   // A missing renderer is not a WebGL failure until startup has concluded.
@@ -3187,16 +3198,13 @@ function bindEvents() {
   updateCurrentSection();
 
   if ("IntersectionObserver" in window) {
-    const globeObserver = new IntersectionObserver(([entry]) => {
-      state.globeVisible = entry.isIntersecting;
-      if (state.globeVisible) wakeGlobe();
-      else pauseGlobe();
-    }, { rootMargin: "0px" });
+    const globeObserver = new IntersectionObserver(resumeGlobe, { rootMargin: "0px" });
     globeObserver.observe(document.querySelector(".globe-stage"));
   }
+  window.addEventListener("pageshow", resumeGlobe);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) pauseGlobe();
-    else wakeGlobe();
+    else resumeGlobe();
   });
 
 }
@@ -3226,7 +3234,7 @@ export async function startGlobe() {
       const resource = resources.find((item) => item.id === requestedResource);
       if (resource) focusGlobeOn(resource);
     }
-    wakeGlobe();
+    resumeGlobe();
     document.documentElement.dataset.globeStartup = "ready";
   } catch (error) {
     console.warn("Interactive map could not load; the text finder remains available.", error);

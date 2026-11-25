@@ -120,7 +120,7 @@ async function inspectFailedGlobeState(client) {
   let breakpoint;
   try {
     const source = await readFile("dist/src/app.js", "utf8");
-    const lineNumber = source.split("\n").findIndex((line) => line.startsWith("function animateGlobe(now)")) + 1;
+    const lineNumber = source.split("\n").findIndex((line) => line.startsWith("function wakeGlobe(")) + 1;
     if (lineNumber < 1) return { diagnosticError: "Built animation entry point was not found." };
     await client.call("Debugger.enable");
     const result = await client.call("Debugger.setBreakpointByUrl", {
@@ -129,13 +129,16 @@ async function inspectFailedGlobeState(client) {
         dragging:state.dragging,touching:state.touching,pinching:state.pinching,
         zoom:state.zoom,targetZoom:state.targetZoom,targetLon:state.targetLon,
         velocityLon:state.velocityLon,velocityLat:state.velocityLat,
-        globeVisible:state.globeVisible,contextLost:globeContextLost,
+        globeVisible:state.globeVisible,contextLost:globeContextLost,frameHandle:globeFrameHandle,renderer:!!globeRenderer,hidden:document.hidden,
         pointers:activeGlobePointers.size,autoRotate:state.autoRotate,
         frames:globeRenderer?.info.render.frame,textures:globeRenderer?.info.memory.textures,
         at:performance.now()
       },false)`
     });
     breakpoint = result.breakpointId;
+    // Only after failure: a real control wakes the scheduler so a stopped
+    // animation can still explain why it did not schedule a frame.
+    await evaluate(client, "document.getElementById('zoomIn')?.click()");
     await sleep(650);
     return await evaluate(client, "window.__rwnRuntimeSnapshot || null");
   } catch (error) {
@@ -476,7 +479,7 @@ async function run() {
           const canvas=document.getElementById('globeCanvas');
           const gl=canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
           const stage=document.querySelector('.globe-stage');
-          return {readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,scrollTrace:window.__rwnScrollTrace,scrollPreconditions:window.__rwnScrollPreconditions,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
+          return {startup:document.documentElement.dataset.globeStartup,hidden:document.hidden,readout:document.getElementById('globeReadout')?.innerText,moving:stage?.classList.contains('is-globe-moving'),contextLost:!gl || gl.isContextLost(),scrollY,viewport:{width:innerWidth,height:innerHeight},inputTrace:window.__rwnInputTrace,scrollTrace:window.__rwnScrollTrace,scrollPreconditions:window.__rwnScrollPreconditions,frameIntervals:window.__rwnFrameSamples,longTasks:window.__rwnLongTasks,inputTimings:window.__rwnInputTimings,assets:performance.getEntriesByType('resource').filter(e=>/earth-blue-marble|countries.*geojson/.test(e.name)).map(e=>({name:new URL(e.name).pathname,bytes:e.transferSize,duration:e.duration}))};
         })()`);
         failure.runtime = await inspectFailedGlobeState(client);
         Object.assign(failure, { phase, error: String(error.message || error), observations, exceptions, scrollPreconditionFailure: error.scrollStability || null });
