@@ -70,19 +70,10 @@ function bindLanguage(select) {
   select.addEventListener('change', () => { languageClearFailed = false; setLocale(select.value); });
 }
 function ensureControl() {
-  const existing = document.querySelector('[data-language-control] select');
-  if (existing) { bindLanguage(existing); return; }
-  const header = document.querySelector('.rwn-site-header, .site-header, .legal-header');
-  if (!header) return;
-  const bar = document.createElement('nav'); bar.className = 'rwn-language-bar'; bar.setAttribute('aria-label', 'Language / Idioma');
-  const label = document.createElement('label'); label.dataset.languageControl = '';
-  const name = document.createElement('span'); name.textContent = 'Language / Idioma';
-  const select = document.createElement('select'); select.setAttribute('aria-label', 'Language / Idioma'); select.setAttribute('aria-describedby', 'rwn-language-scope');
-  for (const [value, text] of [['en', 'English'], ['es', 'Español']]) { const option = document.createElement('option'); option.value = value; option.textContent = text; option.lang = value; select.append(option); }
-  select.value = getLocale(); bindLanguage(select); label.append(name, select);
-  const notice = document.createElement('p'); notice.id = 'rwn-language-scope'; notice.dataset.languageNotice = ''; notice.textContent = t('translationScope'); notice.hidden = getLocale() !== 'es';
-  bar.append(label, notice); header.insertAdjacentElement('afterend', bar);
+  const select = document.querySelector('[data-language-control] select');
+  if (select) bindLanguage(select);
 }
+
 function update() {
   scheduled = false; observer.disconnect(); ensureControl();
   document.title = originalTitle.split(' | ').map(part => translateInterfaceText(part, getLocale())).join(' | ');

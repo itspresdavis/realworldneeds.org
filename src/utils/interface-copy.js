@@ -121,6 +121,8 @@ const patterns = [
     [/^([\d,]+) saved listings? · ([\d,]+) no longer in the directory\. Confirm current details before you go\.$/, '$1 fichas guardadas · $2 ya no están en el directorio. Confirma los detalles actuales antes de ir.'],
     [/^Remove (.+) from saved services$/, 'Quitar $1 de los servicios guardados'],
     [/^Actions for (.+)$/, 'Acciones para $1'], [/^Quick actions for (.+)$/, 'Acciones rápidas para $1'],
+    [/^Call (.+) for (.+)$/, 'Llamar a $2 al $1'],
+    [/^Call (.+) at (.+)$/, 'Llamar a $1 al $2'],
     [/^Call (.+)$/, 'Llamar a $1'], [/^Directions to (.+)$/, 'Cómo llegar a $1'],
   ];
 

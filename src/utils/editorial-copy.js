@@ -2,6 +2,8 @@
 // Organization names, addresses and source-provided facts are not rewritten.
 export const editorialCopy = [
   ['Find Help', 'Buscar ayuda'], ['Why RWN?', '¿Por qué RWN?'], ['Get Involved', 'Participa'],
+  ['Find Essential Services Near You', 'Encuentra servicios esenciales cerca de ti'],
+  ['Free Essential Services Directory', 'Directorio de servicios esenciales gratuitos'], ['Our Impact', 'Nuestro impacto'],
   ['Impact', 'Nuestro impacto'], ['Donations', 'Donaciones'], ['Contact', 'Contacto'],
   ['Primary navigation', 'Navegación principal'], ['Mobile navigation', 'Navegación móvil'],
   ['Navigation menu', 'Menú de navegación'], ['About translations', 'Acerca de las traducciones'],

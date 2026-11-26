@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { minify } from 'terser';
+import { translateInterfaceText } from '../src/utils/interface-copy.js';
 
 // Keep language switching available offline without a new module dependency in
 // the budgeted Directory/Saved entries. A failed optional language script leaves
@@ -13,6 +14,17 @@ const { code } = await minify(source, { module: true });
 const css = await readFile('public/task-controls.css', 'utf8');
 const release = createHash('sha256').update(code).update(css).digest('hex').slice(0, 12);
 const control = '<div class="rwn-language-bar"><label data-language-control><span class="rwn-visually-hidden">Language / Idioma</span><select aria-label="Language / Idioma" disabled><option value="en" lang="en">English</option><option value="es" lang="es">Español</option></select></label><details class="rwn-language-info"><summary aria-label="About translations"><span aria-hidden="true">i</span></summary><p id="rwn-language-scope" data-language-notice>Provider information stays in its original language. Language selection does not confirm that a provider offers service in Spanish.</p></details></div>';
+// Authored editorial pages paint their chosen language immediately. Only exact
+// copy in the translation dictionary is paired; URLs and markup stay intact.
+const escapeText = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+function bilingualEditorial(html) {
+  if (!html.includes('class="editorial-page"')) return html;
+  return html.replace(/<(main|footer)\b[^>]*>[\s\S]*?<\/\1>/g, section => section.replace(/>([^<>]+)</g, (match, text) => {
+    const spanish = translateInterfaceText(text, 'es');
+    if (spanish === text) return match;
+    return `><span data-rwn-label><span lang="en">${text}</span><span lang="es">${escapeText(spanish)}</span></span><`;
+  }));
+}
 await writeFile('dist/language.js', `${code}\n`);
 await writeFile('dist/task-controls.css', css);
 async function inject(directory) {
@@ -21,6 +33,7 @@ async function inject(directory) {
     if (entry.isDirectory()) await inject(path);
     else if (entry.name.endsWith('.html')) {
       let html = await readFile(path, 'utf8');
+      html = bilingualEditorial(html);
       // Authored long-form English content remains correctly identified when
       // navigation changes language; reviewed explicit translations override it.
       html = html.replace(/<(section|article) class="(legal-hero|legal-content)">/g, '<$1 class="$2" lang="en">');
