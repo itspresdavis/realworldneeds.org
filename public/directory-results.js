@@ -73,7 +73,9 @@ export const createResultRow = (record, connectivityNotice) => {
       accessUrl ? `Website (connection required): ${accessUrl}` : "", phoneAccess ? `Dialing scope: ${phoneAccess}` : ""].filter(Boolean).join(" ")));
   }
   wrap.append(actions);
-  if (serviceAccessSummary) more.append(element("p", serviceAccessSummary));
+  if (serviceAccessSummary) {
+    for (const route of serviceAccessSummary.split(" | ")) more.append(element("p", route));
+  }
   if (extraActions) more.append(routeActions);
   if (serviceAccessSummary || extraActions) wrap.append(more);
   if (!navigator.onLine) {
