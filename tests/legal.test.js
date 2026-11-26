@@ -20,7 +20,7 @@ test("public policy pages are indexable, titled, and canonical", async () => {
 
 test("sitemap publishes every policy route", async () => {
   const sitemap = await readFile("public/sitemap.xml", "utf8");
-  for (const route of ["/privacy", "/terms", "/accessibility", "/editorial-policy", "/transparency"]) {
+  for (const route of ["/privacy", "/terms", "/accessibility", "/editorial-policy", "/our-story"]) {
     assert.match(sitemap, new RegExp(`<loc>https://www\\.realworldneeds\\.org${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<\\/loc>`));
   }
 });
