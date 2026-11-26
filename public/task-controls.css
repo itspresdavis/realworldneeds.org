@@ -1,13 +1,54 @@
-/* Shared access, search and language controls. New components use existing colors and touch targets. */
-.rwn-language-bar { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:.5rem 1rem; padding:0 max(1rem,calc((100vw - 1184px)/2)); background:#fff; border-bottom:1px solid #dce5df; color:#294139; font:500 .8125rem/1.5 system-ui,sans-serif; }
-.rwn-language-bar label { display:flex; align-items:center; flex-wrap:wrap; gap:.6rem; }
-.rwn-language-bar select { min-width:6.2rem; min-height:44px; padding:.5rem .65rem; border:0; border-radius:0; background:#fff; color:#153e5c; font:inherit; }
-.rwn-language-bar select:focus-visible { outline:3px solid #376b47; outline-offset:3px; }
-.rwn-language-bar p { flex:1 1 100%; max-width:70ch; margin:0; }
-.rwn-language-bar [hidden] { display:none; }
-html[lang="es"] .rwn-professional .resource-row__reviewed::before { content:"Fuente consultada "; }
-@media (max-width:600px) { .rwn-language-bar { justify-content:flex-start; } }
-@media print { .rwn-language-bar { display:none; } }
+/* Shared header: identical geometry on the map, directory and editorial pages. */
+html { scrollbar-gutter: stable; scroll-behavior: auto; scroll-padding-top: 6rem; }
+.rwn-site-header, .rwn-site-header * { box-sizing: border-box; }
+.rwn-site-header { position: sticky; top: 0; z-index: 100; margin: 0; border-bottom: 1px solid #d7e0e4; background: #fff; color: #153e5c; font: 400 1rem/1.4 system-ui, sans-serif; }
+.rwn-site-header__inner { display: flex; align-items: center; gap: 1.5rem; width: min(76rem, calc(100% - 3rem)); min-height: 80px; margin: 0 auto; padding: .5rem 0; }
+.rwn-site-header .rwn-site-brand { display: flex; align-items: center; flex-shrink: 0; gap: .65rem; color: #153e5c; text-decoration: none; }
+.rwn-site-brand img { display: block; width: 44px; height: 44px; object-fit: contain; }
+.rwn-site-brand strong { display: block; font-size: .95rem; font-weight: 750; line-height: 1.3; }
+.rwn-site-brand small { display: block; margin-top: .15rem; color: #526774; font-size: .7rem; line-height: 1.3; }
+.rwn-site-header .rwn-site-nav { display: flex; align-items: center; gap: 1.25rem; margin-left: auto; }
+.rwn-site-header .rwn-site-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: .5rem 0; border: 0; color: #153e5c; background: none; font-size: .875rem; font-weight: 600; line-height: 1.4; white-space: nowrap; text-decoration: none; }
+.rwn-site-header a::after { content: none; }
+.rwn-site-header .rwn-site-nav a:is(:hover,[aria-current="page"]) { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: .4em; }
+.rwn-site-header :is(a,select,summary):focus-visible { outline: 3px solid #2875a8; outline-offset: 3px; border-radius: 2px; }
+.rwn-site-tools { display: flex; align-items: center; gap: .75rem; }
+.rwn-language-bar { display: flex; align-items: center; gap: .1rem; padding: 0; margin: 0; color: #153e5c; font: 400 .8125rem/1.5 system-ui, sans-serif; }
+.rwn-language-bar label { display: flex; align-items: center; }
+.rwn-language-bar select { width: 6.25rem; min-height: 44px; padding: .5rem .3rem; border: 0; border-radius: 0; background: #fff; color: #153e5c; font: inherit; cursor: pointer; }
+.rwn-language-info { position: relative; margin: 0; }
+.rwn-language-info summary { display: grid; place-items: center; width: 30px; min-height: 44px; padding: 0; cursor: pointer; list-style: none; }
+.rwn-language-info summary::-webkit-details-marker { display: none; }
+.rwn-language-info summary span { display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid #74868e; border-radius: 50%; font-size: .7rem; font-weight: 600; }
+.rwn-language-info p { position: absolute; right: 0; top: 100%; z-index: 120; width: min(21rem, calc(100vw - 2rem)); max-width: none; margin: .4rem 0 0; padding: 1rem; border: 1px solid #d7e0e4; border-radius: 6px; background: #fff; color: #40525c; box-shadow: 0 8px 24px #153e5c14; font: 400 .875rem/1.6 system-ui, sans-serif; }
+.rwn-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+[data-rwn-label] > [lang="es"] { display: none; }
+html[lang="es"] [data-rwn-label] > [lang="en"] { display: none; }
+html[lang="es"] [data-rwn-label] > [lang="es"] { display: inline; }
+.rwn-site-header .rwn-page-menu { display: none; position: relative; margin: 0; }
+.rwn-site-header .rwn-page-menu > summary { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: .5rem .65rem; border: 1px solid #c8d5db; border-radius: 4px; background: #fff; color: #153e5c; font: 600 .875rem/1.4 system-ui, sans-serif; cursor: pointer; list-style: none; }
+.rwn-site-header .rwn-page-menu > summary::-webkit-details-marker { display: none; }
+.rwn-site-header .rwn-page-menu nav { position: absolute; top: calc(100% + .5rem); right: 0; display: grid; gap: 0; width: min(20rem, calc(100vw - 2rem)); max-height: calc(100dvh - 7rem); overflow: auto; overscroll-behavior: contain; padding: .5rem; border: 1px solid #d7e0e4; border-radius: 6px; background: #fff; box-shadow: 0 8px 24px #153e5c14; }
+.rwn-site-header .rwn-page-menu nav a { display: flex; align-items: center; min-height: 48px; padding: .65rem .75rem; border: 0; color: #153e5c; font: 600 .9375rem/1.4 system-ui, sans-serif; text-decoration: none; }
+.rwn-site-header .rwn-page-menu nav a:is(:hover,[aria-current="page"]) { background: #edf4f7; text-decoration: underline; text-underline-offset: .2em; }
+html[lang="es"] .rwn-professional .resource-row__reviewed::before { content: "Fuente consultada "; }
+@media (max-width: 68rem) {
+  .rwn-site-header .rwn-site-nav { display: none; }
+  .rwn-site-header .rwn-site-tools { margin-left: auto; }
+  .rwn-site-header .rwn-page-menu { display: block; }
+}
+@media (max-width: 40rem) {
+  .rwn-site-header__inner { width: calc(100% - 1.5rem); min-height: 72px; gap: .5rem; }
+  .rwn-site-header .rwn-site-brand { flex-shrink: 1; min-width: 0; gap: .4rem; }
+  .rwn-site-brand img { width: 36px; height: 36px; }
+  .rwn-site-brand strong { max-width: 7.5rem; font-size: .875rem; }
+  .rwn-site-brand small { display: none; }
+  .rwn-site-tools { gap: .25rem; flex-shrink: 0; }
+  .rwn-language-bar select { width: 5.3rem; }
+  .rwn-language-info summary { width: 24px; }
+  .rwn-language-info p { right: -4rem; }
+}
+@media print { .rwn-site-header, .rwn-language-bar { display: none; } }
 
 .rwn-professional .result-access-facts { min-width:0; max-width:70ch; margin:.5rem 0 .75rem; color:#40594c; font-size:.875rem; line-height:1.55; overflow-wrap:anywhere; }
 .rwn-professional .result-access-facts p { margin:.35rem 0; }

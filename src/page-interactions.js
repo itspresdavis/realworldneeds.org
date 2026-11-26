@@ -5,7 +5,7 @@ const EDITORIAL_ITEMS = ".about-rwn__heading h2, .source-band__heading h2, .miss
 
 export function installPageInteractions() {
   const page = document.documentElement;
-  const header = document.querySelector(".site-header");
+  const header = document.querySelector(".rwn-site-header");
   if (!header || page.dataset.pageInteractions === "ready") return;
   page.dataset.pageInteractions = "ready";
 

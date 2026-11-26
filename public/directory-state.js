@@ -18,7 +18,7 @@ export const writeDirectoryState = (history, path, value) => {
 
 export const restoreDirectoryView = (list, state, browseInput) => {
   window.scrollTo({ top: state.scroll, behavior: "instant" });
-  const header = document.querySelector(".legal-header");
+  const header = document.querySelector(".rwn-site-header");
   const edge = header?.getBoundingClientRect().bottom || 0;
   const visible = node => {
     const rect = node.getBoundingClientRect();

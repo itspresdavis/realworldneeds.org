@@ -4,7 +4,7 @@ import { join, posix } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // A query alone cannot escape an installed worker that strips cache queries.
-export const requiredOfflineAssets = Object.freeze(["/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory-geography.js", "/directory.js", "/directory-startup.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/saved-loader.js", "/language.js", "/task-controls.css", "/directory-suggestions.css"]);
+export const requiredOfflineAssets = Object.freeze(["/language-preference.js", "/legal.css", "/page-menu.js", "/directory-enhancements.css", "/professional-pages.css", "/navigation-actions.css", "/directory-geography.js", "/directory.js", "/directory-startup.js", "/saved-services.js", "/saved-services.css", "/offline-status.js", "/saved-loader.js", "/language.js", "/task-controls.css", "/directory-suggestions.css"]);
 export const offlineModuleEntries = Object.freeze(["/src/utils/search-intent-entry.js"]);
 export const optionalOfflineData = Object.freeze(["/data/postal-areas.json"]);
 const digest = bytes => createHash("sha256").update(bytes).digest("hex").slice(0, 12);

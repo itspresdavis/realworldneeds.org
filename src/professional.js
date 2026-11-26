@@ -10,36 +10,6 @@ function installBrandMarks() {
   });
 }
 
-function rewriteNavigation() {
-  const desktop = document.querySelector(".primary-nav");
-  const mobile = document.querySelector(".site-menu nav");
-  const links = `
-    <a href="/directory">Find Help</a>
-    <a href="/our-story">Why RWN?</a>
-    <a href="/get-involved">Get Involved</a>
-    <a href="/impact">Impact</a>
-    <a href="/donate">Donations</a>
-    <a href="/contact">Contact</a>
-  `;
-  if (desktop) desktop.innerHTML = links;
-  if (mobile) mobile.innerHTML = links;
-
-  const menuSummary = document.querySelector(".site-menu > summary");
-  if (menuSummary) {
-    menuSummary.textContent = "Menu";
-    menuSummary.setAttribute("aria-label", "Navigation menu");
-    menuSummary.setAttribute("title", "Menu");
-  }
-
-  const action = document.querySelector(".header-action");
-  if (action) {
-    action.textContent = "Saved";
-    action.href = "/directory#saved";
-    action.removeAttribute("data-section-link");
-    action.setAttribute("aria-label", "Open saved services");
-  }
-}
-
 function rewriteBrandText() {
   for (const container of document.querySelectorAll(".brand__name, .footer-brand > span:last-child")) {
     const strong = container.querySelector("strong");
@@ -176,7 +146,6 @@ export function installProfessionalPresentation() {
   }
   installBrandMarks();
   rewriteBrandText();
-  rewriteNavigation();
   rewriteFinderCopy();
   rewriteMethodSections();
   simplifyStructure();

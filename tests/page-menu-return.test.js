@@ -24,7 +24,7 @@ function fixture({ open = true, active = 'link', narrow = true, present = true }
     removeAttribute(name) { assert.equal(name, 'open'); mutations.push(name); this.open = false; },
     querySelector: () => nodes.summary, closest: () => header };
   const document = { body: nodes.body, hasFocus: () => true, addEventListener: listen, activeElement: nodes[active], querySelector(selector) { assert.equal(selector, '.rwn-page-menu'); return present ? menu : null; } };
-  const context = { document, window: { innerHeight: 844, innerWidth: narrow ? 390 : 1180, addEventListener: listen },
+  const context = { document, window: { matchMedia: () => ({ get matches() { return context.window.innerWidth <= 1088; } }), innerHeight: 844, innerWidth: narrow ? 390 : 1180, addEventListener: listen },
     getComputedStyle: node => ({ visibility: 'visible', display: node === menu && !narrow ? 'none' : 'block' }) };
   vm.runInNewContext(source, context);
   const fire = (type, event = {}) => {
@@ -100,7 +100,7 @@ test('menu can reopen normally and each later retained return repairs it once', 
 });
 
 test('generated header lifecycle is bounded and does not write browsing state or navigate', () => {
-  assert.ok(Buffer.byteLength(source) <= 2_000, 'shared generated header lifecycle, dismissal and native focus repair stay below 2 KB');
+  assert.ok(Buffer.byteLength(source) <= 2_300, 'shared generated header lifecycle, dismissal and native focus repair stay below 2.3 KB');
   assert.doesNotMatch(source, /localStorage|sessionStorage|history\.|location\.|scrollTo|scrollIntoView|fetch\(|setTimeout|requestAnimationFrame|querySelectorAll\([^)]*directory/);
 });
 
@@ -114,11 +114,11 @@ test('local, global, service and trust pages load the same byte-addressed contro
     const html = await readFile(`dist/${path}`, 'utf8');
     assert.equal(html.split(`src="${asset}?v=`).length - 1, 1, path);
     assert.doesNotMatch(html, /<details class="rwn-page-menu" open/, path);
-    assert.match(html, /<summary aria-label="Navigation menu">Menu<\/summary>/, path);
+    assert.match(html, /<summary aria-label="Navigation menu">[\s\S]*?lang="en">Menu<\/span>[\s\S]*?<\/summary>/, path);
     assert.doesNotMatch(html.match(/<details class="rwn-page-menu">[\s\S]*?<\/details>/)?.[0], /aria-expanded|role="(?:menu|button)"/, 'native details retains expanded semantics');
   }
   const home = await readFile('dist/index.html', 'utf8');
-  assert.ok(!home.includes('src="/page-menu.'), 'homepage keeps its existing menu owner');
+  assert.ok(home.includes('src="/page-menu.'), 'homepage uses the shared menu owner');
 });
 
 test('Escape from summary or a menu link closes once and restores visible summary without scrolling', () => {
@@ -168,7 +168,7 @@ test('outside click closes without stealing focus from the clicked control', () 
   assert.equal(f.menu.open, false);
   assert.equal(f.document.activeElement, f.nodes.summary, 'repair only focus left in the hidden menu');
   const inside = fixture(); inside.fire('click');
-  assert.equal(inside.menu.open, true, 'native navigation and Saved retain their existing owner');
+  assert.equal(inside.menu.open, false, 'a selected navigation link dismisses the overlay without intercepting navigation');
 });
 
 test('desktop resize closes and repairs hidden menu focus, while narrow resize preserves it', () => {

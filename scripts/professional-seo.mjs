@@ -1,3 +1,4 @@
+import { siteHeader } from "./site-shell.mjs";
 import { serviceActions } from "../src/utils/service-access.js";
 import { serviceContactMarkup } from "./service-contact.mjs";
 import { isContactOnly, hasMapCoordinates } from "../src/utils/resource-location.js";
@@ -112,39 +113,6 @@ function addSocialMetadata(html) {
   return html;
 }
 
-function navKey(path) {
-  if (path.startsWith("/directory") || path.startsWith("/service/")) return "directory";
-  if (path === "/editorial-policy") return "checks";
-  if (path === "/sources") return "sources";
-  if (path === "/transparency") return "transparency";
-  if (path === "/our-story") return "story";
-  if (path === "/get-involved") return "involved";
-  if (path === "/contact") return "contact";
-  if (["/about", "/our-work"].includes(path)) return "about";
-  return path === "/" ? "find" : null;
-}
-
-function navigationLinks(path) {
-  const current = navKey(path);
-  const links = [
-    ["directory", "/directory", "Find Help"],
-    ["story", "/our-story", "Why RWN?"],
-    ["involved", "/get-involved", "Get Involved"],
-    ["contact", "/contact", "Contact"],
-    ["saved", "/directory#saved", "Saved"]
-  ];
-  return links.map(([key, href, label]) => `<a href="${href}"${key === current ? ' aria-current="page"' : ""}>${label}</a>`).join("");
-}
-
-function unifiedHeader(path) {
-  const links = navigationLinks(path);
-  return `<header class="legal-header rwn-unified-header">
-    <a class="legal-brand" href="/"><img class="legal-brand__mark" src="/brand/rwn-logo-192.png" alt="" width="192" height="192" decoding="async" /><span><strong>Real World Needs</strong><small>Essential services directory</small></span></a>
-    <nav class="rwn-page-nav" aria-label="Primary navigation">${links}</nav>
-    <details class="rwn-page-menu"><summary aria-label="Navigation menu">Menu</summary><nav aria-label="Mobile navigation">${links}</nav></details>
-  </header>`;
-}
-
 function unifiedFooter() {
   return `<footer class="legal-footer rwn-unified-footer">
     <p><strong>Real World Needs</strong><br />Essential services directory</p>
@@ -215,6 +183,8 @@ function enhanceHome(html, release) {
       "<p>Search by service or place. Listings include provider contact details, the original source, and the date RWN checked it.</p>"
     );
 
+  html = html.replace(/<body([^>]*)>/, `$&${siteHeader("/")}`);
+  html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
   html = ensureVersionedStylesheet(html, "/src/clarity.css", release);
   html = ensureVersionedStylesheet(html, "/navigation-actions.css", release);
   if (!html.includes("data-rwn-critical-shell")) html = html.replace("</head>", `  ${CRITICAL_HOME_STYLE}\n</head>`);
@@ -243,11 +213,12 @@ function enhanceGeneratedPage(html, release) {
   html = html.replace(/<meta\b[^>]*\bname=(["'])theme-color\1[^>]*\bcontent=(["'])(.*?)\2[^>]*>/i, '<meta name="theme-color" content="#ffffff" />');
 
   const path = canonicalPathFrom(html);
-  if (/<header class="legal-header">[\s\S]*?<\/header>/.test(html)) html = html.replace(/<header class="legal-header">[\s\S]*?<\/header>/, unifiedHeader(path));
+  html = html.replace(/<header class="(?:legal-header|editorial-header)">[\s\S]*?<\/header>/, siteHeader(path));
   if (/<footer class="legal-footer">[\s\S]*?<\/footer>/.test(html)) html = html.replace(/<footer class="legal-footer">[\s\S]*?<\/footer>/, unifiedFooter());
   if (html.includes('class="rwn-page-menu"')) {
     html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
   }
+  html = html.replace(/(<nav aria-label="Policies and contact">)/, '$1<a href="/impact">Impact</a><a href="/donate">Donations</a>');
   html = enhanceActionOrientation(html);
   return html;
 }

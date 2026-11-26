@@ -7,8 +7,8 @@ import { resources } from "../src/data/resources.js";
 const text = (path) => readFile(path, "utf8");
 
 function primaryLabels(html) {
-  const nav = html.match(/<nav class="rwn-page-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1] || "";
-  return [...nav.matchAll(/<a[^>]*>([^<]+)<\/a>/g)].map((match) => match[1].trim());
+  const nav = html.match(/<nav class="rwn-site-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1] || "";
+  return [...nav.matchAll(/<a[^>]*>[\s\S]*?<span lang="en">([^<]+)<\/span>[\s\S]*?<\/a>/g)].map((match) => match[1].trim());
 }
 
 test("public pages share one task-first navigation order and an explicit mobile Menu", async () => {
@@ -18,11 +18,11 @@ test("public pages share one task-first navigation order and an explicit mobile 
     text("dist/transparency.html"),
     text("dist/editorial-policy.html")
   ]);
-  const expected = ["Find help", "Directory", "Saved", "About RWN", "How listings are checked", "Sources", "Transparency"];
+  const expected = ["Find Help", "Why RWN?", "Get Involved", "Contact", "Saved"];
   for (const html of pages) {
     assert.deepEqual(primaryLabels(html), expected);
     assert.match(html, /class="rwn-page-menu"/);
-    assert.match(html, /<summary[^>]*>Menu<\/summary>/);
+    assert.match(html, /<summary[^>]*>[\s\S]*?lang="en">Menu<\/span>/);
     assert.match(html, /\/navigation-actions\.[a-f0-9]{12}\.css\?v=[a-f0-9]{12}/);
     assert.match(html, /class="legal-footer rwn-unified-footer"/);
   }

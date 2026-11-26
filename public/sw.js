@@ -15,6 +15,7 @@ const runtimePattern = new RegExp(`^(?:${runtimeCanonicals.map(path => path.repl
 const CORE_ASSETS = [
   "/directory",
   "/legal.css",
+  "/language-preference.js",
   "/page-menu.js",
   "/directory-enhancements.css",
   "/directory-suggestions.css",

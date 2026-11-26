@@ -409,28 +409,6 @@ function directionsUrl(resource) {
 function shell() {
   root.innerHTML = `
     <a class="skip-link" href="#finder">Skip to find help</a>
-    <header class="site-header" id="top">
-      <a class="brand" href="#top">
-        <span class="brand__mark">${icon.globe}</span>
-        <span class="brand__name"><strong>RWN</strong><small>Real World Needs</small></span>
-      </a>
-      <nav class="primary-nav" aria-label="Primary navigation">
-        <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-        <a href="#about" data-section-link="about">How it works</a>
-        <a href="#standards" data-section-link="standards">How we check</a>
-        <a href="/transparency">Transparency</a>
-      </nav>
-      <details class="site-menu">
-        <summary aria-label="Open site navigation" title="Menu">${icon.menu}</summary>
-        <nav aria-label="Mobile navigation">
-          <a href="#finder" data-section-link="finder" aria-current="location">Find help</a>
-          <a href="#about" data-section-link="about">How it works</a>
-          <a href="#standards" data-section-link="standards">How we check</a>
-          <a href="/transparency">Transparency</a>
-        </nav>
-      </details>
-      <a class="header-action" href="#finder" data-section-link="finder">Find help</a>
-    </header>
 
     <main>
       <section class="finder" id="finder">
@@ -1060,7 +1038,7 @@ function setSelected(id, focus = true, reveal = "panel", historyMode = "push") {
   if (reveal) {
     const target = reveal === "map" ? document.querySelector(".globe-stage") : document.getElementById("resourcePanel");
     const bounds = target?.getBoundingClientRect();
-    const headerOffset = document.querySelector(".site-header")?.getBoundingClientRect().height || 0;
+    const headerOffset = document.querySelector(".rwn-site-header")?.getBoundingClientRect().height || 0;
     if (target && bounds && (bounds.top < headerOffset || bounds.bottom > window.innerHeight)) {
       if (reveal === "map") {
         state.globeVisible = true;
@@ -3129,48 +3107,6 @@ function bindEvents() {
     recoverGlobeContext();
   });
 
-  const siteMenu = document.querySelector(".site-menu");
-  const siteMenuSummary = siteMenu?.querySelector("summary");
-  const isSiteMenuControl = (node) => siteMenu?.contains(node) && node.closest?.("summary, a[href]")
-    && !node.closest("dialog, [role=dialog], input, select, textarea, [contenteditable]");
-  const repairSiteMenuFocus = () => {
-    if (!siteMenu || (!siteMenu.contains(document.activeElement) && document.activeElement !== document.body)) return;
-    const target = [siteMenuSummary, ...siteMenu.closest("header").querySelectorAll("a")].find((node) => {
-      if (!node) return false;
-      const rect = node.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight
-        && getComputedStyle(node).visibility !== "hidden";
-    });
-    target?.focus({ preventScroll: true });
-  };
-  const closeSiteMenu = ({ restoreFocus = false, repairClosed = false } = {}) => {
-    if (!siteMenu || (!siteMenu.open && !repairClosed)) return;
-    siteMenu.removeAttribute("open");
-    if (restoreFocus) repairSiteMenuFocus();
-  };
-  // Presentation replaces navigation links after app startup; delegate to the
-  // stable menu so the replacement links still dismiss it.
-  siteMenu?.addEventListener("click", (event) => {
-    if (event.target.closest?.("a[href]")) closeSiteMenu();
-  });
-  document.addEventListener("click", (event) => {
-    if (siteMenu?.open && !siteMenu.contains(event.target)) {
-      closeSiteMenu({ restoreFocus: siteMenu.contains(document.activeElement) });
-    }
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || !siteMenu?.open || !isSiteMenuControl(event.target)) return;
-    event.preventDefault();
-    closeSiteMenu({ restoreFocus: true });
-  });
-  // Responsive hiding can clear native focus before or after resize fires.
-  siteMenu?.addEventListener("focusout", (event) => {
-    if (!event.relatedTarget && isSiteMenuControl(event.target) && window.innerWidth > 900
-      && document.hasFocus() && document.activeElement === document.body && getComputedStyle(siteMenu).display === "none") repairSiteMenuFocus();
-  });
-  window.addEventListener("resize", () => {
-    if (window.innerWidth > 900) closeSiteMenu({ restoreFocus: siteMenu?.contains(document.activeElement), repairClosed: true });
-  }, { passive: true });
   window.addEventListener("popstate", (event) => {
     const wasPreparing = preparationNoticeTimer !== null;
     cancelPendingSearch();
@@ -3180,22 +3116,6 @@ function bindEvents() {
     searchInput.value = state.query;
     document.getElementById("clearSearch").hidden = !state.query;
   });
-
-  const sections = ["finder", "about", "standards"].map((id) => document.getElementById(id));
-  let navigationFrame = null;
-  const updateCurrentSection = () => {
-    navigationFrame = null;
-    const marker = window.scrollY + window.innerHeight * 0.34;
-    const current = sections.reduce((active, section) => section.offsetTop <= marker ? section : active, sections[0]);
-    document.querySelectorAll("[data-section-link]").forEach((link) => {
-      if (link.dataset.sectionLink === current.id) link.setAttribute("aria-current", "location");
-      else link.removeAttribute("aria-current");
-    });
-  };
-  window.addEventListener("scroll", () => {
-    if (!navigationFrame) navigationFrame = window.requestAnimationFrame(updateCurrentSection);
-  }, { passive: true });
-  updateCurrentSection();
 
   if ("IntersectionObserver" in window) {
     const globeObserver = new IntersectionObserver(resumeGlobe, { rootMargin: "0px" });

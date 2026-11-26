@@ -5,9 +5,10 @@ import { translateInterfaceText } from '../src/utils/interface-copy.js';
 // arbitrary provider prose. Existing elements stay in place to retain focus,
 // native handlers, Saved IDs, selection, composition and browser history.
 const originalText = new WeakMap(), originalAttributes = new WeakMap();
-const providerSelector = '[data-provider-text], .resource-row__service strong, .resource-row__place, .resource-row__access, .directory-record__summary, .directory-record > header h2 a, .directory-record > header span, .directory-record__facts strong, .directory-record__facts p, .directory-global-result > span > strong, .directory-global-result > span > span, #service .legal-hero h1, #service .legal-hero__lede, dd';
-const ignoredSelector = 'script, style, noscript, textarea, input, code, pre, [data-language-control], [data-language-notice], [data-i18n-en], [data-i18n]';
+const providerSelector = '[data-provider-text], .resource-row__service strong, .resource-row__place, .resource-row__access, .directory-record__summary, .directory-record > header h2 a, .directory-record > header span, .directory-record__facts strong, .directory-record__facts p, .directory-global-result > span > strong, .directory-global-result > span > span, #service .legal-hero h1, #service .legal-hero__lede, .service-facts dd, .service-before-you-go dd';
+const ignoredSelector = 'script, style, noscript, textarea, input, code, pre, [data-language-control], [data-language-notice], [data-i18n-en], [data-i18n], [data-rwn-label]';
 let scheduled = false, pending = new Set(), languageClearFailed = false;
+const originalTitle = document.title;
 
 function translateNode(node) {
   const parent = node.parentElement;
@@ -71,7 +72,7 @@ function bindLanguage(select) {
 function ensureControl() {
   const existing = document.querySelector('[data-language-control] select');
   if (existing) { bindLanguage(existing); return; }
-  const header = document.querySelector('.site-header, .legal-header');
+  const header = document.querySelector('.rwn-site-header, .site-header, .legal-header');
   if (!header) return;
   const bar = document.createElement('nav'); bar.className = 'rwn-language-bar'; bar.setAttribute('aria-label', 'Language / Idioma');
   const label = document.createElement('label'); label.dataset.languageControl = '';
@@ -84,11 +85,12 @@ function ensureControl() {
 }
 function update() {
   scheduled = false; observer.disconnect(); ensureControl();
+  document.title = originalTitle.split(' | ').map(part => translateInterfaceText(part, getLocale())).join(' | ');
   for (const root of pending) localize(root);
   pending.clear();
   const select = document.querySelector('[data-language-control] select'); if (select) select.value = getLocale();
   const notice = document.querySelector('[data-language-notice]');
-  if (notice) { const value = t(languageClearFailed ? 'languageClearFailed' : 'translationScope'); if (notice.textContent !== value) notice.textContent = value; notice.hidden = !languageClearFailed && getLocale() !== 'es'; }
+  if (notice) { const value = t(languageClearFailed ? 'languageClearFailed' : 'translationScope'); if (notice.textContent !== value) notice.textContent = value; notice.hidden = false; }
   observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'placeholder', 'title'] });
 }
 function queue(root) { if (root) pending.add(root); if (!scheduled) { scheduled = true; queueMicrotask(update); } }

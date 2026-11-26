@@ -1,4 +1,5 @@
 const menu = document.querySelector(".rwn-page-menu");
+const compact = window.matchMedia("(max-width: 68rem)");
 const isMenuControl = node => menu?.contains(node) && node.closest("summary, a[href]")
   && !node.closest("dialog, [role=dialog], input, select, textarea, [contenteditable]");
 const repairFocus = () => {
@@ -23,15 +24,17 @@ document.addEventListener("keydown", event => {
   closeMenu();
 });
 document.addEventListener("click", event => {
-  if (menu?.open && !menu.contains(event.target)) closeMenu();
+  if (!menu?.open) return;
+  if (!menu.contains(event.target)) closeMenu();
+  else if (event.target.closest?.("a[href]")) menu.removeAttribute("open");
 });
 // Responsive hiding can clear native focus before or after the resize event.
 menu?.addEventListener("focusout", event => {
-  if (!event.relatedTarget && isMenuControl(event.target) && window.innerWidth > 900
+  if (!event.relatedTarget && isMenuControl(event.target) && !compact.matches
     && document.hasFocus() && document.activeElement === document.body && getComputedStyle(menu).display === "none") repairFocus();
 });
 window.addEventListener("resize", () => {
-  if (window.innerWidth > 900) closeMenu(true);
+  if (!compact.matches) closeMenu(true);
 }, { passive: true });
 // Fresh loads and same-document navigation retain their existing state owners.
 window.addEventListener("pageshow", event => {

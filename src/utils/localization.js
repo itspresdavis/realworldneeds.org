@@ -8,7 +8,7 @@ export const messages = Object.freeze({
   eligibilityUnknown: ['Eligibility is not confirmed here. Check the provider’s requirements.', 'Los requisitos no están confirmados aquí. Consulta al proveedor.'],
   accessUnknown: ['Access instructions are not confirmed here. Check the official source.', 'Las instrucciones de acceso no están confirmadas aquí. Consulta la fuente oficial.'],
   originalProviderText: ['Provider information is shown in its original language.', 'La información del proveedor se muestra en su idioma original.'],
-  translationScope: ['RWN interface language. Some information remains in its original language; this does not confirm that the provider offers service in Spanish.', 'Interfaz en español; algunos textos conservan su idioma original. Esto no confirma que el proveedor atienda en español.'],
+  translationScope: ['RWN’s navigation and main pages are available in Spanish. Information supplied by service providers stays in its original language. This does not confirm that a provider offers services in Spanish.', 'La navegación y las páginas principales de RWN están disponibles en español. La información de las organizaciones se conserva en su idioma original. Esto no confirma que ofrezcan atención en español.'],
   languageClearFailed: ['The language preference could not be cleared from this browser. Check its storage settings.', 'No se pudo borrar la preferencia de idioma de este navegador. Revisa sus ajustes de almacenamiento.'],
   eligibility: ['Eligibility', 'Requisitos'], entrance: ['Entrance', 'Entrada'], hours: ['Hours', 'Horario'],
   intake: ['Intake', 'Admisión'], contact: ['Contact', 'Contacto'], directions: ['Directions', 'Cómo llegar'],
@@ -98,5 +98,5 @@ export function formatDate(value, locale = getLocale()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return String(value || '');
   const date = new Date(`${value}T00:00:00Z`);
   if (!Number.isFinite(date.valueOf()) || date.toISOString().slice(0, 10) !== value) return value;
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+  return new Intl.DateTimeFormat(locale === 'es' ? 'es-419' : 'en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
 }

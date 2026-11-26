@@ -1,8 +1,10 @@
 import { messages } from './localization.js';
+import { editorialCopy } from './editorial-copy.js';
 
 // Only RWN-owned interface copy belongs here. No provider facts or search input.
 export const interfaceCopy = Object.freeze([
   ...Object.values(messages),
+  ...editorialCopy,
   ['Home', 'Inicio'], ['All', 'Todas'], ['All help', 'Todos los tipos de ayuda'], ['Health care', 'Atención médica'], ['Navigation', 'Orientación'],
   ['Interactive map', 'Mapa interactivo'], ['View on RWN', 'Ver en RWN'],
   ['Free help. Clear next steps.', 'Ayuda gratis. Pasos claros.'],
@@ -22,8 +24,9 @@ export const interfaceCopy = Object.freeze([
   ['In the United States, location search can also load current USDA summer meal sites.', 'En Estados Unidos, la búsqueda por ubicación también puede cargar lugares de comidas de verano del USDA.'],
   ['Your browser uses location to sort nearby listings. For U.S. meal searches, the USDA receives only an approximate area. You can search by place instead.', 'Tu navegador usa la ubicación para ordenar las fichas cercanas. Para búsquedas de comidas en EE. UU., el USDA recibe solo una zona aproximada. También puedes buscar por lugar.'],
   ['Read how location works', 'Consulta cómo funciona la ubicación'], ['Use location', 'Usar ubicación'],
-  ['Immediate danger?', '¿Peligro inmediato?'], ['Contact local emergency services. This directory is not an emergency service.', 'Contacta con los servicios de emergencia locales. Este directorio no es un servicio de emergencia.'],
+  ['Immediate danger?', '¿Peligro inmediato?'], ['Contact local emergency services. This directory is not an emergency service.', 'Comunícate con los servicios de emergencia locales. Este directorio no es un servicio de emergencia.'],
   ['View results', 'Ver resultados'], ['Nearby service locations appear first. Regional resource finders appear after them.', 'Los lugares de atención cercanos aparecen primero, seguidos de los buscadores regionales.'],
+  ['Free Title X services for clients with family income at or below 100% of the federal poverty level.', 'Servicios gratuitos del Título X para personas con ingresos familiares iguales o inferiores al 100 % del nivel federal de pobreza.'],
   ['Free with eligibility', 'Gratis si cumples los requisitos'], ['Eligibility applies', 'Con requisitos'], ['Free resource finder', 'Buscador de recursos gratuito'], ['Free option', 'Opción gratuita'],
   ['Find a service', 'Encuentra un servicio'], ['Search results', 'Resultados de búsqueda'], ['View listings', 'Ver fichas'],
   ['Browse services', 'Explorar servicios'], ['Browse all services', 'Explorar todos los servicios'], ['More filters', 'Más filtros'],
@@ -100,6 +103,12 @@ export const interfaceCopy = Object.freeze([
 ]);
 const byEnglish = new Map(interfaceCopy);
 const patterns = [
+    [/^Page (\d+) of (\d+)$/, 'Página $1 de $2'],
+    [/^([\d,]+) matching services$/, '$1 servicios encontrados'],
+    [/^View results ([\d,]+) matches ↓$/, 'Ver resultados: $1 coincidencias ↓'],
+    [/^Saved (\d+)$/, 'Guardados $1'],
+    [/^Explore (\d+) grouped listings$/, 'Explorar $1 servicios agrupados'],
+    [/^View details for (.+)$/, 'Ver detalles de $1'],
     [/^Source checked (.+)$/, 'Fuente consultada $1'], [/^Source reviewed (.+)$/, 'Fuente revisada $1'],
     [/^Showing ([\d,]+) of ([\d,]+) listings$/, 'Mostrando $1 de $2 fichas'],
     [/^([\d,]+) listings on this page$/, '$1 fichas en esta página'],
@@ -119,8 +128,8 @@ export function translateInterfaceText(text, locale = 'en') {
   if (locale !== 'es') return text;
   const value = text.trim(), translated = byEnglish.get(value);
   if (translated) return text.replace(value, translated);
+  if (value.includes(' — ')) return text.replace(value, value.split(' — ').map(part => translateInterfaceText(part, locale)).join(' — '));
   if (value.endsWith(' · offline copy')) return `${translateInterfaceText(value.slice(0, -15), locale)} · copia sin conexión`;
-  if (!/^(?:Source |Showing |\d|Show |Remove |Actions |Quick actions |Call |Directions )/.test(value)) return text;
   // These bounded forms contain only RWN labels, numeric counts or untouched names.
   for (const [pattern, replacement] of patterns) if (pattern.test(value)) return text.replace(value, value.replace(pattern, replacement));
   return text;

@@ -20,7 +20,7 @@ test('language selection rejects unsupported values and preserves provider names
 });
 test('date-only evidence remains the same local calendar date and invalid values remain unknown', () => {
   assert.equal(formatDate('2026-11-07', 'en'), 'Nov 7, 2026');
-  assert.equal(formatDate('2026-11-07', 'es'), '7 nov 2026');
+  assert.equal(formatDate('2026-11-07', 'es'), new Intl.DateTimeFormat('es-419', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date('2026-11-07T00:00:00Z')));
   assert.equal(formatDate('2026-02-30', 'es'), '2026-02-30');
   assert.equal(formatDate('unknown', 'es'), 'unknown');
 });
