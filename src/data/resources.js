@@ -6,6 +6,8 @@ import { newYorkWicResources } from "./generated/new-york-wic.js";
 import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js";
 import { imssBienestarResources } from "./imss-bienestar-resources.js";
 import { melbourneWaterResources } from "./generated/melbourne-water.js";
+import { titleXResources } from "./generated/title-x.js";
+import { phillyFoodResources } from "./generated/philly-food.js";
 import { novemberExpansionResources } from "./november-expansion.js";
 import { priorityCommunityResources } from "./priority-community-resources.js";
 import { withFreeAccess } from "./free-access.js";
@@ -1316,6 +1318,8 @@ const reviewedResources = [
   ...verifiedExpansionResources,
   ...priorityCommunityResources,
   ...melbourneWaterResources,
+  ...titleXResources,
+  ...phillyFoodResources,
   ...novemberExpansionResources,
   ...imssBienestarResources,
   ...massachusettsWicResources,
