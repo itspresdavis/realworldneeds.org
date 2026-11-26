@@ -99,7 +99,7 @@ let inputTimer;
 listen(country,"change",()=>{cancelInput();stopRestore();apply();});
 listen(need,"change",()=>{cancelInput();stopRestore();activeCategory=normalize(need.value);renderChips();apply();});
 const inSaved=()=>location.hash==="#saved"||shell?.classList.contains("has-saved-view");
-const restore=event=>{if(inSaved()){stopRestore();return;}const entry=startup.edited?saved=remember(startup.scroll):readState();startup.edited=false;browse=event?.detail==="browse";restored=entry||(browse?saved:null);if(!restored){stopRestore();return;}event?.preventDefault?.();cancelInput();restorePending=true;input.value=restored.query;activeCategory=restored.category;if(country)country.value=restored.country;renderChips();if(!entry)writeDirectoryState(history,pagePath,restored);apply();};
+const restore=event=>{if(inSaved()){stopRestore();return;}const entry=startup.edited?saved=remember(startup.scroll):readState();startup.edited=false;browse=event?.detail==="browse";restored=entry||(browse?saved:null);if(!restored){stopRestore();return;}event?.preventDefault?.();cancelInput();restorePending=true;input.value=restored.query;activeCategory=restored.category;if(country){country.value=restored.country;if(country.value){const filter=country.closest("details");if(filter)filter.open=true;}}renderChips();if(!entry)writeDirectoryState(history,pagePath,restored);apply();};
 listen(window,"popstate",restore);
 listen(window,"pageshow",event=>{activePage=true;if(event.persisted)restore();});
 listen(window,"rwn-directory-restore",restore);

@@ -99,19 +99,20 @@ function breadcrumbs(items) {
   return `<nav class="directory-downloads" aria-label="Breadcrumb"><a href="/">Home</a>${items.map((item) => item.href ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>` : `<span aria-current="page">${escapeHtml(item.label)}</span>`).join("")}</nav>`;
 }
 
-function directoryRecordActions(resource, coordinate) {
+function directoryRecordActions(resource) {
   const links = [];
+  const routes = [];
   for (const { label, href } of phoneLinks(resource.phone)) {
     links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
   for (const action of serviceActions(resource)) {
-    links.push(`<a class="${action.kind === "directions" ? "is-directions" : "is-access-details"}" href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`);
+    routes.push(`<a class="${action.kind === "directions" ? "is-directions" : "is-access-details"}" href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`);
   }
   if (isContactOnly(resource) && resource.accessUrl) {
     links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>`);
   }
   links.push(`<a class="is-details" href="/service/${encodeURIComponent(resource.id)}">Open listing</a>`);
-  return `<nav class="directory-record__actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Actions for ${escapeHtml(resource.name)}">${links.join("")}</nav>`;
+  return { primary: `<nav class="directory-record__actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Actions for ${escapeHtml(resource.name)}">${links.join("")}</nav>`, routes: routes.length ? `<nav class="directory-record__actions" aria-label="Access options for ${escapeHtml(resource.name)}">${routes.join("")}</nav>` : "" };
 }
 
 function serviceLocationFacts(resource) {
@@ -121,6 +122,7 @@ function serviceLocationFacts(resource) {
 
 function resourceRecord(resource) {
   const place = formatResourcePlace(resource);
+  const actions = directoryRecordActions(resource);
   const coordinate = `${resource.lat},${resource.lng}`;
   const phone = resource.phone
     ? `<div><dt>Phone</dt><dd>${phoneMarkup(resource.phone)}</dd></div>`
@@ -137,10 +139,10 @@ function resourceRecord(resource) {
     ${sourceClosureMarkup(resource)}
     <p class="directory-record__summary">${escapeHtml(resource.summary)}</p>
     <ul class="directory-aid" aria-label="Aid categories">${aidLabels(resource).map((label) => `<li>${escapeHtml(label)}</li>`).join("")}</ul>
-    <div class="directory-record__facts" role="group" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong><p>${escapeHtml(resource.costNote)}</p></div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
+    <div class="directory-record__facts" role="group" aria-label="Access at a glance"><div><span>Cost</span><strong>${escapeHtml(freeAccessLabel(resource))}.</strong>${resource.costModel !== "free" ? `<p>${escapeHtml(resource.costNote)}</p>` : ""}</div><div><span>Access</span><strong>${escapeHtml(resource.accessType)}</strong></div></div>
     ${contactOnly ? `<p class="directory-caution">${escapeHtml(contactOnlyNotice(resource))}</p><p class="directory-caution"><strong>Coverage:</strong> ${escapeHtml(resource.coverageNote)} <strong>Eligibility:</strong> ${escapeHtml(resource.eligibility)}${resource.phone ? ` <strong>Phone dialing scope:</strong> ${escapeHtml(resource.phoneAccess)}` : ""}</p>` : ""}
-    ${directoryRecordActions(resource, coordinate)}
-    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, location &amp; source"}</summary><div class="directory-record__more-body"><dl><div><dt>${addressLabel}</dt><dd>${serviceLocationFacts(resource)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
+    ${actions.primary}
+    <details class="directory-record__more"><summary>${contactOnly ? "Contact, coverage &amp; source" : "Hours, directions &amp; source"}</summary><div class="directory-record__more-body">${actions.routes}<dl><div><dt>${addressLabel}</dt><dd>${serviceLocationFacts(resource)}</dd></div>${resource.hours ? `<div><dt>Hours</dt><dd>${escapeHtml(resource.hours)}</dd></div>` : ""}${phone}${contactFacts}</dl><p class="directory-caution"><strong>${contactOnly ? "Check before contacting." : "Check before you go."}</strong> ${escapeHtml(contactOnly ? contactOnlyNotice(resource) : availabilityInstructions(resource))}</p><nav class="directory-record__links" aria-label="More information for ${escapeHtml(resource.name)}"><a href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer">Official source</a>${maps}${globeLink}</nav></div></details>
   </article>`;
 }
 
@@ -232,15 +234,15 @@ function directoryPage({ title, heading, lede, canonicalPath, items, page, total
       <div class="directory-shell">
         ${breadcrumbs(breadcrumbItems)}
         <div class="policy-note"><p><strong>Services can change.</strong> Check the original source or contact the organization before you travel. RWN shows where information came from and when it was last reviewed.</p></div>
-        ${canonicalPath === "/directory" ? `<div class="policy-note directory-guide"><p><strong>Start with a need or a place.</strong> Use the search above or browse by category.</p><nav aria-label="Browse directory by need"><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/health">Health care</a><a href="/directory/help/water">Water</a></nav></div>` : ""}
-        <a class="directory-results-jump" href="#directory-results"><span><strong>View listings</strong><small>${items.length.toLocaleString()} ${items.length === 1 ? "listing" : "listings"} on this page · page ${page} of ${totalPages}</small></span><span aria-hidden="true">↓</span></a>
+        ${canonicalPath === "/directory" ? `<noscript><div class="policy-note directory-guide"><p><strong>Start with a need or a place.</strong> Use the search above or browse by category.</p><nav aria-label="Browse directory by need"><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/health">Health care</a><a href="/directory/help/water">Water</a></nav></div></noscript>` : ""}
+        <a class="directory-results-jump" href="#directory-results">Skip to listings <span aria-hidden="true">↓</span></a>
+        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages, "before")}
+        <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
+        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages, "after")}
         <div class="directory-browse-tools">
           <div class="directory-downloads"><strong>Directory tools</strong><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Full JSON</a><a href="/data/map-index.json">Compact map index</a><a href="/data/sources.json">Data sources</a></div>
           ${browseMarkup}
         </div>
-        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages, "before")}
-        <span class="directory-results-anchor" id="directory-results" tabindex="-1"></span><div class="directory-records">${items.map(resourceRecord).join("\n")}</div>
-        ${pagination(canonicalPath.replace(/\/page\/\d+$/, ""), page, totalPages, "after")}
       </div>
     </main>
     <footer class="legal-footer"><p>Real World Needs · Free essential services directory</p><nav aria-label="Footer policies"><a href="/">Find help</a><a href="/directory">Directory</a><a href="/transparency">Transparency</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a></nav></footer>

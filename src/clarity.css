@@ -36,7 +36,7 @@ border-bottom:1px solid var(--rwn-line);background:#153e5c;color:var(--rwn-ink);
 .rwn-professional .finder__grid,
 .rwn-professional .finder__grid.is-panel-collapsed,
 .rwn-professional .finder__grid:not(.is-panel-collapsed) {
-display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1.05fr);width:min(100%, var(--rwn-max));min-height:0;margin:0 auto;padding:clamp(2rem, 4vw, 3.5rem) 2rem;gap:clamp(1.5rem, 3.2vw, 3rem);align-items:start;background:transparent;}
+display:grid;grid-template-columns:minmax(0, 1fr) minmax(0, 1.05fr);width:min(100%, var(--rwn-max));min-height:0;margin:0 auto;padding:clamp(1.5rem, 3vw, 2.5rem) 2rem;gap:clamp(1.5rem, 3.2vw, 3rem);align-items:start;background:transparent;}
 .rwn-professional .finder-sidebar,
 .rwn-professional .resource-panel {
 position:static !important;max-height:none !important;overflow:visible !important;overscroll-behavior:auto !important;scrollbar-width:auto !important;}
@@ -44,10 +44,10 @@ position:static !important;max-height:none !important;overflow:visible !importan
 display:block;min-width:0;padding:.25rem 0 0;border:0;background:transparent;box-shadow:none;}
 .rwn-professional .finder-intro { max-width:36rem;padding-left:0; border-left:0;}
 .rwn-professional .finder-intro h1 {
-max-width:17ch;margin:0;color:#f9f8ef;font-family:inherit;font-size:clamp(2.75rem, 4.7vw, 4.15rem);font-weight:750;line-height:1.06;letter-spacing:-.045em;}
+max-width:17ch;margin:0;color:#f9f8ef;font-family:inherit;font-size:clamp(2.4rem, 4vw, 3.3rem);font-weight:750;line-height:1.06;letter-spacing:-.045em;}
 .rwn-professional .finder-intro p {
-max-width:31rem;margin:1.15rem 0 0;color:#dae7ef;font-size:1rem;line-height:1.6;}
-.rwn-professional .finder-surface { container-type:inline-size;margin-top:1.6rem;padding:1.25rem;border:1px solid #e0e7df;border-radius:4px;background:#fff;color:var(--rwn-ink);box-shadow:none;}
+max-width:31rem;margin:.75rem 0 0;color:#dae7ef;font-size:1rem;line-height:1.6;}
+.rwn-professional .finder-surface { container-type:inline-size;margin-top:1rem;padding:1rem;border:1px solid #e0e7df;border-radius:4px;background:#fff;color:var(--rwn-ink);box-shadow:none;}
 .finder-search-label { display:block;margin-bottom:.4rem;color:var(--rwn-ink-strong);font-size:.875rem;font-weight:700;}
 .rwn-professional .finder-search { margin-top:0;}
 .rwn-professional .search-box {

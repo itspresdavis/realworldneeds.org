@@ -41,6 +41,11 @@ function enhanceCard(article) {
   replaceResultTrigger(trigger, resource);
 
   const locale = getLocale();
+  const more = document.createElement("details");
+  more.className = "result-more";
+  const summary = document.createElement("summary");
+  summary.textContent = "Directions and access details";
+  more.append(summary);
   const accessFacts = resource.serviceAccess ? beforeYouGoFacts(resource, { locale }) : [];
   if (accessFacts.length) {
     const details = document.createElement("div");
@@ -54,20 +59,23 @@ function enhanceCard(article) {
       fact.append(label, document.createTextNode([route.instructions, ...route.facts.filter(item => item.key !== "hours" || resource.serviceAccess.some(item => item.id === route.routeId && (item.schedule || item.hours))).map(item => `${item.label}: ${item.value}`)].join(" ")));
       details.append(fact);
     }
-    article.append(details);
+    more.append(details);
   }
 
   const actions = document.createElement("nav");
   actions.className = "result-direct-actions";
   actions.setAttribute("aria-label", `Actions for ${resource.name}`);
 
+  const routeActions = document.createElement("nav");
+  routeActions.className = "result-direct-actions";
+  routeActions.setAttribute("aria-label", `Access options for ${resource.name}`);
   if (resource.kind === "direct" || isContactOnly(resource)) {
     const phones = phoneLinks(resource.phone);
     for (const { label, href } of phones) {
       actions.append(createAction(phones.length > 1 ? `Call ${label}` : "Call", href, `Call ${resource.name} at ${label}`, { primary: true }));
     }
     for (const action of serviceActions(resource, { mapProvider: /iPad|iPhone|iPod/.test(navigator.userAgent) ? "apple" : "google", locale })) {
-      actions.append(createAction(action.label, action.href, `${action.label} for ${resource.name}`, { newTab: action.href.startsWith("https://") }));
+      routeActions.append(createAction(action.label, action.href, `${action.label} for ${resource.name}`, { newTab: action.href.startsWith("https://") }));
     }
     if (isContactOnly(resource) && resource.accessUrl) {
       actions.append(createAction("Contact website", resource.accessUrl, `Open the contact website for ${resource.name}`, { newTab: true }));
@@ -88,7 +96,10 @@ function enhanceCard(article) {
     scope.textContent = `Dialing scope: ${resource.phoneAccess}`;
     article.append(scope);
   }
-  if (actions.childElementCount) article.append(actions);
+  actions.append(createAction("View details", `/service/${encodeURIComponent(resource.id)}`, `View details for ${resource.name}`));
+  article.append(actions);
+  if (routeActions.childElementCount) more.append(routeActions);
+  if (accessFacts.length || routeActions.childElementCount) article.append(more);
 }
 
 function enhanceResults(grid) {

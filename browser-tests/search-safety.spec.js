@@ -164,6 +164,7 @@ test('shelter intake address finds Bowery with the reviewed service-specific nex
     await search(page, path, '90 Lafayette shelter');
     expect(await resultIds(page, path)).toEqual(['bowery-mission']);
     const card = resultScope(page, path, 'bowery-mission');
+    await card.locator('.result-more > summary').click();
     await expect(card.getByRole('link', { name: 'Shelter intake details for The Bowery Mission', exact: true })).toHaveAttribute('href', 'https://www.bowery.org/get-help/');
     const meal = card.getByRole('link', { name: 'Directions to meal service for The Bowery Mission', exact: true });
     expect(new URL(await meal.getAttribute('href')).searchParams.get('destination')).toContain('227 Bowery');

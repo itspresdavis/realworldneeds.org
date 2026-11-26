@@ -45,6 +45,7 @@ async function proveLegacyCatalog(page, gate, stage) {
 }
 
 async function expectSafeBowery(scope) {
+  for (const summary of await scope.locator(".result-more:not([open]) > summary").all()) await summary.click();
   await expect(scope.getByRole('link', { name: /^Shelter intake details/ })).toHaveAttribute('href', 'https://www.bowery.org/get-help/');
   const meal = scope.getByRole('link', { name: /^Directions to meal service/ });
   const url = new URL(await meal.getAttribute('href'));

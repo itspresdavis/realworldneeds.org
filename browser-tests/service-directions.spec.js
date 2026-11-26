@@ -23,6 +23,7 @@ async function chooseServiceAccess(page) {
 }
 
 async function assertAccessActions(scope) {
+  for (const summary of await scope.locator(".result-more:not([open]) > summary").all()) await summary.click();
   const meal = scope.getByRole('link', { name: new RegExp('^' + mealLabel) });
   const shelter = scope.getByRole('link', { name: new RegExp('^' + shelterLabel) });
   await expect(meal).toBeVisible();

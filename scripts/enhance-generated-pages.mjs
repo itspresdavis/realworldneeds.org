@@ -108,14 +108,14 @@ function directorySearchMarkup(scope) {
     <p data-saved-status role="status" aria-live="polite"></p>
   </section><section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
-      <label class="directory-search-control"><span>Search this directory</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Service, place, or organization" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="Alt+/ Escape" /></span></label>
-      <label class="directory-place-field"><span>Place (city, region, country or postal code)</span><input type="search" data-directory-place aria-label="Place (city, region, country or postal code)" autocomplete="off" enterkeyhint="search" /></label>
-      ${countryControl}
+      <label class="directory-search-control"><span>What do you need?</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="What do you need?" placeholder="Food, a clinic, an organization…" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="Alt+/ Escape" /></span></label>
+      <label class="directory-place-field"><span>City or postal code</span><input type="search" data-directory-place aria-label="City or postal code" autocomplete="off" enterkeyhint="search" /></label>
     </div>
+    ${countryControl ? `<details class="directory-location-filter"><summary>Filter by country or area</summary>${countryControl}</details>` : ""}
     <label class="directory-need-field"><span>Type of help</span><select data-directory-need disabled><option value="">All help</option>${needs.map(need => `<option value="${escapeHtml(need)}">${escapeHtml(need)}</option>`).join("")}</select></label>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
-    <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Ask the provider to confirm hours, eligibility and what’s available before you go.</p>
-    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><button class="directory-search-tools__clear" type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button><span><kbd>Alt+/</kbd><span> focuses search · Escape clears</span></span></div>
+    <p id="directory-coverage-note" class="directory-coverage-note">Confirm hours and eligibility with the provider before you go. <a href="/editorial-policy">How we check listings</a>.</p>
+    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><button class="directory-search-tools__clear" type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button></div>
     <template data-directory-notice><div class="policy-note warning-note"><p><strong>Offline mode.</strong> Search the saved directory; current availability and service-detail pages require a connection. Reconnect before traveling or relying on a listing.</p></div></template>
     <template data-directory-results><section><div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" id="directory-global-list" data-global-list></div><button type="button" class="directory-search-tools__clear" data-directory-more aria-controls="directory-global-list" hidden>Show more listings</button></section></template>
     <template data-directory-empty><div class="directory-global-empty"><h2>No matching listings.</h2><p>A missing result does not mean help is unavailable.</p><div class="directory-empty-actions"><button type="button" data-fewer-words>Try without search words</button><button type="button" data-clear-all>Clear all filters</button></div><p>Or ${scope !== "/directory/global" ? '<a href="/directory/global">browse global resource finders</a>' : ""}${scope !== "/directory" ? `${scope !== "/directory/global" ? " or " : ""}<a href="/directory">browse the full directory</a>` : ""}.</p></div></template>
@@ -270,7 +270,7 @@ for (const path of await walkHtml("dist/directory")) {
   const html = await readFile(path, "utf8");
   let enhanced = enhanceCollectionPage(html, directoryRelease, path.replace(/^dist/, "").replace(/\/index\.html$/, "").replace(/\/page\/\d+$/, ""));
   if (path === "dist/directory/index.html") {
-    enhanced = enhanced.replace('<template data-directory-empty>', `${suggestionsMarkup()}<template data-directory-empty>`)
+    enhanced = enhanced.replace('<div class="directory-browse-tools">', `${suggestionsMarkup()}<div class="directory-browse-tools">`)
       .replace("</head>", `<link rel="stylesheet" href="${suggestionAssets.css}" /><script type="module" src="${suggestionAssets.js}?v=${directoryRelease}"></script>\n</head>`);
   }
   await writeFile(path, enhanced);

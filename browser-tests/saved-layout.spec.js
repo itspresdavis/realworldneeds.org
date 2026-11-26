@@ -39,6 +39,8 @@ for (const upgraded of [false, true]) {
       await expect(page.locator('[data-saved-list] a.directory-global-result')).toHaveCount(2);
       await expect.poll(() => page.locator('[data-saved-clear]').evaluate(button => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
       const bowery = rowFor(page, ids[0]), singleSite = rowFor(page, ids[1]);
+      await bowery.locator(".result-more > summary").click();
+      await singleSite.locator(".result-more > summary").click();
       await expect(bowery.getByRole('link', { name: /^Shelter intake details/ })).toHaveAttribute('href', 'https://www.bowery.org/get-help/');
       const meal = bowery.getByRole('link', { name: /^Directions to meal service/ });
       expect(new URL(await meal.getAttribute('href')).searchParams.get('destination')).toContain('227 Bowery');

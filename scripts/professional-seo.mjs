@@ -32,8 +32,8 @@ const CRITICAL_PAGE_STYLE = `<style data-rwn-page-critical>
   #service>.legal-hero{padding:1.35rem .9rem 1.15rem!important}
 }
 </style>`;
-const DIRECTORY_HEADING = "Find a service in the directory.";
-const DIRECTORY_DESCRIPTION = "Search by service, place, or organization. Listings include contact details, the source, and the date RWN checked it.";
+const DIRECTORY_HEADING = "Find free help";
+const DIRECTORY_DESCRIPTION = "Search for food, water, clothing, shelter and healthcare. Free to browse. No account needed.";
 
 async function walkHtml(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -117,20 +117,21 @@ function navKey(path) {
   if (path === "/editorial-policy") return "checks";
   if (path === "/sources") return "sources";
   if (path === "/transparency") return "transparency";
-  if (["/about", "/our-work", "/get-involved", "/contact"].includes(path)) return "about";
+  if (path === "/our-story") return "story";
+  if (path === "/get-involved") return "involved";
+  if (path === "/contact") return "contact";
+  if (["/about", "/our-work"].includes(path)) return "about";
   return path === "/" ? "find" : null;
 }
 
 function navigationLinks(path) {
   const current = navKey(path);
   const links = [
-    ["find", "/", "Find help"],
-    ["directory", "/directory", "Directory"],
-    ["saved", "/directory#saved", "Saved"],
-    ["about", "/about", "About RWN"],
-    ["checks", "/editorial-policy", "How listings are checked"],
-    ["sources", "/sources", "Sources"],
-    ["transparency", "/transparency", "Transparency"]
+    ["directory", "/directory", "Find Help"],
+    ["story", "/our-story", "Why RWN?"],
+    ["involved", "/get-involved", "Get Involved"],
+    ["contact", "/contact", "Contact"],
+    ["saved", "/directory#saved", "Saved"]
   ];
   return links.map(([key, href, label]) => `<a href="${href}"${key === current ? ' aria-current="page"' : ""}>${label}</a>`).join("");
 }
@@ -156,18 +157,19 @@ function unifiedFooter() {
 
 function directoryQuickActions(resource) {
   const links = [];
+  const routes = [];
   const phones = phoneLinks(resource.phone);
   for (const { label, href } of phones) {
     links.push(`<a class="is-call" href="${href}">Call ${escapeHtml(label)}</a>`);
   }
   for (const action of serviceActions(resource)) {
-    links.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`);
+    routes.push(`<a href="${escapeHtml(action.href)}" rel="noopener noreferrer">${escapeHtml(action.label)}</a>`);
   }
   if (isContactOnly(resource) && resource.accessUrl) {
     links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer">Get help online</a>`);
   }
   links.push(`<a class="is-details" href="/service/${encodeURIComponent(resource.id)}">View details</a>`);
-  return `<nav class="directory-quick-actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Quick actions for ${escapeHtml(resource.name)}"><span>${resource.kind === "direct" ? (phones.length ? "Call or get directions" : "Get directions") : "Open this listing"}</span>${links.join("")}</nav>`;
+  return `<nav class="directory-quick-actions" data-rwn-actions="${escapeHtml(resource.id)}" aria-label="Quick actions for ${escapeHtml(resource.name)}">${links.join("")}</nav>${routes.length ? `<details class="result-more"><summary>Directions and access details</summary><nav class="directory-quick-actions">${routes.join("")}</nav></details>` : ""}`;
 }
 
 

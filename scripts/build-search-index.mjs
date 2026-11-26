@@ -1,3 +1,4 @@
+import { freeAccessLabel } from "../src/data/free-access.js";
 import { resourceScope } from "../src/utils/resource-scope.js";
 import { postalAreas } from "../src/data/generated/postal-areas.js";
 import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
@@ -81,6 +82,8 @@ const records = resources.map((resource, index) => {
     lat: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lat) ? resource.lat : null,
     lng: !Object.hasOwn(resource, "serviceAccess") && !isContactOnly(resource) && Number.isFinite(resource.lng) ? resource.lng : null,
     checked: resource.lastChecked,
+    costLabel: freeAccessLabel(resource),
+    ...(resource.costModel !== "free" ? { costNote: resource.costNote } : {}),
     ...(resource.serviceAccess ? { serviceActions: serviceActions(resource).map(({ label, href, kind }) => ({ label, href, kind })), serviceAccessSummary: serviceAccessSummary(resource) } : {}),
     ...(isContactOnly(resource) ? {
       locationPrecision: "contact-only",

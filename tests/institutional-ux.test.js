@@ -65,7 +65,8 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   const byId = new Map(resources.map(resource => [resource.id, resource]));
   for (const record of searchIndex.records) {
     const resource = byId.get(record.id);
-    const expected = ["categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
+    const expected = ["costLabel", "categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
+    if (resource.costModel !== "free") expected.push("costNote");
     if (Object.hasOwn(record, "phone")) expected.push("phone");
     if (resource.kind !== "direct") expected.push("coverageScope");
     if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");

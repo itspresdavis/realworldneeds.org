@@ -49,7 +49,7 @@ test("the real restore handler reads history.state and restores the filter contr
   writeDirectoryState(history, "/directory", { query: "WIC", category: "food", country: "United States", shown: 120, scroll: 900 });
   const f = vm.createContext({ place: { value: "" }, history, location: { pathname: "/directory", hash: "" }, pagePath: "/directory", readDirectoryState,
     startup: {}, shell: null, saved: null, browse: false, readState: () => readDirectoryState(history.state, "/directory"), restored: null, restorePending: false, cancelInput() {}, clearTimeout() {}, inputTimer: null,
-    input: {}, activeCategory: "", country: {}, renderChips() {}, apply: () => calls++ });
+    input: {}, activeCategory: "", country: { closest: () => null }, renderChips() {}, apply: () => calls++ });
   const restoreSource = source.slice(source.indexOf("const inSaved="), source.indexOf('listen(window,"popstate"'));
   vm.runInContext(`${restoreSource}\nrestore();`, f);
   assert.equal(f.input.value, "WIC"); assert.equal(f.activeCategory, "food");
