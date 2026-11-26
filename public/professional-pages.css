@@ -1,6 +1,6 @@
 /* RWN shared public page shell. */
 :root {
---page-blue:#24583e;--page-blue-dark:#153c30;--page-blue-deep:#12392e;--page-green:#356c4e;--page-green-dark:#24583e;--page-green-soft:#edf7ef;--page-ink:#14262e;--page-ink-strong:#153c30;--page-muted:#5f7077;--page-muted-light:#586b60;--page-line:#d8e0dd;--page-line-strong:#c5d0cc;--page-paper:#f5f4ee;--page-white:#ffffff;--page-max:1120px;--page-wide:1480px;}
+--page-blue:#246a9a;--page-blue-dark:#153e5c;--page-blue-deep:#153e5c;--page-green:#356c4e;--page-green-dark:#24583e;--page-green-soft:#edf7ef;--page-ink:#14262e;--page-ink-strong:#153e5c;--page-muted:#5f7077;--page-muted-light:#586b60;--page-line:#d8e0dd;--page-line-strong:#c5d0cc;--page-paper:#f0f5f7;--page-white:#ffffff;--page-max:1120px;--page-wide:1480px;}
 html { background:var(--page-white);scroll-padding-top:5rem;}
 body {
 min-width:0;margin:0;background:var(--page-white);color:var(--page-ink);font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}

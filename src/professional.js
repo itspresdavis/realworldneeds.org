@@ -53,7 +53,7 @@ function rewriteFinderCopy() {
   setText(".finder-intro h1", "Find help");
   setText(
     ".finder-intro p",
-    "Look for food, shelter, clothing and other essentials. Contact the provider directly."
+    "Free food, water, clothing, shelter and healthcare. Search by need or place to find a service and how to reach it."
   );
   const intro = document.querySelector(".finder-intro");
   if (intro && !intro.querySelector(".finder-directory-entry")) {
@@ -81,10 +81,10 @@ function rewriteMethodSections() {
   // These authored explanations remain English until a reviewed translation is
   // supplied. Translated navigation and labels declare their own language.
   document.querySelectorAll('.about-rwn, .source-band').forEach(section => { section.lang = 'en'; });
-  setText(".about-rwn__heading h2", "Before you go");
+  setText(".about-rwn__heading h2", "About Real World Needs");
   setText(
     ".about-rwn__heading p",
-    "A quick call can save you a trip. Ask the provider to confirm its hours and whether you’re eligible."
+    "We are building a directory of free essential resources so more people can find the help already available in their communities. You can search without an account."
   );
 
   const heading = document.querySelector(".about-rwn__heading");
@@ -92,7 +92,7 @@ function rewriteMethodSections() {
     const link = document.createElement("a");
     link.className = "contributor-invitation";
     link.href = "/our-story";
-    link.textContent = "Why RWN?";
+    link.textContent = "Why we started RWN";
     heading.append(link);
   }
   document.querySelectorAll(".about-rwn .section-kicker, .source-band .section-kicker, .results-heading .section-kicker").forEach(node => node.remove());
@@ -103,6 +103,7 @@ function rewriteMethodSections() {
     ["Contact", "Contact the provider to check what’s available."]
   ];
   document.querySelectorAll(".mission-steps article").forEach((article, index) => {
+    article.querySelector(":scope > span")?.remove();
     const copy = stepCopy[index];
     if (!copy) return;
     const heading = article.querySelector("h3");
@@ -120,9 +121,9 @@ function rewriteMethodSections() {
   const principles = document.getElementById("principleGrid");
   if (principles) {
     principles.innerHTML = `
-      <article><span>01</span><div><h3>Source</h3><p>Open the original page for more details.</p></div></article>
-      <article><span>02</span><div><h3>Review date</h3><p>See when we last reviewed the source.</p></div></article>
-      <article><span>03</span><div><h3>Changes</h3><p>Hours and availability can change between reviews.</p></div></article>
+      <article><div><h3>Source</h3><p>Open the original page for more details.</p></div></article>
+      <article><div><h3>Review date</h3><p>See when we last reviewed the source.</p></div></article>
+      <article><div><h3>Changes</h3><p>Hours and availability can change between reviews.</p></div></article>
     `;
   }
 }
