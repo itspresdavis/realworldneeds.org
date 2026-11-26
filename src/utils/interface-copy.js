@@ -103,6 +103,10 @@ export const interfaceCopy = Object.freeze([
 ]);
 const byEnglish = new Map(interfaceCopy);
 const patterns = [
+    [/^Select (.+), Service location$/, 'Seleccionar $1, lugar de atención'],
+    [/^Select (.+), Resource finder$/, 'Seleccionar $1, buscador de recursos'],
+    [/^Select (.+), Service network$/, 'Seleccionar $1, red de servicios'],
+    [/^Official finder: Open the official resource finder for (.+)$/, 'Buscador oficial: abrir el buscador de recursos de $1'],
     [/^Page (\d+) of (\d+)$/, 'Página $1 de $2'],
     [/^([\d,]+) matching services$/, '$1 servicios encontrados'],
     [/^View results ([\d,]+) matches ↓$/, 'Ver resultados: $1 coincidencias ↓'],

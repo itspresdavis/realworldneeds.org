@@ -1,6 +1,11 @@
 // RWN-authored public copy in neutral Latin American Spanish.
 // Organization names, addresses and source-provided facts are not rewritten.
 export const editorialCopy = [
+  ['Skip to find help', 'Saltar al buscador de ayuda'],
+  ['Use my location to show nearby service locations first', 'Usar mi ubicación para mostrar primero los lugares de atención cercanos'],
+  ['Open all service filters', 'Abrir todos los filtros de servicios'],
+  ['Footer explore', 'Explorar recursos'], ['Footer standards', 'Información sobre RWN'], ['Footer legal', 'Políticas del sitio'],
+  ['Map boundaries:', 'Límites del mapa:'], ['· Earth imagery:', '· Imágenes de la Tierra:'],
   ['Find Help', 'Buscar ayuda'], ['Why RWN?', '¿Por qué RWN?'], ['Get Involved', 'Participa'],
   ['Find Essential Services Near You', 'Encuentra servicios esenciales cerca de ti'],
   ['Free Essential Services Directory', 'Directorio de servicios esenciales gratuitos'], ['Our Impact', 'Nuestro impacto'],
