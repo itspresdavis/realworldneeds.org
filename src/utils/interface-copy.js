@@ -134,9 +134,9 @@ export function translateInterfaceText(text, locale = 'en') {
   if (locale !== 'es') return text;
   const value = text.trim(), translated = byEnglish.get(value);
   if (translated) return text.replace(value, translated);
-  if (value.includes(' — ')) return text.replace(value, value.split(' — ').map(part => translateInterfaceText(part, locale)).join(' — '));
   if (value.endsWith(' · offline copy')) return `${translateInterfaceText(value.slice(0, -15), locale)} · copia sin conexión`;
   // These bounded forms contain only RWN labels, numeric counts or untouched names.
   for (const [pattern, replacement] of patterns) if (pattern.test(value)) return text.replace(value, value.replace(pattern, replacement));
+  if (value.includes(' — ')) return text.replace(value, value.split(' — ').map(part => translateInterfaceText(part, locale)).join(' — '));
   return text;
 }

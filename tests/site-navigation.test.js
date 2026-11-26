@@ -36,4 +36,5 @@ test('Spanish retains provider identity and the exact free-service income condit
   assert.match(cost, /iguales o inferiores al 100 %/);
   assert.match(cost, /Título X/);
   assert.equal(translateInterfaceText('Unreviewed provider instructions', 'es'), 'Unreviewed provider instructions');
+  assert.equal(translateInterfaceText('Call 989-426-9431 for Central Michigan District Health Department — Title X', 'es'), 'Llamar a Central Michigan District Health Department — Title X al 989-426-9431');
 });
