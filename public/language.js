@@ -75,7 +75,11 @@ function ensureControl() {
 }
 
 function update() {
-  scheduled = false; observer.disconnect(); ensureControl();
+  scheduled = false;
+  // A search promise can change results after the observer queued this update.
+  // Drain those mutations before disconnecting so their new copy is not lost.
+  for (const change of observer.takeRecords()) pending.add(change.target);
+  observer.disconnect(); ensureControl();
   document.title = originalTitle.split(' | ').map(part => translateInterfaceText(part, getLocale())).join(' | ');
   for (const root of pending) localize(root);
   pending.clear();
