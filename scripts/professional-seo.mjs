@@ -1,3 +1,4 @@
+import { siteFooter } from '../src/utils/site-footer.js';
 import { siteHeader } from "./site-shell.mjs";
 import { serviceActions } from "../src/utils/service-access.js";
 import { serviceContactMarkup } from "./service-contact.mjs";
@@ -113,16 +114,6 @@ function addSocialMetadata(html) {
   return html;
 }
 
-function unifiedFooter() {
-  return `<footer class="legal-footer rwn-unified-footer">
-    <p><strong>Real World Needs</strong><br />Essential services directory</p>
-    <nav aria-label="Footer find help"><strong>Find help</strong><a href="/">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a><a href="/account">Your resources</a></nav>
-    <nav aria-label="Footer about RWN"><strong>About RWN</strong><a href="/our-story">Why RWN?</a><a href="/donate">Donations</a><a href="/our-work">Our work</a><a href="/get-involved">Get involved</a><a href="/contact">Contact and help</a><a href="/transparency">Transparency</a></nav>
-    <nav aria-label="Footer policies"><strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a></nav>
-    <nav class="professional-need-links" aria-label="Browse essential services by need"><strong>Browse by need</strong><a href="/directory/help/food">Food</a><a href="/directory/help/shelter">Shelter</a><a href="/directory/help/health">Health care</a><a href="/directory/help/hygiene">Hygiene</a><a href="/directory/help/clothing">Clothing</a><a href="/directory/help/water">Water</a></nav>
-  </footer>`;
-}
-
 function directoryQuickActions(resource) {
   const links = [];
   const routes = [];
@@ -214,11 +205,11 @@ function enhanceGeneratedPage(html, release) {
 
   const path = canonicalPathFrom(html);
   html = html.replace(/<header class="(?:legal-header|editorial-header)">[\s\S]*?<\/header>/, siteHeader(path));
-  if (/<footer class="legal-footer">[\s\S]*?<\/footer>/.test(html)) html = html.replace(/<footer class="legal-footer">[\s\S]*?<\/footer>/, unifiedFooter());
+  html = html.replace(/<footer class="(?:legal-footer|editorial-footer)">[\s\S]*?<\/footer>/, siteFooter());
   if (html.includes('class="rwn-page-menu"')) {
     html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
   }
-  html = html.replace(/(<nav aria-label="Policies and contact">)/, '$1<a href="/impact">Impact</a><a href="/donate">Donations</a>');
+  html = html.replaceAll('href="/transparency"', 'href="/our-story#transparency"');
   html = enhanceActionOrientation(html);
   return html;
 }

@@ -50,6 +50,21 @@ html[lang="es"] .rwn-professional .resource-row__reviewed::before { content: "Fu
 }
 @media print { .rwn-site-header, .rwn-language-bar { display: none; } }
 
+/* The same compact footer on the map, directory and information pages. */
+.rwn-site-footer { margin: 0; padding: 2.5rem 0; border-top: 4px solid #377a4b; background: #153e5c; color: #fff; font: 400 .875rem/1.5 system-ui, sans-serif; }
+.rwn-site-footer, .rwn-site-footer * { box-sizing: border-box; }
+.rwn-site-footer__inner { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); gap: 2rem; width: min(76rem, calc(100% - 3rem)); margin-inline: auto; }
+.rwn-site-footer__inner > * { min-width: 0; overflow-wrap: anywhere; }
+.rwn-site-footer nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.rwn-site-footer strong { display: block; margin-bottom: .5rem; color: #fff; font-size: .9375rem; }
+.rwn-site-footer .rwn-site-footer__brand p { margin: 0; color: #d4e2eb; font-size: .875rem; }
+.rwn-site-footer a, .rwn-site-footer button { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; padding: .45rem 0; border: 0; background: none; color: #fff; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.rwn-site-footer a:hover, .rwn-site-footer button:hover { text-decoration: underline; text-underline-offset: .2em; }
+.rwn-site-footer :is(a,button):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+@media (max-width: 56rem) { .rwn-site-footer__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 30rem) { .rwn-site-footer__inner { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; width: calc(100% - 2.5rem); } }
+@media print { .rwn-site-footer { display: none; } }
+
 .rwn-professional .result-access-facts { min-width:0; max-width:70ch; margin:.5rem 0 .75rem; color:#40594c; font-size:.875rem; line-height:1.55; overflow-wrap:anywhere; }
 .rwn-professional .result-access-facts p { margin:.35rem 0; }
 .rwn-professional .finder-place, .directory-place-field { display:grid; gap:.35rem; min-width:0; margin-top:.7rem; }

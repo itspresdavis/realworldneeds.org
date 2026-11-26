@@ -71,6 +71,11 @@
 .editorial-story .editorial-chapter p:first-child { margin-top: 0; }
 .editorial-reading-links { display: flex; flex-wrap: wrap; gap: .5rem 2rem; padding-top: 1.5rem; }
 .editorial-reading-links a { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: .2em; }
+.editorial-story-nav { padding-top: 0; border-bottom: 1px solid var(--line); padding-bottom: 1rem; }
+.editorial-disclosure { border-bottom: 1px solid var(--line); margin-top: .5rem; }
+.editorial-disclosure > summary { padding: .85rem 0; min-height: 48px; font-weight: 650; cursor: pointer; }
+.editorial-disclosure[open] { padding-bottom: 1rem; }
+.editorial-disclosure .editorial-reading-links { gap: .25rem 1.25rem; padding-top: .5rem; font-size: .9rem; }
 @media (max-width: 40rem) {
   .editorial-mission-grid, .editorial-story .editorial-chapter { grid-template-columns: 1fr; gap: 1rem; }
   .editorial-needs { border-left: 0; padding: 1rem 0 0; }

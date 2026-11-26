@@ -172,25 +172,6 @@ const html = `<!doctype html>
 await mkdir("dist/sources", { recursive: true });
 await writeFile("dist/sources/index.html", html);
 
-const transparencyPath = "dist/transparency.html";
-let transparency = await readFile(transparencyPath, "utf8");
-if (!transparency.includes('href="/sources"')) {
-  transparency = transparency
-    .replace(
-      '<a href="/data/sources.json">View data sources</a>',
-      '<a href="/sources">Browse source ledger</a><a href="/data/sources.json">Raw source registry</a>'
-    )
-    .replace(
-      '<a href="/data/sources.json">Source registry</a>',
-      '<a href="/sources">Human source ledger</a><a href="/data/sources.json">Source registry JSON</a>'
-    )
-    .replace(
-      '<a href="/privacy">Privacy</a>',
-      '<a href="/sources">Sources</a><a href="/privacy">Privacy</a>'
-    );
-  await writeFile(transparencyPath, transparency);
-}
-
 const sitemapPath = "dist/sitemap.xml";
 let sitemap = await readFile(sitemapPath, "utf8");
 if (!sitemap.includes(`<loc>${SITE_ORIGIN}/sources</loc>`)) {

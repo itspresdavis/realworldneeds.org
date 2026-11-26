@@ -3,13 +3,13 @@
 const label = (en, es) => `<span data-rwn-label><span lang="en">${en}</span><span lang="es">${es}</span></span>`;
 export function siteHeader(path) {
   const links = [
-    ['/directory', 'Find Help', 'Buscar ayuda'],
+    ['/', 'Home', 'Inicio'],
+    ['/impact', 'Impact', 'Nuestro impacto'],
     ['/our-story', 'Why RWN?', '¿Por qué RWN?'],
     ['/get-involved', 'Get Involved', 'Participa'],
     ['/contact', 'Contact', 'Contacto'],
-    ['/directory#saved', 'Saved', 'Guardados'],
   ].map(([href, en, es]) => {
-    const current = path === href || (href === '/directory' && /^\/(directory\/|service\/)/.test(path));
+    const current = path === href;
     return `<a href="${href}"${current ? ' aria-current="page"' : ''}>${label(en, es)}</a>`;
   }).join('');
   return `${path === "/" ? '<span id="top" class="page-start" tabindex="-1"></span>' : ""}<header class="rwn-site-header"><div class="rwn-site-header__inner">

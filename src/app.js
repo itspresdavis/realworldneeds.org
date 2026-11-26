@@ -1,3 +1,4 @@
+import { siteFooter } from './utils/site-footer.js';
 import { resolveSearchIntent, resourceMatchesIntent } from "./utils/search-intent.js";
 import { mountSearchIntentControls } from "./utils/search-intent-controls.js";
 import { serviceActions, serviceAccessSummary, serviceAccessNotice } from "./utils/service-access.js";
@@ -561,14 +562,7 @@ function shell() {
       </section>
     </main>
 
-    <footer class="site-footer">
-      <a class="footer-brand" href="#top"><span class="brand__mark">${icon.globe}</span><span><strong>RWN</strong><small>Real World Needs</small></span></a>
-      <nav aria-label="Footer explore"><strong>Explore</strong><a href="#finder">Find services</a><a href="/directory">Text directory</a><a href="#about">How it works</a></nav>
-      <nav aria-label="Footer standards"><strong>About RWN</strong><a href="/transparency">Transparency</a><a href="/editorial-policy">How listings are checked</a><a href="#accountability">About the directory</a></nav>
-      <nav aria-label="Footer legal"><strong>Legal &amp; trust</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a><button class="footer-data-button" id="clearBrowserData" type="button">Clear browser data</button></nav>
-      <nav aria-label="Footer map and imagery"><strong>Map &amp; imagery</strong><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></nav>
-      <p><span class="status-dot"></span>${resources.length} listings checked against original sources · This website does not accept donations or personal requests.</p>
-    </footer>
+    ${siteFooter({ clearBrowserData: true })}
 
     <div class="status-toast" id="statusToast" role="status" aria-live="polite"></div>
   `;

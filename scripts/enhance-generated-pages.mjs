@@ -305,7 +305,7 @@ let sitemap = await readFile("dist/sitemap.xml", "utf8");
 const newest = latestDate(resources);
 sitemap = replaceUrlLastmod(sitemap, "/", newest);
 sitemap = replaceUrlLastmod(sitemap, "/directory", newest);
-sitemap = replaceUrlLastmod(sitemap, "/transparency", newest);
+sitemap = replaceUrlLastmod(sitemap, "/our-story", newest);
 
 for (const path of STATIC_WITHOUT_DATA_LASTMOD) sitemap = replaceUrlLastmod(sitemap, path, null);
 for (const resource of resources) sitemap = replaceUrlLastmod(sitemap, `/service/${resource.id}`, resource.lastChecked);

@@ -169,6 +169,16 @@
   ],
   "redirects": [
     {
+      "source": "/transparency",
+      "destination": "/our-story#transparency",
+      "permanent": true
+    },
+    {
+      "source": "/transparency.html",
+      "destination": "/our-story#transparency",
+      "permanent": true
+    },
+    {
       "source": "/directory/local/united-states/united-states/:path*",
       "destination": "/directory/united-states",
       "permanent": true

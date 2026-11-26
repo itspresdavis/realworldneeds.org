@@ -5,7 +5,7 @@ import { siteHeader } from '../scripts/site-shell.mjs';
 import { translateInterfaceText } from '../src/utils/interface-copy.js';
 
 test('every public surface keeps the same navigation destinations and order', () => {
-  const expected = ['/directory', '/our-story', '/get-involved', '/contact', '/directory#saved'];
+  const expected = ['/', '/impact', '/our-story', '/get-involved', '/contact'];
   for (const path of ['/', '/directory', '/directory/page/2', '/service/bowery-mission', '/our-story', '/get-involved', '/contact', '/impact', '/donate']) {
     const header = siteHeader(path);
     const navs = [...header.matchAll(/<nav[^>]*>([\s\S]*?)<\/nav>/g)];
@@ -37,4 +37,18 @@ test('Spanish retains provider identity and the exact free-service income condit
   assert.match(cost, /Título X/);
   assert.equal(translateInterfaceText('Unreviewed provider instructions', 'es'), 'Unreviewed provider instructions');
   assert.equal(translateInterfaceText('Call 989-426-9431 for Central Michigan District Health Department — Title X', 'es'), 'Llamar a Central Michigan District Health Department — Title X al 989-426-9431');
+});
+
+
+test('old transparency routes lead to the combined page with its disclosures and data links', async () => {
+  const config = JSON.parse(await readFile('vercel.json', 'utf8'));
+  for (const source of ['/transparency', '/transparency.html']) {
+    const redirect = config.redirects.find(item => item.source === source);
+    assert.equal(redirect?.destination, '/our-story#transparency');
+    assert.equal(redirect?.permanent, true);
+  }
+  const html = await readFile('dist/our-story.html', 'utf8');
+  for (const id of ['transparency', 'scope', 'quality', 'data', 'privacy', 'governance', 'technology']) assert.ok(html.includes(`id="${id}"`), id);
+  for (const href of ['/directory', '/sources', '/directory.csv', '/data/resources.json', '/data/release.json', '/editorial-policy', '/contact']) assert.ok(html.includes(`href="${href}"`), href);
+  assert.doesNotMatch(await readFile('dist/sitemap.xml', 'utf8'), /<loc>[^<]*\/transparency<\/loc>/);
 });

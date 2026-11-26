@@ -3,13 +3,89 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Why Real World Needs exists: helping people find free food, water, clothing, shelter and healthcare." />
+  <meta name="description" content="Why Real World Needs exists: helping people find free essentials, with clear information about our sources, standards and organization." />
   <meta name="theme-color" content="#ffffff" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Real World Needs" />
   <meta property="og:url" content="https://www.realworldneeds.org/our-story" />
   <link rel="canonical" href="https://www.realworldneeds.org/our-story" />
   <link rel="stylesheet" href="/rwn-editorial.css" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <link rel="alternate" type="application/json" href="/data/resources.json" title="RWN resource data" />
+  <link rel="alternate" type="text/csv" href="/directory.csv" title="RWN resource directory CSV" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://www.realworldneeds.org/our-story#page",
+            "url": "https://www.realworldneeds.org/our-story",
+            "name": "Why RWN? | Real World Needs",
+            "description": "How the Real World Needs directory works, where its information comes from, and how releases can be inspected.",
+            "isPartOf": { "@id": "https://www.realworldneeds.org/#website" },
+            "about": { "@id": "https://www.realworldneeds.org/data/resources.json#dataset" },
+            "mainEntity": { "@id": "https://www.realworldneeds.org/data/resources.json#dataset" }
+          },
+          {
+            "@type": "DataCatalog",
+            "@id": "https://www.realworldneeds.org/directory#catalog",
+            "name": "Real World Needs Essential Services Directory",
+            "url": "https://www.realworldneeds.org/directory",
+            "description": "Public source-connected directory of free essential services and official resource finders.",
+            "dataset": { "@id": "https://www.realworldneeds.org/data/resources.json#dataset" }
+          },
+          {
+            "@type": "Dataset",
+            "@id": "https://www.realworldneeds.org/data/resources.json#dataset",
+            "name": "Real World Needs Essential Services Directory",
+            "description": "Reviewed public directory records for free food, shelter, health care, hygiene, clothing, drinking water, and navigation services, with original-source links and review dates.",
+            "url": "https://www.realworldneeds.org/our-story",
+            "isAccessibleForFree": true,
+            "creator": { "@id": "https://www.realworldneeds.org/#organization" },
+            "includedInDataCatalog": { "@id": "https://www.realworldneeds.org/directory#catalog" },
+            "dateModified": "{{LATEST_REVIEW}}",
+            "version": "Sources checked through {{LATEST_REVIEW}}",
+            "size": "{{RESOURCE_COUNT}} reviewed directory records",
+            "measurementTechnique": "Review against cited original or public sources under RWN publishing rules.",
+            "variableMeasured": [
+              "Service name",
+              "Location or coverage",
+              "Aid category",
+              "Access model",
+              "Free-access model",
+              "Eligibility",
+              "Original source",
+              "Review date"
+            ],
+            "keywords": [
+              "essential services",
+              "food assistance",
+              "shelter",
+              "health care",
+              "hygiene",
+              "clothing",
+              "drinking water",
+              "public resource directory"
+            ],
+            "distribution": [
+              {
+                "@type": "DataDownload",
+                "name": "RWN essential services CSV",
+                "encodingFormat": "text/csv",
+                "contentUrl": "https://www.realworldneeds.org/directory.csv"
+              },
+              {
+                "@type": "DataDownload",
+                "name": "RWN essential services JSON",
+                "encodingFormat": "application/json",
+                "contentUrl": "https://www.realworldneeds.org/data/resources.json"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   <title>Why RWN? | Real World Needs</title>
 </head>
 <body class="editorial-page">
@@ -63,6 +139,7 @@
       </div>
     </section>
     <div class="editorial-width editorial-content editorial-story">
+      <nav class="editorial-reading-links editorial-story-nav" aria-label="On this page"><a href="#why-directory-heading">Why we started</a><a href="#transparency">Transparency</a></nav>
       <section class="editorial-chapter" aria-labelledby="why-directory-heading">
         <h2 id="why-directory-heading">Why we started</h2>
         <div>
@@ -86,7 +163,42 @@
           <a class="editorial-text-link" href="/get-involved">Help improve the directory <span aria-hidden="true">→</span></a>
         </div>
       </section>
-      <div class="editorial-reading-links"><a href="/editorial-policy">How we review listings</a><a href="/impact">RWN’s distribution reporting</a></div>
+      <section class="editorial-chapter" id="transparency" aria-labelledby="transparency-heading">
+        <h2 id="transparency-heading">Transparency</h2>
+        <div><p>How we work, what our information means and what is still being built.</p>
+          <details class="editorial-disclosure" id="scope"><summary>What RWN can help with</summary>
+            <p>RWN brings together free essential services and official resource finders. Providers decide who can use their services. A listing cannot reserve a place, guarantee availability or provide emergency assistance.</p>
+            <p>Our coverage is incomplete. Some listings are places to visit; others are regional finders or networks. Several services can share one address. Directory totals are not a count of people helped.</p>
+            <div class="editorial-reading-links"><a href="/impact">RWN’s distribution reporting</a></div>
+          </details>
+          <details class="editorial-disclosure" id="quality"><summary>How information is reviewed</summary>
+            <p>We look for an original source, contact details, the area served, free-access conditions and a review date. A source check does not mean we called the provider or can confirm today’s hours and availability. Please check before you travel.</p>
+            <p>You can email a correction with the listing link and an official source. Changes are reviewed before publication; submitting a correction does not update the directory automatically.</p>
+            <div class="editorial-reading-links"><a href="/editorial-policy">How we review listings</a><a href="/contact">Report a listing correction</a></div>
+          </details>
+          <details class="editorial-disclosure" id="data"><summary>Sources and open data</summary>
+            <p>The reviewed directory is available as CSV and JSON, with source links and review dates. Optional live USDA meal-site results are not included in these downloads; they appear in the finder after a U.S. location search.</p>
+            <p>Keep the original source and review date if you reuse a listing. Release metadata identifies the published snapshot so it can be compared with the website.</p>
+            <div class="editorial-reading-links"><a href="/sources">Sources</a><a href="/directory.csv" download>Download CSV</a><a href="/data/resources.json">Download JSON</a><a href="/data/release.json">Release metadata</a></div>
+          </details>
+          <details class="editorial-disclosure" id="privacy"><summary>Privacy and accessible browsing</summary>
+            <p>No account is needed to search. Saved services stay on your device. The site does not use advertising trackers or third-party analytics, and it does not collect personal case information. Exact location stays on your device; a U.S. meal-site search sends the USDA an approximate search area.</p>
+            <p>The text directory includes every reviewed catalog listing without the globe. Optional live USDA results appear in the finder after a location search. Supported browsers can reopen the saved directory after a connection drops. We are working toward WCAG 2.2 Level AA; we do not claim formal conformance.</p>
+            <div class="editorial-reading-links"><a href="/privacy">Privacy</a><a href="/accessibility">Accessibility</a><a href="/account">Your resources</a></div>
+          </details>
+          <details class="editorial-disclosure" id="governance"><summary>Organization and donations</summary>
+            <p>RWN has not yet published verified registration, board information or financial reports. It does not claim registered charity or nonprofit status. This website does not accept donations or personal requests for assistance.</p>
+            <p>Before online giving opens, we need verified legal and contact information, responsible leadership, safeguarding and complaints procedures, and financial controls. We will publish confirmed information here as it becomes available.</p>
+            <div class="editorial-reading-links"><a href="/donate">Donations</a><a href="/contact">Contact RWN</a></div>
+          </details>
+          <details class="editorial-disclosure" id="technology"><summary>Website and map credits</summary>
+            <p>The website is hosted on Vercel. Supabase supports the reviewed database and contributor tools. The public directory is a published snapshot, so browsing does not require an account or a live database connection.</p>
+            <p>The globe uses NASA Blue Marble imagery and Natural Earth boundaries. These are generalized map references, not legal or navigation guidance.</p>
+            <div class="editorial-reading-links"><a href="https://www.naturalearthdata.com/downloads/" rel="noopener noreferrer">Natural Earth</a><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" rel="noopener noreferrer">NASA Blue Marble</a><a href="/join">Contributor workspace</a></div>
+          </details>
+        </div>
+      </section>
+
     </div>
   </main>
   <footer class="editorial-footer">

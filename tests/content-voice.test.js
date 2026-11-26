@@ -11,7 +11,7 @@ const publicCopyFiles = [
   "public/editorial-policy.html",
   "public/privacy.html",
   "public/terms.html",
-  "public/transparency.html"
+  "public/our-story.html"
 ];
 
 test("public copy avoids internal audit and product-language jargon", async () => {
@@ -32,7 +32,7 @@ test("public copy avoids internal audit and product-language jargon", async () =
 });
 
 test("public copy states RWN's present organization status without inventing credentials", async () => {
-  const transparency = await readFile("public/transparency.html", "utf8");
+  const transparency = await readFile("public/our-story.html", "utf8");
   assert.match(transparency, /does not claim registered charity or nonprofit status/i);
   assert.match(transparency, /does not accept donations/i);
   assert.match(transparency, /original source/i);

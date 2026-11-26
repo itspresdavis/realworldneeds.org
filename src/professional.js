@@ -101,33 +101,6 @@ function rewriteMethodSections() {
 function simplifyStructure() {
   document.querySelector(".directory-strip")?.remove();
   document.getElementById("accountability")?.remove();
-
-  const footer = document.querySelector(".site-footer");
-  if (!footer) return;
-
-  const explore = footer.querySelector('nav[aria-label="Footer explore"]');
-  if (explore) explore.innerHTML = `<strong>Find help</strong><a href="#finder">Interactive map</a><a href="/directory">Directory</a><a href="/directory#saved">Saved services</a><a href="/account">Your resources</a>`;
-
-  const standards = footer.querySelector('nav[aria-label="Footer standards"]');
-  if (standards) standards.innerHTML = `<strong>About RWN</strong><a href="/our-story">Why RWN?</a><a href="/get-involved">Get Involved</a><a href="/impact">Impact</a><a href="/donate">Donations</a><a href="/contact">Contact</a><a href="/editorial-policy">How listings are checked</a><a href="/sources">Sources</a><a href="/transparency">Transparency</a><a href="/join">Contributor workspace</a>`;
-
-  const legal = footer.querySelector('nav[aria-label="Footer legal"]');
-  if (legal) {
-    const clearButton = legal.querySelector("#clearBrowserData");
-    legal.innerHTML = `<strong>Policies</strong><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/accessibility">Accessibility</a>`;
-    if (clearButton) {
-      clearButton.className = "footer-data-button";
-      clearButton.textContent = "Clear browser data";
-      legal.append(clearButton);
-    }
-  }
-
-  const map = footer.querySelector('nav[aria-label="Footer map and imagery"]');
-  const note = footer.querySelector(":scope > p");
-  if (map) map.remove();
-  if (note) {
-    note.innerHTML = `<span>Map boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> · Earth imagery: <a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-map/" target="_blank" rel="noopener noreferrer">NASA Blue Marble</a></span>`;
-  }
 }
 
 export function installProfessionalPresentation() {

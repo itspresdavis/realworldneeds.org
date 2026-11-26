@@ -18,13 +18,13 @@ test("public pages share one task-first navigation order and an explicit mobile 
     text("dist/transparency.html"),
     text("dist/editorial-policy.html")
   ]);
-  const expected = ["Find Help", "Why RWN?", "Get Involved", "Contact", "Saved"];
+  const expected = ["Home", "Impact", "Why RWN?", "Get Involved", "Contact"];
   for (const html of pages) {
     assert.deepEqual(primaryLabels(html), expected);
     assert.match(html, /class="rwn-page-menu"/);
     assert.match(html, /<summary[^>]*>[\s\S]*?lang="en">Menu<\/span>/);
     assert.match(html, /\/navigation-actions\.[a-f0-9]{12}\.css\?v=[a-f0-9]{12}/);
-    assert.match(html, /class="legal-footer rwn-unified-footer"/);
+    assert.match(html, /class="rwn-site-footer"/);
   }
 });
 

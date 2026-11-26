@@ -10,7 +10,7 @@ function jsonLdGraphs(html) {
 }
 
 test("transparency center publishes crawlable open-data discovery metadata", async () => {
-  const html = await read("dist/transparency.html");
+  const html = await read("dist/our-story.html");
   assert.match(html, /<meta name="robots" content="index, follow/);
   assert.match(html, /rel="alternate" type="application\/json" href="\/data\/resources\.json"/);
   assert.match(html, /rel="alternate" type="text\/csv" href="\/directory\.csv"/);

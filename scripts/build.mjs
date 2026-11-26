@@ -422,14 +422,11 @@ for (const path of builtJsFiles) {
   await writeFile(path, versionThreeReferences(versionModuleImports(source, release), three));
 }
 
-const transparencyTemplate = await readFile("public/transparency.html", "utf8");
-const transparencyHtml = transparencyTemplate
+const storyTemplate = await readFile("public/our-story.html", "utf8");
+const storyHtml = storyTemplate
   .replaceAll("{{RESOURCE_COUNT}}", String(resources.length))
-  .replaceAll("{{DIRECT_COUNT}}", String(directCount))
-  .replaceAll("{{PHYSICAL_COUNT}}", String(coverageSummary.uniquePhysicalAddresses))
-  .replaceAll("{{COVERAGE_COUNT}}", String(coverageCount))
   .replaceAll("{{LATEST_REVIEW}}", latestReview);
-await writeFile("dist/transparency.html", transparencyHtml);
+await writeFile("dist/our-story.html", storyHtml);
 
 const countries = [...new Set(resources.map((resource) => resource.country))].sort((a, b) => a.localeCompare(b));
 const regions = [...new Set(resources.map((resource) => resource.region).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -449,7 +446,7 @@ const categoryLinks = categoryTypes.map((type) => {
 }).join("");
 const browseMarkup = `<nav class="directory-downloads" aria-label="Browse directory by need"><strong>Browse by need</strong>${categoryLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by region"><strong>Browse by region</strong>${regionLinks}</nav><nav class="directory-downloads" aria-label="Browse directory by country"><strong>Browse by country</strong>${countryLinks}</nav>`;
 
-const sitemapPaths = ["/", "/directory", "/our-story", "/get-involved", "/contact", "/impact", "/donate", "/transparency", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
+const sitemapPaths = ["/", "/directory", "/our-story", "/get-involved", "/contact", "/impact", "/donate", "/editorial-policy", "/privacy", "/terms", "/accessibility"];
 sitemapPaths.push(...await writePagedDirectory("dist/directory", "/directory", resources, {
   title: "Free Essential Services Directory",
   heading: "Find free essential services without using the globe.",
