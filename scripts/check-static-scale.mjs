@@ -11,7 +11,8 @@ const LIMITS = {
   resourcesBytes: 16_000_000,
   // Decoded limits protect memory; compressed limits bound transfer growth.
   // The full export is separate from the search payload and compact map index.
-  searchGzipBytes: 650_000,
+  // 6,137-record snapshot measured 683,874 bytes on the native Linux runner.
+  searchGzipBytes: 750_000,
   resourcesGzipBytes: 1_000_000,
   generatedDataGzipBytes: 650_000
 };

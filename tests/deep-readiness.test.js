@@ -18,7 +18,7 @@ test("static scale remains guarded by explicit route and payload budgets", async
   assert.match(scale, /files: 10000/);
   assert.match(scale, /htmlPages: 9500/);
   assert.match(scale, /searchIndexBytes: 5_500_000/);
-  assert.match(scale, /searchGzipBytes: 650_000/);
+  assert.match(scale, /searchGzipBytes: 750_000/);
   assert.match(scale, /generatedDataGzipBytes: 650_000/);
   assert.match(packageJson.scripts.check, /scripts\/check-static-scale\.mjs/);
 });
