@@ -39,9 +39,11 @@ test("local page expectations preserve known anchors and exact source IDs after 
   assert.ok(original.referral.includes("new-york-public-library-access"));
   assert.ok(original.wic.length > 0);
   assert.ok(original.wic.every(id => original.city.includes(id) && original.referral.includes(id)));
+  assert.deepEqual(original.foodReferral, [...original.wic,
+    "nyc-youth-ali-forney-midtown", "nyc-youth-door-manhattan", "nyc-youth-streetwork-harlem"].sort());
   const removed = original.wic[0];
   const next = newYorkCatalogFixtures(resources.filter(record => record.id !== removed));
-  for (const key of ["city", "referral", "wic"]) assert.deepEqual(next[key], original[key].filter(id => id !== removed));
+  for (const key of ["city", "referral", "foodReferral", "wic"]) assert.deepEqual(next[key], original[key].filter(id => id !== removed));
 });
 
 

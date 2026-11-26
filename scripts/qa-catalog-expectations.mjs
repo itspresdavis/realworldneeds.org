@@ -25,6 +25,8 @@ export function newYorkCatalogFixtures(catalog = resources) {
   return {
     city: ids(city),
     referral: ids(city.filter(record => [record.category, ...(record.secondaryCategories || [])].includes("referral"))),
+    foodReferral: ids(city.filter(record => [record.category, ...(record.secondaryCategories || [])].includes("referral")
+      && [record.category, ...(record.secondaryCategories || [])].includes("food"))),
     wic: ids(city.filter(record => record.id.startsWith("ny-wic-")))
   };
 }
