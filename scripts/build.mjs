@@ -579,6 +579,22 @@ await writeFile("dist/data/sources.json", `${JSON.stringify({
   note: "Counts show records available on the review date, not the number of people helped. The finder loads only nearby current records from live sources.",
   sources: sourceRegistry
 }, null, 2)}\n`);
+// Preview builds include the integration for review; its browser guard excludes preview hosts.
+// Production collection requires explicit opt-in because Vercel Pro meters every event.
+if (process.env.VERCEL_ENV === "preview" || process.env.RWN_VERCEL_WEB_ANALYTICS === "1") {
+  const analyticsAsset = await readFile("public/rwn-web-analytics.js");
+  const hash = createHash("sha256").update(analyticsAsset).digest("hex").slice(0, 12);
+  const path = `/rwn-web-analytics.${hash}.js`;
+  await writeFile(`dist${path}`, analyticsAsset);
+  for (const page of ["dist/index.html", "dist/directory/index.html"]) {
+    const html = await readFile(page, "utf8");
+    if (!html.includes("</head>")) throw new Error(`Missing head for ${page}`);
+    await writeFile(page, html.replace("</head>", `<script defer src="${path}"></script>\n</head>`));
+  }
+}
+// Only the content-addressed asset may be referenced by a deployment.
+await rm("dist/rwn-web-analytics.js", { force: true });
+
 await writeFile("dist/data/release.json", `${JSON.stringify({ release, vendorRelease: three.release, catalogSha256, resourceCount: resources.length, directoryPageSize: DIRECTORY_PAGE_SIZE, snapshotReviewedThrough: latestReview })}\n`);
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(sitemapPaths)].map((path) => `  <url><loc>${SITE_ORIGIN}${path}</loc><lastmod>${latestReview}</lastmod></url>`).join("\n")}\n</urlset>\n`;
