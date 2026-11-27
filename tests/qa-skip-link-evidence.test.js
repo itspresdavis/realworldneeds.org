@@ -3,6 +3,28 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { installSkipLinkWitness, withSkipLinkEvidence } from '../scripts/qa-skip-link-evidence.mjs';
+import { skipLinkDestination, hasImmediateSkipLinkArrival } from '../scripts/qa-page-interactions.mjs';
+
+test('native skip destination uses pre-input geometry, padding and target margin with scroll bounds', () => {
+  const prepared = { finderDocumentTop:122.1875, clearance:'78px', finderMargin:'0px', scrollHeight:7489, clientHeight:844 };
+  assert.deepEqual(skipLinkDestination(prepared), {y:44.1875,target:78,clearance:78,margin:0});
+  assert.deepEqual(skipLinkDestination({...prepared,finderMargin:'12px'}), {y:32.1875,target:90,clearance:78,margin:12});
+  assert.equal(skipLinkDestination({...prepared,finderDocumentTop:74}).y, 0);
+  assert.equal(skipLinkDestination({...prepared,finderDocumentTop:7400}).y, 6645);
+  assert.throws(() => skipLinkDestination({...prepared,clearance:'unknown'}), /geometry is unavailable/);
+});
+
+test('immediate skip oracle rejects stale, document-top, overshot, obscured and non-native arrivals', () => {
+  const expected = {y:44.1875,target:78,clearance:78,margin:0};
+  const actual = {y:44,target:78.1875,header:66,clearance:78,hash:'#finder',active:'finder',smooth:'auto',overflow:false};
+  assert.equal(hasImmediateSkipLinkArrival(actual, expected), true);
+  for (const change of [
+    {y:300,target:-177.8125}, {y:0,target:122.1875}, {y:46,target:76.1875},
+    {header:79}, {target:65}, {clearance:0}, {hash:'#top'}, {active:'resourceSearch'},
+    {smooth:'smooth'}, {overflow:true}, {y:NaN}, {target:undefined},
+  ]) assert.equal(hasImmediateSkipLinkArrival({...actual,...change}, expected), false, JSON.stringify(change));
+  assert.equal(hasImmediateSkipLinkArrival({...actual,y:0,target:74,header:74}, {...expected,y:0,target:74}), true, 'document-start clamp still permits a visible target');
+});
 
 function browserFixture() {
   const listeners = [], pendingFrames = new Map(), microtasks = [], cancelled = [];
@@ -169,17 +191,18 @@ test('cleanup failure after a successful check is not silently accepted', async 
   await assert.rejects(withSkipLinkEvidence(f.options), /cleanup unavailable/);
 });
 
-test('integration keeps the original immediate predicate and native Enter sequence', async () => {
+test('integration captures native geometry before Enter and checks arrival without waiting', async () => {
   const source = await readFile(new URL('../scripts/qa-page-interactions.mjs', import.meta.url), 'utf8');
   const block = source.slice(source.indexOf('const readSkipWitness'), source.indexOf('\n    await loadHome();', source.indexOf('const readSkipWitness')));
   assert.match(block, /record\.prepared = await evaluate\(client, `scrollTo\([\s\S]*?focus\(\{preventScroll:true\}\); window\.__rwnSkipLinkWitness\.snapshot\(\)`\)/);
   const preparation = block.slice(block.indexOf('record.prepared ='), block.indexOf("type:'keyDown',key:'Enter'"));
   assert.equal((preparation.match(/await evaluate/g) || []).length, 1);
   assert.doesNotMatch(preparation, /await readSkipWitness|settle\(|arrive\(|wait\(|requestAnimationFrame/);
-  assert.match(block, /record\.immediate = skipImmediate;\s*assert\(skipImmediate\.y<=1 && skipImmediate\.active==='finder', 'Keyboard skip link did not arrive immediately', skipImmediate\)/);
+  assert.match(preparation, /record\.expected = skipLinkDestination\(record\.prepared\.state\)/);
+  assert.match(block, /record\.immediate = skipImmediate;\s*assert\(hasImmediateSkipLinkArrival\(skipImmediate, record\.expected\), 'Keyboard skip link did not arrive immediately'/);
   assert.equal((block.match(/type:'keyDown',key:'Enter'/g) || []).length, 1);
   assert.equal((block.match(/type:'keyUp',key:'Enter'/g) || []).length, 1);
-  const immediate = block.slice(block.indexOf("type:'keyDown',key:'Enter'"), block.indexOf('assert(skipImmediate'));
+  const immediate = block.slice(block.indexOf("type:'keyDown',key:'Enter'"), block.indexOf('assert(hasImmediateSkipLinkArrival'));
   assert.doesNotMatch(immediate, /settle\(|arrive\(|wait\(|requestAnimationFrame/);
   assert.match(block, /page-interactions-skip-failure-\$\{width\}\.png/);
   assert.doesNotMatch(installSkipLinkWitness.toString(), /preventDefault\(|\.focus\(|scrollTo\(|scrollIntoView\(|dispatchEvent\(|classList\.(?:add|remove)/);

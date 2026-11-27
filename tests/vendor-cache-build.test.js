@@ -21,9 +21,9 @@ async function graph(root) {
   const module = `three.module.${info.vendorRelease}.js`;
   const core = `three.core.${info.vendorRelease}.js`;
   const index = await read(root, "dist/index.html");
-  assert.ok(index.includes(`href="/vendor/${module}"`), "preload must use the same renderer as both imports");
+  assert.doesNotMatch(index, /<link[^>]+(?:href|rel)=[^>]*three/, "graphics must remain deferred until capability is confirmed");
   assert.ok(index.includes(`/src/bootstrap.js?v=${info.release}`));
-  for (const path of ["dist/src/app.js", "dist/src/globe-points.js"]) {
+  for (const path of ["dist/src/utils/globe-engine.js", "dist/src/globe-points.js"]) {
     const source = await read(root, path);
     assert.ok(source.includes(`/vendor/${module}`), path);
     assert.equal(source.includes('"/vendor/three.module.js"'), false, path);

@@ -146,15 +146,20 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
             const toggled = state();
             button.click();
             const restored = state();
-            const note = document.querySelector('.service-next-steps + .policy-note');
+            const note = document.querySelector('#service > .directory-shell > .policy-note');
             const tools = document.querySelector('[data-service-utility]');
             const contrastFor = ${renderedTextContrast.toString()};
             const nextActions = [...document.querySelectorAll('.service-next-steps a')].map((link) => {
               const text = [link, ...link.querySelectorAll('strong, span')];
               const box = link.getBoundingClientRect();
-              return {top:box.top,bottom:box.bottom,contact:link.parentElement.matches('.service-contact-buttons'),map:!!link.closest('.service-location-actions'),contrast:Math.min(...text.map(contrastFor))};
+              return {label:link.firstChild?.textContent?.trim(),href:link.href,top:box.top,bottom:box.bottom,contact:link.parentElement.matches('.service-contact-buttons'),map:!!link.closest('.service-location-actions'),contrast:Math.min(...text.map(contrastFor))};
             });
-            return {before,toggled,restored,nextActions,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
+            const routeActions = [...document.querySelectorAll('[data-service-route-actions] a')].map(link => {
+              const route=link.closest('[data-service-route]');
+              return {routeId:route.dataset.serviceRoute,label:link.textContent.trim(),href:link.href,height:link.getBoundingClientRect().height,
+                factsFirst:Boolean(route.querySelector('dl').compareDocumentPosition(link)&4),contrast:contrastFor(link)};
+            });
+            return {before,toggled,restored,nextActions,routeActions,warningBeforeTools:!note || Boolean(note.compareDocumentPosition(tools) & 4)};
           })()`);
           if ([service.before, service.toggled, service.restored].some((state) => !state.label || !Number.isFinite(state.contrast) || state.contrast < 4.5) || service.before.pressed === service.toggled.pressed || service.before.pressed !== service.restored.pressed || !service.warningBeforeTools) {
             throw new Error(`Service action contrast/state/order failed at ${width}px: ${JSON.stringify(service)}`);
@@ -163,7 +168,22 @@ export async function verifyFinderPresentation({ client, host, navigate, evaluat
           const maps = service.nextActions.filter(action => action.map);
           const contactsAligned = width < 901 || contacts.every(action => close(action.top, contacts[0].top));
           const mapsBelow = maps.every(map => contacts.every(contact => map.top >= contact.bottom));
-          if (contacts.length !== 2 || maps.length !== 2 || service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || !contactsAligned || !mapsBelow) {
+          // Bowery's reviewed routes use different entrances and intake steps.
+          // Preserve geometry/contrast checks while proving the actual next steps.
+          const expectedLabels = ['Choose service access', 'Interactive map'];
+          const accessByLabel = new Map(maps.map(action => [action.label, action]));
+          const mealHref = service.routeActions.find(action => action.routeId === 'meals' && action.label === 'Directions to meal service')?.href;
+          const mealUrl = mealHref ? new URL(mealHref) : null;
+          const correctMeal = mealUrl?.origin === 'https://www.google.com' && mealUrl.pathname === '/maps/dir/' && mealUrl.searchParams.get('destination') === '227 Bowery, New York, NY 10002';
+          const shelterHref = service.routeActions.find(action => action.routeId === 'shelter' && action.label === 'Directions to shelter intake')?.href;
+          const shelterUrl = shelterHref ? new URL(shelterHref) : null;
+          const correctShelter = shelterUrl?.origin === 'https://www.google.com' && shelterUrl.pathname === '/maps/dir/' && shelterUrl.searchParams.get('destination') === '90 Lafayette Street, New York, NY 10013';
+          const correctIntake = [['shelter','Shelter intake details'],['showers-clothing','Showers and clothing details'],['medical','Mobile medical care details']].every(([routeId,label]) => service.routeActions.some(action => action.routeId===routeId && action.label===label && action.href==='https://www.bowery.org/get-help/'));
+          const correctGlobe = accessByLabel.get('Interactive map')?.href === host + '/#resource=bowery-mission';
+          const correctChoice = accessByLabel.get('Choose service access')?.href === host + '/service/bowery-mission#before-you-go-title';
+          const correctRoutes = maps.length === expectedLabels.length && accessByLabel.size === expectedLabels.length && expectedLabels.every(label => accessByLabel.has(label)) && correctChoice && correctMeal && correctShelter && correctIntake && correctGlobe
+            && service.routeActions.length === 5 && service.routeActions.every(action => action.factsFirst && action.height >=44 && Number.isFinite(action.contrast) && action.contrast>=4.5);
+          if (contacts.length !== 2 || !correctRoutes || service.nextActions.some((action) => !Number.isFinite(action.contrast) || action.contrast < 4.5) || !contactsAligned || !mapsBelow) {
             throw new Error(`Service next-step labels or row alignment failed at ${width}px: ${JSON.stringify(service.nextActions)}`);
           }
         }

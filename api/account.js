@@ -2,14 +2,25 @@ import {
   clientFor,
   json,
   readBody,
+  RequestBodyError,
   requestOrigin,
   requireUser,
   sameOrigin,
 } from "../server/supabase.js";
+import { exportNotes, ExportLimitError } from "../server/account-export.js";
+import { personalAccountsEnabled } from "../server/resource-preferences.js";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "private, no-store");
   try {
+    if (!["GET", "POST"].includes(req.method)) {
+      res.setHeader("Allow", "GET, POST");
+      return json(res, 405, { error: "Method not allowed." });
+    }
+    if (req.method === "POST" && !sameOrigin(req))
+      return json(res, 403, {
+        error: "Open this form on the RWN website and try again.",
+      });
     const client = clientFor(req, res);
     const url = new URL(req.url, requestOrigin(req));
     if (req.method === "GET" && url.searchParams.get("action") === "callback") {
@@ -18,22 +29,24 @@ export default async function handler(req, res) {
         ? await client.auth.exchangeCodeForSession(code)
         : { error: true };
       res.statusCode = 303;
-      res.setHeader("Location", error ? "/join?notice=expired" : "/workspace");
+      const personal = url.searchParams.get('destination') === 'account';
+      res.setHeader("Location", personal ? (error ? '/account?notice=expired' : '/account') : error ? "/join?notice=expired" : "/workspace");
       return res.end();
     }
     if (req.method === "GET") {
       const user = await requireUser(client, res);
       if (user && url.searchParams.get("action") === "export") {
-        const { data: notes, error } = await client
-          .from("rwn_reviews")
-          .select("id,location_id,note,created_at")
-          .eq("author_id", user.id)
-          .order("created_at")
-          .limit(10000);
-        if (error)
-          return json(res, 503, {
-            error: "Your data could not be exported. Please try again.",
+        let notes;
+        try {
+          notes = await exportNotes(client, user.id);
+        } catch (error) {
+          return json(res, error instanceof ExportLimitError ? 413 : 503, {
+            error:
+              error instanceof ExportLimitError
+                ? "Your account has more than 10,000 notes. Contact the project administrator for a complete export."
+                : "Your complete data could not be exported. Please try again.",
           });
+        }
         res.setHeader(
           "Content-Disposition",
           'attachment; filename="rwn-contributor-data.json"',
@@ -41,21 +54,17 @@ export default async function handler(req, res) {
         return json(res, 200, {
           account: { email: user.email, id: user.id },
           notes,
-          note: "Up to 10,000 notes. Contact the project administrator for larger exports.",
+          total: notes.length,
+          complete: true,
         });
       }
       if (user) json(res, 200, { user: { email: user.email, id: user.id } });
       return;
     }
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "GET, POST");
-      return json(res, 405, { error: "Method not allowed." });
-    }
-    if (!sameOrigin(req))
-      return json(res, 403, {
-        error: "Open this form on the RWN website and try again.",
-      });
-    const { action, email, password } = await readBody(req);
+    const { action, email, password, audience } = await readBody(req);
+    const personal = audience === 'personal';
+    if (personal && ['signin', 'signup', 'recover'].includes(action) && !personalAccountsEnabled())
+      return json(res, 503, { error: 'Personal accounts are not open yet. The directory is available without an account.' });
     if (action === "delete-request") {
       const user = await requireUser(client, res);
       if (!user) return;
@@ -99,7 +108,7 @@ export default async function handler(req, res) {
       return json(res, 400, {
         error: "Use a password between 12 and 128 characters.",
       });
-    const redirectTo = `${requestOrigin(req)}/api/account?action=callback`;
+    const redirectTo = `${requestOrigin(req)}/api/account?action=callback${personal ? '&destination=account' : ''}`;
     let result;
     if (action === "signin")
       result = await client.auth.signInWithPassword({ email, password });
@@ -132,7 +141,9 @@ export default async function handler(req, res) {
           ? "Check your inbox for the next step. Open the link in this browser."
           : "Account updated.",
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError)
+      return json(res, error.status, { error: error.message });
     return json(res, 503, {
       error:
         "Account services are temporarily unavailable. Please try again. The public directory is still available.",

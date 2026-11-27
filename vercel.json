@@ -4,7 +4,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
-  "ignoreCommand": "if [ \"$VERCEL_PROJECT_ID\" = \"prj_HEVILzuiHPxyO49zHlpjftMBlU9u\" ]; then exit 0; else exit 1; fi",
   "functions": {
     "api/rum.js": {
       "maxDuration": 5,
@@ -19,11 +18,30 @@
     "api/workspace.js": {
       "maxDuration": 30,
       "includeFiles": "server/workspace.html"
+    },
+    "api/corrections.js": {
+      "maxDuration": 30
+    },
+    "api/correction-review.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
     {
-      "source": "/(join|workspace)",
+      "source": "/(join|workspace|account|account.html)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/corrections(.*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -54,6 +72,19 @@
       ]
     },
     {
+      "source": "/data/release.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
       "source": "/src/(.*)",
       "headers": [
         {
@@ -68,6 +99,19 @@
         {
           "key": "Cache-Control",
           "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/api/correction(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
         }
       ]
     },
@@ -121,6 +165,143 @@
     {
       "source": "/workspace",
       "destination": "/api/workspace"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/transparency",
+      "destination": "/our-story#transparency",
+      "permanent": true
+    },
+    {
+      "source": "/transparency.html",
+      "destination": "/our-story#transparency",
+      "permanent": true
+    },
+    {
+      "source": "/directory/local/united-states/united-states/:path*",
+      "destination": "/directory/united-states",
+      "permanent": true
+    },
+    {
+      "source": "/directory/local/united-kingdom/united-kingdom/:path*",
+      "destination": "/directory/united-kingdom",
+      "permanent": true
+    },
+    {
+      "source": "/directory/local/united-states/new-york/:path*",
+      "destination": "/directory/local/united-states/new-york-city/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/join",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/join",
+      "permanent": true
+    },
+    {
+      "source": "/workspace",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/workspace",
+      "permanent": true
+    },
+    {
+      "source": "/api/account",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/account",
+      "permanent": true
+    },
+    {
+      "source": "/api/catalog",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/catalog",
+      "permanent": true
+    },
+    {
+      "source": "/api/workspace",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/workspace",
+      "permanent": true
+    },
+    {
+      "source": "/corrections",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/corrections",
+      "permanent": true
+    },
+    {
+      "source": "/api/corrections",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/corrections",
+      "permanent": true
+    },
+    {
+      "source": "/api/correction-review",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/correction-review",
+      "permanent": true
+    },
+    {
+      "source": "/account",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/account",
+      "permanent": true
+    },
+    {
+      "source": "/api/preferences",
+      "has": [
+        {
+          "type": "host",
+          "value": "realworldneeds.org"
+        }
+      ],
+      "destination": "https://www.realworldneeds.org/api/preferences",
+      "permanent": true
     }
   ]
 }

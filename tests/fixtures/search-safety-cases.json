@@ -1,0 +1,387 @@
+[
+  {
+    "id": "S01",
+    "query": "Boston food",
+    "expectation": "Preserve Boston city ambiguity and include evidenced Boston meal providers; do not assume a country.",
+    "includes": [
+      "st-francis-house-boston",
+      "rosies-place-boston",
+      "trussell-16aacd7d-6341-4323-8e08-6f437d5d7e76"
+    ],
+    "ambiguityCountries": [
+      "United Kingdom",
+      "United States"
+    ]
+  },
+  {
+    "id": "S02",
+    "query": "Boston MA food",
+    "expectation": "Explicit MA keeps actual Massachusetts records and excludes UK namesakes.",
+    "includes": [
+      "st-francis-house-boston",
+      "ma-wic-boston-medical-center-0"
+    ],
+    "country": "United States"
+  },
+  {
+    "id": "S03",
+    "query": "Boston US meals",
+    "expectation": "A specific meals query should rank an evidenced meal service above WIC benefit offices.",
+    "everyMealEvidence": true,
+    "includes": [
+      "st-francis-house-boston",
+      "rosies-place-boston"
+    ]
+  },
+  {
+    "id": "S04",
+    "query": "Taunton assistance",
+    "expectation": "Generic assistance wording should still retrieve the evidenced Taunton WIC/help options.",
+    "includes": [
+      "ma-wic-tauntonattleboro-wic-program-main-clinic"
+    ]
+  },
+  {
+    "id": "S05",
+    "query": "Taunton MA help",
+    "expectation": "Manual city/state search retrieves both the existing eligible WIC office and source-reviewed free walk-in meal service without location permission.",
+    "exactIds": [
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "taunton-community-table-meals"
+    ],
+    "evidenceReference": "docs/catalog-reviews/2026-11-07-priority-access.json"
+  },
+  {
+    "id": "S06",
+    "query": "Taunton",
+    "expectation": "City-only query preserves UK/US ambiguity and includes the MA office.",
+    "includes": [
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "trussell-a5972681-06d9-4a88-80cb-6be38293ccc7"
+    ],
+    "ambiguityCountries": [
+      "United Kingdom",
+      "United States"
+    ]
+  },
+  {
+    "id": "S07",
+    "query": "Providence showers",
+    "expectation": "Do not substitute the reviewed Providence meal service for an unverified shower site.",
+    "coverageOrCapabilityGap": "No reviewed Providence shower service in the current catalog. Amos House meal coverage does not establish shower access.",
+    "exactIds": []
+  },
+  {
+    "id": "S08",
+    "query": "Rhode Island clothing",
+    "expectation": "Show the existing regional clothing network as coverage, not an exact RI walk-in site.",
+    "includes": [
+      "cradles-to-crayons-boston"
+    ]
+  },
+  {
+    "id": "S09",
+    "query": "shelter intake",
+    "expectation": "Keep evidenced NYC intake/referral paths and Bowery service-specific next steps discoverable.",
+    "includes": [
+      "nyc-shelter-intake-coalition",
+      "bowery-mission"
+    ]
+  },
+  {
+    "id": "S10",
+    "query": "New York shelter intake",
+    "expectation": "Explicit city query includes NYC shelter referral plus Bowery, without unrelated-city results.",
+    "exactIds": [
+      "nyc-shelter-intake-coalition",
+      "bowery-mission"
+    ]
+  },
+  {
+    "id": "S11",
+    "query": "Bowery shelter",
+    "expectation": "Stable Bowery listing exposes shelter intake details rather than organization-coordinate directions.",
+    "exactIds": [
+      "bowery-mission"
+    ]
+  },
+  {
+    "id": "S12",
+    "query": "90 Lafayette shelter",
+    "expectation": "The newly source-backed shelter access address should find its organization listing.",
+    "exactIds": [
+      "bowery-mission"
+    ]
+  },
+  {
+    "id": "S13",
+    "query": "Bowery meals",
+    "expectation": "Meal search finds stable Bowery ID and map destination uses the reviewed meal address.",
+    "exactIds": [
+      "bowery-mission"
+    ]
+  },
+  {
+    "id": "S14",
+    "query": "diapers",
+    "expectation": "Return the published National Diaper Bank Network as a network, without invented physical coordinates.",
+    "exactIds": [
+      "national-diaper-bank-network"
+    ]
+  },
+  {
+    "id": "S15",
+    "query": "pañales",
+    "expectation": "Reviewed core Spanish need vocabulary should connect diapers intent to the evidenced national network.",
+    "exactIds": [
+      "national-diaper-bank-network"
+    ]
+  },
+  {
+    "id": "S16",
+    "query": "diapers Boston",
+    "expectation": "Do not invent a Boston diaper site; broader official network is available but not matched with the city term.",
+    "coverageOrCapabilityGap": "No Boston diaper provider in published catalog; scoped referral fallback and/or authoritative local batch needed.",
+    "exactIds": []
+  },
+  {
+    "id": "S17",
+    "query": "drinking water",
+    "expectation": "Top result has actual drinking-water evidence and locator semantics.",
+    "includes": [
+      "sf-free-water-map",
+      "nyc-cool-it-drinking-fountains",
+      "london-drinking-fountains"
+    ]
+  },
+  {
+    "id": "S18",
+    "query": "water Boston",
+    "expectation": "Water need must not be satisfied solely by a metaphorical provider name.",
+    "exactIds": []
+  },
+  {
+    "id": "S19",
+    "query": "London drinking water",
+    "expectation": "Find actual official drinking-water locator for London.",
+    "includes": [
+      "london-drinking-fountains"
+    ]
+  },
+  {
+    "id": "S20",
+    "query": "WIC",
+    "expectation": "Completed WIC intent matches evidenced program records and excludes Wick foodbank.",
+    "everyWicEvidence": true
+  },
+  {
+    "id": "S21",
+    "query": "W.I.C.",
+    "expectation": "Punctuation does not change completed WIC results.",
+    "sameAs": "WIC"
+  },
+  {
+    "id": "S22",
+    "query": "Wick",
+    "expectation": "Exact Wick place evidence outranks an incidental Wick-prefixed street in New York.",
+    "firstId": "trussell-84a7410e-aeaf-4cd3-a8d2-f110185f9168"
+  },
+  {
+    "id": "S23",
+    "query": "Wi",
+    "expectation": "Incomplete typing retains WIC and Wick possibilities.",
+    "includes": [
+      "trussell-84a7410e-aeaf-4cd3-a8d2-f110185f9168",
+      "ma-wic-boston-medical-center-0"
+    ]
+  },
+  {
+    "id": "S24",
+    "query": "Cambridge",
+    "expectation": "Explicitly identify UK/US ambiguity without assuming Cambridge Massachusetts.",
+    "includes": [
+      "ny-wic-212-03",
+      "trussell-638629ce-207b-4056-8fbd-5d6b4baee551"
+    ],
+    "ambiguityCountries": [
+      "United Kingdom",
+      "United States"
+    ]
+  },
+  {
+    "id": "S25",
+    "query": "Cambridge NY",
+    "expectation": "Respect explicit state qualifier.",
+    "exactIds": [
+      "ny-wic-212-03"
+    ]
+  },
+  {
+    "id": "S26",
+    "query": "Cambridge MA",
+    "expectation": "Do not silently substitute Cambridge NY or UK for missing MA coverage.",
+    "coverageOrCapabilityGap": "No Cambridge MA record in current catalog; source-backed local coverage needed.",
+    "exactIds": []
+  },
+  {
+    "id": "S27",
+    "query": "Cambridge UK food",
+    "expectation": "Respect explicit UK country qualifier.",
+    "country": "United Kingdom"
+  },
+  {
+    "id": "S28",
+    "query": "Mexico",
+    "expectation": "Country-versus-city ambiguity must be made explicit when Mexico NY and Mexico-country entries both match.",
+    "ambiguityCountries": [
+      "Mexico",
+      "United States"
+    ]
+  },
+  {
+    "id": "S29",
+    "query": "México",
+    "expectation": "Diacritics preserve both real interpretations and require the same ambiguity handling as Mexico.",
+    "ambiguityCountries": [
+      "Mexico",
+      "United States"
+    ],
+    "sameAs": "Mexico"
+  },
+  {
+    "id": "S30",
+    "query": "Mexico shelter",
+    "expectation": "Need-qualified country query retrieves the real UNHCR official referral, not an invented local shelter.",
+    "exactIds": [
+      "unhcr-help-mexico"
+    ]
+  },
+  {
+    "id": "S31",
+    "query": "Rosarito food",
+    "expectation": "Do not substitute a reviewed Rosarito health clinic for an unverified food service.",
+    "coverageOrCapabilityGap": "No reviewed free-food service in Rosarito. The source-reviewed local health clinic must not be substituted for food.",
+    "exactIds": []
+  },
+  {
+    "id": "S32",
+    "query": "Tijuana shelter",
+    "expectation": "Do not fabricate Tijuana shelter intake or silently substitute another city.",
+    "coverageOrCapabilityGap": "No reviewed shelter-intake destination in Tijuana. The source-reviewed local health clinic must not be substituted for shelter.",
+    "exactIds": []
+  },
+  {
+    "id": "S33",
+    "query": "comida Taunton MA",
+    "expectation": "Spanish food alias finds reviewed free meals and eligible food benefits, ranking the meal service first.",
+    "exactIds": [
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "taunton-community-table-meals"
+    ],
+    "evidenceReference": "docs/catalog-reviews/2026-11-07-priority-access.json",
+    "firstId": "taunton-community-table-meals"
+  },
+  {
+    "id": "S34",
+    "query": "albergue Boston MA",
+    "expectation": "Spanish shelter alias retains real Boston shelter options.",
+    "includes": [
+      "southampton-shelter",
+      "woods-mullen-shelter"
+    ]
+  },
+  {
+    "id": "S35",
+    "query": "duchas Boston MA",
+    "expectation": "Specific Spanish shower term maps to shower evidence rather than every hygiene listing.",
+    "includes": [
+      "st-francis-house-boston",
+      "rosies-place-boston"
+    ]
+  },
+  {
+    "id": "S36",
+    "query": "ropa Boston MA",
+    "expectation": "Spanish clothing term retains established providers/networks.",
+    "includes": [
+      "cradles-to-crayons-boston",
+      "st-francis-house-boston"
+    ]
+  },
+  {
+    "id": "S37",
+    "query": "Rosie’s Place",
+    "expectation": "Curly-apostrophe provider query resolves stable published ID.",
+    "exactIds": [
+      "rosies-place-boston"
+    ]
+  },
+  {
+    "id": "S38",
+    "query": "St. Francis House",
+    "expectation": "Punctuation preserves the existing provider name.",
+    "exactIds": [
+      "st-francis-house-boston"
+    ]
+  },
+  {
+    "id": "S39",
+    "query": "Carapicuíba",
+    "expectation": "Accented city query resolves reviewed contact-only listing, without fictional map access.",
+    "exactIds": [
+      "centro-pop-carapicuiba"
+    ]
+  },
+  {
+    "id": "S40",
+    "query": "Hunger Hotline",
+    "expectation": "Official remote food-referral channel remains directly searchable.",
+    "exactIds": [
+      "usda-hunger-hotline"
+    ]
+  },
+  {
+    "id": "S41",
+    "query": "988 mental health",
+    "expectation": "Find the existing remote crisis support resource without precise location.",
+    "exactIds": [
+      "988-suicide-crisis-lifeline"
+    ]
+  },
+  {
+    "id": "S42",
+    "query": "Antarctica food",
+    "expectation": "A genuine catalog no-results query must stay empty, without fabricated assistance.",
+    "exactIds": []
+  },
+  {
+    "id": "S43",
+    "query": "food 東京",
+    "expectation": "Unknown non-Latin location is retained as a constraint rather than discarded.",
+    "exactIds": []
+  },
+  {
+    "id": "S44",
+    "query": "Taunton MA help",
+    "expectation": "Location denial retains manual access to the reviewed Taunton meal service and existing WIC office.",
+    "coverageOrCapabilityGap": "Location-denial UI is separately exercised by browser-tests/search-safety.spec.js; the deterministic matcher diagnostic alone cannot establish it.",
+    "exactIds": [
+      "ma-wic-tauntonattleboro-wic-program-main-clinic",
+      "taunton-community-table-meals"
+    ],
+    "evidenceReference": "docs/catalog-reviews/2026-11-07-priority-access.json"
+  },
+  {
+    "id": "S45",
+    "query": "foood Boston MA",
+    "expectation": "Curated food typo keeps the original query and matches the English food set.",
+    "sameAs": "food Boston MA"
+  },
+  {
+    "id": "S46",
+    "query": "duchas Providence",
+    "expectation": "Spanish showers query must not substitute Providence meal coverage for unverified shower access.",
+    "coverageOrCapabilityGap": "No reviewed Providence shower service; a translated need does not add provider coverage.",
+    "exactIds": []
+  }
+]

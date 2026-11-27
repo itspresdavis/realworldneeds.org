@@ -4,6 +4,12 @@ import { verifiedExpansionResources } from "./verified-expansion.js";
 import { massachusettsWicResources } from "./generated/massachusetts-wic.js";
 import { newYorkWicResources } from "./generated/new-york-wic.js";
 import { trussellFoodbankResources } from "./generated/trussell-foodbanks.js";
+import { imssBienestarResources } from "./imss-bienestar-resources.js";
+import { melbourneWaterResources } from "./generated/melbourne-water.js";
+import { titleXResources } from "./generated/title-x.js";
+import { phillyFoodResources } from "./generated/philly-food.js";
+import { novemberExpansionResources } from "./november-expansion.js";
+import { priorityCommunityResources } from "./priority-community-resources.js";
 import { withFreeAccess } from "./free-access.js";
 
 export const categories = {
@@ -188,7 +194,7 @@ const expandedResources = [
     availabilityNote: "Opening hours differ by station. Use the official finder to choose a location and check its current hours.",
     sourceName: "Bahnhofsmission Deutschland",
     sourceKind: "Official nonprofit network",
-    sourceUrl: "https://www.bahnhofsmission.de/",
+    sourceUrl: "https://www.bahnhofsmission.de/startseite",
     sourceDetail: "The official network and Deutsche Bahn describe immediate, free help and provide locations and opening hours for station missions."
   }),
   verified({
@@ -337,23 +343,28 @@ const expandedResources = [
     city: "Carapicuíba",
     country: "Brazil",
     region: "South America",
-    lat: -23.5235,
-    lng: -46.8348,
+    lat: null,
+    lng: null,
+    locationPrecision: "contact-only",
     category: "hygiene",
     secondaryCategories: ["clothing", "health", "referral"],
-    kind: "direct",
-    accessType: "Walk-in public service",
+    kind: "locator",
+    accessType: "Contact the public service before travel",
     costNote: "Free services",
-    address: "Avenida Fernanda, 154, Centro, Carapicuíba, São Paulo",
+    address: "Carapicuíba, São Paulo — call to confirm the current service address",
+    coverageNote: "Municipal service in Carapicuíba. Two official pages publish different street addresses; no walk-in location is confirmed here.",
+    eligibility: "The municipality describes this service for people experiencing homelessness. Confirm current access with the provider.",
+    phoneAccess: "Municipal contact in Carapicuíba, Brazil; check dialing requirements when calling from another country.",
+    accessUrl: "https://www.carapicuiba.sp.gov.br/portal/secretarias/41/centro-pop",
     phone: "(11) 4164-2806",
     hours: "Monday–Friday, 8:00 AM–5:00 PM",
     summary: "A public reference centre for people experiencing homelessness, with personal hygiene, clothing and shoes, document support, medical referrals, and social reintegration help.",
     services: ["Personal hygiene", "Clothing and shoes", "Document support", "Medical and social referrals"],
-    availabilityNote: "The official municipal page lists weekday hours. Call ahead to confirm current access and holiday changes.",
+    availabilityNote: "The municipality publishes conflicting addresses: Avenida Fernanda, 154 and Avenida Celeste, 180. Call (11) 4164-2806 to confirm the current address, opening hours and access before travel. Directions are withheld until the location is clarified.",
     sourceName: "Carapicuíba Municipal Government",
     sourceKind: "Government service site",
-    sourceUrl: "https://www.carapicuiba.sp.gov.br/departamento/view/23/centro-pop",
-    sourceDetail: "The official city page lists the address, phone, opening hours, hygiene, clothing, document, and medical-referral services."
+    sourceUrl: "https://www.carapicuiba.sp.gov.br/portal/secretarias/41/centro-pop",
+    sourceDetail: "The municipal source lists Avenida Fernanda, 154. A second official page, https://www.carapicuiba.sp.gov.br/portal/secretarias/71/centro-pop/, lists Avenida Celeste, 180. Both publish the same phone number and weekday hours. Their conflicting location information requires provider confirmation."
   }),
   verified({
     id: "strazsa-tanya-hungary",
@@ -392,7 +403,7 @@ const reviewedResources = [
     category: "food",
     secondaryCategories: ["shelter", "hygiene", "clothing", "health"],
     kind: "direct",
-    accessType: "Walk-in",
+    accessType: "Varies by service; see access details",
     costNote: "Free services",
     address: "227 Bowery, New York, NY 10002",
     phone: "(212) 226-6214",
@@ -402,7 +413,13 @@ const reviewedResources = [
     sourceName: "The Bowery Mission",
     sourceKind: "Official provider",
     sourceUrl: "https://www.bowery.org/get-help/",
-    sourceDetail: "The official help page lists free meals at 227 Bowery and shelter intake at 90 Lafayette Street."
+    sourceDetail: "The official help page lists free meals at 227 Bowery and shelter intake at 90 Lafayette Street.",
+    serviceAccess: [
+      { id: "meals", label: "Meal service", categories: ["food"], mode: "walk-in", address: "227 Bowery, New York, NY 10002", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-07", instructions: "Dine in or request a to-go meal at the Bowery Campus.", hours: "Daily meals begin at 8 a.m., 1 p.m. and 5:30 p.m. End times are not published.", eligibility: "Anyone in need; no ID required. Chapel attendance is not required to receive a meal.", fieldEvidence: { hours: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Meal start times only; no meal end times or live availability.", verification: "source-reviewed" }, eligibility: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Meal ID and chapel requirements.", verification: "source-reviewed" } } },
+      { id: "shelter", label: "Shelter intake", categories: ["shelter"], mode: "intake", directions: true, address: "90 Lafayette Street, New York, NY 10013", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-07", instructions: "Overnight shelter intake is at the Tribeca Campus, a different location from meal service. Walk in or call (212) 226-6214 for current intake information.", intake: "Daily intake at 3 p.m. for women and 3:45 p.m. for men. Guests may stay overnight for up to seven days.", capacity: "Confirm current intake and capacity before travel; a published intake time does not guarantee a bed.", fieldEvidence: { intake: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Shelter intake address, separate intake times and maximum stay; no capacity confirmation.", verification: "source-reviewed" }, address: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Tribeca shelter intake destination.", verification: "source-reviewed" } } },
+      { id: "showers-clothing", label: "Showers and clothing", categories: ["hygiene", "clothing"], mode: "intake", address: "227 Bowery, New York, NY 10002", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-07", instructions: "The program begins at 9:30 a.m.; registration is earlier and capacity is limited.", intake: "Women: Monday, register at reception 7–8 a.m.; first 15. Men: Wednesday–Friday, line up outside 6–6:30 a.m.; first 20.", capacity: "First come, first served. Hygiene items and clean clothing are provided as needed.", fieldEvidence: { intake: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Gender-specific registration windows, program start time and published capacities.", verification: "source-reviewed" } } },
+      { id: "medical", label: "Mobile medical care", categories: ["health"], mode: "intake", address: "227 Bowery, New York, NY 10002", sourceUrl: "https://www.bowery.org/get-help/", reviewedAt: "2026-11-07", instructions: "Project Renewal provides free care in a mobile medical van outside the Bowery Campus.", eligibility: "Free regardless of insurance status.", schedule: { timeZone: "America/New_York", complete: true, weekly: [{ days: [2], opens: "09:00", closes: "14:00" }, { days: [4], opens: "14:00", closes: "17:00" }], text: "Tuesday 9 a.m.–2 p.m.; Thursday 2–5 p.m. Check with the provider for changes." }, fieldEvidence: { schedule: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Published mobile medical service days and hours; no live availability or exceptional closures confirmed.", verification: "source-reviewed" }, eligibility: { sourceUrl: "https://www.bowery.org/get-help/", checkedAt: "2026-11-07T05:37:35Z", scope: "Free medical care regardless of insurance.", verification: "source-reviewed" } } }
+    ]
   }),
   verified({
     id: "beacon-houston",
@@ -421,11 +438,18 @@ const reviewedResources = [
     phone: "(713) 220-9737",
     summary: "A downtown day center providing meals, private showers, full-service laundry, charging, Wi-Fi, mail, and housing navigation.",
     services: ["Breakfast and hot lunch", "Private showers", "Full-service laundry", "Housing assessment and referrals"],
-    availabilityNote: "Service days, intake, and capacity can change. Confirm on the official page or by phone before traveling.",
+    availabilityNote: "Enter the Day Center on Caroline Street. Meals, showers and laundry are offered Tuesday–Saturday; all services are first come, first served and not guaranteed because capacity is limited.",
     sourceName: "The Beacon",
     sourceKind: "Official provider",
-    sourceUrl: "https://www.beaconhomeless.org/essentialservices",
-    sourceDetail: "The official essential-services page lists the address and its current meals, hygiene, and Pathways support."
+    sourceUrl: "https://www.beaconhomeless.org/gethelp",
+    sourceDetail: "The official Get Help page distinguishes the Caroline Street service entrance, meal hours, intake times and capacity limits from the mailing address. Access and schedule fields reviewed November 7; the original broad review date is retained.",
+    hours: "Tuesday–Saturday: breakfast 7–9:30 a.m.; lunch 11 a.m.–noon. Laundry and shower end times are not published. America/Chicago local time.",
+    serviceAccess: [
+      { id: "breakfast", label: "Breakfast", categories: ["food"], mode: "walk-in", address: "1212 Prairie Street, Houston, TX 77002", sourceUrl: "https://www.beaconhomeless.org/gethelp", reviewedAt: "2026-11-07", instructions: "Enter through the Day Center on Caroline Street.", entrance: "Day Center entrance on Caroline Street, not the mailing address on Texas Avenue.", capacity: "All services are first come, first served and not guaranteed due to limited operational capacity.", schedule: { timeZone: "America/Chicago", complete: true, weekly: [{ days: [2, 3, 4, 5, 6], opens: "07:00", closes: "09:30" }], text: "Tuesday–Saturday, 7–9:30 a.m." }, fieldEvidence: { schedule: { sourceUrl: "https://www.beaconhomeless.org/gethelp", checkedAt: "2026-11-07T05:37:36Z", scope: "Breakfast service days and hours only; no live capacity confirmation.", verification: "source-reviewed" }, entrance: { sourceUrl: "https://www.beaconhomeless.org/gethelp", checkedAt: "2026-11-07T05:37:36Z", scope: "Day Center entrance for all services.", verification: "source-reviewed" } } },
+      { id: "lunch", label: "Lunch", categories: ["food"], mode: "walk-in", address: "1212 Prairie Street, Houston, TX 77002", sourceUrl: "https://www.beaconhomeless.org/gethelp", reviewedAt: "2026-11-07", instructions: "Enter through the Day Center on Caroline Street.", entrance: "Day Center entrance on Caroline Street.", capacity: "First come, first served; service is not guaranteed due to limited capacity.", schedule: { timeZone: "America/Chicago", complete: true, weekly: [{ days: [2, 3, 4, 5, 6], opens: "11:00", closes: "12:00" }], text: "Tuesday–Saturday, 11 a.m.–noon." }, fieldEvidence: { schedule: { sourceUrl: "https://www.beaconhomeless.org/gethelp", checkedAt: "2026-11-07T05:37:36Z", scope: "Lunch service days and hours only; no live capacity confirmation.", verification: "source-reviewed" }, entrance: { sourceUrl: "https://www.beaconhomeless.org/gethelp", checkedAt: "2026-11-07T05:37:36Z", scope: "Day Center entrance for all services.", verification: "source-reviewed" } } },
+      { id: "showers-laundry", label: "Showers and laundry", categories: ["hygiene"], mode: "intake", address: "1212 Prairie Street, Houston, TX 77002", sourceUrl: "https://www.beaconhomeless.org/gethelp", reviewedAt: "2026-11-07", instructions: "Enter through the Day Center on Caroline Street.", hours: "Tuesday–Saturday. The source does not publish shower or laundry end times.", entrance: "Day Center entrance on Caroline Street.", capacity: "First come, first served; not guaranteed due to limited operational capacity.", fieldEvidence: { instructions: { sourceUrl: "https://www.beaconhomeless.org/gethelp", checkedAt: "2026-11-07T05:37:36Z", scope: "Service days, entrance and capacity limitation; hours remain incomplete.", verification: "source-reviewed" } } },
+      { id: "housing-assessment", label: "Housing assessment intake", categories: ["referral"], mode: "intake", address: "1212 Prairie Street, Houston, TX 77002", sourceUrl: "https://www.beaconhomeless.org/gethelp", reviewedAt: "2026-11-07", instructions: "Coordinated Entry is offered Tuesday–Friday; enter through the Day Center on Caroline Street.", intake: "Sign up at Intake at 7 a.m.; first 25 people.", capacity: "An assessment does not guarantee housing or a shelter placement.", fieldEvidence: { intake: { sourceUrl: "https://www.beaconhomeless.org/gethelp", checkedAt: "2026-11-07T05:37:36Z", scope: "Coordinated Entry intake days, start time and first-25 limit; eligibility not reverified.", verification: "source-reviewed" } } }
+    ]
   }),
   verified({
     id: "st-anthony-hygiene-hub",
@@ -1292,6 +1316,12 @@ const reviewedResources = [
   ...expandedResources,
   ...expansionResources,
   ...verifiedExpansionResources,
+  ...priorityCommunityResources,
+  ...melbourneWaterResources,
+  ...titleXResources,
+  ...phillyFoodResources,
+  ...novemberExpansionResources,
+  ...imssBienestarResources,
   ...massachusettsWicResources,
   ...newYorkWicResources,
   ...trussellFoodbankResources

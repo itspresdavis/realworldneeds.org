@@ -21,6 +21,8 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 5rem; background: var(--paper); }
+/* Native search focus reveals the caret; retain clearance for the whole field. */
+html:has([data-directory-query]:focus) { scroll-padding-top: 6rem; }
 body { min-width: 320px; margin: 0; background: var(--paper); color: var(--ink); font-size: 17px; line-height: 1.68; -webkit-font-smoothing: antialiased; }
 a { color: var(--green-dark); text-underline-offset: .18em; text-decoration-thickness: 1px; }
 a:hover { color: #055f34; }
@@ -196,3 +198,11 @@ aside.source-status-notice > a:focus-visible { outline: 3px solid currentColor; 
 
 .directory-global-result-wrap.has-source-status { grid-template-columns: minmax(0, 1fr); }
 .directory-global-result-wrap.has-source-status .directory-global-result-actions { justify-content: flex-start; }
+
+/* Reserve room for the outer keyboard focus ring during native scrolling. */
+.directory-page-list a { scroll-margin-block:8px;}
+/* Keep the directory introduction in the reading flow, not in a separate card. */
+#directory .directory-guide { margin:0 0 1.25rem;padding:.15rem 0 .85rem;border:0;border-bottom:1px solid var(--page-line);border-radius:0;background:transparent;color:var(--page-ink); }
+#directory .directory-guide p { margin:0; }
+#directory .directory-guide nav { display:flex;flex-wrap:wrap;column-gap:.75rem;margin-top:.15rem; }
+#directory .directory-guide a { display:inline-flex;align-items:center;min-height:44px;padding:0 .12rem;color:var(--page-green-dark);text-underline-offset:.2em; }

@@ -1,3 +1,5 @@
+import { reviewSchedule } from "/src/utils/review-schedule.js";
+
 const $ = (selector) => document.querySelector(selector);
 async function request(path, body, method = "POST") {
   const response = await fetch(path, {
@@ -28,6 +30,12 @@ function node(tag, text, className) {
   if (text != null) el.textContent = text;
   if (className) el.className = className;
   return el;
+}
+function providerNode(tag, value) {
+  const element = node(tag, value);
+  element.dataset.providerText = "";
+  element.lang = "und";
+  return element;
 }
 function safeLink(label, href) {
   const a = node("a", label);
@@ -140,7 +148,7 @@ if (document.body.dataset.page === "workspace") {
       const r = data.location.record;
       panel.replaceChildren(
         node("p", "Database record", "eyebrow"),
-        node("h2", r.name),
+        providerNode("h2", r.name),
       );
       const links = node("div", null, "card-links");
       links.append(safeLink("Original source ↗", r.sourceUrl));
@@ -152,6 +160,17 @@ if (document.body.dataset.page === "workspace") {
       if (data.isEditor)
         links.append(safeLink("Open Supabase table ↗", data.databaseUrl));
       panel.append(links, node("p", `Record ID: ${r.id}`, "record-id"));
+      const schedule = reviewSchedule(r);
+      panel.append(
+        node("h3", "Review planning"),
+        node("p", schedule.nextReviewDue
+          ? `Proposed next review: ${schedule.nextReviewDue} (${schedule.state}; ${schedule.intervalDays}-day ${schedule.risk === "shelter" ? "shelter access" : "source"} cadence).`
+          : "Review evidence needs attention before a next review date can be calculated."),
+        node("p", schedule.anchorKind === "legacy-source-check"
+          ? "This proposal uses the legacy source-check date, which may record a retrieval rather than a substantive review. A successful fetch is not provider confirmation."
+          : "This proposal uses the recorded substantive review date. Source fetches do not advance it."),
+        node("p", "Cadences require operations approval. Age alone does not mean a service has closed. Record evidence and a reason in a review note; published changes still require review and release."),
+      );
       const facts = node("dl", null, "record-facts");
       for (const [key, value] of Object.entries(r)) {
         facts.append(
@@ -284,11 +303,11 @@ if (document.body.dataset.page === "workspace") {
         panel.append(node("h3", "Change history"));
         for (const change of data.history) {
           const entry = node("details");
+          const heading = node("summary"), changedAt = node("time", new Date(change.changed_at).toLocaleString());
+          changedAt.dateTime = change.changed_at;
+          heading.append(providerNode("span", change.operation), document.createTextNode(" · "), changedAt);
           entry.append(
-            node(
-              "summary",
-              `${change.operation} · ${new Date(change.changed_at).toLocaleString()}`,
-            ),
+            heading,
             node(
               "pre",
               JSON.stringify(
@@ -328,8 +347,8 @@ if (document.body.dataset.page === "workspace") {
               : "Coverage / resource finder",
             "kind",
           ),
-          node("h2", r.name),
-          node("p", r.country),
+          providerNode("h2", r.name),
+          providerNode("p", r.country),
         );
         const facts = node("dl");
         facts.append(
@@ -364,6 +383,8 @@ if (document.body.dataset.page === "workspace") {
         review.addEventListener("click", () => {
           $("#reviewForm").elements.locationId.value = r.id;
           $("#reviewSelection").textContent = r.name;
+          $("#reviewSelection").dataset.providerText = "";
+          $("#reviewSelection").lang = "und";
           $("#reviewNote").disabled = false;
           $("#reviewSubmit").disabled = false;
           $("#reviewStatus").textContent = "";
@@ -392,8 +413,8 @@ if (document.body.dataset.page === "workspace") {
         const date = node("time", new Date(review.created_at).toLocaleString());
         date.dateTime = review.created_at;
         row.append(
-          node("strong", review.location_id),
-          node("p", review.note),
+          providerNode("strong", review.location_id),
+          providerNode("p", review.note),
           date,
         );
         history.append(row);

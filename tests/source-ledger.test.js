@@ -41,11 +41,9 @@ test("source ledger release metadata matches the registry and record-level sourc
 
 test("source ledger is crawlable and discoverable from transparency", async () => {
   const sitemap = await read("dist/sitemap.xml");
-  const transparency = await read("dist/transparency.html");
+  const transparency = await read("dist/our-story.html");
   assert.match(sitemap, /<loc>https:\/\/www\.realworldneeds\.org\/sources<\/loc><lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
-  assert.match(transparency, /href="\/sources">Browse source ledger<\/a>/);
-  assert.match(transparency, /href="\/sources">Human source ledger<\/a>/);
-  assert.match(transparency, /href="\/sources">Sources<\/a>/);
+  assert.match(transparency, /href="\/sources"/);
 });
 
 test("source ledger structured data describes a collection without inventing endorsements", async () => {

@@ -47,10 +47,10 @@ test("the real restore handler reads history.state and restores the filter contr
   let calls = 0;
   const history = { state: null, replaceState(value) { this.state = value; } };
   writeDirectoryState(history, "/directory", { query: "WIC", category: "food", country: "United States", shown: 120, scroll: 900 });
-  const f = vm.createContext({ history, location: { pathname: "/directory", hash: "" }, pagePath: "/directory", readDirectoryState,
+  const f = vm.createContext({ place: { value: "" }, history, location: { pathname: "/directory", hash: "" }, pagePath: "/directory", readDirectoryState,
     startup: {}, shell: null, saved: null, browse: false, readState: () => readDirectoryState(history.state, "/directory"), restored: null, restorePending: false, cancelInput() {}, clearTimeout() {}, inputTimer: null,
-    input: {}, activeCategory: "", country: {}, renderChips() {}, apply: () => calls++ });
-  const restoreSource = source.slice(source.indexOf("const restore="), source.indexOf('listen(window,"popstate"'));
+    input: {}, activeCategory: "", country: { closest: () => null }, renderChips() {}, apply: () => calls++ });
+  const restoreSource = source.slice(source.indexOf("const inSaved="), source.indexOf('listen(window,"popstate"'));
   vm.runInContext(`${restoreSource}\nrestore();`, f);
   assert.equal(f.input.value, "WIC"); assert.equal(f.activeCategory, "food");
   assert.equal(f.country.value, "United States"); assert.equal(f.restored.shown, 120);
@@ -68,7 +68,7 @@ test("the real restore handler reads history.state and restores the filter contr
 
 test("reconnection retries a country-only search after its results were hidden by a failed request", () => {
   let searches = 0;
-  const f = vm.createContext({ showConnectivityState() {}, loadCatalog: { retry() {} }, results: { hidden: true },
+  const f = vm.createContext({ place: { value: "" }, showConnectivityState() {}, loadCatalog: { retry() {} }, results: { hidden: true },
     input: { value: "" }, activeCategory: "", country: { value: "France" }, apply: () => searches++ });
   const changeSource = source.slice(source.indexOf("const connectivityChanged="), source.indexOf('for(const type of ["online","offline","rwn-connection-restored"])'));
   vm.runInContext(`${changeSource}\nconnectivityChanged();`, f);
@@ -77,7 +77,7 @@ test("reconnection retries a country-only search after its results were hidden b
 
 test("a second refresh while restoration loads preserves the saved position and target", () => {
   const history = { state: null, replaceState(value) { this.state = value; } };
-  const f = vm.createContext({ history, writeDirectoryState, location: { pathname: "/directory" }, pagePath: "/directory",
+  const f = vm.createContext({ place: { value: "" }, history, writeDirectoryState, location: { pathname: "/directory" }, pagePath: "/directory",
     input: { value: "WIC" }, activeCategory: "food", country: { value: "United States" }, visibleCount: 0,
     restorePending: true, restored: { shown: 120, scroll: 900, focus: "/service/example" },
     window: { scrollY: 0 }, document: { activeElement: {} } });
@@ -97,8 +97,8 @@ function searchFixture({ country = "", category = "", query = "", restored = nul
     { id: "global", country: "Global", kind: "network", categoryLabels: ["Food"], name: "Global referral" }
   ];
   const frames = [], effects = { remembers: 0, focus: 0, scroll: null, cleared: 0 };
-  const f = vm.createContext({
-    format: value => value.toLocaleString(), browse: false, document: {}, retry: {}, showRetry() {}, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false,
+  const f = vm.createContext({ place: { value: "" },
+    geography: undefined, releaseVersion: "fixture", format: value => value.toLocaleString(), browse: false, document: {}, retry: {}, showRetry() {}, input: { value: query }, country: { value: country }, activeCategory: category, generation: 0, composing: false, activePage: true,
     queryTokens: value => value.trim().split(/\s+/).filter(Boolean), normalize: value => value.toLowerCase(),
     clear: {}, root: { classList: { toggle() {} } }, count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: async () => ({ records }),
     syncCategoryLabels() {}, scopedRecords: payload => payload.records, scoreRecord: () => 1,
@@ -187,7 +187,7 @@ test("Saved navigation closes the narrow menu before moving focus into either vi
   const syncSource = saved.slice(saved.indexOf("  const syncView ="), saved.indexOf('  window.addEventListener("hashchange"'));
   for (const visible of [true, false]) {
     const effects = [];
-    const f = vm.createContext({ active: () => visible, generation: 0, navigation: [], directoryTitle: "Directory | Real World Needs",
+    const f = vm.createContext({ place: { value: "" }, active: () => visible, generation: 0, navigation: [], directoryTitle: "Directory | Real World Needs",
       document: { querySelector(selector) { assert.equal(selector, ".rwn-page-menu"); return { removeAttribute(name) { assert.equal(name, "open"); effects.push("closed"); } }; } },
       panel: { closest: () => ({ classList: { contains: () => true, toggle() { effects.push("toggled"); } } }), scrollIntoView(options) { assert.equal(options.behavior, "instant"); effects.push("instant-entry"); } },
       cancelClear() {}, render() {}, heading: { focus() { effects.push("focus"); } },
@@ -256,7 +256,7 @@ test("cleared searches and failed restored searches still have a visible return-
 
 test("Saved navigation snapshots current scroll before creating its fragment history entry", () => {
   let capture, handler, snapshots = 0;
-  const f = vm.createContext({ listen: (node, ...args) => node?.addEventListener(...args), location: { hash: "" }, saved: null, document: { addEventListener(type, fn, flag) { assert.equal(type, "click"); handler = fn; capture = flag; } }, remember: () => snapshots++ });
+  const f = vm.createContext({ place: { value: "" }, listen: (node, ...args) => node?.addEventListener(...args), location: { hash: "" }, saved: null, document: { addEventListener(type, fn, flag) { assert.equal(type, "click"); handler = fn; capture = flag; } }, remember: () => snapshots++ });
   const clickSource = source.split("\n").find(line => line.startsWith('listen(document,"click"'));
   vm.runInContext(clickSource, f);
   assert.equal(capture, true);

@@ -1,3 +1,91 @@
-const element=tag=>document.createElement(tag),encode=encodeURIComponent;
-const actionLink=(label,href,className,ariaLabel)=>{const link=element("a");link.href=href;link.textContent=label;link.className=className;link.setAttribute("aria-label",ariaLabel);if(href.startsWith("http"))link.rel="noopener noreferrer";return link;};
-export const createResultRow=(record,connectivityNotice)=>{const contactOnly=record.locationPrecision==="contact-only",wrap=element("div");wrap.className="directory-global-result-wrap";const link=element("a");link.className="directory-global-result";link.href=`/service/${encode(record.id)}`;const main=element("span"),name=element("strong"),place=element("span"),meta=element("small");name.textContent=record.name;place.textContent=` — ${record.place}`;main.append(name,place);meta.textContent=`${contactOnly?"Phone or online help · check coverage":record.kind==="direct"?"Service location":record.kind==="locator"?"Help finder or referral · check coverage":"Service network · check coverage"} · ${record.categoryLabels.join(" · ")} · Source checked ${record.checked}${navigator.onLine?"":" · reconnect for full details"}`;link.append(main,meta);const actions=element("nav");actions.className="directory-global-result-actions";actions.setAttribute("aria-label",`Actions for ${record.name}`);for(const {label,href} of record.phoneLinks||[]){actions.append(actionLink(`Call ${label}`,href,"is-call",`Call ${record.name} at ${label}`));}if(!contactOnly&&record.kind==="direct"&&Number.isFinite(record.lat)&&Number.isFinite(record.lng)){const coordinate=encode(`${record.lat},${record.lng}`);for(const [provider,url] of [["Apple Maps",`https://maps.apple.com/?daddr=${coordinate}&q=${encode(record.name)}`],["Google Maps",`https://www.google.com/maps/dir/?api=1&destination=${coordinate}`]])actions.append(actionLink(provider,url,"is-map",`Get directions to ${record.name} in ${provider}`));}if(contactOnly&&record.accessUrl?.startsWith("https://"))actions.append(actionLink("Contact website",record.accessUrl,"is-contact",`Open the contact website for ${record.name}`));actions.append(actionLink("View details",link.href,"is-details",`View details for ${record.name}`));wrap.append(link);if(record.sourceStatus){const notice=element("aside"),title=element("strong"),detail=element("p");notice.className="source-status-notice";notice.setAttribute("aria-label","Source-reported availability");title.textContent=record.sourceStatus.title;detail.textContent=record.sourceStatus.detail;notice.append(title,detail);wrap.classList.add("has-source-status");wrap.append(notice);}if(record.phone&&(record.phoneLinks?.length!==1||record.phoneLinks[0].label!==record.phone)){const phone=element("small");phone.textContent=`Phone: ${record.phone}`;link.append(phone);}if(contactOnly){const scope=element("small");scope.textContent=[record.coverageNote,record.eligibility?`Eligibility: ${record.eligibility}`:"",record.accessUrl?`Website (connection required): ${record.accessUrl}`:"",record.phoneAccess?`Dialing scope: ${record.phoneAccess}`:""].filter(Boolean).join(" ");link.append(scope);}wrap.append(actions);if(!navigator.onLine){link.setAttribute("aria-describedby",connectivityNotice.id);link.addEventListener("click",event=>{event.preventDefault();connectivityNotice.hidden=false;connectivityNotice.focus({preventScroll:true});connectivityNotice.scrollIntoView({block:"center",behavior:"auto"});});}return wrap;};
+const rowClass = "directory-global-result";
+const element = (tag, text) => {
+  const node = document.createElement(tag);
+  if (text) node.textContent = text;
+  return node;
+};
+const encode = encodeURIComponent;
+
+export const createResultRow = (record, connectivityNotice) => {
+  const { serviceActions: routes, sourceStatus, phoneLinks, phone, phoneAccess,
+    serviceAccessSummary, name: resourceName, kind: resourceKind, accessUrl,
+    eligibility, lat, lng } = record;
+  const contactOnly = record.locationPrecision === "contact-only";
+  const wrap = element("div");
+  wrap.className = rowClass + "-wrap";
+  const link = element("a");
+  link.className = rowClass;
+  link.href = `/service/${encode(record.id)}`;
+  const main = element("span");
+  main.append(element("strong", resourceName), element("span", record.place));
+  const kind = routes ? "Service access routes" : !contactOnly && resourceKind === "direct"
+    ? "Service location" : `${contactOnly ? "Phone or online help" : resourceKind === "locator" ? "Help finder or referral" : "Service network"} · check coverage`;
+  link.append(main, element("small", `${record.categoryLabels.join(" · ")} · ${kind}`));
+  if (record.costLabel) link.append(element("small", [record.costLabel, record.costNote].filter(Boolean).join(" — ")));
+  link.append(element("small", `Source checked ${record.checked}${navigator.onLine ? "" : " · reconnect for full details"}`));
+
+  const actions = element("nav");
+  actions.className = rowClass + "-actions";
+  actions.setAttribute("aria-label", `Actions for ${resourceName}`);
+  const more = element("details");
+  more.className = "result-more";
+  more.append(element("summary", "Directions and access details"));
+  const routeActions = element("nav");
+  routeActions.className = rowClass + "-actions";
+  routeActions.setAttribute("aria-label", `Access options for ${resourceName}`);
+  let extraActions = 0;
+  const add = (label, href, className, target = actions) => {
+    const action = element("a", label);
+    action.href = href;
+    action.className = className;
+    action.setAttribute("aria-label", `${label} for ${resourceName}`);
+    action.rel = "noopener noreferrer";
+    target.append(action);
+    if (target === routeActions) extraActions++;
+  };
+  for (const { label, href } of phoneLinks || []) add(`Call ${label}`, href, "is-call");
+  const coordinate = encode(`${lat},${lng}`);
+  const steps = Object.hasOwn(record, "serviceActions") ? (Array.isArray(routes) ? routes : [])
+    : !contactOnly && resourceKind === "direct" && Number.isFinite(lat) && Number.isFinite(lng)
+      ? [{ label: "Apple Maps", href: `https://maps.apple.com/?daddr=${coordinate}` },
+        { label: "Google Maps", href: `https://www.google.com/maps/dir/?api=1&destination=${coordinate}` }] : [];
+  for (const { label, href, kind } of steps) {
+    try {
+      const url = new URL(href);
+      if (url.href !== href || url.username || url.password || !(url.protocol === "https:" || kind === "contact" && /^(?:mailto:[a-zA-Z0-9.!#$'*+\/=_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,63}|sms:(?:\+[1-9]\d{6,14}|\d{3,6}))$/.test(href))) continue;
+      add(label, url.href, kind === "contact" ? "is-contact" : kind === "details" ? "is-access" : "is-map", routeActions);
+    } catch { /* Ignore an invalid provider URL rather than making a new one. */ }
+  }
+  if (contactOnly && accessUrl?.startsWith("https://")) add("Contact website", accessUrl, "is-contact");
+  add("View details", link.href, "is-details");
+  wrap.append(link);
+  if (sourceStatus) {
+    const notice = element("aside");
+    notice.className = "source-status-notice";
+    notice.setAttribute("aria-label", "Source-reported availability");
+    notice.append(element("strong", sourceStatus.title), element("p", sourceStatus.detail));
+    wrap.classList.add("has-source-status");
+    wrap.append(notice);
+  }
+  if (phone && (phoneLinks?.length !== 1 || phoneLinks[0].label !== phone)) link.append(element("small", `Phone: ${phone}`));
+  if (contactOnly) {
+    link.append(element("small", [record.coverageNote, eligibility ? `Eligibility: ${eligibility}` : "",
+      accessUrl ? `Website (connection required): ${accessUrl}` : "", phoneAccess ? `Dialing scope: ${phoneAccess}` : ""].filter(Boolean).join(" ")));
+  }
+  wrap.append(actions);
+  if (serviceAccessSummary) {
+    for (const route of serviceAccessSummary.split(" | ")) more.append(element("p", route));
+  }
+  if (extraActions) more.append(routeActions);
+  if (serviceAccessSummary || extraActions) wrap.append(more);
+  if (!navigator.onLine) {
+    link.setAttribute("aria-describedby", connectivityNotice.id);
+    link.addEventListener("click", event => {
+      event.preventDefault();
+      connectivityNotice.hidden = false;
+      connectivityNotice.focus({ preventScroll: true });
+      connectivityNotice.scrollIntoView({ block: "center", behavior: "auto" });
+    });
+  }
+  return wrap;
+};

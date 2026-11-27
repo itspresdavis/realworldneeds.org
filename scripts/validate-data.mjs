@@ -1,3 +1,4 @@
+import { validateServiceAccess } from "../src/utils/service-access.js";
 import { validateResourceLocation } from "../src/utils/resource-location.js";
 import { categories, resources } from "../src/data/resources.js";
 import { freeAccessModels } from "../src/data/free-access.js";
@@ -28,6 +29,8 @@ const required = [
 const ids = new Set();
 const datasetRecords = new Set();
 for (const resource of resources) {
+  const accessError = validateServiceAccess(resource);
+  if (accessError) throw new Error(`${resource.id}: ${accessError}`);
   for (const field of required) {
     if (resource[field] === undefined || resource[field] === "") {
       throw new Error(`${resource.id || "Unknown resource"} is missing ${field}.`);
@@ -70,8 +73,8 @@ for (const resource of resources) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(resource.lastChecked)) {
     throw new Error(`Invalid review date: ${resource.id}`);
   }
-  if (resource.kind === "direct" && resource.locationPrecision && resource.locationPrecision !== "exact") {
-    throw new Error(`Direct site must have exact location semantics: ${resource.id}`);
+  if (resource.kind === "direct" && resource.locationPrecision && !["exact", "address"].includes(resource.locationPrecision)) {
+    throw new Error(`Direct site must have exact or reviewed address-only location semantics: ${resource.id}`);
   }
   if (resource.datasetId) {
     if (!resource.sourceRecordId || !resource.verificationMethod) {

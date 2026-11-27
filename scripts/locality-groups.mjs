@@ -1,27 +1,16 @@
 import { isContactOnly } from "../src/utils/resource-location.js";
+import { resourceScope } from "../src/utils/resource-scope.js";
 
 // Build-only geography grouping shared by local pages and their search scopes.
 // Retain unqualified records when the city/country has at most one known area.
 // When it has multiple known areas, exclude unqualified records rather than
 // guessing a state/province. This groups records without changing their facts.
-function administrativeArea(resource) {
-  const address = String(resource.address || "");
-  if (resource.country === "United States") {
-    return address.match(/,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/)?.[1] || "";
-  }
-  if (resource.country === "Canada") {
-    return address.match(/,\s*([A-Z]{2})\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d\b/i)?.[1]?.toUpperCase() || "";
-  }
-  return "";
-}
-
 function locality(resource) {
   // Coverage text and an optional city are never evidence of a service site.
   if (isContactOnly(resource)) return null;
-  const city = String(resource.city || "").trim();
-  const country = String(resource.country || "").trim();
-  if (!city || !country || country === "Global") return null;
-  return { city, country, administrativeArea: administrativeArea(resource) };
+  const { type, city, country, administrativeArea } = resourceScope(resource);
+  if (type !== "municipal") return null;
+  return { city, country, administrativeArea };
 }
 
 export function localitySignature({ city, country, administrativeArea }) {

@@ -1,3 +1,5 @@
+import { resolveSearchIntent, resourceMatchesIntent } from "../src/utils/search-intent.js";
+import { searchGeographyChoices } from "../src/utils/search.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -42,10 +44,10 @@ function finderFixture({ denied = "", initial } = {}) {
     viewMode: "aid", query: "First", accessMode: "all", activeTypes: new Set(["food"]), selectedId: "first", inspectorOpen: true };
   let resultsRenders = 0, panelRenders = 0;
   const messages = [], history = [];
-  const context = vm.createContext({ window: f.window, document, state, resources: records, URL, URLSearchParams,
+  const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null, window: f.window, document, state, resources: records, URL, URLSearchParams,
     renderResourcePanel() { panelRenders++; }, renderClusterTray() {}, wakeGlobe() {}, syncGlobePointLayer() {},
     availableResources: () => records, matchesResource: record => !state.query || record.name === state.query,
-    resourceSearchScore: () => 1, initialResultCount: () => 8, pinSignature: "",
+    searchGeographyChoices, resourceSearchScore: () => 1, initialResultCount: () => 8, pinSignature: "",
     CustomEvent: class { constructor(type) { this.type = type; } },
     resourceCard(record) { resultsRenders++; return `<article>${record.id}</article>`; },
     refreshSearchPreparation() {}, nearbyExactCount: () => 0, notify: message => messages.push(message),
@@ -174,14 +176,15 @@ test("a failed mutation preserves an expanded Saved view when persisted membersh
 for (const stillDenied of [false, true]) {
   test(`explicit Clear rereads availability when reads ${stillDenied ? 'remain denied' : 'recover'}`, () => {
     const f = finderFixture({ denied: "read" });
+    f.values.set("rwn-resource-topics-v1", '["food"]');
     if (!stillDenied) f.deny("");
     f.click("clearBrowserData");
-    assert.equal(f.values.has("rwn-saved-resources"), false); assert.equal(f.values.get("unrelated"), "keep");
+    assert.equal(f.values.has("rwn-saved-resources"), false); assert.equal(f.values.has("rwn-resource-topics-v1"), false); assert.equal(f.values.get("unrelated"), "keep");
     assert.equal(f.state.savedIds.size, 0); assert.equal(f.state.savedOnly, false);
     assert.equal(f.state.savedStorageUnavailable, stillDenied);
     assert.equal(f.node("savedCount").textContent, stillDenied ? "Unavailable" : "0");
     assert.equal(f.node("retrySavedServices").hidden, !stillDenied);
-    assert.equal(f.writes(), 1); assert.match(f.messages.at(-1), /cleared/);
+    assert.equal(f.writes(), 2); assert.match(f.messages.at(-1), /cleared/);
   });
 }
 
@@ -196,10 +199,10 @@ test("failed explicit Clear leaves Saved data and presentation unchanged", () =>
 function serviceFixture(initial) {
   const f = storageFixture(initial), status = { textContent: "" }, attributes = {};
   const button = { disabled: false, textContent: "", setAttribute(name, value) { attributes[name] = value; }, addEventListener(name, callback) { this[name] = callback; } };
-  const context = vm.createContext({ window: f.window, URL, URLSearchParams, status,
+  const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null, window: f.window, URL, URLSearchParams, status,
     utility: { querySelector: () => button }, document: { querySelector: () => ({ dataset: { serviceId: "first" } }) } });
-  vm.runInContext(`${privacy}\n${between(service, '  const saveButton = utility.querySelector', '\n  const publicDetails =')}`, context);
-  return { ...f, status, button, attributes };
+  vm.runInContext(`${privacy}\n${between(service, '  const saveButton = utility.querySelector', '\n  const publicDetails =')}\nglobalThis.announce = announce;`, context);
+  return { ...f, status, button, attributes, announce: context.announce };
 }
 
 for (const denied of ["getter", "read"]) for (const initial of ['[]', '["first"]']) {
@@ -213,10 +216,20 @@ for (const denied of ["getter", "read"]) for (const initial of ['[]', '["first"]
   });
 }
 
+test('service storage recovery clears its localized failure without relying on displayed wording', () => {
+  const f = serviceFixture('[]');
+  f.deny('read'); f.events.pageshow();
+  assert.equal(f.button.disabled, true);
+  f.status.textContent = 'No se puede guardar en este navegador.';
+  f.deny(''); f.events.pageshow();
+  assert.equal(f.button.disabled, false);
+  assert.equal(f.status.textContent, '');
+});
+
 for (const message of ["Service details copied.", "Link copied. You can paste it into a message.", "Copy is unavailable in this browser.", "Opening the print dialog."]) {
   test(`service storage recovery preserves newer feedback: ${message}`, () => {
     const f = serviceFixture('["first"]'); f.deny("read"); f.events.pageshow();
-    f.status.textContent = message; f.deny(""); f.events.storage({ key: "rwn-saved-resources" });
+    f.announce(message); f.deny(""); f.events.storage({ key: "rwn-saved-resources" });
     assert.equal(f.status.textContent, message); assert.equal(f.button.disabled, false); assert.equal(f.writes(), 0);
   });
 }
@@ -230,7 +243,7 @@ for (const allowed of [false, true]) {
       removeItem(name) { values.delete(name); }
     }
     const storage = new Storage(), window = { localStorage: storage };
-    const context = vm.createContext({ window, Storage, DOMException, document: { addEventListener() {} }, location: { origin: allowed ? "http://127.0.0.1:4181" : "https://example.org" } });
+    const context = vm.createContext({ resolveSearchIntent, resourceMatchesIntent, finderIntentControls: null, window, Storage, DOMException, document: { addEventListener() {} }, location: { origin: allowed ? "http://127.0.0.1:4181" : "https://example.org" } });
     vm.runInContext(`(${installSavedStorageFixture.toString()})("http://127.0.0.1:4181", ["first"])`, context);
     if (!allowed) { assert.equal(values.size, 0); assert.equal(window.__rwnSavedStorageQA, undefined); return; }
     const probe = window.__rwnSavedStorageQA;

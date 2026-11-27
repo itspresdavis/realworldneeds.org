@@ -1,6 +1,6 @@
 # Real World Needs
 
-Real World Needs (RWN) is a privacy-minimizing directory for essential services. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
+Real World Needs (RWN) is a humanitarian organization. This repository implements its current public essential-services directory, one program within the broader mission. Distributions, partnerships, volunteering and future programs must not be presented as operational without evidence. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
 
 The product is deliberately split into two interfaces over the same reviewed catalog:
 
@@ -9,7 +9,7 @@ The product is deliberately split into two interfaces over the same reviewed cat
 
 ## Architecture
 
-The public directory is built as static output and deployed from `dist/` on Vercel. Supabase stores the editorial catalog, contributor identities, private review notes, and immutable change history. Server functions provide HTTP-only authentication and a protected editor workspace. The public directory remains available without an account. There is no personal case-intake form, donation flow, advertising SDK, or third-party analytics SDK.
+The public directory is built as static output and deployed from `dist/` on Vercel. Supabase stores the editorial catalog, contributor identities, private review notes, and immutable change history. Server functions provide HTTP-only authentication and a protected editor workspace. The public directory remains available without an account. The optional /account page stores only consented broad resource topics and a coarse place when explicitly enabled after Auth acceptance. Browsing and local suggestions remain available without an account. There is no personal case-intake form, payment collection, advertising SDK, or third-party analytics SDK.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [the editor guide](docs/EDITOR_GUIDE.md), and [the Auth/catalog architecture](docs/AUTH_AND_CATALOG.md).
 
@@ -28,7 +28,7 @@ The interactive homepage uses a single deterministic bootstrap sequence. The app
 
 ## Data and provenance
 
-The current catalog contains **2,019 source-backed records** plus a bounded live adapter for the official USDA Summer Meals source.
+The published catalog count is recorded in `/data/release.json` and validated against the source records during each build. A bounded live adapter separately queries the official USDA Summer Meals source.
 
 Every record is also stored in Supabase `public.rwn_locations`. Database changes are audited and released through `npm run catalog:export`; `npm run catalog:verify` checks every field against the public snapshot. Core source records live in `src/data/resources.js` and reviewed generated modules under `src/data/generated/`. Published records must include stable identity, public place or coverage information, coordinates where appropriate, service type, practical access information, original HTTPS source, source name, and review date.
 
@@ -69,7 +69,14 @@ The browser suite covers:
 4. hard-offline directory behavior and reconnect safeguards; and
 5. local Share/Copy/Print service handoff plus rendered source-ledger verification.
 
-CI uploads short-lived QA screenshots from the rendered browser suite.
+CI uploads short-lived QA screenshots from the rendered browser suite. Mandatory Playwright coverage also runs in Chromium, Firefox, and WebKit:
+
+```sh
+npx playwright install --with-deps chromium firefox webkit
+npm run test:cross-browser
+```
+
+The install command may need administrator permission for Linux system packages. Do not disable dependency validation or omit an engine to obtain a passing result. WebKit automation does not establish physical Safari/iOS compatibility. See [exact-commit local validation](docs/QUALITY_VALIDATION.md) for Linux and macOS provenance, isolated profiles, and release requirements.
 
 ### Native Firefox fallback check
 
@@ -125,13 +132,20 @@ Pull requests and `main` run the GitHub `Quality` workflow. A release is expecte
 2. deterministic production build;
 3. policy, privacy, SEO, accessibility, provenance, offline, and performance tests;
 4. generated-page canonical and structured-data checks;
-5. internal-link integrity checks; and
-6. rendered Chromium QA on desktop and mobile.
+5. internal-link integrity checks;
+6. rendered Chromium QA on desktop and mobile, including native globe touch; and
+7. Chromium, Firefox, and WebKit assistance journeys and accessibility checks.
 
-Vercel deploys the static `dist/` output after the repository build succeeds.
+Vercel builds the static `dist/` output from source. A READY deployment is not evidence that Quality passed. Required GitHub checks and Vercel Deployment Checks must be verified in account settings; workflow files alone do not enforce protection. Until those settings are available, the exact-commit local validator and release tooling provide explicit evidence, with all five stages required and production staged without assigning domains. A passing receipt does not grant permission to merge or publish.
+
+`dist/`, `node_modules/`, and browser reports are generated local artifacts. `npm ci` and `npm run build` reproduce them from authored source and the lockfile. `node scripts/check-repository-artifacts.mjs` rejects these paths in the Git index without deleting local files.
 
 ## Operational boundary
 
 The codebase intentionally does not represent unverified future operations as current capabilities. Public donation processing, public case intake, partner accounts, allocations, disbursements, and impact reporting remain disabled until the organization has the legal, governance, financial, safeguarding, and operational controls required to run them safely.
 
 Relevant design documents live in `docs/`, including platform data modeling, donation controls, and professional launch requirements.
+
+## Current development and testing policy
+
+Use native GitHub Actions on standard Linux runners within the included 2,000-minute allowance. SSH and rwn-mini are no longer development or test dependencies; do not use a local fallback as release qualification. Personal-account rollout requirements are in [PERSONAL_ACCOUNTS.md](docs/PERSONAL_ACCOUNTS.md).

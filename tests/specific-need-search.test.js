@@ -5,7 +5,7 @@ import { resources } from "../src/data/resources.js";
 import { resourceSearchScore as score, resourceSearchText } from "../src/utils/search.js";
 
 const fixture = (extra = {}) => ({ name: "Community support", city: "London", country: "United Kingdom", category: "food", address: "1 Main Street", ...extra });
-const indexed = (r) => ({ name: r.name, place: `${r.city}, ${r.country}`, country: r.country, category: r.category, categories: [r.category, ...(r.secondaryCategories || [])], search: resourceSearchText(r) });
+const indexed = (r) => ({ name: r.name, place: `${r.city}, ${r.country}`, country: r.country, kind: r.kind, category: r.category, categories: [r.category, ...(r.secondaryCategories || [])], search: resourceSearchText(r) });
 const both = [r => r, indexed];
 const ranked = (records, query) => records.map(r => [r.id, score(r, query), r.name]).filter(([, n]) => n >= 0).sort((a, b) => b[1] - a[1] || a[2].localeCompare(b[2])).map(([id, n]) => [id, n]);
 

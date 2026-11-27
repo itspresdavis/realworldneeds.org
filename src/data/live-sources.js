@@ -12,6 +12,59 @@ const usdaCircuit = {
 
 export const sourceRegistry = [
   {
+    id: 'hhs-title-x-clinics', title: 'HHS Title X family-planning clinics', owner: 'HHS Office of Population Affairs',
+    sourceUrl: 'https://reproductivehealthservices.gov/',
+    dataUrl: 'https://api.reproductivehealthservices.gov/v1/clinics?latitude=39&longitude=-98&range=5000&limit=5000&offset=0',
+    mode: 'reviewed-snapshot', updateFrequency: 'Explicit review of a complete current public finder response. Never fetched during a build.',
+    recordCount: 3591, sourceReportedRecordsAtAudit: 3743, sourceParsedRecordsAtAudit: 3743, excludedForPublicationAtAudit: 152,
+    auditedAt: '2026-11-25',
+    accessStandard: 'Only the Title X no-cost eligibility route is listed: family income at or below 100% of the federal poverty level. Clinic age rules, appointments and other care require confirmation. Possible duplicate sites and incomplete destinations held.',
+    fields: ['stable clinic ID', 'physical address', 'source coordinates', 'public phone', 'official clinic detail link'],
+    reuseBasis: 'Factual site identities and contact/location information from the public federal finder, with original RWN summaries and record-level attribution. No provider prose, logos or images copied; no blanket licence asserted for third-party material. Program policy is linked separately. Source review is not a clinical assessment or an appointment guarantee.'
+  },
+  {
+    id: 'philadelphia-free-food', title: 'Philadelphia free food and meal sites', owner: 'City of Philadelphia',
+    sourceUrl: 'https://opendataphilly.org/datasets/free-food-and-meal-sites/',
+    dataUrl: 'https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/free_meal_sites/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json',
+    mode: 'reviewed-open-data-snapshot', updateFrequency: 'City updates active status as needed. Explicit snapshot review; no automatic publication.',
+    recordCount: 255, sourceReportedRecordsAtAudit: 405, sourceParsedRecordsAtAudit: 405, excludedForPublicationAtAudit: 150,
+    auditedAt: '2026-11-25', sourceUpdatedAt: '2026-11-25',
+    accessStandard: 'Active food and general-meal sites without closure flags. Schedule exceptions and ZIP restrictions retained. Closed, seasonal, senior-specific, student and benefits-only entries require separate review; ambiguous duplicates held.',
+    fields: ['source object ID', 'address', 'source coordinates', 'phone when usable', 'distribution schedule and exceptions', 'ZIP restrictions'],
+    reuseBasis: 'City of Philadelphia open-data release, under City terms linked by OpenDataPhilly and the source ArcGIS item. Data supplied as is, without warranty. Attribution, transformations and publisher date retained in each listing and exports. Review does not establish live opening or food stock.'
+  },
+  {
+    id: "melbourne-drinking-fountains",
+    title: "City of Melbourne drinking fountains and refill taps",
+    owner: "City of Melbourne",
+    sourceUrl: "https://data.melbourne.vic.gov.au/explore/dataset/drinking-fountains/",
+    dataUrl: "https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/drinking-fountains/exports/json",
+    mode: "reviewed-open-data-snapshot",
+    updateFrequency: "City states weekly source updates. Explicit candidate review before import; never downloaded during builds.",
+    recordCount: 280,
+    sourceReportedRecordsAtAudit: 338,
+    sourceParsedRecordsAtAudit: 338,
+    excludedForPublicationAtAudit: 58,
+    auditedAt: "2026-11-25",
+    sourceUpdatedAt: "2026-11-04",
+    accessStandard: "Human drinking-water fixtures owned by the city. Excludes dog bowls, non-city ownership and two nearby duplicate candidates. No live operating-status claim.",
+    fields: ["stable asset ID", "city coordinates", "written fixture destination", "human-use subtype", "asset evaluation date when supplied"],
+    reuseBasis: "City of Melbourne Drinking fountains, CC BY 4.0: https://creativecommons.org/licenses/by/4.0/. RWN filters assets and writes original access summaries. Attribution and changes are retained in every record and export. Publisher processing date is shown separately from RWN's source review; neither proves current water flow."
+  },
+  {
+    id: "imss-bienestar-reviewed-clinics",
+    title: "IMSS-Bienestar — bounded Baja California clinic review",
+    owner: "IMSS-Bienestar, Government of Mexico",
+    sourceUrl: "https://www.imssbienestar.gob.mx/02_ubica_clinica.html",
+    dataUrl: "https://www.imssbienestar.gob.mx/assets/json/clinicas_cp/clinicas_cp_22.json",
+    mode: "reviewed-bounded-source-selection",
+    updateFrequency: "Explicit bounded candidate review; never fetched during builds or automatically published.",
+    recordCount: 2,
+    auditedAt: "2026-11-07",
+    fields: ["CLUES identity", "clinic address", "clinic coordinates distinct from postal points", "phone", "partial hours"],
+    reuseBasis: "Two factual clinic summaries from the public official finder with CLUES attribution and direct links. No bulk feed, page text, images or open-data licence is asserted. Changes require a reviewed publication decision."
+  },
+  {
     id: "usda-summer-meals-2026",
     title: "USDA Summer Meals for Kids Site Finder — 2026",
     owner: "U.S. Department of Agriculture, Food and Nutrition Service",
@@ -64,7 +117,7 @@ export const sourceRegistry = [
     excludedForPublicationAtAudit: 15,
     auditedAt: "2026-10-10",
     fields: ["Trussell-published coordinates", "public address", "town and postcode", "phone and email when supplied", "referral route", "collection or delivery status", "provider page"],
-    reuseBasis: "Official Trussell finder snapshot with record-level UUIDs and attribution. RWN excludes hidden-address records and records that fail exact-location or publication checks."
+    reuseBasis: "Official finder snapshot with record-level attribution; hidden addresses are excluded. Bulk-reuse permission is not established in RWN's recorded evidence and requires a source-specific decision before further refresh or expansion."
   }
 ];
 

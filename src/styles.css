@@ -2976,10 +2976,22 @@ svg {
   .resource-list-head span:nth-child(3),
   .resource-list-head span:nth-child(5),
   .resource-list-head span:nth-child(6),
-  .resource-row__type,
+  .resource-row__type {
+    display: none;
+  }
+
+  /* Eligibility and intake instructions remain visible before choosing a
+     service. A narrow layout may grow vertically rather than remove facts. */
   .resource-row__access,
   .resource-row__reviewed {
-    display: none;
+    display: block;
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
+  }
+
+  .resource-row__arrow {
+    grid-column: 4;
+    grid-row: 1;
   }
 
   .source-band {
@@ -3222,6 +3234,12 @@ svg {
   .resource-row__place {
     grid-column: 1;
     grid-row: 2;
+    padding-left: 1.2rem;
+  }
+
+  .resource-row__access {
+    grid-column: 1 / -1;
+    grid-row: 4;
     padding-left: 1.2rem;
   }
 
@@ -5157,7 +5175,7 @@ svg {
 .globe-stage.is-globe-unavailable .globe-gesture-hint { display: none; }
 
 /* Editorial invitation uses a small original line illustration with fixed dimensions. */
-.mission-drawing{display:block;width:min(100%,300px);height:auto;margin:20px 0 2px}.contributor-invitation{display:inline-flex;align-items:center;min-height:44px;color:#205944;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:4px}.contributor-invitation:focus-visible{outline:3px solid #9b6b28;outline-offset:4px}
+.contributor-invitation{display:inline-flex;align-items:center;min-height:44px;color:#205944;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:4px}.contributor-invitation:focus-visible{outline:3px solid #9b6b28;outline-offset:4px}
 .result-direct-actions {
   display: flex;
   flex-wrap: wrap;

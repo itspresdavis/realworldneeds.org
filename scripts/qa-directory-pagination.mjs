@@ -87,7 +87,7 @@ export function directoryPaginationViolations(actual, expected, { hidden = false
   if (actual.navs?.length !== 2) issues.push('two-pagination-landmarks');
   for (const [index, nav] of (actual.navs || []).entries()) {
     const fail = value => issues.push(`${index}:${value}`);
-    if (nav.tag !== 'NAV' || nav.label !== 'Directory pages' || !nav.classes?.includes('directory-downloads')) fail('landmark');
+    if (nav.tag !== 'NAV' || !/^Directory pages (before|after) listings$/.test(nav.label) || !nav.classes?.includes('directory-downloads')) fail('landmark');
     if (nav.status !== `Page ${expected.page} of ${expected.total}`) fail('status');
     if (nav.pickerTag !== 'DETAILS' || nav.summary?.tag !== 'SUMMARY' || nav.summary?.text !== 'Choose a page' || nav.summary.role) fail('native-picker');
     if (nav.listTag !== 'OL' || nav.items?.length !== expected.total) fail('complete-page-list');

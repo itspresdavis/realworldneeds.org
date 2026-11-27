@@ -48,3 +48,11 @@ export function setResourceSaved(id, saved, storage = window.localStorage) {
 export function clearSavedResources(storage = window.localStorage) {
   storage.removeItem(SAVED_RESOURCES_KEY);
 }
+
+export const RESOURCE_TOPICS_KEY = "rwn-resource-topics-v1";
+
+// Only broad, non-health/non-shelter browsing topics may be remembered.
+export function normalizeRememberedTopics(value) {
+  const permitted = ["food", "water", "hygiene", "clothing"];
+  return Array.isArray(value) ? permitted.filter((topic) => value.includes(topic)) : [];
+}

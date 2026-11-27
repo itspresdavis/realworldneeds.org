@@ -1,7 +1,9 @@
+import { serviceContactMarkup } from "./service-contact.mjs";
 import { relatedResources } from "./related-resources.mjs";
-import { isContactOnly, hasMapCoordinates, contactOnlyNotice } from "../src/utils/resource-location.js";
+import { resourceScope } from "../src/utils/resource-scope.js";
+import { serviceBeforeYouGoMarkup } from "./service-before-you-go.mjs";
+import { isContactOnly } from "../src/utils/resource-location.js";
 import { minify } from "terser";
-import { phoneLinks } from "../src/utils/phone.js";
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -43,7 +45,7 @@ async function walkHtml(directory) {
 
 async function directoryAssetRelease() {
   const hash = createHash("sha256");
-  for (const path of ["dist/directory.js", "dist/directory-startup.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
+  for (const path of ["dist/directory.js", "dist/directory-startup.js", "dist/directory-geography.js", "dist/directory-results.js", "dist/directory-enhancements.css", "dist/legal.css", "dist/data/search-index.json"]) {
     hash.update(path);
     hash.update(await readFile(path));
   }
@@ -55,7 +57,7 @@ function relatedMarkup(resource) {
   const country = String(resource.country || "").trim();
   const isCountry = Boolean(country && country !== "Global");
   const heading = related.length
-    ? isCountry ? `Related help in ${country}` : "Related networks and finders"
+    ? isCountry ? "Related help and wider finders" : "Related networks and finders"
     : "Explore more help";
   const countryHref = isCountry ? `/directory/${slugify(country)}` : "/directory/global";
   const note = related.length
@@ -73,7 +75,7 @@ function relatedMarkup(resource) {
       const label = [kind, categories[candidate.category]?.label || "Essential help"].filter(Boolean).join(" · ");
       const place = candidate.kind === "direct" && isExactServiceSite(candidate)
         ? formatResourcePlace(candidate)
-        : candidate.country === "Global" ? "Check provider coverage" : candidate.country;
+        : resourceScope(candidate).label;
       return `<a href="/service/${encodeURIComponent(candidate.id)}"><strong>${escapeHtml(candidate.name)}</strong><span>${escapeHtml(place)}</span><small>${escapeHtml(label)}</small></a>`;
     }).join("")}</div>` : ""}
     ${broader}
@@ -85,32 +87,8 @@ function accessibilityMarkup(resource) {
   return `<aside class="service-accessibility" aria-label="Accessibility information"><strong>Accessibility</strong><p>${escapeHtml(resource.accessibilityNote)}</p></aside>`;
 }
 
-function serviceNextStepMarkup(resource) {
-  const links = [`<a class="is-primary" href="${escapeHtml(resource.sourceUrl)}" rel="noopener noreferrer"><strong>Official source</strong><span>Verify current details</span></a>`];
-  const phones = phoneLinks(resource.phone);
-  const phoneContext = resource.phone && (phones.length !== 1 || phones[0].label !== resource.phone)
-    ? `<span class="service-next-steps__context" data-phone-context>Phone: ${escapeHtml(resource.phone)}</span>`
-    : "";
-  for (const { label, href } of phones) {
-    links.push(`<a href="${href}"><strong>Call</strong><span>${escapeHtml(label)}</span></a>`);
-  }
-  if (resource.kind === "direct" && hasMapCoordinates(resource)) {
-    const coordinate = `${resource.lat},${resource.lng}`;
-    links.push(`<a href="https://maps.apple.com/?q=${encodeURIComponent(resource.name)}&amp;ll=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Directions</strong><span>Open Apple Maps</span></a>`);
-    links.push(`<a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(coordinate)}" rel="noopener noreferrer"><strong>Google Maps</strong><span>Open location</span></a>`);
-  }
-  if (hasMapCoordinates(resource)) links.push(`<a href="/#resource=${encodeURIComponent(resource.id)}"><strong>Interactive map</strong><span>Show this listing on RWN</span></a>`);
-  if (isContactOnly(resource) && resource.accessUrl) {
-    links.push(`<a href="${escapeHtml(resource.accessUrl)}" rel="noopener noreferrer"><strong>Get help online</strong><span>Use the reviewed access link</span></a>`);
-  }
-  const contactContext = isContactOnly(resource)
-    ? `<span class="service-next-steps__context">${escapeHtml(contactOnlyNotice(resource))}</span>${resource.phone ? `<span class="service-next-steps__context">Phone dialing scope: ${escapeHtml(resource.phoneAccess)}</span>` : ""}`
-    : "";
-  return `<nav class="service-next-steps" aria-label="Next steps for this service"><div><span>Next step</span><strong>Contact or verify the service</strong>${phoneContext}${contactContext}</div><div>${links.join("")}</div></nav>`;
-}
-
 function assetLinks(release, includeScript) {
-  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script>` : ""}`;
+  return `<link rel="stylesheet" href="/directory-enhancements.css?v=${release}" />${includeScript ? `\n    <script src="/directory-startup.js?v=${release}"></script>\n    <script type="module" src="/directory.js?v=${release}"></script><script type="module" src="/src/utils/search-intent-entry.js?v=${releaseInfo.release}"></script>` : ""}`;
 }
 
 function directorySearchMarkup(scope) {
@@ -130,15 +108,42 @@ function directorySearchMarkup(scope) {
     <p data-saved-status role="status" aria-live="polite"></p>
   </section><section class="directory-search-tools" data-directory-search aria-label="Search this directory">
     <div class="directory-search-tools__top">
-      <label class="directory-search-control"><span>Search this directory</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="Search this directory" placeholder="Service, place, or organization" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="Alt+/ Escape" /></span></label>
-      ${countryControl}
+      <label class="directory-search-control"><span>What do you need?</span><span class="directory-search-field"><span aria-hidden="true">⌕</span><input type="search" data-directory-query aria-label="What do you need?" placeholder="Food, a clinic, an organization…" autocomplete="off" enterkeyhint="search" aria-keyshortcuts="Alt+/ Escape" /></span></label>
+      <label class="directory-place-field"><span>City or postal code</span><input type="search" data-directory-place aria-label="City or postal code" autocomplete="off" enterkeyhint="search" /></label>
     </div>
+    ${countryControl ? `<details class="directory-location-filter"><summary>Filter by country or area</summary>${countryControl}</details>` : ""}
     <label class="directory-need-field"><span>Type of help</span><select data-directory-need disabled><option value="">All help</option>${needs.map(need => `<option value="${escapeHtml(need)}">${escapeHtml(need)}</option>`).join("")}</select></label>
     <div class="directory-category-chips" data-directory-categories role="group" aria-label="Filter by type of help"></div>
-    <p id="directory-coverage-note" class="directory-coverage-note">RWN does not list every service or place. Finders and networks cover broader areas. Services can change: check coverage, access and current details with the provider before travel.</p>
-    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><button class="directory-search-tools__clear" type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button><span><kbd>Alt+/</kbd><span> focuses search · Escape clears</span></span></div>
+    <p id="directory-coverage-note" class="directory-coverage-note">Confirm hours and eligibility with the provider before you go. <a href="/editorial-policy">How we check listings</a>.</p>
+    <div class="directory-search-tools__meta"><span data-directory-count role="status" aria-live="polite"></span><button class="directory-search-tools__clear" type="button" data-directory-clear hidden>Clear filters</button><button class="directory-search-tools__clear" type="button" data-directory-retry aria-disabled="false" hidden>Retry search</button></div>
+    <template data-directory-notice><div class="policy-note warning-note"><p><strong>Offline mode.</strong> Search the saved directory; current availability and service-detail pages require a connection. Reconnect before traveling or relying on a listing.</p></div></template>
+    <template data-directory-results><section><div class="directory-global-results__heading"><strong>Search results</strong><span data-global-summary></span></div><div class="directory-global-results__list" id="directory-global-list" data-global-list></div><button type="button" class="directory-search-tools__clear" data-directory-more aria-controls="directory-global-list" hidden>Show more listings</button></section></template>
     <template data-directory-empty><div class="directory-global-empty"><h2>No matching listings.</h2><p>A missing result does not mean help is unavailable.</p><div class="directory-empty-actions"><button type="button" data-fewer-words>Try without search words</button><button type="button" data-clear-all>Clear all filters</button></div><p>Or ${scope !== "/directory/global" ? '<a href="/directory/global">browse global resource finders</a>' : ""}${scope !== "/directory" ? `${scope !== "/directory/global" ? " or " : ""}<a href="/directory">browse the full directory</a>` : ""}.</p></div></template>
   </section>`;
+}
+
+function suggestionsMarkup() {
+  return `<details class="directory-suggestions" data-directory-suggestions hidden>
+    <summary>Get resource suggestions</summary>
+    <p><a href="/account">Optional account</a> · No account needed. Choose topics to find listings in a city or ZIP, or resource finders and networks with wider coverage. These choices stay in your browser.</p>
+    <form autocomplete="off" aria-label="Resource suggestions">
+      <fieldset><legend>What kind of help are you looking for?</legend><div>
+        ${Object.entries(categories).map(([id, { label }]) => `<label><input type="checkbox" data-suggestion-topic value="${escapeHtml(id)}" /> ${escapeHtml(label)}</label>`).join("")}
+      </div></fieldset>
+      <div><label class="suggestion-area-label" for="suggestion-area">City or U.S. ZIP (optional)</label>
+        <input id="suggestion-area" data-suggestion-area type="text" maxlength="80" autocomplete="off" spellcheck="false" aria-describedby="suggestion-area-hint suggestion-area-error" />
+        <small id="suggestion-area-hint">Use the exact city name or listed ZIP, not a street address. If cities share a name, enter city and country separated by a comma.</small>
+        <p id="suggestion-area-error" data-suggestion-error role="status"></p>
+      </div>
+      <div><label><input type="checkbox" data-suggestion-remember aria-describedby="suggestion-remember-hint" /> Remember topics on this device</label>
+        <small id="suggestion-remember-hint">Only Food, Water, Hygiene and Clothing can be saved. Never your location. Anyone using this browser can see saved topics.</small>
+      </div>
+      <div class="suggestion-actions"><button type="submit" class="directory-search-tools__clear">Find suggestions</button><button type="button" class="directory-search-tools__clear" data-suggestion-reset>Reset suggestions</button></div>
+    </form>
+    <p data-suggestion-status role="status" aria-live="polite"></p>
+    <ul data-suggestion-results aria-label="Suggested listings"></ul>
+    <p>Listings may offer free services, free options, or free ways to find help. Check cost, coverage, eligibility, hours and availability with the provider before relying on a suggestion.</p>
+  </details>`;
 }
 
 function localLinksMarkup(country, entries) {
@@ -176,8 +181,8 @@ function enhanceServicePage(html, resource, release) {
     html = html.replace('<link rel="stylesheet" href="/legal.css" />', `<link rel="stylesheet" href="/legal.css" />\n  ${assetLinks(release, false)}`);
   }
   if (!html.includes("service-next-steps")) {
-    const nextSteps = serviceNextStepMarkup(resource);
-    html = html.replace('<div class="policy-note">', `${nextSteps}\n      <div class="policy-note">`);
+    const nextSteps = serviceContactMarkup(resource);
+    html = html.replace('<div class="policy-note">', `${nextSteps}\n${serviceBeforeYouGoMarkup(resource)}\n      <div class="policy-note">`);
   }
   const accessibility = accessibilityMarkup(resource);
   if (accessibility && !html.includes("service-accessibility")) {
@@ -202,6 +207,8 @@ const releaseInfo = JSON.parse(await readFile("dist/data/release.json", "utf8"))
 // directory.js before it successfully installs a new complete offline release.
 const catalogSource = (await readFile("public/catalog-request.js", "utf8")).replaceAll("export ", "");
 const catalogImport = 'import { createCatalogLoader } from "./catalog-request.js";';
+const { code: geographyCode } = await minify(await readFile("dist/directory-geography.js", "utf8"), { module: true });
+await writeFile("dist/directory-geography.js", `${geographyCode}\n`);
 const directoryEntry = await readFile("dist/directory.js", "utf8");
 if (!directoryEntry.includes(catalogImport)) throw new Error("Directory catalog import was not found.");
 const resultRenderer = await readFile("dist/directory-results.js", "utf8");
@@ -210,14 +217,17 @@ const stateImport = 'import { readDirectoryState, writeDirectoryState, restoreDi
 if (!directoryEntry.includes(stateImport)) throw new Error("Directory history import was not found.");
 const rendererImport = 'import { createResultRow } from "./directory-results.js";';
 if (!directoryEntry.includes(rendererImport)) throw new Error("Directory renderer import was not found.");
-const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, resourceSearchScore as scoreRecord } from "../src/utils/search.js";';
+const searchImport = 'import { normalizeSearch as normalize, querySearchTokens as queryTokens, createIndexedSearchMatcher } from "../src/utils/search.js";';
 if (!directoryEntry.includes(searchImport)) throw new Error("Directory search import was not found.");
 const searchSource = (await readFile("src/utils/search.js", "utf8")).replaceAll("export ", "");
-const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens,scoreRecord=resourceSearchScore;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}`;
-// Keep the complete offline entry under its 16 KB ceiling, without
-// another runtime request. Terser uses its safe defaults (no unsafe transforms),
-// including declaration joining; rendered CI tests exercise the shipped bundle.
-const { code: directoryCode } = await minify(directoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow", "root"] } });
+const directoryBundle = `${catalogSource}\n${searchSource}\nconst normalize=normalizeSearch,queryTokens=querySearchTokens;\n${resultRenderer.replace("export const createResultRow", "const createResultRow")}\n${stateSource}\n{\n${directoryEntry.replace(catalogImport, "").replace(rendererImport, "").replace(searchImport, "").replace(stateImport, "")}\n}`;
+// Keep one complete offline entry, without another runtime request. A lexical
+// wrapper lets the compiler shorten repeated references to stable browser objects;
+// their mutable properties (history state, online status) are still read live.
+// Fetch and timers remain global so transport recovery/testing can replace them.
+// Terser keeps its safe transforms; real rendered/upgrade tests exercise this output.
+const scopedDirectoryBundle = `((document,window,navigator,history)=>{${directoryBundle}})(document,window,navigator,history);`;
+const { code: directoryCode } = await minify(scopedDirectoryBundle, { module: true, compress: { reduce_funcs: false }, mangle: { reserved: ["createResultRow"] } });
 await writeFile("dist/directory.js", `${directoryCode}\n`);
 // Load saved-list code only on an explicit #saved visit. Its compiled module
 // embeds the same storage helper and result renderer, keeping directory search
@@ -245,10 +255,25 @@ try {
   // Local pages are an enhancement; the global directory must still build without them.
 }
 
+const suggestionEntry = (await readFile("public/directory-suggestions.js", "utf8")).replace(/^import[^;]+;\s*/gm, "").replaceAll("export ", "");
+const { code: suggestionCode } = await minify(`${catalogSource}\n${privacySource}\n${suggestionEntry}`, { module: true });
+const suggestionAssets = {};
+for (const [type, content] of [["js", `${suggestionCode}\n`], ["css", await readFile("public/directory-suggestions.css")]]) {
+  const hash = createHash("sha256").update(content).digest("hex").slice(0, 12);
+  const path = `/directory-suggestions.${hash}.${type}`;
+  await writeFile(`dist${path}`, content);
+  suggestionAssets[type] = path;
+}
+
 const searchIndex = JSON.parse(await readFile("dist/data/search-index.json", "utf8"));
 for (const path of await walkHtml("dist/directory")) {
   const html = await readFile(path, "utf8");
-  await writeFile(path, enhanceCollectionPage(html, directoryRelease, path.replace(/^dist/, "").replace(/\/index\.html$/, "").replace(/\/page\/\d+$/, "")));
+  let enhanced = enhanceCollectionPage(html, directoryRelease, path.replace(/^dist/, "").replace(/\/index\.html$/, "").replace(/\/page\/\d+$/, ""));
+  if (path === "dist/directory/index.html") {
+    enhanced = enhanced.replace('<div class="directory-browse-tools">', `${suggestionsMarkup()}<div class="directory-browse-tools">`)
+      .replace("</head>", `<link rel="stylesheet" href="${suggestionAssets.css}" /><script type="module" src="${suggestionAssets.js}?v=${directoryRelease}"></script>\n</head>`);
+  }
+  await writeFile(path, enhanced);
 }
 
 const localByCountry = new Map();
@@ -280,7 +305,7 @@ let sitemap = await readFile("dist/sitemap.xml", "utf8");
 const newest = latestDate(resources);
 sitemap = replaceUrlLastmod(sitemap, "/", newest);
 sitemap = replaceUrlLastmod(sitemap, "/directory", newest);
-sitemap = replaceUrlLastmod(sitemap, "/transparency", newest);
+sitemap = replaceUrlLastmod(sitemap, "/our-story", newest);
 
 for (const path of STATIC_WITHOUT_DATA_LASTMOD) sitemap = replaceUrlLastmod(sitemap, path, null);
 for (const resource of resources) sitemap = replaceUrlLastmod(sitemap, `/service/${resource.id}`, resource.lastChecked);

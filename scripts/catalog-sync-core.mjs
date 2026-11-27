@@ -21,6 +21,30 @@ export function fingerprint(records) {
     .digest("hex");
 }
 
+// Diagnose failed verification without printing records or changing either side.
+export function summarizeCatalogDrift(local, database, limit = 10) {
+  const index = (records) => new Map(records.map((record) => [record.id, record]));
+  const localById = index(local);
+  const databaseById = index(database);
+  const bucket = () => ({ count: 0, sample: [] });
+  const summary = { releaseOnly: bucket(), databaseOnly: bucket(), changed: bucket() };
+  const add = (group, id) => {
+    group.count++;
+    // A database ID outside the public site's ID format is not safe log text.
+    if (group.sample.length < limit && /^[a-z0-9][a-z0-9-]{0,159}$/.test(id)) {
+      group.sample.push(id);
+    }
+  };
+  for (const id of [...new Set([...localById.keys(), ...databaseById.keys()])].sort()) {
+    if (!databaseById.has(id)) add(summary.releaseOnly, id);
+    else if (!localById.has(id)) add(summary.databaseOnly, id);
+    else if (JSON.stringify(canonical(localById.get(id))) !== JSON.stringify(canonical(databaseById.get(id)))) {
+      add(summary.changed, id);
+    }
+  }
+  return summary;
+}
+
 // A short REST page can be a server-side row cap, not the end of the catalog.
 // Require exact ranges/counts and advance by rows actually returned. Never turn
 // an incomplete response into mass withholding during a public export.
@@ -131,6 +155,13 @@ export async function fetchPublishedCatalog({
 // rows as overrides would undo the refresh and can resurrect withheld listings.
 export function assertFreshExport(records, curatedResources) {
   const local = new Map(curatedResources.map((record) => [record.id, record]));
+  // A record-level review date does not authorize changing a service entrance.
+  // Reconcile reviewed routes explicitly before exporting an older DB snapshot.
+  const changedRoutes = records.filter(record => {
+    const source = local.get(record.id);
+    return source?.serviceAccess && JSON.stringify(canonical(source.serviceAccess)) !== JSON.stringify(canonical(record.serviceAccess));
+  });
+  if (changedRoutes.length) throw new Error(`Refusing to export ${changedRoutes.length} records with unreconciled service access. Review and reconcile the source-backed routes before export.`);
   const datasetDates = new Map();
   for (const record of curatedResources) {
     if (

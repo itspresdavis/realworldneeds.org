@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { startGlobeWhenNeeded } from '../src/utils/globe-demand.js';
 
 const source = await readFile(new URL("../src/bootstrap.js", import.meta.url), "utf8");
 const installedOrder = ["installProfessionalPresentation", "installRefinements", "installAccessibility", "installResultActions"];
@@ -18,6 +19,9 @@ function fixture({ readyState = "interactive", delayed, supported = true, secure
   const document = { readyState, documentElement: { dataset: {} }, getElementById: id => ({ root, "preboot-finder": preboot })[id] || null };
   const window = new EventTarget();
   window.isSecureContext = secure;
+  const frames = [], tasks = [], graphics = [];
+  window.requestAnimationFrame = callback => { frames.push(callback); };
+  window.setTimeout = callback => { tasks.push(callback); };
   const registrations = [], installed = [], attempted = [], imports = [], failures = [], logs = [];
   window.addEventListener("rwn:offline-unavailable", event => failures.push(event.type));
   const navigator = supported ? { serviceWorker: { register(...args) {
@@ -33,12 +37,13 @@ function fixture({ readyState = "interactive", delayed, supported = true, secure
     installed.push(name);
   };
   const modules = {
-    "./app.js": {},
+    "./app.js": { startGlobe() { graphics.push({ state: document.documentElement.dataset.finderStartup, installed: [...installed] }); } },
     "./refinement.js": { installRefinements: installer("installRefinements") },
     "./professional.js": { installProfessionalPresentation: installer("installProfessionalPresentation") },
     "./accessibility.js": { installAccessibility: installer("installAccessibility") },
     "./result-actions.js": { installResultActions: installer("installResultActions") },
     "./telemetry.js": { startTelemetry() {} },
+    "./utils/globe-demand.js": { startGlobeWhenNeeded: start => startGlobeWhenNeeded(start, { document, window }) },
   };
   const loadModule = async specifier => {
     imports.push(specifier);
@@ -54,7 +59,7 @@ function fixture({ readyState = "interactive", delayed, supported = true, secure
   const done = vm.runInNewContext(`(async () => {${program}\n})()`, { document, window, navigator, loadModule, CustomEvent, console: { error: message => logs.push(message) } });
   const load = () => { document.readyState = "complete"; window.dispatchEvent(new Event("load")); };
   const finish = async () => { release(); await done; await Promise.resolve(); };
-  return { document, root, preboot, registrations, installed, attempted, imports, failures, logs, done, load, finish };
+  return { document, root, preboot, registrations, installed, attempted, imports, failures, logs, done, load, finish, frames, tasks, graphics };
 }
 
 function assertRegistered(f) {
@@ -199,3 +204,32 @@ for (const partialApp of [false, true]) {
     assert.equal(f.registrations.length, 1, "directory offline support remains available");
   });
 }
+
+
+test("graphics starts only after completed finder installation and its next paint opportunity", async () => {
+  const f = fixture();
+  await f.done;
+  assert.deepEqual(f.graphics, []);
+  assert.equal(f.frames.length, 1);
+  f.frames.shift()();
+  assert.deepEqual(f.graphics, [], "render work must not run inside the pre-paint animation callback");
+  assert.equal(f.tasks.length, 1);
+  await f.tasks.shift()();
+  assert.deepEqual(f.graphics, [{ state: "ready", installed: installedOrder }]);
+});
+
+test('a missing map scheduling module preserves optional graphics startup', async () => {
+  const f = fixture({ moduleErrors: ['./utils/globe-demand.js'] });
+  await f.done;
+  f.frames.shift()();
+  await f.tasks.shift()();
+  assert.deepEqual(f.graphics, [{ state: 'ready', installed: installedOrder }]);
+  assert.equal(f.document.documentElement.dataset.finderStartup, 'ready');
+});
+
+test("failed core never queues graphics startup", async () => {
+  const f = fixture({ moduleErrors: ["./app.js"] });
+  await f.done;
+  assert.deepEqual(f.frames, []);
+  assert.deepEqual(f.tasks, []);
+});

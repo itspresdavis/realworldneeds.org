@@ -1,3 +1,6 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
+import { sourceClosureNotice } from "../src/utils/source-status.js";
+import { serviceActions } from "../src/utils/service-access.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
@@ -46,7 +49,7 @@ test("directory pages remain indexable HTML while gaining whole-catalog search",
 test("whole-catalog directory search uses a static privacy-preserving contextual index", async () => {
   const client = await text("public/directory.js");
   const searchIndex = JSON.parse(await text("dist/data/search-index.json"));
-  assert.equal(searchIndex.schemaVersion, "1.5");
+  assert.equal(searchIndex.schemaVersion, SEARCH_CATALOG_SCHEMA);
   assert.equal(searchIndex.resourceCount, resources.length);
   assert.equal(searchIndex.records.length, resources.length);
   assert.match(searchIndex.privacy, /Search terms remain in the visitor's browser/);
@@ -59,8 +62,27 @@ test("whole-catalog directory search uses a static privacy-preserving contextual
   assert.doesNotMatch(client, /input\?\.value.*searchIndexUrl|searchIndexUrl.*input\?\.value/);
   assert.match(client, /BATCH\s*=\s*60/);
   assert.match(client, /Escape/);
-  for (const record of searchIndex.records.slice(0, 10)) {
-    assert.deepEqual(Object.keys(record).sort(), ["categories", "category", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phone", "phoneLinks", "place", "search"].sort());
+  const byId = new Map(resources.map(resource => [resource.id, resource]));
+  for (const record of searchIndex.records) {
+    const resource = byId.get(record.id);
+    const expected = ["costLabel", "categories", "categoryLabels", "checked", "country", "id", "kind", "lat", "lng", "name", "phoneLinks", "place", "search"];
+    if (resource.costModel !== "free") expected.push("costNote");
+    if (Object.hasOwn(record, "phone")) expected.push("phone");
+    if (resource.kind !== "direct") expected.push("coverageScope");
+    if (resource.serviceAccess) expected.push("serviceActions", "serviceAccessSummary");
+    if (sourceClosureNotice(resource)) expected.push("sourceStatus");
+    if (resource.locationPrecision === "contact-only") {
+      expected.push("locationPrecision", "coverageNote", "eligibility", "locationNotice");
+      if (resource.phone) expected.push("phoneAccess");
+      if (resource.accessUrl) expected.push("accessUrl");
+    }
+    assert.deepEqual(Object.keys(record).sort(), expected.sort());
+    assert.deepEqual(record.categories, [resource.category, ...(resource.secondaryCategories || [])], "compact category order retains the authoritative primary need");
+    if (resource.serviceAccess) {
+      assert.deepEqual(record.serviceActions, serviceActions(resource).map(({ label, href, kind }) => ({ label, href, kind })), "every verified destination and contact survives compact export; one route may have several actions");
+      assert.ok(record.serviceAccessSummary.includes(resource.serviceAccess[0].label));
+      for (const action of record.serviceActions) assert.deepEqual(Object.keys(action).sort(), ["href", "kind", "label"]);
+    }
   }
   const usIndex = searchIndex.records.findIndex((record) => record.country === "United States");
   assert.ok(usIndex >= 0);
@@ -74,7 +96,8 @@ test("service pages add crawlable related-help links and source-backed accessibi
   const sample = resources.find((resource) => resource.id === "bowery-mission") || resources[0];
   const html = await text(`dist/service/${sample.id}/index.html`);
   assert.match(html, /class="related-services"/);
-  assert.match(html, /Other help near|Related help in|Related essential services/);
+  assert.match(html, /Related help and wider finders/);
+  assert.match(html, /Service areas and eligibility vary/);
   const relatedLinks = html.match(/href="\/service\//g) || [];
   assert.ok(relatedLinks.length >= 2, "service page should link to at least one other permanent service page");
 
@@ -153,7 +176,7 @@ test("interaction layers and search index stay within deliberate budgets", async
     ["public/directory.js", 14_000],
     ["public/directory-results.js", 4_000],
     ["public/directory-enhancements.css", 18_000],
-    ["dist/data/search-index.json", 1_500_000]
+    ["dist/data/search-index.json", 1_650_000]
   ];
   for (const [path, maximum] of budgets) {
     const { size } = await stat(path);

@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../../public/catalog-request.js";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
@@ -7,7 +8,7 @@ export const deferred = () => {
   const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
   return { promise, resolve, reject };
 };
-export const payload = { records: [{ id: "current" }], scopes: {} };
+export const payload = { schemaVersion: SEARCH_CATALOG_SCHEMA, records: [{ id: "current" }], scopes: {} };
 export const response = (value = payload) => ({ ok: true, json: async () => value });
 const root = process.env.RWN_CATALOG_SOURCE_ROOT || new URL("../../", import.meta.url);
 const read = path => readFile(new URL(path, typeof root === "string" ? `file://${root}/` : root), "utf8");

@@ -2,23 +2,41 @@
 
 RWN expands by adding maintained sources, not by counting unverified links. A public record is useful only when a person can understand where it is, what it provides, how to access it, how current it is, and which organization is responsible for the facts.
 
-## Current scale
+## Recompute current coverage
 
-- 586 reviewed free-access directory records.
-- 442 reviewed physical service sites.
-- 17,442 USDA summer-meal sites active at the August 5, 2026 audit, queried live in bounded nearby searches.
-- 637 of those active USDA records were in Massachusetts.
-- 101 Massachusetts WIC offices carry official coordinates, phone numbers, and published hours.
-- 293 New York WIC sites carry state-published coordinates, phones, and permanent or temporary site status.
+Do not reuse a historical audit count as a current impact figure. Generate the
+static-snapshot report from the same source tree used for the build:
 
-Counts describe records, not people helped or services guaranteed. Seasonal and live counts always need an as-of date.
+```sh
+node scripts/coverage-report.mjs --date YYYY-MM-DD --output /private/local/path/coverage.json
+npm run catalog:health -- --date YYYY-MM-DD --output /private/local/path/health.json
+```
+
+`coverage-report.mjs` separates direct records, unique physical service addresses,
+address-only sites, referral/network records, source/dataset populations and the
+Boston, Brockton, Taunton, Providence, Playas de Rosarito and Tijuana need matrix.
+Multiple service routes at one address count once; a second verified service
+address counts separately. Normalized addresses are a reproducible measure,
+not a claim that every building/entrance alias has been independently deduplicated.
+National or regional finders do not count as local physical coverage. Food-benefit
+programs do not become immediate meal coverage merely because their category is food.
+
+The optional USDA summer-meal adapter is a separate location-triggered seasonal
+population. It is excluded from static totals, even when an older audit recorded
+a live feed count. Counts describe catalog coverage, not people helped or
+available services.
+
+The November 7 bounded tranche and before/after counts are in
+[the priority coverage review](catalog-reviews/2026-11-07-priority-coverage.md).
+Run the report again after any catalog change. The report is deterministic for
+an explicit date and never advances review dates.
 
 ## Record contract
 
 Every reviewed or live physical record must provide:
 
 - a stable RWN ID and, for datasets, the source dataset ID and source record ID;
-- service name, written address, latitude, longitude, and an honest precision label;
+- service name, written service address and an honest precision label; coordinates only when source-backed (`address` precision preserves usable physical sites without inventing a map point);
 - primary and secondary need categories;
 - access type, one of the four allowed free-access models, an exact cost or eligibility note, services provided, and phone when published;
 - published hours when present, or an explicit statement that the source does not supply hours;
@@ -29,6 +47,29 @@ Every reviewed or live physical record must provide:
 The allowed cost models are `free`, `free-eligible`, `free-navigation`, and `free-option`. A free-navigation record promises that the official search, guidance, or referral is free; it does not silently promise that every downstream provider is free. Category tags cover only the no-cost help supported by the source. Paid clinics, low-cost meals, administrative offices without a public access path, and services whose no-cost status cannot be verified are withheld.
 
 The validator rejects duplicates, missing provenance, unsafe source URLs, invalid coordinates, repeated or unknown categories, missing no-cost language, unsupported free-access models, reversed active dates, malformed review dates, and unknown source datasets.
+
+## Outstanding source-reuse decisions (November 7, 2026)
+
+Provenance and attribution do not establish a dataset licence. A bounded current
+review found no recorded permission for the existing **1,373 Trussell snapshot
+records**. The official `/terms-and-conditions` link redirects to donation terms;
+its privacy policy does not establish finder-data reuse rights. Before another
+bulk refresh or expansion, RWN's operator must document an applicable licence
+or written permission covering the published fields, JSON/CSV exports, offline
+cache and refresh/removal requirements. No such permission is claimed here.
+
+The **105 UNHCR country locators** use original summaries and official links,
+rather than a copied inventory of country services. Assess that narrower use
+separately. The terms URL linked by the official HELP Mexico footer returned
+HTTP 429 during this review; current conditions remain unverified. Do not
+repeatedly fetch the rate-limited page or infer permission from its public access.
+
+PR #92 is an open withholding proposal, not a reuse agreement or an instruction
+to erase existing records. This release preserves the existing publication and
+withheld IDs while recording these unresolved source-specific decisions. It
+does not refresh either population or label their reuse cleared. The five new
+November 7 records have their own bounded factual-summary evidence and reuse
+scope in the priority review. Full source captures remain outside tracked source.
 
 ## Refresh modes
 
@@ -58,3 +99,69 @@ Before an importer is published:
 6. Label missing fields honestly, suppress expired records by default, and withhold records when free access cannot be supported by the source.
 7. Test nearby ranking, mobile density, keyboard use, source links, and map links.
 8. Publish the source manifest and keep a correction/removal audit trail.
+
+## Search catalog compatibility and service access
+
+`public/catalog-request.js` exports the exact supported compact search schema,
+`SEARCH_CATALOG_SCHEMA` (`2.0`). The index generator and the self-contained
+Directory, Saved and offline fallback entries share that value and loader.
+A missing, older or unknown schema is rejected before any records become usable;
+connection recovery and explicit retry can load a compatible replacement. This
+failure preserves Saved IDs and keeps the existing unavailable/retry controls.
+The offline action fallback states “Listing actions are unavailable. Reconnect
+and retry.” even if the separate availability probe succeeds.
+
+This compatibility break is required by service-specific access routes. Compact
+records with an explicit `serviceAccess` contract carry `serviceActions` and
+`serviceAccessSummary`, with `lat` and `lng` set to `null`. Older renderers that
+ignore the new fields therefore cannot manufacture generic map actions. Stable
+IDs, source facts and raw/map reference coordinates remain unchanged. Older
+renderers may treat a direct record’s compact coordinates as a destination;
+reference coordinates alone do not establish the right entrance for each service.
+Never lower the supported schema to make an old cached payload pass. A future
+incompatible contract needs a new explicit version and matching loader/tests.
+
+Cached HTML and scripts can outlive a deployment. These checks cover current
+entries receiving an older index and historical renderers receiving the new
+index. A disconnected device retaining only old code and old data cannot receive
+an immediate correction or revocation; it must reconnect to obtain the release.
+
+
+## Completeness and operational review
+
+The coverage report lists missing structured hours and eligibility separately
+from service-specific schedules. It retains the broad review date and latest
+scoped service review; a limited phone/schedule correction must not refresh the
+whole listing. Narrative detail is preserved even when machine-readable hours
+are incomplete. The report's missing-field list prioritizes immediate-need
+records for review, not automatic withdrawal or an assertion that a service closed.
+
+`catalog:health` additionally reports source URL syntax, duplicate candidates,
+location issues and risk-based overdue review work. Its optional bounded
+`--check-links` sample measures reachability only. A 200 response is not a
+substantive provider review. Neither command is a deployed monitoring service;
+an approved operator, schedule and tested notification destination are still
+needed before alert delivery can be claimed. Keep full operational JSON outside
+tracked source and review source failures before accepting a candidate refresh.
+
+
+### Source-link transport boundary
+
+The optional health sample uses HTTPS on port 443, checks every resolved A/AAAA
+answer for public destinations, and pins that answer set into a fresh TLS
+connection. It rejects a different connected address, follows redirects only
+through the same validation, and discards every response body immediately. One
+10-second deadline covers DNS, HEAD, optional GET/Range fallback and all redirect
+hops; DNS queries are cancellable. Concurrency remains at most four and sampling
+at most 200 distinct sources. No credentials or cookies are forwarded.
+
+An HTTP proxy cannot be assumed to honor the locally validated DNS address.
+Where a proxy or unsupported managed network policy is configured, the sampler
+fails closed with `blocked: proxy-pinning-unavailable` before DNS or HTTP; it
+never silently opens a direct connection or honors a bypass exception to evade
+that boundary. `blocked` and `unknown` are distinct from provider `broken`.
+Aggregate outcome counts are included in the report. The current managed
+workspace exercises this blocked path; live-provider reachability is not passed.
+A supported proxy-aware pinned transport would need its own reviewed implementation
+before this environment can run reachability checks. Manual substantive source
+review through an already authorized public-source tool remains separate.

@@ -24,7 +24,7 @@ test("local SEO pages are canonical, source connected, and included in sitemap",
   assert.match(html, /"@type":"CollectionPage"/);
   assert.match(html, /"@type":"ItemList"/);
   assert.match(html, /Visit original source/);
-  assert.match(html, /Services can change/);
+  assert.match(html, /Ask the provider to confirm hours, eligibility and what’s available before you go/);
 
   const sitemap = await text("dist/sitemap.xml");
   assert.match(sitemap, new RegExp(`https://www\\.realworldneeds\\.org${sample.path}`));

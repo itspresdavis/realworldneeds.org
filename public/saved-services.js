@@ -10,7 +10,7 @@ export function initSavedServices() {
   const panel = document.querySelector("[data-saved-services]");
   if (!panel) return;
   const directoryTitle = document.title;
-  const navigation = [...(document.querySelectorAll?.(".legal-header nav a") || [])]
+  const navigation = [...(document.querySelectorAll?.(".rwn-site-header nav a") || [])]
     .map(link => ({ link, current: link.getAttribute("aria-current") }));
   const heading = panel.querySelector("h2");
   const summary = panel.querySelector("[data-saved-summary]");
@@ -21,7 +21,7 @@ export function initSavedServices() {
   const clear = panel.querySelector("[data-saved-clear]");
   const confirmation = panel.querySelector("[data-saved-confirmation]");
   const more = panel.querySelector("[data-saved-more]");
-  let generation = 0;
+  let generation = 0, activePage = true;
   let entries = [];
   let shown = 0;
   let renderedEntries = "", renderedOnline;
@@ -67,7 +67,7 @@ export function initSavedServices() {
 
   const render = async () => {
     const current = ++generation;
-    if (!active()) return;
+    if (!activePage || !active()) return;
     const focused = document.activeElement;
     const focusedRow = focused?.closest?.("[data-saved-id]");
     const focusedIndex = focusedRow ? [...list.children].indexOf(focusedRow) : -1;
@@ -196,12 +196,24 @@ export function initSavedServices() {
     }
   };
   window.addEventListener("hashchange", () => syncView(true));
-  window.addEventListener("pageshow", () => syncView());
+  // A controller may change while this document is leaving. Cancel its work
+  // before it loses fetch access; a cached return starts from current state.
+  window.addEventListener("pagehide", () => {
+    activePage = false;
+    generation += 1;
+    loadCatalog.retry();
+  });
+  window.addEventListener("pageshow", () => { activePage = true; syncView(); });
   window.addEventListener("storage", (event) => {
     if (event.key === SAVED_RESOURCES_KEY || event.key === null) render();
   });
   const reconnect = () => { loadCatalog.retry(); render(); };
   for (const type of ["online", "offline", "rwn-connection-restored"]) window.addEventListener(type, reconnect);
-  navigator.serviceWorker?.addEventListener("controllerchange", () => { loadCatalog.reset(); render(); });
+  navigator.serviceWorker?.addEventListener("controllerchange", () => {
+    loadCatalog.reset();
+    // WebKit may revoke fetch access before pagehide during navigation.
+    // A live page refreshes on its next frame; a departing page does not.
+    window.requestAnimationFrame(() => { if (activePage) render(); });
+  });
   syncView(active());
 }

@@ -1,0 +1,17 @@
+{
+  "id": "us-census-zcta-2025-search-reference",
+  "sourceUrl": "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2025_Gazetteer/2025_Gaz_zcta_national.zip",
+  "documentationUrl": "https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html",
+  "reuseReference": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title17-section105&num=0&edition=prelim",
+  "reuseBasis": "Public United States Census Bureau geographic reference data (United States government work, 17 USC 105); retain attribution. No provider listing or service fact is imported.",
+  "checkedAt": "2026-11-07",
+  "scope": "2025 ZCTA internal reference points, not USPS delivery validation, legal boundaries, addresses, service coordinates, service coverage, or live availability.",
+  "sourceTextSha256": "100e70311af1655406d939a930f183559c902b57e1f20e714b43ef4776f6ac3d",
+  "selection": "All ZCTA codes with first three digits 010 through 029 (priority Massachusetts/Rhode Island search area), plus ZCTA codes explicitly present after a state code in current United States catalog addresses.",
+  "areas": 894,
+  "precision": "Published internal reference point; approximate area only. Search radius is an explicit visitor choice of 10, 25 or 50 km. It never creates a directions action.",
+  "countryChoice": "A five-digit input does not silently select the United States. The visitor must choose the labeled US ZIP area action.",
+  "unsupported": "Unincluded postcodes remain literal/unsupported. Ask for city, region and country without geolocation or external query lookup.",
+  "maintenance": "Download the source separately, run node scripts/build-postal-areas.mjs <downloaded-text> <candidate.js>, review the source hash/diff and then publish the reviewed candidate. Builds never fetch it. Parsing/schema/scale errors leave the previous snapshot unchanged.",
+  "sourceAccess": "Official ZIP download returned HTTP 200. Census HTML documentation/copyright pages returned HTTP 403 in this environment; no bypass was attempted. Source file contents and schema were inspected directly."
+}

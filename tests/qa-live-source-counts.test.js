@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
-import { countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
+import { assertLiveSourceGlobeReady, countryStateProbeSource, installLiveSourceCountFixture, withCountryStateProbe } from "../scripts/qa-live-source-counts.mjs";
 
 const host = "http://127.0.0.1:4175";
 const endpoint = "https://services1.arcgis.com/RLQu0rK7h4kbsBq5/arcgis/rest/services/Summer_Meals_Site_Finder_2026_(Testing)/FeatureServer/0/query";
@@ -238,6 +238,20 @@ test("the fixture records trusted About location, Use and Clear activations", ()
   assert.deepEqual(JSON.parse(JSON.stringify(f.probe.clicks)), ["about", "locateMe", "clearLocation"].map(id => ({ id, trusted: true })));
 });
 
+test("the fixture observes native globe exploration without mutating location or releasing geometry", () => {
+  const f = fixture();
+  const wheel = f.listeners.find(listener => listener.type === "wheel").callback;
+  wheel({ isTrusted: false, deltaY: 300 });
+  wheel({ isTrusted: true, deltaY: 800 });
+  assert.deepEqual(JSON.parse(JSON.stringify(f.probe.globeScrolls)), [
+    { trusted: false, deltaY: 300 }, { trusted: true, deltaY: 800 },
+  ]);
+  assert.equal(f.probe.locationCalls, 0);
+  assert.equal(f.probe.detailReleased, false);
+  assert.equal(f.probe.requests.length, 0);
+  assert.equal(f.probe.geometryLoads.length, 0);
+});
+
 for (const name of ["countries.geojson", "countries-detail.geojson"]) {
   test(`the complete ${name} fixture preserves original map bytes and country order`, async () => {
     const bytes = await readFile(new URL(`../public/data/${name}`, import.meta.url), "utf8");
@@ -311,4 +325,15 @@ test("ordinary production source and build output contain no CI country observer
     const source = await readFile(new URL(path, import.meta.url), "utf8");
     assert.doesNotMatch(source, /__rwnLiveCountQA|countryStateProbeSource/);
   }
+});
+
+
+test("complete-geometry QA fails explicitly on unsupported, pending, hidden or inconsistent globe startup", () => {
+  assert.doesNotThrow(() => assertLiveSourceGlobeReady({ globeStartup: "ready", globeFallbackVisible: false }));
+  for (const snapshot of [
+    { globeStartup: "unavailable", globeFallbackVisible: true },
+    { globeStartup: "loading", globeFallbackVisible: false },
+    { globeStartup: "ready", globeFallbackVisible: true },
+    {},
+  ]) assert.throws(() => assertLiveSourceGlobeReady(snapshot), /requires initialized WebGL/);
 });

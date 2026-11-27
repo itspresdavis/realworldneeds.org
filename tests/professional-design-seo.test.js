@@ -11,7 +11,7 @@ test("production homepage uses the institutional presentation and aligned search
   ]);
   assert.match(html, new RegExp(`<title>${HOME_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</title>`));
   assert.match(html, /<html lang="en" class="rwn-professional">/);
-  assert.match(html, /<h1>Find essential services near you\.<\/h1>/);
+  assert.match(html, /<h1>Find help<\/h1>/);
   assert.match(html, /\/src\/clarity\.css\?v=[a-f0-9]{12}/);
   assert.doesNotMatch(html, /\/src\/professional\.css\?v=/);
   assert.doesNotMatch(html, /<script[^>]+src="\/src\/professional\.js/);
@@ -25,7 +25,7 @@ test("generated directory, service, and trust pages share the same professional 
     "dist/directory/index.html",
     "dist/service/whitechapel-mission/index.html",
     "dist/sources/index.html",
-    "dist/transparency.html"
+    "dist/our-story.html"
   ];
 
   for (const path of pages) {
@@ -34,7 +34,8 @@ test("generated directory, service, and trust pages share the same professional 
     assert.match(html, /\/brand\/rwn-logo-192\.png/, `${path} is missing the official RWN mark`);
     assert.match(html, /twitter:card[^>]+summary_large_image/i, `${path} is missing Twitter card metadata`);
     assert.match(html, /og:image[^>]+earth-blue-marble\.jpg/i, `${path} is missing social imagery`);
-    assert.match(html, /professional-need-links/, `${path} is missing crawlable need navigation`);
+    assert.match(html, /class="rwn-site-footer"/, `${path} is missing shared footer navigation`);
+    assert.match(html, /href="\/directory"/, `${path} is missing the directory route`);
   }
 });
 

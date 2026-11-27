@@ -1,3 +1,4 @@
+import { renderDirectoryRow } from "./helpers/directory-renderer.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
@@ -20,14 +21,23 @@ test("globe point layer uses one semantic RWN marker language without discarding
 });
 
 test("directory search results expose direct actions without turning the record into one giant link", async () => {
-  const client = await text("public/directory.js") + await text("public/directory-results.js");
-  assert.match(client, /directory-global-result-wrap/);
-  assert.match(client, /directory-global-result-actions/);
-  assert.match(client, /actionLink\(`Call \$\{label\}`/);
-  assert.match(client, /maps\.apple\.com\/\?daddr=/);
-  assert.match(client, /google\.com\/maps\/dir\/\?api=1&destination=/);
-  assert.match(client, /actionLink\("View details"/);
-  assert.match(client, /setAttribute\("aria-label",\s*`Actions for/);
+  const client = await text("public/directory-results.js");
+  const row = renderDirectoryRow(client, { id: "fixture", name: "Reviewed site", place: "Example", kind: "direct", categoryLabels: ["Food"], checked: "2026-11-06", lat: 42, lng: -71, phone: "211", phoneLinks: [{ label: "211", href: "tel:211" }] });
+  assert.equal(row.className, "directory-global-result-wrap");
+  const [listing, actions, more] = row.children;
+  assert.equal(more.tag, "details");
+  assert.equal(more.children[0].textContent, "Directions and access details");
+  const routes = more.children.find(child => child.tag === "nav");
+  assert.equal(listing.tag, "a");
+  assert.equal(listing.href, "/service/fixture");
+  assert.equal(actions.tag, "nav");
+  assert.equal(actions.className, "directory-global-result-actions");
+  assert.equal(actions.attributes["aria-label"], "Actions for Reviewed site");
+  assert.equal(actions.children.find(link => link.textContent === "Call 211")?.href, "tel:211");
+  assert.equal(new URL(routes.children.find(link => link.textContent === "Apple Maps").href).searchParams.get("daddr"), "42,-71");
+  assert.equal(new URL(routes.children.find(link => link.textContent === "Google Maps").href).searchParams.get("destination"), "42,-71");
+  assert.equal(actions.children.find(link => link.textContent === "View details")?.href, "/service/fixture");
+  assert.ok(!listing.children.includes(actions), "actions must be siblings of the listing link");
 });
 
 test("directory visual system stays registry-first and action-led", async () => {

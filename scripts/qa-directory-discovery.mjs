@@ -517,7 +517,7 @@ export async function verifyDirectorySavedBrowse({ client, host, navigate, evalu
       // those actual links, never manufacture a scope-local Saved anchor.
       for (const fixture of [
         { ...wic(60), path: '/directory/united-states', country: undefined },
-        { path: '/directory/local/united-states/new-york/help/referral', query: 'library', category: 'All help', count: '1 matching listing', rows: 1 }
+        { path: '/directory/local/united-states/new-york-city/help/referral', query: 'library', category: 'All help', count: '1 matching listing', rows: 1 }
       ]) {
         scenario = `scope-${fixture.path}`;
         const scopeInitial = await open(fixture.path);

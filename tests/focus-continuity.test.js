@@ -1,3 +1,5 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
+import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -34,7 +36,7 @@ function domFixture() {
     }
     getAttribute(name) { return this.attributes[name] ?? null; }
     removeAttribute(name) { delete this.attributes[name]; }
-    get isConnected() { return this === document.body || Boolean(this.parent?.isConnected); }
+    get isConnected() { return this === document.documentElement || this === document.body || Boolean(this.parent?.isConnected); }
     getClientRects() { return this.isConnected && !this.hidden && (!this.parent || this.parent.getClientRects().length) ? [{}] : []; }
     contains(node) { return node === this || this.children.some((child) => child.contains(node)); }
     matches(selector) {
@@ -74,7 +76,8 @@ function domFixture() {
     addEventListener(event, callback) { this.events[event] = callback; }
     click() { if (!this.disabled) return this.events.click?.({ currentTarget: this, target: this }); }
   }
-  document.body = new Element("body"); document.activeElement = document.body;
+  document.documentElement = new Element("html");
+  document.body = new Element("body"); document.documentElement.append(document.body); document.activeElement = document.body;
   document.getElementById = (id) => id ? document.body.querySelector(`#${id}`) : null;
   document.querySelector = (selector) => document.body.querySelector(selector);
   document.createElement = (tag) => new Element(tag);
@@ -93,7 +96,7 @@ function inspectorFixture({ clipboard, execCommand = () => true, share } = {}) {
   const state = { filtered: records, selectedId: "second", inspectorOpen: true, savedIds: new Set() };
   let stored = new Set();
   const messages = [];
-  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
+  const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel, escapeHtml, safeExternalUrl,
     document, state, navigator: { clipboard, share }, URL,
     window: { innerWidth: 1440, innerHeight: 1000, location: { href: "https://www.realworldneeds.org/" } },
     categories: { food: { color: "blue" } }, icon: {}, freeAccessModels: {}, reduceMotion: true,
@@ -256,11 +259,11 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   document.body.append(panel, search, results, ...navigation, outsideNavigation);
   const ids = Array.from({ length: 61 }, (_, index) => `service-${index}`);
   let currentIds = ids.slice(0, initialCount), storageError = storageUnavailable;
-  const timers = new Map(); let now = 0, nextTimer = 0;
+  const timers = new Map(), frames = []; let now = 0, nextTimer = 0;
   const events = {}, workerEvents = {}, effects = { reads: 0, writes: 0, fetches: 0 }, requests = [];
   const navigator = { onLine: true, serviceWorker: { addEventListener(type, handler) { workerEvents[type] = handler; } } };
   const location = { hash }, history = { state: null }, restores = [];
-  const response = { ok: true, json: async () => ({ records: ids.map((id) => ({ id, name: id })) }) };
+  const response = { ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: ids.map((id) => ({ id, name: id })) }) };
   let resolveCatalog, rejectCatalog;
   const catalog = pendingCatalog ? new Promise((resolve, reject) => { resolveCatalog = resolve; rejectCatalog = reject; }) : Promise.resolve(response);
   const context = vm.createContext({ isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel,
@@ -269,8 +272,13 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     clearTimeout(id) { timers.delete(id); }, SAVED_RESOURCES_KEY: "saved",
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
+      requestAnimationFrame: callback => frames.push(callback),
       addEventListener: (name, handler) => { events[name] = handler; },
-      dispatchEvent: (event) => { restores.push(event); return true; },
+      dispatchEvent: (event) => {
+        if (event.type === "rwn-directory-restore") restores.push(event);
+        events[event.type]?.(event);
+        return true;
+      },
     },
     fetch: (...args) => { effects.fetches += 1; requests.push(args); return fetchCatalog ? fetchCatalog(...args) : catalog; },
     readSavedResources: () => { effects.reads += 1; if (storageError) throw new Error("denied"); return new Set(currentIds); },
@@ -281,6 +289,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   vm.runInContext(catalogLoader + "\n" + saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
   return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle,
+    frame() { frames.splice(0).forEach(callback => callback()); },
     timers, workerEvents, requests, navigator, savedIds: () => [...currentIds],
     advance(ms) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.callback(); } },
     setIds: (count) => { currentIds = ids.slice(0, count); },
@@ -555,7 +564,7 @@ for (const stage of ["headers", "JSON"]) {
     assert.equal(f.retry.getAttribute("aria-disabled"), "true");
     for (let i = 0; i < 5; i++) f.retry.click();
     await settle(); assert.equal(attempts, 2);
-    finish({ ok: true, json: async () => ({ records: [{ id: "service-0", name: "Current listing" }] }) });
+    finish({ ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [{ id: "service-0", name: "Current listing" }] }) });
     await settle();
     assert.equal(f.retry.hidden, true); assert.equal(f.document.activeElement, f.heading);
     assert.equal(f.list.children.length, 2); assert.match(f.summary.textContent, /1 no longer/);
@@ -566,10 +575,10 @@ for (const stage of ["headers", "JSON"]) {
 test("Saved online recovery replaces a stalled request and ignores its late success", async () => {
   let attempts = 0, finishOld;
   const old = new Promise(resolve => { finishOld = resolve; });
-  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : { ok: true, json: async () => ({ records: [] }) } });
+  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : { ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [] }) } });
   f.events["rwn-connection-restored"](); await settle();
   assert.equal(attempts, 2); assert.match(f.summary.textContent, /1 no longer/);
-  finishOld({ ok: true, json: async () => ({ records: [{ id: "service-0", name: "Withdrawn" }] }) });
+  finishOld({ ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: [{ id: "service-0", name: "Withdrawn" }] }) });
   await settle();
   assert.match(f.summary.textContent, /1 no longer/); assert.equal(f.effects.writes, 0);
   f.events.offline(); await settle(); assert.equal(attempts, 2, "finished offline snapshot remains cached");
@@ -585,7 +594,7 @@ test("Saved navigation away supersedes timeout without restoring the panel or st
 });
 
 
-const catalogResponse = records => ({ ok: true, json: async () => ({ records: structuredClone(records) }) });
+const catalogResponse = records => ({ ok: true, json: async () => ({ schemaVersion: SEARCH_CATALOG_SCHEMA, records: structuredClone(records) }) });
 
 test("Saved identical fresh catalog keeps row identity, pagination and focus through controller replacement", async () => {
   const records = Array.from({ length: 61 }, (_, index) => ({ id: `service-${index}`, name: `Service ${index}`, sourceStatus: { title: "Open", detail: "Check with provider" } }));
@@ -594,7 +603,7 @@ test("Saved identical fresh catalog keeps row identity, pagination and focus thr
   const f = await savedFixture(61, { fetchCatalog: () => ++attempts === 1 ? catalogResponse(records) : refresh });
   f.more.click();
   const rows = [...f.list.children], link = rows[0].querySelector("a"), summary = f.summary.textContent;
-  link.focus(); f.workerEvents.controllerchange(); await settle();
+  link.focus(); f.workerEvents.controllerchange(); f.frame(); await settle();
   assert.equal(f.requests.length, 2);
   assert.equal(f.requests[1][0], "/data/search-index.json");
   assert.equal(f.requests[1][1].cache, "reload", "identity preservation must not skip a fresh release fetch");
@@ -620,7 +629,7 @@ for (const [label, change] of [
     const f = await savedFixture(1, { fetchCatalog: () => catalogResponse(records) });
     const old = f.list.children[0]; old.querySelector("a").focus();
     records = [{ ...records[0], ...change }];
-    f.workerEvents.controllerchange(); await settle();
+    f.workerEvents.controllerchange(); f.frame(); await settle();
     const current = f.list.children[0];
     assert.notEqual(current, old);
     assert.equal(old.isConnected, false);
@@ -636,7 +645,7 @@ test("Saved withdrawn record becomes an unavailable row without deleting its sav
   let records = [{ id: "service-0", name: "Withdrawn service" }];
   const f = await savedFixture(1, { fetchCatalog: () => catalogResponse(records) });
   const old = f.list.children[0]; records = [];
-  f.workerEvents.controllerchange(); await settle();
+  f.workerEvents.controllerchange(); f.frame(); await settle();
   assert.notEqual(f.list.children[0], old);
   assert.equal(f.list.children[0].querySelector("a"), null);
   assert.match(f.summary.textContent, /1 no longer in the directory/);
@@ -649,7 +658,7 @@ test("Saved failed fresh reload clears old rows and identical-data recovery rest
   let attempts = 0;
   const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 2 ? { ok: false } : catalogResponse(records) });
   const old = f.list.children[0];
-  f.workerEvents.controllerchange(); await settle();
+  f.workerEvents.controllerchange(); f.frame(); await settle();
   assert.equal(f.list.children.length, 0);
   assert.match(f.summary.textContent, /could not load/);
   assert.equal(f.retry.hidden, false);
@@ -677,4 +686,24 @@ test("Saved navigator mode changes rebuild offline click semantics even with unc
     previous = current;
   }
   assert.equal(f.effects.writes, 0);
+});
+
+test("Saved cancels a departing request, ignores late worker/storage refresh and resumes on pageshow", async () => {
+  let finishOld, attempts = 0;
+  const old = new Promise(resolve => { finishOld = resolve; });
+  const current = [{ id: "service-0", name: "Current verified service" }];
+  const f = await savedFixture(1, { fetchCatalog: () => ++attempts === 1 ? old : catalogResponse(current) });
+  f.events.pagehide(); await settle();
+  assert.equal(f.requests[0][1].signal.aborted, true);
+  f.workerEvents.controllerchange(); f.frame(); await f.refresh();
+  assert.equal(f.requests.length, 1);
+  finishOld(catalogResponse([{ id: "service-0", name: "Superseded service" }])); await settle();
+  assert.equal(f.list.children.length, 0);
+  f.events.pageshow({ persisted: true }); await settle();
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.requests[1][1].cache, "reload");
+  assert.deepEqual(f.list.children[0].renderedRecord, current[0]);
+  assert.deepEqual(f.savedIds(), ["service-0"]);
+  assert.equal(f.effects.writes, 0);
+  assert.equal(f.timers.size, 0);
 });

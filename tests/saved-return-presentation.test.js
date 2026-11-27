@@ -1,3 +1,4 @@
+import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
@@ -37,7 +38,7 @@ test("homepage Saved entry points open the private fragment without reading any 
 
 test("Saved stays a visible text action with a 44px target on narrow home headers", () => {
   assert.match(clarity, /\.rwn-professional \.header-action\s*\{[^}]*display:\s*inline-flex;[^}]*min-height:\s*44px;/);
-  const narrowHeader = clarity.slice(clarity.indexOf("@media (max-width: 900px)"), clarity.indexOf("@media (max-width: 600px)"));
+  const narrowHeader = clarity.slice(clarity.search(/@media \(max-width:\s*900px\)/), clarity.search(/@media \(max-width:\s*600px\)/));
   assert.match(narrowHeader, /\.rwn-professional \.header-action\s*\{[^}]*display:\s*inline-flex;/);
   for (const rule of clarity.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     if (/\.header-action(?:\s|$|,)/.test(rule[1]) && !/\.header-action\s+svg/.test(rule[1])) {
@@ -53,7 +54,7 @@ test("every directory scope gets honest, initially hidden guidance and scope-pre
   const record = { country: "United States", categoryLabels: ["Food"] };
   const scopes = ["/directory", "/directory/help/food", "/directory/united-states/new-york"];
   const context = vm.createContext({
-    searchIndex: { records: [record], scopes: Object.fromEntries(scopes.map((scope) => [scope, [0]])) },
+    searchIndex: { schemaVersion: SEARCH_CATALOG_SCHEMA, records: [record], scopes: Object.fromEntries(scopes.map((scope) => [scope, [0]])) },
     escapeHtml: (value) => String(value),
   });
   vm.runInContext(generator.slice(first, last), context);
@@ -76,7 +77,10 @@ test("every directory scope gets honest, initially hidden guidance and scope-pre
 });
 
 test("Saved hero treatment is scoped to its fragment and preserves the directory heading for assistive technology", () => {
-  const rules = [...savedCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].includes(".legal-hero"));
+  const heroRules = [...savedCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1].includes(".legal-hero"));
+  const motionRule = heroRules.find((rule) => rule[1].trim().split("\n").at(-1) === "#directory>.legal-hero");
+  assert.equal(motionRule?.[2], "transition:none!important", "return layout must be immediate, including under reduced motion");
+  const rules = heroRules.filter((rule) => rule !== motionRule);
   assert.equal(rules.length, 1);
   assert.equal(rules[0][1].trim().split("\n").at(-1), "#directory:has(#saved:target)>.legal-hero");
   assert.match(rules[0][2], /position:absolute/);

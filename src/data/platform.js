@@ -1,4 +1,7 @@
 export const platformStatus = {
+  // Requires the operational and hosted acceptance gates in CORRECTION_CHANNEL_HANDOFF.md.
+  // Keep source-controlled so reproducible builds never silently activate intake links.
+  publicCorrectionLinksEnabled: false,
   donationProcessingEnabled: false,
   publicNeedIntakeEnabled: false,
   partnerPortalEnabled: false,

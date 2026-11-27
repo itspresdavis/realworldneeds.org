@@ -3,15 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
-const start = app.indexOf('  const siteMenu = document.querySelector(".site-menu");');
-const end = app.indexOf('  window.addEventListener("popstate"', start);
-assert.ok(start >= 0 && end > start);
-const source = app.slice(start, end);
+const source = await readFile(new URL("../public/page-menu.js", import.meta.url), "utf8");
 
 function fixture() {
   const events = {}, windowEvents = {}, menuEvents = {}, body = {}, input = {}, outside = {};
-  const window = { innerWidth: 800, innerHeight: 700, addEventListener: (type, handler) => { windowEvents[type] = handler; } };
+  const window = { innerWidth: 800, matchMedia: () => ({ get matches() { return window.innerWidth <= 1088; } }), innerHeight: 700, addEventListener: (type, handler) => { windowEvents[type] = handler; } };
   const document = { body, activeElement: body, hasFocus: () => true,
     querySelector: () => menu, addEventListener: (type, handler) => { events[type] = handler; } };
   function control(kind, inMenu = true) {
@@ -19,8 +15,8 @@ function fixture() {
       closest: selector => selector === "summary, a[href]" ? node
         : selector === "a[href]" && kind === "link" ? node : null,
       focus: () => { document.activeElement = node; },
-      getBoundingClientRect: () => ({ width: inMenu && window.innerWidth > 900 ? 0 : 80,
-        height: inMenu && window.innerWidth > 900 ? 0 : 32, top: 10, bottom: 42 }) };
+      getBoundingClientRect: () => ({ width: inMenu && window.innerWidth > 1088 ? 0 : 80,
+        height: inMenu && window.innerWidth > 1088 ? 0 : 32, top: 10, bottom: 42 }) };
     return node;
   }
   const summary = control("summary"), link = control("link"), brand = control("link", false);
@@ -33,7 +29,7 @@ function fixture() {
   };
   document.activeElement = summary;
   vm.runInNewContext(source, { document, window,
-    getComputedStyle: node => ({ visibility: "visible", display: node === menu && window.innerWidth > 900 ? "none" : "block" }) });
+    getComputedStyle: node => ({ visibility: "visible", display: node === menu && window.innerWidth > 1088 ? "none" : "block" }) });
   return { events, windowEvents, menuEvents, menu, document, window, summary, link, brand, input, outside, control };
 }
 
@@ -101,30 +97,13 @@ test("native focus loss during desktop reflow is repaired without stealing delib
 
 test("links replaced by the presentation layer still close mobile navigation", () => {
   const f = fixture(), replacement = f.control("link");
-  f.menuEvents.click({ target: replacement });
+  f.events.click({ target: replacement });
   assert.equal(f.menu.open, false);
 });
 
-test("section tracking updates newly replaced navigation anchors", () => {
-  const trackingStart = app.indexOf('  const sections = ["finder", "about", "standards"]');
-  const trackingEnd = app.indexOf('  if ("IntersectionObserver" in window)', trackingStart);
-  const events = {}, sections = [{ id: "finder", offsetTop: 0 }, { id: "about", offsetTop: 1000 }, { id: "standards", offsetTop: 2000 }];
-  const link = id => ({ dataset: { sectionLink: id }, attributes: {},
-    setAttribute(key, value) { this.attributes[key] = value; },
-    removeAttribute(key) { delete this.attributes[key]; } });
-  const old = link("finder");
-  let links = [old];
-  const window = { scrollY: 0, innerHeight: 600,
-    addEventListener: (type, callback) => { events[type] = callback; },
-    requestAnimationFrame: callback => { callback(); return 0; } };
-  vm.runInNewContext(app.slice(trackingStart, trackingEnd), { window,
-    document: { getElementById: id => sections.find(section => section.id === id), querySelectorAll: () => links } });
-  assert.equal(old.attributes["aria-current"], "location");
-  const finder = link("finder"), about = link("about");
-  finder.attributes["aria-current"] = "location";
-  links = [finder, about];
-  window.scrollY = 1000;
-  events.scroll();
-  assert.equal(finder.attributes["aria-current"], undefined);
-  assert.equal(about.attributes["aria-current"], "location");
+test("home no longer replaces shared navigation or tracks page links as section links", async () => {
+  const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+  const presentation = await readFile(new URL("../src/professional.js", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /data-section-link|const siteMenu =/);
+  assert.doesNotMatch(presentation, /function rewriteNavigation/);
 });

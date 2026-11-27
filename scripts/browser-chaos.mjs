@@ -136,7 +136,7 @@ async function testStaticRoutes() {
   const homepage = await fetch(`${HOST}/`);
   if (!homepage.ok) throw new Error(`Homepage returned ${homepage.status}.`);
   const homepageHtml = await homepage.text();
-  if (!homepageHtml.includes("Find essential services near you") || !homepageHtml.includes("/directory/help/food")) {
+  if (!homepageHtml.includes("<h1>Find help</h1>") || !homepageHtml.includes("/directory/help/food")) {
     throw new Error("Homepage is missing the server-visible finder fallback or need navigation.");
   }
 

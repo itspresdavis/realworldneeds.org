@@ -10,8 +10,8 @@ const assert = (ok, label, detail) => {
 };
 const ids = records => records.map(record => record.id).sort();
 const sameIds = (actual, expected) => JSON.stringify([...actual].sort()) === JSON.stringify(expected);
-const referralPath = "/directory/local/united-states/new-york/help/referral";
-const cityPath = "/directory/local/united-states/new-york";
+const referralPath = "/directory/local/united-states/new-york-city/help/referral";
+const cityPath = "/directory/local/united-states/new-york-city";
 const bostonPath = "/directory/local/united-states/boston";
 
 export function localDirectorySnapshot() {
@@ -43,12 +43,13 @@ export function localDirectorySnapshot() {
 }
 
 export async function verifyLocalDirectorySearch({ client, host, payload, navigate, evaluate, capture }) {
-  const newYork = payload.resources.filter(record => record.country === "United States" && record.city === "New York");
+  const newYork = payload.resources.filter(record => record.country === "United States" && ["New York", "New York City"].includes(record.city));
   const referral = newYork.filter(record => [record.category, ...(record.secondaryCategories || [])].includes("referral"));
   const wic = ids(newYork.filter(record => record.id.startsWith("ny-wic-")));
   const library = ["new-york-public-library-access"];
   const boston = payload.resources.filter(record => record.country === "United States" && record.city === "Boston");
   const expected = newYorkCatalogFixtures();
+  const foodReferral = expected.foodReferral;
   assert(sameIds(ids(newYork), expected.city) && sameIds(ids(referral), expected.referral) && sameIds(wic, expected.wic), "New York published payload disagrees with reviewed source membership", { newYork: ids(newYork), referral: ids(referral), wic, expected });
   assert(wic.length > 0 && wic.every(id => expected.referral.includes(id)) && referral.some(record => record.id === library[0]), "New York WIC/referral or known library fixture missing", { referral: ids(referral), wic });
   assert(boston.some(record => record.id === "boston-homeless-services" && record.kind === "locator"), "Boston locator fixture missing", ids(boston));
@@ -128,7 +129,7 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
       await capture(client, `local-search-referral-library-${width}.png`);
       await clear(referralPath, scopeIds);
       await selectDirectoryNeed({ client, evaluate, click }, "Food");
-      await filtered(referralPath, "", "Food", wic, scopeIds);
+      await filtered(referralPath, "", "Food", foodReferral, scopeIds);
       await type("WIC");
       const searched = await filtered(referralPath, "WIC", "Food", wic, scopeIds);
       const history = await client.call("Page.getNavigationHistory");
@@ -152,14 +153,14 @@ export async function verifyLocalDirectorySearch({ client, host, payload, naviga
       await noMatch();
       await capture(client, `local-search-referral-empty-${width}.png`);
       await click(".directory-global-empty [data-fewer-words]");
-      const fewer = await filtered(referralPath, "", "Food", wic, scopeIds);
+      const fewer = await filtered(referralPath, "", "Food", foodReferral, scopeIds);
       assert(fewer.inputFocused, "Fewer words must focus the query and preserve the need", fewer);
       await noMatch();
       const cleared = await clear(referralPath, scopeIds, ".directory-global-empty [data-clear-all]");
       await client.call("Page.reload", { ignoreCache: true });
       const fresh = await wait(state => state.timeOrigin !== cleared.timeOrigin && committed(state, referralPath, "", "") && !state.filtered && state.rows.length === 0 && state.staticVisible, "Cleared local filters returned after reload");
       check(fresh, scopeIds);
-      evidence.push({ width, path: referralPath, staticIds: scopeIds, wic, library, emptyQueryFood: wic, back: true, reload: true, target, fewerWords: true, clear: true, privateUrl: true, overflow: reloaded.overflow });
+      evidence.push({ width, path: referralPath, staticIds: scopeIds, wic, library, emptyQueryFood: foodReferral, back: true, reload: true, target, fewerWords: true, clear: true, privateUrl: true, overflow: reloaded.overflow });
 
       await open(cityPath, ids(newYork));
       await type("library");

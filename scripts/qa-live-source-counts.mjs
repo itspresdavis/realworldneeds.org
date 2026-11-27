@@ -37,7 +37,7 @@ export function installLiveSourceCountFixture(origin) {
   const nativeFetch = window.fetch.bind(window);
   const pending = [], pendingBodies = [];
   let finishDetail;
-  const probe = window.__rwnLiveCountQA = { requests: [], clicks: [], geometryLoads: [], detailReleased: false, locationCalls: 0, position: { latitude: 40, longitude: -75 }, scenario: { count: 0, nearby: 0 } };
+  const probe = window.__rwnLiveCountQA = { requests: [], clicks: [], globeScrolls: [], geometryLoads: [], detailReleased: false, locationCalls: 0, position: { latitude: 40, longitude: -75 }, scenario: { count: 0, nearby: 0 } };
   probe.releaseDetail = () => { probe.detailReleased = true; finishDetail?.(); };
   Object.defineProperty(navigator, "geolocation", { configurable: true, value: {
     getCurrentPosition(success) {
@@ -139,8 +139,11 @@ export function installLiveSourceCountFixture(origin) {
   document.addEventListener("click", event => {
     const control = event.target.closest?.("button, summary");
     const id = control?.matches(".finder-location-notes summary") ? "about" : control?.id;
-    if (["locateMe", "clearLocation", "about"].includes(id)) probe.clicks.push({ id, trusted: event.isTrusted });
+    if (["locateMe", "clearLocation", "about", "zoomIn"].includes(id)) probe.clicks.push({ id, trusted: event.isTrusted });
   }, true);
+  document.addEventListener("wheel", event => {
+    probe.globeScrolls.push({ trusted: event.isTrusted, deltaY: event.deltaY });
+  }, { passive: true });
   document.addEventListener("DOMContentLoaded", () => {
     const banner = document.createElement("aside");
     banner.textContent = "SYNTHETIC QA: test USDA responses and locations with the complete unchanged world maps. Do not contact examples.";
@@ -154,6 +157,8 @@ export function liveSourceCountSnapshot() {
   const box = element => { const rect = element?.getBoundingClientRect(); return rect ? { width: rect.width, height: rect.height } : null; };
   return {
     href: location.href, title: document.title,
+    globeStartup: document.documentElement.dataset.globeStartup || null,
+    globeFallbackVisible: Boolean(document.getElementById("globeFallback")?.checkVisibility()),
     status: status?.textContent, reach: reach?.textContent,
     role: status?.getAttribute("role"), live: status?.getAttribute("aria-live"), atomic: status?.getAttribute("aria-atomic"),
     statusBox: box(status), reachBox: box(reach),
@@ -174,8 +179,14 @@ export function liveSourceCountSnapshot() {
       activeControl: document.activeElement?.id || document.activeElement?.tagName,
       notification: document.getElementById("statusToast")?.textContent,
     },
-    probe: window.__rwnLiveCountQA && { requests: window.__rwnLiveCountQA.requests, clicks: window.__rwnLiveCountQA.clicks, locationCalls: window.__rwnLiveCountQA.locationCalls, geometryLoads: window.__rwnLiveCountQA.geometryLoads, detailReleased: window.__rwnLiveCountQA.detailReleased, countryState: window.__rwnLiveCountQA.countryState },
+    probe: window.__rwnLiveCountQA && { requests: window.__rwnLiveCountQA.requests, clicks: window.__rwnLiveCountQA.clicks, globeScrolls: window.__rwnLiveCountQA.globeScrolls, locationCalls: window.__rwnLiveCountQA.locationCalls, geometryLoads: window.__rwnLiveCountQA.geometryLoads, detailReleased: window.__rwnLiveCountQA.detailReleased, countryState: window.__rwnLiveCountQA.countryState },
   };
+}
+
+export function assertLiveSourceGlobeReady(snapshot) {
+  check(snapshot.globeStartup === "ready" && snapshot.globeFallbackVisible === false,
+    "USDA complete-geometry fixture requires initialized WebGL; check the isolated Chrome software-renderer configuration",
+    { globeStartup: snapshot.globeStartup, globeFallbackVisible: snapshot.globeFallbackVisible });
 }
 
 // Runs in the existing GitHub browser suite. No browser is launched here.
@@ -214,7 +225,33 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
       await client.call("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
       await navigate(client, `${host}/`);
       await wait("document.querySelector('.finder-location-notes') && !document.getElementById('locateMe')?.disabled", "finder ready");
+      // The complete-country fixture deliberately explores the optional map.
+      // Native page scrolling reveals an offscreen canvas through the real
+      // visibility gate; it never changes application state or geometry.
+      const exploration = await evaluate(client, `(() => {
+        const rect = document.getElementById("globeCanvas")?.getBoundingClientRect();
+        if (!rect) return null;
+        const visible = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(0, rect.top));
+        return { y: innerHeight / 2, deltaY: visible >= Math.min(rect.height / 4, innerHeight / 2) ? 0 : rect.top + rect.height / 2 - innerHeight / 2 };
+      })()`);
+      check(exploration, "The globe canvas must exist before exploration", exploration);
+      if (exploration.deltaY) {
+        await client.call("Input.dispatchMouseEvent", { type: "mouseWheel", x: 1, y: exploration.y, deltaX: 0, deltaY: exploration.deltaY });
+        await wait(`(() => {
+          const rect = document.getElementById("globeCanvas").getBoundingClientRect();
+          const visible = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(0, rect.top));
+          return window.__rwnLiveCountQA.globeScrolls.at(-1)?.trusted === true && visible >= Math.min(rect.height / 4, innerHeight / 2);
+        })()`, "trusted scroll reveals the globe");
+      }
+      await wait("[\"ready\", \"unavailable\"].includes(document.documentElement.dataset.globeStartup)", "globe capability established");
+      assertLiveSourceGlobeReady(await snapshot());
       await wait("window.__rwnLiveCountQA.countryState?.coarseFeatures > 1", "complete coarse geometry applied");
+      const globeReady = await evaluate(client, `(() => {
+        const stage = document.querySelector(".globe-stage");
+        const zoom = document.getElementById("zoomIn");
+        return { visible: Boolean(zoom?.getClientRects().length), hasFallback: stage?.classList.contains("is-globe-unavailable"), status: document.getElementById("globeFallbackMessage")?.textContent };
+      })()`);
+      check(globeReady.visible && !globeReady.hasFallback, "USDA detail fixture requires a real WebGL renderer", globeReady);
       const initial = await snapshot();
       check(initial.href === `${host}/` && initial.title && initial.reach === undefined && !initial.disclosureOpen && !initial.statusVisible, "Enhanced finder must retain its collapsed disclosure and removed base reach strip", initial);
       check(initial.probe.countryState.detailGeometryReady === false && initial.probe.countryState.userCountry === null, "The first location must start with coarse geometry and no country", initial);
@@ -261,6 +298,11 @@ async function verifyLiveSourceCountsInFixture({ client, host, navigate, evaluat
         check(/In the United States, location search/.test(cleared.status) && !/active nationally today/.test(cleared.status), "Clear retained a current-count claim", cleared);
         evidence.push({ label: `clear-${scenario.label}-${width}`, ...cleared });
         if (scenario.label === "zero") {
+          // This fetch is demand-driven. Use the real controls to reach the detail
+          // zoom threshold even when clearing location interrupted auto-zoom.
+          await activate("zoomIn");
+          await activate("zoomIn");
+          await wait("window.__rwnLiveCountQA.geometryLoads.some(({path}) => path === '/data/countries-detail.geojson')", "full detailed map requested by native zoom input", 200);
           await evaluate(client, "window.__rwnLiveCountQA.releaseDetail(); document.querySelector('.globe-stage').scrollIntoView({block:'center'})");
           await wait("window.__rwnLiveCountQA.countryState?.detailGeometryReady === true", "real detailed geometry applied before repeated Use", 200);
           const detailed = await snapshot();

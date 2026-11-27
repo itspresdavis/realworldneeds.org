@@ -44,7 +44,9 @@ test("privacy notice explicitly describes minimized first-party diagnostics", as
   const privacy = await readFile("public/privacy.html", "utf8");
   assert.match(privacy, /about 2% of page loads/);
   assert.match(privacy, /does <strong>not<\/strong> include your search words, exact page path, service identifier, city/);
-  assert.match(privacy, /no third-party advertising tracker or third-party analytics service/);
+  assert.match(privacy, /no third-party advertising trackers/);
+  assert.match(privacy, /Vercel counts visits to the homepage and directory landing page without analytics cookies/);
+  assert.match(privacy, /Global Privacy Control or Do Not Track disables both/);
   assert.match(privacy, /first-party endpoint on the same website/);
   assert.match(privacy, /does not copy them into a separate visitor analytics database/);
 });

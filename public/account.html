@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="An optional RWN account for the resource topics and area you choose." />
+  <meta name="theme-color" content="#ffffff" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Real World Needs" />
+  <meta property="og:url" content="https://www.realworldneeds.org/account" />
+  <link rel="stylesheet" href="/rwn-editorial.css" />
+  <title>Your resources | Real World Needs</title>
+  <meta name="robots" content="noindex,follow" />
+  <link rel="stylesheet" href="/resource-account.css" />
+  <script type="module" src="/resource-account.js"></script>
+</head>
+<body class="editorial-page">
+  <a class="editorial-skip" href="#main">Skip to content</a>
+  <header class="editorial-header">
+    <div class="editorial-width">
+      <a class="editorial-brand" href="/">
+        <img src="/brand/rwn-logo-192.png" alt="" width="38" height="38" />
+        <span>Real World Needs</span>
+      </a>
+      <nav class="editorial-primary" aria-label="Primary navigation">
+        <a href="/">Home</a>
+        <a href="/directory">Find Help</a>
+        <a href="/our-story">Why RWN?</a>
+        <a href="/get-involved">Get Involved</a>
+        <a href="/impact">Impact</a>
+        <a href="/donate">Donations</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <details class="editorial-mobile-menu">
+        <summary>Menu</summary>
+        <nav aria-label="Mobile navigation">
+        <a href="/">Home</a>
+        <a href="/directory">Find Help</a>
+        <a href="/our-story">Why RWN?</a>
+        <a href="/get-involved">Get Involved</a>
+        <a href="/impact">Impact</a>
+        <a href="/donate">Donations</a>
+        <a href="/contact">Contact</a>
+        </nav>
+      </details>
+    </div>
+  </header>
+  <main id="main" tabindex="-1" class="editorial-width account-layout">
+    <section><h1>Your resources</h1><p>Keep the topics and area you choose in an optional account. We use them to suggest existing listings and show why they match.</p><p><a href="/directory">Browse without an account</a> — every public listing is available to everyone.</p></section>
+    <p id="accountAvailability" role="status">Checking account availability…</p>
+    <section id="signinPanel" hidden><h2 id="signinTitle">Sign in</h2>
+      <form id="personalAuth"><label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required /></label><label id="personalPasswordLabel">Password<input name="password" type="password" autocomplete="current-password" maxlength="128" required /></label><button type="submit" id="personalAuthSubmit">Sign in</button></form>
+      <div class="account-actions"><button type="button" id="personalSignup">Create an account</button><button type="button" id="personalRecover">Forgot password?</button></div>
+      <p id="personalAuthStatus" role="status"></p>
+    </section>
+    <section id="preferencesPanel" hidden><h2>What would help?</h2><p id="personalIdentity"></p>
+      <form id="preferencesForm"><fieldset><legend>Choose any topics. You can leave them blank.</legend><div class="account-topics"><label><input type="checkbox" name="topic" value="food" /> Food</label><label><input type="checkbox" name="topic" value="water" /> Water</label><label><input type="checkbox" name="topic" value="clothing" /> Clothing</label><label><input type="checkbox" name="topic" value="shelter" /> Shelter</label><label><input type="checkbox" name="topic" value="health" /> Healthcare</label><label><input type="checkbox" name="topic" value="hygiene" /> Hygiene</label><label><input type="checkbox" name="topic" value="referral" /> Help finding services</label></div></fieldset>
+        <label>City, city and country, or U.S. ZIP (optional)<input name="area" type="text" maxlength="80" autocomplete="off" placeholder="Boston, United States" /></label>
+        <p>These are search preferences, not an application for assistance. We do not ask for your address, medical details, income or documents. A matching listing does not confirm eligibility or availability.</p>
+        <label class="account-consent"><input name="consent" type="checkbox" required /> I agree to store these selected topics and this area in my RWN account, including health or shelter if I select them. <a href="/privacy#personal-accounts">How this is used</a></label>
+        <button type="submit">Save answers and find resources</button>
+      </form>
+      <p id="preferencesStatus" role="status"></p><ul id="personalSuggestions" aria-label="Suggested resources"></ul>
+      <div class="account-actions"><button type="button" id="clearPreferences">Delete my saved answers</button><button type="button" id="downloadPreferences">Download my answers</button><button type="button" id="personalSignout">Sign out</button></div>
+      <details><summary>Account settings</summary><form id="personalPasswordForm"><label>New password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /></label><button type="submit">Update password</button></form><button type="button" id="deletePersonalAccount">Request account deletion</button><p>Saved answers can be deleted immediately above. Account deletion is processed by the administrator; the account stays active until then.</p><p id="personalSettingsStatus" role="status"></p></details>
+    </section>
+    <noscript><p>Accounts need JavaScript. <a href="/directory">The directory does not.</a></p></noscript>
+  </main>
+  <footer class="editorial-footer">
+    <div class="editorial-width">
+      <span><strong>Real World Needs</strong><br />Massachusetts</span>
+      <nav aria-label="Policies and contact"><a href="/editorial-policy">Listing standards</a><a href="/privacy">Privacy</a><a href="/accessibility">Accessibility</a><a href="/contact">Contact</a></nav>
+    </div>
+  </footer>
+</body>
+</html>

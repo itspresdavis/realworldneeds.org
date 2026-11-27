@@ -4,9 +4,9 @@ const MAX_ERROR_REPORTS = 3;
 
 let errorReports = 0;
 let perfReported = false;
-let lcp = 0;
-let cls = 0;
-let inp = 0;
+let lcp = null;
+let layoutShiftTotal = null;
+let maxEventDuration = null;
 let longTasks = 0;
 
 function randomSampled() {
@@ -44,27 +44,18 @@ function viewportClass() {
 
 function send(payload) {
   const body = JSON.stringify({
-    schema: 2,
+    schema: 3,
     route: routeClass(location.pathname),
     viewportClass: viewportClass(),
     ...payload
   });
-
-  try {
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(ENDPOINT, new Blob([body], { type: "application/json" }));
-      return;
-    }
-  } catch {
-    // Fall through to fetch.
-  }
 
   fetch(ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,
     keepalive: true,
-    credentials: "same-origin"
+    credentials: "omit"
   }).catch(() => {});
 }
 
@@ -77,8 +68,9 @@ function reportPerformance() {
   send({
     type: "performance",
     lcp: cleanNumber(lcp),
-    cls: Number.isFinite(cls) ? Number(cls.toFixed(3)) : null,
-    inp: cleanNumber(inp),
+    // These are coarse diagnostics, not standards-compliant CLS or INP.
+    layoutShiftTotal: Number.isFinite(layoutShiftTotal) ? Number(layoutShiftTotal.toFixed(3)) : null,
+    maxEventDuration: cleanNumber(maxEventDuration),
     fcp: cleanNumber(fcpEntry?.startTime),
     ttfb: cleanNumber(nav ? nav.responseStart - nav.requestStart : null),
     domReady: cleanNumber(nav?.domContentLoadedEventEnd),
@@ -91,7 +83,8 @@ function observePerformance() {
 
   try {
     const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) lcp = Math.max(lcp, entry.startTime);
+      if (perfReported || document.visibilityState === "hidden") return;
+      for (const entry of list.getEntries()) lcp = Math.max(lcp || 0, entry.startTime);
     });
     observer.observe({ type: "largest-contentful-paint", buffered: true });
   } catch {}
@@ -99,7 +92,7 @@ function observePerformance() {
   try {
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (!entry.hadRecentInput) cls += entry.value;
+        if (!perfReported && !entry.hadRecentInput) layoutShiftTotal = (layoutShiftTotal || 0) + entry.value;
       }
     });
     observer.observe({ type: "layout-shift", buffered: true });
@@ -107,7 +100,7 @@ function observePerformance() {
 
   try {
     const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) inp = Math.max(inp, entry.duration || 0);
+      for (const entry of list.getEntries()) if (!perfReported) maxEventDuration = Math.max(maxEventDuration || 0, entry.duration || 0);
     });
     observer.observe({ type: "event", buffered: true, durationThreshold: 40 });
   } catch {}
@@ -120,9 +113,9 @@ function observePerformance() {
   } catch {}
 }
 
-function errorName(error, fallback = "Error") {
-  const name = typeof error?.name === "string" ? error.name : fallback;
-  return name.replace(/[^a-zA-Z0-9 _.-]/g, "").slice(0, 80) || fallback;
+export function errorName(error) {
+  const names = ["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError", "EvalError", "AggregateError", "AbortError", "NetworkError", "SecurityError"];
+  return names.includes(error?.name) ? error.name : "UnknownError";
 }
 
 function installErrorReporting() {
@@ -131,10 +124,7 @@ function installErrorReporting() {
     errorReports += 1;
     send({
       type: "client_error",
-      errorName: errorName(event.error),
-      file: String(event.filename || "").split("/").pop()?.slice(0, 80) || null,
-      line: Number.isFinite(event.lineno) ? event.lineno : null,
-      column: Number.isFinite(event.colno) ? event.colno : null
+      errorName: errorName(event.error)
     });
   });
 
@@ -152,11 +142,16 @@ function installGlobeDiagnostics() {
 }
 
 export function startTelemetry() {
-  observePerformance();
+  if (navigator.globalPrivacyControl === true || navigator.doNotTrack === "1" || window.doNotTrack === "1") return;
+  // Background starts and BFCache restorations are excluded from this limited
+  // diagnostic sample; they are not represented as fresh navigation measurements.
+  if (document.visibilityState === "hidden") perfReported = true;
+  else observePerformance();
   installErrorReporting();
   installGlobeDiagnostics();
 
   window.addEventListener("pagehide", reportPerformance, { once: true });
+  window.addEventListener("pageshow", event => { if (event.persisted) perfReported = true; });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") reportPerformance();
   });

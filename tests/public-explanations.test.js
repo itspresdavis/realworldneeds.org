@@ -15,12 +15,12 @@ for (const folder of ["public", "dist"]) {
       .trim();
   const section = (html, id) =>
     plain(
-      html.match(new RegExp(`<section id="${id}">[\\s\\S]*?</section>`))?.[0] ||
+      html.match(new RegExp(`<(?:section|details)[^>]* id="${id}"[^>]*>[\\s\\S]*?</(?:section|details)>`))?.[0] ||
         "",
     );
   const accessibility = read("accessibility"),
     privacy = read("privacy"),
-    transparency = read("transparency"),
+    transparency = read("our-story"),
     editorial = read("editorial-policy");
 
   test(`${folder}: accessibility hero scopes location-free browsing to the reviewed catalog`, () => {

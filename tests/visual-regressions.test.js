@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 test("generated directory search has an accessible name without a visible helper-label leak", async () => {
   const html = await readFile("dist/directory/index.html", "utf8");
-  assert.match(html, /data-directory-query[^>]*aria-label="Search this directory"/);
+  assert.match(html, /data-directory-query[^>]*aria-label="What do you need\?"/);
   assert.doesNotMatch(html, /class="sr-only">Search this directory<\/span>/);
 });
 

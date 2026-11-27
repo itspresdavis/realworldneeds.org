@@ -41,3 +41,15 @@ test("catalog CI coverage keeps the real worker and timeouts, with isolated HTTP
   assert.match(qa, /await app\.cleanup\(\)/);
   assert.match(runner, /await verifyCatalogRecovery\(/);
 });
+
+test("current unavailable copy still requires an actionable retry and no withdrawn rows", () => {
+  const state = { ...failure(), message: "Search unavailable. Browse below or retry." };
+  assertCatalogFailure(state);
+  for (const change of [
+    { retry: { visible: false, busy: false } },
+    { retry: { visible: true, busy: true } },
+    { message: "Searching this directory…" },
+    { rows: ["/service/withdrawn"] },
+    { controller: undefined }
+  ]) assert.throws(() => assertCatalogFailure({ ...state, ...change }));
+});

@@ -45,7 +45,7 @@ function assertSafeNotice(html, notice, label) {
   const scripts = [...html.matchAll(/<script\b[\s\S]*?<\/script>/gi)].map((match) => match[0]);
   if (label.startsWith("public/")) assert.deepEqual(scripts, [], `${label}: do not add bespoke JavaScript`);
   for (const script of scripts) {
-    assert.match(script, /^<script type="module" src="\/(?:service-actions\.js|page-menu(?:\.[a-f0-9]{12})?\.js)\?v=[a-f0-9]{12}"><\/script>$/, `${label}: only existing shared build scripts are allowed`);
+    assert.match(script, /^<script type="module" src="\/(?:service-actions\.js|(?:page-menu|language)(?:\.[a-f0-9]{12})?\.js)\?v=[a-f0-9]{12}"><\/script>$/, `${label}: only named public shared build scripts are allowed`);
   }
   assert.doesNotMatch(html, /"@type"\s*:\s*"Service"|GeoCoordinates|PostalAddress/i, `${label}: no active service or location schema`);
   assert.doesNotMatch(html, /(?:google\.com\/maps|maps\.google\.|maps\.apple\.|openstreetmap\.|#resource=|data-save-resource|data-rwn-actions)/i, `${label}: no map, directions, or save actions`);
@@ -62,6 +62,12 @@ for (const root of ["public", "dist"]) {
       const path = `${root}/service/${notice.id}/index.html`;
       const html = await text(path);
       assertSafeNotice(html, notice, path);
+      if (root === "dist") {
+        const language = html.match(/src="(\/language(?:\.[a-f0-9]{12})?\.js)\?v=[a-f0-9]{12}"/)?.[1];
+        assert.ok(language, `${path}: the shared language control is available`);
+        const source = await text(`dist${language}`);
+        assert.doesNotMatch(source, /\bfetch\s*\(|XMLHttpRequest|sendBeacon|correction-review|rwn_private/, 'withheld notice language controls cannot load private data or send reports');
+      }
       if (notice.id === "breakthrough-daytime-support") {
         assert.match(html, /two separate centres/);
         assert.match(html, /Men's Center: <a href="tel:\+17733461785">773-346-1785<\/a>/);

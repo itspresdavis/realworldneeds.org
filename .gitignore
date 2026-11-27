@@ -10,3 +10,12 @@ qa-screenshots/
 
 # Python validation tooling bytecode
 __pycache__/
+
+# Browser reports are CI artifacts, not source files
+playwright-report/
+test-results/
+
+# Cross-browser evidence
+qa-cross-browser/
+test-results/
+playwright-report/

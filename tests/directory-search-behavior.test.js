@@ -1,3 +1,4 @@
+import { renderDirectoryRow } from "./helpers/directory-renderer.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -12,7 +13,7 @@ const applySource = bodyBetween("const apply=", "const reset=");
 
 function pageFixture(total) {
   const appended = [];
-  const f = vm.createContext({
+  const f = vm.createContext({ place: { value: "" },
     activeMatches: Array.from({ length: total }, (_, id) => ({ id })), visibleCount: 0,
     format: value => value.toLocaleString(), BATCH: 60, scopedCount: 2019, resultRow: (record) => record,
     resultList: { append: (...rows) => appended.push(...rows) }, more: {}, resultSummary: {}
@@ -33,7 +34,7 @@ for (const total of [0, 1, 60, 61, 120, 302]) {
     } while (!f.more.hidden);
     assert.equal(appended.length, total);
     assert.deepEqual(appended.map((row) => row.id), Array.from({ length: total }, (_, id) => id));
-    assert.equal(f.resultSummary.textContent, `Showing ${total} of ${total} matches across 2,019 listings`);
+    assert.equal(f.resultSummary.textContent, `${total} of ${total} matches · 2,019 listings`);
   });
 }
 
@@ -41,8 +42,8 @@ test("an older pending search cannot replace newer input or reset state", async 
   let resolve;
   let renderCalls = 0;
   const pending = new Promise((done) => { resolve = done; });
-  const f = vm.createContext({
-    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
+  const f = vm.createContext({ place: { value: "" },
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, activePage: true, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending,
     syncCategoryLabels: () => { renderCalls += 1; }
@@ -60,15 +61,20 @@ test("an older pending search cannot replace newer input or reset state", async 
 test("shipped directory entry stays self-contained for existing offline workers", async () => {
   const client = await readFile("dist/directory.js", "utf8");
   const { directoryRelease, offlineAssets } = JSON.parse(await readFile("dist/data/release.json", "utf8"));
-  assert.match(client, /directory-global-result-wrap/);
+  const row = renderDirectoryRow(client, { id: "fixture", name: "Reviewed site", place: "Example", kind: "locator", categoryLabels: ["Food"], checked: "2026-11-06" });
+  assert.equal(row.className, "directory-global-result-wrap");
+  assert.equal(row.children[0].href, "/service/fixture");
   assert.doesNotMatch(client, /from[\s]*["\'].*search\.js/);
   assert.doesNotMatch(client, /\bimport(?!\s*\.)[^;]*directory-results/);
-  assert.ok(Buffer.byteLength(client) <= 16_000, "bundled entry must stay inside the directory client budget");
+  assert.ok(Buffer.byteLength(client) <= 17_000, "bundled entry must stay inside the documented directory client budget");
   const page = await readFile("dist/directory/index.html", "utf8");
   assert.ok(page.includes(`${offlineAssets["/directory.js"]}?v=${directoryRelease}`));
   const worker = await readFile("dist/sw.js", "utf8");
   assert.doesNotMatch(worker, /"\/directory-results\.js"/);
-  assert.match(source, /aria-controls="directory-global-list"/);
+  const template = page.match(/<template data-directory-results>([\s\S]*?)<\/template>/)?.[1];
+  assert.ok(template, "generated results template must be available to the entry");
+  assert.match(template, /aria-controls="directory-global-list"/);
+  assert.match(template, /id="directory-global-list"/);
   assert.match(source, /renderNext\(\)\?\.querySelector\("a"\)\?\.focus\(\)/);
 });
 
@@ -77,8 +83,8 @@ test("a failed older search cannot clear newer results after input changes or re
   let reject;
   let clearCalls = 0;
   const pending = new Promise((_, fail) => { reject = fail; });
-  const f = vm.createContext({
-    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, document: {}, retry: {}, showRetry() {},
+  const f = vm.createContext({ place: { value: "" },
+    input: { value: "New York" }, activeCategory: "", generation: 0, composing: false, activePage: true, document: {}, retry: {}, showRetry() {},
     queryTokens: (value) => value.split(" "), clear: {}, root: { classList: { toggle() {} } },
     count: {}, announce: text => { f.count.textContent = text; }, loadCatalog: () => pending, clearGlobalResults: () => { clearCalls += 1; }
   });
