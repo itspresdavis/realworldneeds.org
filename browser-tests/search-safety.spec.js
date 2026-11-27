@@ -12,7 +12,14 @@ const mealSites = [
 // Independent geographic oracle uses published country/city fields, never the matcher.
 const mexicoSites = resources.filter(record => record.country === 'Mexico' || record.city === 'Mexico').map(record => record.id).sort();
 const mexicoCountrySites = resources.filter(record => record.country === 'Mexico').map(record => record.id).sort();
-const taunton = ['ma-wic-tauntonattleboro-wic-program-main-clinic', 'taunton-community-table-meals'].sort();
+// The November HHS import adds a distinct family-planning service at
+// 1 Taunton Green, confirmed by https://cfcinc.org/programs/family-planning/.
+// Keep exact membership: location denial must not add or remove any result.
+const taunton = [
+  'ma-wic-tauntonattleboro-wic-program-main-clinic',
+  'taunton-community-table-meals',
+  'title-x-a377bbf4-f78d-41d2-8534-139c5c9e32b4',
+].sort();
 const surfaces = ['/', '/directory'];
 
 // No provider request or location service is needed to search this catalog.

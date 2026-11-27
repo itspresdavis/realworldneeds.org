@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "codex/remediation-p0-20261127": false
+    }
+  },
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
