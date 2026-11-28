@@ -4,6 +4,30 @@ Current policy — November 25, 2026: automated qualification runs natively in G
 
 The Quality workflow retains the source, catalog, unit, generated-link, static-budget, native-globe and offline suites. It also requires Chromium, Firefox and WebKit and rejects tracked build output/dependencies. Dependencies are locked, and a high-severity dependency audit fails the check instead of being silently ignored.
 
+## Production source and release control
+
+Rechecked November 28, 2026 in the authenticated Vercel project overview:
+
+- Repository: `itspresdavis/realworldneeds.org` (renamed; repository ID 1303280368).
+- Current production: `f0201672d38b7afbbe0277d0401549ef705a390a`, project `anlos/rwn-web`, deployment `dpl_5wpRg9Loiv8THxhgGuEzcyVxLumk`, immutable URL `https://rwn-pkrz48did-anlos.vercel.app`.
+- Source branch at deployment: `dot/public-site-relaunch-20261125`. Its current head is newer, `214c6900fbb7075681b16d547e4dd6ace4c76d59`; branch names alone are not release identities.
+- `main` is older, `3a2bc977e11d755a4b68bd156fadbc77bd53bd1b`, yet Vercel still advertises it as the automatic production branch. Do not push or merge there to synchronize history: that could deploy the wrong release.
+- Development remains in draft PR104, `codex/remediation-p0-20261127`, with branch-specific Vercel Git deployment disabled. No production branch/settings changed in this milestone.
+
+The live and immutable deployment match for `/data/release.json`, `/page-menu.js` and `/directory.js`; the page-menu source matches the production commit after import-version normalization. The manifest still identifies release `43ecc64c8284`, 6,137 records and catalog hash `8ca7c33acc3459eb21bed9e031ea72f40095c476b03e62d923633f4e7d10aa0d`. This sampling corroborates dashboard identity, not a complete rebuild attestation. The connector still returns 404 for the known deployment.
+
+**Required release invariant:** the designated production branch must identify the exact deployed commit. Development branches may be ahead. This invariant is not yet enforced: `main` has no effective branch rules, and it does not represent production. Finish exact-candidate CI first; then prepare an approved cutover that pauses automatic production deployments, aligns the production branch without losing newer development, and protects it with the six required checks. Never force-reset a branch to hide drift. Deploy only the tested archive using `release-tested.py`, stage without domains, verify the artifact, and promote only after explicit approval. Record the deployment ID, Git SHA, manifest/hash and previous rollback deployment together; recheck those identities after promotion or rollback. Manual dashboard deployments can bypass this script, so project access and deployment policy must also be reviewed before claiming enforcement.
+
+### November 28 bounded publication and repository identity patch
+
+`server/catalog-limits.js` gives the builder and correction verifier one decoded catalog limit: **16,000,000 bytes**, the existing static-build budget. The previous 8,000,000-byte verifier limit rejected the actual 14,269,490-byte export before integrity checks. The manifest limit, timeout, fixed origin, redirect/credential restrictions, exact-byte hash, stable manifest, 50,000-record bound, unique IDs and exact reviewed-record comparison remain unchanged. Intake stays disabled.
+
+New boundary tests accept exactly 16 MB with absent, accurate or understated Content-Length and reject/cancel declared or streamed overflow. The existing generated-catalog test still verifies actual build output. The targeted suite runs before the broader `npm run check` in native GitHub CI. No count expectations were relaxed and no payload budget was increased.
+
+Release and quality tools now trust the renamed repository; tests use that origin and explicitly reject the old origin. The historical isolated validator's identity is updated consistently, but it remains unavailable as a local/SSH qualification fallback. Validation results belong to the exact candidate's Actions run; this source note does not assert that it passed.
+
+Rollback: revert this patch on the remediation branch; no hosted data, feature flag, payment or analytics settings changed. Remaining failures in the table below still need independent diagnosis.
+
 ## November 27 P0 checkpoint: production identity and CI diagnosis
 
 This checkpoint establishes the source baseline and corrects three browser-test assumptions. It does **not** qualify a release or complete P0. No runtime, catalog or database changes are included. Do not merge to `main` or deploy this candidate until the remaining failures and exact-commit gates are resolved.

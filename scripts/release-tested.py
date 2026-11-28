@@ -11,7 +11,7 @@ import sys
 import tarfile
 import tempfile
 
-REPO = "itspresdavis/RWN-WEB"
+REPO = "itspresdavis/realworldneeds.org"
 PROJECT = "prj_504G7M2lhnU5NlmfSAEyY4UdA4DX"
 TEAM = "anlos"
 ROOT = pathlib.Path(__file__).resolve().parents[1]

@@ -36,6 +36,8 @@ jobs:
           python3 tests/ubuntu-quality.test.py
           python3 tests/quality-backend.test.py
           python3 tests/release-tested.test.py
+      - name: Verify bounded correction publication
+        run: node --test tests/correction-publication-limits.test.js
       - name: Validate and build
         id: validate
         run: npm run check

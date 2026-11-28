@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { MAX_PUBLISHED_CATALOG_BYTES } from "./catalog-limits.js";
 
 // Verification is an explicit reviewer action, never a build-time source fetch.
 // The destination is fixed, sends no credentials, rejects redirects and bounds
@@ -40,7 +41,7 @@ export async function verifyCorrectionPublication(report, { fetchImpl = globalTh
     return await Promise.race([
       (async () => {
         const before = JSON.parse((await read("/data/release.json", 64000)).toString("utf8"));
-        const catalogBytes = await read("/data/resources.json", 8000000);
+        const catalogBytes = await read("/data/resources.json", MAX_PUBLISHED_CATALOG_BYTES);
         const after = JSON.parse((await read("/data/release.json", 64000)).toString("utf8"));
         // The catalog and no-store manifest may come from different cache
         // generations. Bind the exact bytes before parsing or trusting facts.

@@ -486,7 +486,7 @@ class QualityTests(unittest.TestCase):
     def test_ref_uses_immutable_commit_and_option_terminator(self):
         sha = "a" * 40
         with mock.patch.object(quality, "git_output", side_effect=[
-            "https://github.com/itspresdavis/RWN-WEB.git", str(self.root), sha,
+            "https://github.com/itspresdavis/realworldneeds.org.git", str(self.root), sha,
         ]) as git:
             self.assertEqual(quality.resolve_ref(self.root, "main", {}), sha)
         self.assertEqual(git.call_args.args[-4:], ("rev-parse", "--verify", "--end-of-options", "main^{commit}"))

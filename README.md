@@ -1,5 +1,7 @@
 # Real World Needs
 
+Production source is pinned in [the release record](docs/QUALITY_VALIDATION.md#production-source-and-release-control). Do not assume `main` represents the live website. Development changes remain on review branches until all exact-commit checks pass and publication is approved.
+
 Real World Needs (RWN) is a humanitarian organization. This repository implements its current public essential-services directory, one program within the broader mission. Distributions, partnerships, volunteering and future programs must not be presented as operational without evidence. The repository's current production and canonical origin is **https://www.realworldneeds.org/**.
 
 The product is deliberately split into two interfaces over the same reviewed catalog:

@@ -320,7 +320,7 @@ class LocalBoundaries(unittest.TestCase):
 
 
     def test_origin_and_branch_reachability_are_required(self):
-        good = [str(ROOT), "git@github.com:itspresdavis/RWN-WEB.git", SHA, "refs/heads/main", TREE]
+        good = [str(ROOT), "git@github.com:itspresdavis/realworldneeds.org.git", SHA, "refs/heads/main", TREE]
         with patch.object(backend.subprocess, "run", side_effect=[
             subprocess.CompletedProcess([], 0, value, "") for value in good
         ]) as mocked:
@@ -328,7 +328,8 @@ class LocalBoundaries(unittest.TestCase):
             self.assertEqual(mocked.call_args_list[2].args[0][-1], "HEAD^{commit}")
         for values in (
             [str(ROOT), "git@github.com:someone-else/RWN-WEB.git"],
-            [str(ROOT), "git@github.com:itspresdavis/RWN-WEB.git", SHA, ""],
+            [str(ROOT), "git@github.com:itspresdavis/RWN-WEB.git"],
+            [str(ROOT), "git@github.com:itspresdavis/realworldneeds.org.git", SHA, ""],
         ):
             with patch.object(backend.subprocess, "run", side_effect=[
                 subprocess.CompletedProcess([], 0, value, "") for value in values
