@@ -10,7 +10,7 @@ export function initSavedServices() {
   const panel = document.querySelector("[data-saved-services]");
   if (!panel) return;
   const directoryTitle = document.title;
-  const navigation = [...(document.querySelectorAll?.(".rwn-site-header nav a") || [])]
+  const navigation = [...(document.querySelectorAll?.(".rwn-site-header nav a, .rwn-site-footer nav a") || [])]
     .map(link => ({ link, current: link.getAttribute("aria-current") }));
   const heading = panel.querySelector("h2");
   const summary = panel.querySelector("[data-saved-summary]");

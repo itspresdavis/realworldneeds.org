@@ -11,14 +11,14 @@ export function savedReturnSnapshot() {
     return r ? { left:r.left, top:r.top, right:r.right, bottom:r.bottom, width:r.width, height:r.height } : null;
   };
   const visible = node => Boolean(node && !node.hidden && box(node).width && box(node).height && getComputedStyle(node).display !== 'none');
-  const saved = document.querySelector('.header-action');
-  const header = saved?.closest('header');
-  const neighbors = header ? [...header.children].filter(node => node !== saved && visible(node)).map(box) : [];
+  const saved = document.querySelector('.rwn-site-footer nav a[href="/directory#saved"]');
+  const navigation = saved?.closest('nav');
+  const neighbors = navigation ? [...navigation.children].filter(node => node !== saved && visible(node)).map(box) : [];
   const panel = document.querySelector('[data-saved-services]');
   const focus = document.activeElement;
   return {
     path:location.pathname, hash:location.hash, title:document.title, width:innerWidth, height:innerHeight, scroll:scrollY,
-    headingBox:box(document.querySelector('#saved-services-heading')),headerBottom:document.querySelector('.legal-header')?.getBoundingClientRect().bottom || 0,
+    headingBox:box(document.querySelector('#saved-services-heading')),headerBottom:document.querySelector('.rwn-site-header')?.getBoundingClientRect().bottom || 0,
     overflow:document.documentElement.scrollWidth > innerWidth + 1,
     savedEntry: saved ? { text:saved.textContent.trim(), href:saved.getAttribute('href'), visible:visible(saved), box:box(saved),
       focused:focus === saved, focusVisible:saved.matches(':focus-visible'), neighbors } : null,
@@ -26,7 +26,7 @@ export function savedReturnSnapshot() {
     summary:document.querySelector('[data-saved-summary]')?.textContent,
     privacy:document.querySelector('.saved-services__privacy')?.textContent,
     rows:[...document.querySelectorAll('[data-saved-id]')].map(node => ({id:node.dataset.savedId,text:node.textContent})),
-    current:[...document.querySelectorAll('.legal-header nav a[aria-current]')].map(node => ({href:node.getAttribute('href'),value:node.getAttribute('aria-current')})),
+    current:[...document.querySelectorAll('.rwn-site-header nav a[aria-current], .rwn-site-footer nav a[aria-current]')].map(node => ({href:node.getAttribute('href'),value:node.getAttribute('aria-current')})),
     focus:{id:focus?.id,href:focus?.getAttribute('href'),remove:focus?.hasAttribute('data-saved-remove'),save:focus?.hasAttribute('data-service-save')},
     reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,
     overlay:Boolean(document.querySelector('vite-error-overlay,nextjs-portal,#webpack-dev-server-client-overlay'))
@@ -35,9 +35,9 @@ export function savedReturnSnapshot() {
 export function homeSavedViolations(s) {
   const e=s?.savedEntry, b=e?.box, issues=[];
   if (!s || s.path !== '/' || s.overlay || s.overflow) issues.push('home-identity-or-overflow');
-  if (!e?.visible || e.text !== 'Saved' || e.href !== '/directory#saved' || !b || b.width < 44 || b.height < 44) issues.push('visible-saved-target');
-  if (b && (b.left < 3 || b.right > s.width-3 || b.top < 3)) issues.push('saved-focus-clearance');
-  for (const other of e?.neighbors || []) if (b && b.left < other.right-1 && b.right > other.left+1 && b.top < other.bottom-1 && b.bottom > other.top+1) issues.push('header-overlap');
+  if (!e?.visible || e.text !== 'Saved services' || e.href !== '/directory#saved' || !b || b.width < 44 || b.height < 44) issues.push('visible-saved-target');
+  if (b && (b.left < 3 || b.right > s.width-3 || b.top < Math.max(3, s.headerBottom + 3) || b.bottom > s.height - 3)) issues.push('saved-focus-clearance');
+  for (const other of e?.neighbors || []) if (b && b.left < other.right-1 && b.right > other.left+1 && b.top < other.bottom-1 && b.bottom > other.top+1) issues.push('navigation-overlap');
   return issues;
 }
 export function savedViewViolations(s, ids=[]) {
@@ -45,7 +45,7 @@ export function savedViewViolations(s, ids=[]) {
   if (!s || s.hash !== '#saved' || !s.savedVisible || s.overlay || s.overflow || s.title !== 'Saved services | Real World Needs') issues.push('saved-identity-or-overflow');
   if (s?.empty !== (ids.length === 0)) issues.push('empty-state');
   if (JSON.stringify(s?.rows.map(row=>row.id)) !== JSON.stringify(ids)) issues.push('saved-identity');
-  if (s?.current.length !== 2 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
+  if (s?.current.length !== 1 || s.current.some(link=>link.href !== '/directory#saved' || link.value !== 'page')) issues.push('current-navigation');
   if (!s?.privacy?.includes('Only in this browser, on this device') || !s.privacy.includes('Anyone using this browser can see your list') || !s.privacy.includes('does not reserve a service or confirm availability')) issues.push('privacy');
   return issues;
 }
@@ -73,25 +73,26 @@ export async function verifySavedReturnBrand({client,host,navigate,evaluate,capt
   const assert=(condition,message,data)=>{if(!condition)throw new Error(`${message}: ${JSON.stringify(data)}`);};
   const snapshot=()=>evaluate(client,`(${savedReturnSnapshot.toString()})()`);
   const destination=expression=>waitForSavedReturnDestination({sample:()=>evaluate(client,expression)});
-  const key=name=>pressConnectivityRecoveryKey(client,name,name==='Tab'?9:13);
-  const tabTo=async selector=>{
+  const key=(name,options)=>pressConnectivityRecoveryKey(client,name,name==='Tab'?9:13,options);
+  const tabTo=async (selector,options)=>{
     for(let i=0;i<80;i++){
-      await key('Tab');
+      await key('Tab',options);
       if(await evaluate(client,`document.activeElement?.matches(${JSON.stringify(selector)})`))return;
     }
     throw new Error(`Keyboard could not reach ${selector}`);
   };
   await navigate(client,`${host}/directory`);
   const directoryBaseline=await snapshot();
-  assert(directoryBaseline.current.length===2 && directoryBaseline.current.every(link=>link.href==='/directory' && link.value==='page'),'Missing directory navigation baseline',directoryBaseline);
+  assert(directoryBaseline.current.length===1 && directoryBaseline.current.every(link=>link.href==='/directory' && link.value==='page'),'Missing directory navigation baseline',directoryBaseline);
   for(const width of SAVED_RETURN_WIDTHS){
     await client.call('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
     await client.call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:width===320?'reduce':'no-preference'}]});
     // Isolated CI profile only. Every save and removal below is a trusted key action.
     await evaluate(client,"localStorage.removeItem('rwn-saved-resources')");
     await navigate(client,`${host}/`);
-    await waitForUI("document.querySelector('.header-action')?.getAttribute('href') === '/directory#saved'");
-    await tabTo('.header-action');
+    await waitForUI(`document.querySelector('.rwn-site-footer nav a[href="/directory#saved"]')`);
+    // Reverse traversal tests the footer with trusted keys, independent of result count.
+    await tabTo('.rwn-site-footer nav a[href="/directory#saved"]',{shift:true});
     let state=await snapshot();
     assert(homeSavedViolations(state).length===0,'Homepage Saved layout failed',{width,issues:homeSavedViolations(state),state});
     assert(state.savedEntry.focused && state.savedEntry.focusVisible,'Homepage Saved lacks keyboard focus',state);

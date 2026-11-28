@@ -205,7 +205,7 @@ function enhanceGeneratedPage(html, release) {
 
   const path = canonicalPathFrom(html);
   html = html.replace(/<header class="(?:legal-header|editorial-header)">[\s\S]*?<\/header>/, siteHeader(path));
-  html = html.replace(/<footer class="(?:legal-footer|editorial-footer)">[\s\S]*?<\/footer>/, siteFooter());
+  html = html.replace(/<footer class="(?:legal-footer|editorial-footer)">[\s\S]*?<\/footer>/, siteFooter({ currentPath: path }));
   if (html.includes('class="rwn-page-menu"')) {
     html = html.replace("</head>", `  <script type="module" src="/page-menu.js?v=${release}"></script>\n</head>`);
   }

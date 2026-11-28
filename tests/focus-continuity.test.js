@@ -250,7 +250,12 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   const outsideNavigation = new Element("a", { href: "/directory#saved", "aria-current": "location" });
   const initialNavigation = navigation.map((link) => link.getAttribute("aria-current"));
   document.title = originalTitle;
-  document.querySelectorAll = (selector) => selector === ".rwn-site-header nav a" ? navigation : document.body.querySelectorAll(selector);
+  document.querySelectorAll = (selector) => {
+    if (selector === ".rwn-site-header nav a, .rwn-site-footer nav a") return navigation;
+    // A header-only implementation must not accidentally receive the footer fixtures.
+    if (selector === ".rwn-site-header nav a") return navigation.slice(0, 1);
+    return document.body.querySelectorAll(selector);
+  };
   const classes = new Set();
   const shell = { classList: { contains: (value) => classes.has(value), toggle: (value, active) => active ? classes.add(value) : classes.delete(value) } };
   panel.closest = (selector) => selector === ".directory-shell" ? shell : null;
@@ -453,7 +458,7 @@ test("Saved renders safely with older cached markup lacking the optional empty g
 function assertSavedNavigation(f) {
   assert.equal(f.document.title, "Saved services | Real World Needs");
   assert.deepEqual(f.navigation.map((link) => link.getAttribute("aria-current")), [null, "page", null, null, "page"]);
-  assert.equal(f.outsideNavigation.getAttribute("aria-current"), "location", "only header navigation is changed");
+  assert.equal(f.outsideNavigation.getAttribute("aria-current"), "location", "only site navigation is changed");
 }
 
 function assertDirectoryNavigation(f) {
@@ -462,7 +467,7 @@ function assertDirectoryNavigation(f) {
   assert.equal(f.outsideNavigation.getAttribute("aria-current"), "location");
 }
 
-test("direct Saved entry identifies both header Saved links and restores exact original semantics on Browse", async () => {
+test("direct Saved entry identifies Saved links across site navigation and restores exact original semantics on Browse", async () => {
   const f = await savedFixture(0);
   assertSavedNavigation(f);
   assert.equal(f.document.activeElement, f.heading);
