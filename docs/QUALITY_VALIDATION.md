@@ -28,6 +28,17 @@ Release and quality tools now trust the renamed repository; tests use that origi
 
 Rollback: revert this patch on the remediation branch; no hosted data, feature flag, payment or analytics settings changed. Remaining failures in the table below still need independent diagnosis.
 
+### First executable checkpoint and fixture repair
+
+[Quality 46121944937](https://github.com/itspresdavis/realworldneeds.org/actions/runs/46121944937) ran native GitHub jobs for `4282bb4e62fe707957f90be299bf3dbe6f7b5d64`. All 97 release-tooling tests, six new size-boundary tests, actual generated-catalog verification, dependency audit, static scale budgets and isolated PostgreSQL checks passed. The main Node suite reported 1,805 passed, 80 failed and one cancelled by its 120-second timeout. These are failing test cases, not 81 independently confirmed product defects. The broader gate did not pass.
+
+The follow-up fixture patch addresses two independently identified causes without changing product behavior or result expectations:
+
+- `tests/search-preparation.test.js` ended its extracted popstate handler at a removed `const sections` marker. `indexOf` returned -1, so `slice` pulled unrelated initialization into the VM; 28 tests failed with a syntax error before exercising search. Bound extraction at the following observer setup and assert every extraction boundary exists. Preserve all debounce, IME, caret, history and preparation assertions. Direct module imports should eventually replace source slicing when the finder is modularized.
+- `tests/directory-saved-return-state.test.js` and `tests/focus-continuity.test.js` still mocked `.legal-header`, while authored state/Saved modules now query `.rwn-site-header`. Update only fixture selectors; retain exact focus, scroll, current-navigation restoration and asynchronous ownership assertions. This is separate from the native Saved-return helper, which still assumes the removed header Saved links and needs a complete journey review.
+
+The three focused suites run before the broader gate. No failing test is removed, no timeout or budget is raised, and no passing result is inferred for the new candidate until its own run finishes. This checkpoint leaves the production/branch alignment and all unrelated failures open.
+
 ## November 27 P0 checkpoint: production identity and CI diagnosis
 
 This checkpoint establishes the source baseline and corrects three browser-test assumptions. It does **not** qualify a release or complete P0. No runtime, catalog or database changes are included. Do not merge to `main` or deploy this candidate until the remaining failures and exact-commit gates are resolved.

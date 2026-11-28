@@ -38,6 +38,8 @@ jobs:
           python3 tests/release-tested.test.py
       - name: Verify bounded correction publication
         run: node --test tests/correction-publication-limits.test.js
+      - name: Verify search and navigation behavior contracts
+        run: node --test tests/search-preparation.test.js tests/directory-saved-return-state.test.js tests/focus-continuity.test.js
       - name: Validate and build
         id: validate
         run: npm run check

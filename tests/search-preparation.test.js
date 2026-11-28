@@ -4,29 +4,21 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile("src/app.js", "utf8");
-const sanitizer = source.slice(
-  source.indexOf("function sanitizeFinderQuery("),
-  source.indexOf("function finderTypesFromHistory("),
-);
-const handlers = source.slice(
-  source.indexOf(
-    "  const searchInput =",
-    source.indexOf("function bindEvents"),
-  ),
-  source.indexOf("  let catalogFilterFrame ="),
-);
-const popstate = source.slice(
-  source.indexOf('  window.addEventListener("popstate", (event) => {'),
-  source.indexOf("  const sections ="),
-);
-const controlSync = source.slice(
-  source.indexOf('  const search = document.getElementById("resourceSearch");', source.indexOf("function renderControls")),
-  source.indexOf('  document.getElementById("locateMe").disabled', source.indexOf("function renderControls")),
-);
-const resultsRenderer = source.slice(
-  source.indexOf("function emptyResultsCopy("),
-  source.indexOf("function setSelected("),
-);
+// These behavioral fixtures execute authored handlers. Fail at a missing source
+// boundary rather than silently slicing through unrelated globe initialization.
+function between(start, end, scope = "") {
+  const scopeIndex = source.indexOf(scope);
+  assert.ok(scopeIndex >= 0, `Missing fixture scope: ${scope}`);
+  const first = source.indexOf(start, scopeIndex);
+  const last = source.indexOf(end, first);
+  assert.ok(first >= 0 && last > first, `Missing fixture boundary: ${start} … ${end}`);
+  return source.slice(first, last);
+}
+const sanitizer = between("function sanitizeFinderQuery(", "function finderTypesFromHistory(");
+const handlers = between("  const searchInput =", "  let catalogFilterFrame =", "function bindEvents");
+const popstate = between('  window.addEventListener("popstate", (event) => {', '  if ("IntersectionObserver" in window) {');
+const controlSync = between('  const search = document.getElementById("resourceSearch");', '  document.getElementById("locateMe").disabled', "function renderControls");
+const resultsRenderer = between("function emptyResultsCopy(", "function setSelected(");
 function fixture() {
   let resolveReady;
   const events = {},

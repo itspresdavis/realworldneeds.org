@@ -250,7 +250,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   const outsideNavigation = new Element("a", { href: "/directory#saved", "aria-current": "location" });
   const initialNavigation = navigation.map((link) => link.getAttribute("aria-current"));
   document.title = originalTitle;
-  document.querySelectorAll = (selector) => selector === ".legal-header nav a" ? navigation : document.body.querySelectorAll(selector);
+  document.querySelectorAll = (selector) => selector === ".rwn-site-header nav a" ? navigation : document.body.querySelectorAll(selector);
   const classes = new Set();
   const shell = { classList: { contains: (value) => classes.has(value), toggle: (value, active) => active ? classes.add(value) : classes.delete(value) } };
   panel.closest = (selector) => selector === ".directory-shell" ? shell : null;
