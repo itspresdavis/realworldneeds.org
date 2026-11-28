@@ -1,3 +1,4 @@
+import { translateInterfaceText } from "../src/utils/interface-copy.js";
 import { SEARCH_CATALOG_SCHEMA } from "../public/catalog-request.js";
 import { escapeHtml, safeExternalUrl } from "../src/utils/html.js";
 import { isContactOnly, hasMapCoordinates, contactOnlyNotice, contactOnlyLabel } from "../src/utils/resource-location.js";
@@ -232,7 +233,7 @@ test("cancelling native Share does not copy or announce a failure", async () => 
   await f.control("shareResource").click(); assert.deepEqual(f.messages, []);
 });
 
-async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = false, storageUnavailable = false, emptyNode = true, hash = "#saved", originalTitle = "Food services in New York | Real World Needs" } = {}) {
+async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = false, storageUnavailable = false, emptyNode = true, hash = "#saved", originalTitle = "Food services in New York | Real World Needs", languageLocale = null } = {}) {
   const f = domFixture(), { document, Element } = f;
   const panel = new Element("section", { "data-saved-services": "" });
   const heading = new Element("h2", { tabindex: "-1" });
@@ -249,7 +250,13 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   ];
   const outsideNavigation = new Element("a", { href: "/directory#saved", "aria-current": "location" });
   const initialNavigation = navigation.map((link) => link.getAttribute("aria-current"));
-  document.title = originalTitle;
+  const titleUpdates = [];
+  const localized = title => title.split(" | ").map(part => translateInterfaceText(part, languageLocale)).join(" | ");
+  document.title = languageLocale ? localized(originalTitle) : originalTitle;
+  const language = languageLocale ? {
+    originalTitle: () => originalTitle,
+    setTitle(title) { titleUpdates.push(title); document.title = localized(title); },
+  } : undefined;
   document.querySelectorAll = (selector) => {
     if (selector === ".rwn-site-header nav a, .rwn-site-footer nav a") return navigation;
     // A header-only implementation must not accidentally receive the footer fixtures.
@@ -277,6 +284,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
     clearTimeout(id) { timers.delete(id); }, SAVED_RESOURCES_KEY: "saved",
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     window: {
+      RWNLanguage: language,
       requestAnimationFrame: callback => frames.push(callback),
       addEventListener: (name, handler) => { events[name] = handler; },
       dispatchEvent: (event) => {
@@ -293,7 +301,7 @@ async function savedFixture(initialCount = 61, { fetchCatalog, pendingCatalog = 
   });
   vm.runInContext(catalogLoader + "\n" + saved.replace(/^import .*;\n/gm, "").replace("export function", "function").replace("import.meta.url", '"https://www.realworldneeds.org/saved-services.js"') + "\ninitSavedServices();", context);
   await settle();
-  return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle,
+  return { ...f, ...controls, heading, search, results, events, effects, location, history, restores, navigation, initialNavigation, outsideNavigation, originalTitle, titleUpdates,
     frame() { frames.splice(0).forEach(callback => callback()); },
     timers, workerEvents, requests, navigator, savedIds: () => [...currentIds],
     advance(ms) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.callback(); } },
@@ -711,4 +719,15 @@ test("Saved cancels a departing request, ignores late worker/storage refresh and
   assert.deepEqual(f.savedIds(), ["service-0"]);
   assert.equal(f.effects.writes, 0);
   assert.equal(f.timers.size, 0);
+});
+
+test("Saved delegates its source title to localization and restores the untranslated directory title", async () => {
+  const originalTitle = "Essential services directory | Real World Needs";
+  const f = await savedFixture(0, { originalTitle, languageLocale: "es" });
+  assert.equal(f.document.title, "Servicios guardados | Real World Needs");
+  assert.deepEqual(f.titleUpdates, ["Saved services | Real World Needs"]);
+  f.location.hash = "#directory-results"; f.events.hashchange(); await settle();
+  assert.equal(f.document.title, "Directorio de servicios esenciales | Real World Needs");
+  assert.deepEqual(f.titleUpdates, ["Saved services | Real World Needs", originalTitle]);
+  assert.equal(f.document.activeElement, f.results);
 });

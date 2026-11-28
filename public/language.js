@@ -8,7 +8,13 @@ const originalText = new WeakMap(), originalAttributes = new WeakMap();
 const providerSelector = '[data-provider-text], .resource-row__service strong, .resource-row__place, .resource-row__access, .directory-record__summary, .directory-record > header h2 a, .directory-record > header span, .directory-record__facts strong, .directory-record__facts p, .directory-global-result > span > strong, .directory-global-result > span > span, #service .legal-hero h1, #service .legal-hero__lede, .service-facts dd, .service-before-you-go dd';
 const ignoredSelector = 'script, style, noscript, textarea, input, code, pre, [data-language-control], [data-language-notice], [data-i18n-en], [data-i18n], [data-rwn-label]';
 let scheduled = false, pending = new Set(), languageClearFailed = false;
-const originalTitle = document.title;
+// Keep the untranslated title owned by the active view, independent of DOM updates.
+let titleSource = document.title;
+function setInterfaceTitle(source = titleSource) {
+  titleSource = source;
+  const rendered = source.split(' | ').map(part => translateInterfaceText(part, getLocale())).join(' | ');
+  if (document.title !== rendered) document.title = rendered;
+}
 
 function translateNode(node) {
   const parent = node.parentElement;
@@ -80,7 +86,7 @@ function update() {
   // Drain those mutations before disconnecting so their new copy is not lost.
   for (const change of observer.takeRecords()) pending.add(change.target);
   observer.disconnect(); ensureControl();
-  document.title = originalTitle.split(' | ').map(part => translateInterfaceText(part, getLocale())).join(' | ');
+  setInterfaceTitle();
   for (const root of pending) localize(root);
   pending.clear();
   const select = document.querySelector('[data-language-control] select'); if (select) select.value = getLocale();
@@ -98,7 +104,7 @@ function interfaceOriginalText(element) {
   }
   return value;
 }
-window.RWNLanguage = Object.freeze({ t, getLocale, originalText: interfaceOriginalText, translate: (value) => translateInterfaceText(value, getLocale()) });
+window.RWNLanguage = Object.freeze({ t, getLocale, originalText: interfaceOriginalText, originalTitle: () => titleSource, setTitle: setInterfaceTitle, translate: (value) => translateInterfaceText(value, getLocale()) });
 window.addEventListener('rwn:languagechange', () => queue(document.body));
 window.addEventListener('storage', event => { if (event.key === LANGUAGE_KEY || event.key === null) setLocale(readLanguagePreference(), { persist: false }); });
 document.addEventListener('click', event => {

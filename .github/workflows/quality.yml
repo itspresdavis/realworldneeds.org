@@ -39,7 +39,7 @@ jobs:
       - name: Verify bounded correction publication
         run: node --test tests/correction-publication-limits.test.js
       - name: Verify search and navigation behavior contracts
-        run: node --test tests/search-preparation.test.js tests/directory-saved-return-state.test.js tests/focus-continuity.test.js tests/qa-saved-return-brand.test.js tests/saved-return-presentation.test.js tests/site-footer-navigation.test.js
+        run: node --test tests/search-preparation.test.js tests/directory-saved-return-state.test.js tests/focus-continuity.test.js tests/qa-saved-return-brand.test.js tests/saved-return-presentation.test.js tests/site-footer-navigation.test.js tests/language-title.test.js
       - name: Validate and build
         id: validate
         run: npm run check
