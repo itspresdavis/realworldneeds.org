@@ -1,6 +1,7 @@
 import { readdir, stat, readFile } from "node:fs/promises";
 import { gzipSync } from 'node:zlib';
 import { join } from "node:path";
+import { MAX_PUBLISHED_CATALOG_BYTES } from "../server/catalog-limits.js";
 
 const ROOT = "dist";
 const LIMITS = {
@@ -8,7 +9,7 @@ const LIMITS = {
   htmlPages: 9500,
   largestFileBytes: 16_000_000,
   searchIndexBytes: 5_500_000,
-  resourcesBytes: 16_000_000,
+  resourcesBytes: MAX_PUBLISHED_CATALOG_BYTES,
   // Decoded limits protect memory; compressed limits bound transfer growth.
   // The full export is separate from the search payload and compact map index.
   // 6,137-record snapshot measured 683,874 bytes on the native Linux runner.

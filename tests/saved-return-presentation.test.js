@@ -3,46 +3,25 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { siteFooter } from "../src/utils/site-footer.js";
 
-const presentation = await readFile("src/professional.js", "utf8");
-const clarity = await readFile("src/clarity.css", "utf8");
+const footerSource = await readFile("src/utils/site-footer.js", "utf8");
+const footerCss = await readFile("public/task-controls.css", "utf8");
 const savedCss = await readFile("public/saved-services.css", "utf8");
 const generator = await readFile("scripts/enhance-generated-pages.mjs", "utf8");
 
-function node() {
-  return {
-    attributes: { "data-section-link": "finder" },
-    setAttribute(name, value) { this.attributes[name] = value; },
-    removeAttribute(name) { delete this.attributes[name]; },
-  };
-}
-
-test("homepage Saved entry points open the private fragment without reading any saved state", () => {
-  const action = node(), explore = node();
-  const footer = { querySelector: (selector) => selector === 'nav[aria-label="Footer explore"]' ? explore : null };
-  const document = {
-    querySelector: (selector) => selector === ".header-action" ? action : selector === ".site-footer" ? footer : null,
-    getElementById: () => null,
-  };
-  const context = vm.createContext({ document });
-  vm.runInContext(presentation.replace("export function", "function"), context);
-  context.rewriteNavigation();
-  context.simplifyStructure();
-  assert.equal(action.href, "/directory#saved");
-  assert.equal(action.attributes["aria-label"], "Open saved services");
-  assert.equal(action.attributes["data-section-link"], undefined, "Saved must not trigger the homepage section handler");
-  assert.equal(action.textContent, "Saved");
-  assert.match(explore.innerHTML, /href="\/directory#saved">Saved services<\/a>/);
-  assert.doesNotMatch(presentation, /localStorage|sessionStorage|readSavedResources|saved-services\.js|fetch\(|sendBeacon|XMLHttpRequest/);
+test("authored homepage Saved entry opens the private fragment without reading saved state", async () => {
+  assert.match(siteFooter(), /<a href="\/directory#saved">Saved services<\/a>/);
+  assert.doesNotMatch(footerSource, /data-section-link|localStorage|sessionStorage|readSavedResources|saved-services\.js|fetch\(|sendBeacon|XMLHttpRequest/);
+  assert.match(await readFile("src/app.js", "utf8"), /siteFooter\(\{ clearBrowserData: true \}\)/);
 });
 
-test("Saved stays a visible text action with a 44px target on narrow home headers", () => {
-  assert.match(clarity, /\.rwn-professional \.header-action\s*\{[^}]*display:\s*inline-flex;[^}]*min-height:\s*44px;/);
-  const narrowHeader = clarity.slice(clarity.search(/@media \(max-width:\s*900px\)/), clarity.search(/@media \(max-width:\s*600px\)/));
-  assert.match(narrowHeader, /\.rwn-professional \.header-action\s*\{[^}]*display:\s*inline-flex;/);
-  for (const rule of clarity.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    if (/\.header-action(?:\s|$|,)/.test(rule[1]) && !/\.header-action\s+svg/.test(rule[1])) {
-      assert.doesNotMatch(rule[2], /display\s*:\s*none|visibility\s*:\s*hidden/, "the Saved text action must remain available");
+test("Saved footer links keep a 44px text target and visible keyboard focus", () => {
+  assert.match(footerCss, /\.rwn-site-footer a, \.rwn-site-footer button\s*\{[^}]*display:\s*inline-flex;[^}]*min-height:\s*44px;/);
+  assert.match(footerCss, /\.rwn-site-footer :is\(a,button\):focus-visible\s*\{[^}]*outline: 2px solid #fff;[^}]*outline-offset: 3px;/);
+  for (const rule of footerCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (/\.rwn-site-footer a(?:\s|$|,)/.test(rule[1])) {
+      assert.doesNotMatch(rule[2], /display\s*:\s*none|visibility\s*:\s*hidden/, "Saved text links remain available at all screen widths");
     }
   }
 });

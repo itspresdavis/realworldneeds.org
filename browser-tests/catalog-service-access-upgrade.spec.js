@@ -44,7 +44,12 @@ async function proveLegacyCatalog(page, gate, stage) {
   await test.info().attach('legacy-controller-' + stage, { body: JSON.stringify(evidence), contentType: 'application/json' });
 }
 
-async function expectSafeBowery(scope) {
+async function expectSafeBowery(results) {
+  // A literal Bowery search also matches a clinic on Bowery Avenue. Verify
+  // the Mission's actions without prohibiting maps for unrelated providers.
+  const scope = results.locator('a.directory-global-result[href="/service/bowery-mission"]').locator('..');
+  await expect(scope).toHaveCount(1);
+  await expect(scope).toHaveClass(/\bdirectory-global-result-wrap\b/);
   for (const summary of await scope.locator(".result-more:not([open]) > summary").all()) await summary.click();
   await expect(scope.getByRole('link', { name: /^Shelter intake details/ })).toHaveAttribute('href', 'https://www.bowery.org/get-help/');
   const meal = scope.getByRole('link', { name: /^Directions to meal service/ });

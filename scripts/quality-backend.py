@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 
-REPOSITORY = "itspresdavis/RWN-WEB"
+REPOSITORY = "itspresdavis/realworldneeds.org"
 OWNER = "itspresdavis"
 WORKFLOW = ".github/workflows/quality.yml"
 EXACT_SOURCE_EVENTS = {"push", "workflow_dispatch"}

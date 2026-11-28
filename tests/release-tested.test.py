@@ -27,7 +27,7 @@ NOW = dt.datetime(2026, 10, 29, 16, 0, tzinfo=dt.timezone.utc)
 
 def receipt(system="linux"):
     return {
-        "schema_version": 1, "repository": "itspresdavis/RWN-WEB",
+        "schema_version": 1, "repository": "itspresdavis/realworldneeds.org",
         "platform": {"system": system, "machine": "arm64" if system == "darwin" else "x86_64"},
         "provider": "macos" if system == "darwin" else "ubuntu",
         "sha": SHA, "source_tree": TREE, "git_archive_sha256": ARCHIVE_HASH,
@@ -281,7 +281,7 @@ class DeploymentBoundaryTests(unittest.TestCase):
 
     def fake_git(self, *args):
         if args[:2] == ("remote", "get-url"):
-            return b"git@github.com:itspresdavis/RWN-WEB.git\n"
+            return b"git@github.com:itspresdavis/realworldneeds.org.git\n"
         if args[0] == "archive":
             return self.data
         if args[-1] == SHA + "^{tree}":

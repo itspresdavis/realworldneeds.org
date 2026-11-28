@@ -10,6 +10,7 @@ test('map and generated pages share the compact footer destinations', async () =
     const html = await readFile(`dist/${path}`, 'utf8');
     const footer = html.match(/<footer class="rwn-site-footer">[\s\S]*?<\/footer>/)?.[0];
     assert.ok(footer, `${path} has its shared footer`);
+    if (path === "directory/index.html") assert.match(footer, /<a href="\/directory" aria-current="page">Directory<\/a>/);
     footers.push(footer);
   }
   for (const footer of footers) {

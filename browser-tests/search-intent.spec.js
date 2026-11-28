@@ -236,14 +236,18 @@ for (const path of ["/", "/directory"]) {
     await page.locator(home ? "#resourcePlace" : "[data-directory-place]").fill("02108");
     await page.getByRole("button", { name: "Use US ZIP 02108", exact: true }).click();
     await expect(need).toHaveValue("");
-    if (home) {
-      // The finder deliberately renders eight rows at a time. Inspect all
-      // returned rows before asserting presence or absence, without requiring
-      // one provider to occupy an arbitrary initial rank for a blank need.
-      const more = page.locator("#showMoreResults");
-      for (let batch = 0; batch < 100 && await more.isVisible(); batch++) await more.click();
-      await expect(more).toBeHidden();
+    // Both surfaces paginate (8 finder rows / 60 directory rows). Check the
+    // complete bounded result set, not an arbitrary provider's initial rank.
+    await expect(page.locator("[data-search-intent]")).toContainText("10 km · US ZIP 02108");
+    const more = page.locator(home ? "#showMoreResults" : "[data-directory-more]");
+    const rows = page.locator(home ? ".resource-card[data-result-resource-id]" : ".directory-global-result");
+    await expect(rows.first()).toBeVisible();
+    for (let batch = 0; batch < 100 && await more.isVisible(); batch++) {
+      const before = await rows.count();
+      await more.click();
+      await expect.poll(() => rows.count()).toBeGreaterThan(before);
     }
+    await expect(more).toBeHidden();
     await expect(page.locator(home ? '.resource-card[data-result-resource-id="rosies-place-boston"]' : '.directory-global-result[href="/service/rosies-place-boston"]')).toBeVisible();
     await expect(page.locator(home ? '.resource-card[data-result-resource-id="bowery-mission"]' : '.directory-global-result[href="/service/bowery-mission"]')).toHaveCount(0);
     await expect(page.locator("[data-search-intent]")).toContainText("10 km · US ZIP 02108");

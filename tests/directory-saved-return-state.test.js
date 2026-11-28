@@ -17,7 +17,7 @@ function fixture() {
   globalThis.window = { innerHeight: 844, scrollTo(options) { effects.push(["scroll", options]); } };
   globalThis.document = {
     querySelector(selector) {
-      assert.equal(selector, ".legal-header");
+      assert.equal(selector, ".rwn-site-header");
       return { getBoundingClientRect: () => ({ bottom: 74 }), querySelectorAll: () => [brand] };
     },
     querySelectorAll(selector) {

@@ -22,7 +22,7 @@ import tempfile
 import time
 import uuid
 
-REPOSITORY = "itspresdavis/RWN-WEB"
+REPOSITORY = "itspresdavis/realworldneeds.org"
 STAGES = (
     ("install", ["npm", "ci"], 300),
     ("check", ["/bin/sh", "-c", """set -eu
@@ -159,12 +159,12 @@ def resolve_ref(repo, ref, env):
         raise ValueError("Ref must be a nonempty Git revision, not an option.")
     origin = git_output(repo, env, "remote", "get-url", "origin")
     permitted = {
-        "https://github.com/itspresdavis/RWN-WEB.git",
-        "https://github.com/itspresdavis/RWN-WEB",
-        "git@github.com:itspresdavis/RWN-WEB.git",
-        "git@github.com:itspresdavis/RWN-WEB",
-        "ssh://git@github.com/itspresdavis/RWN-WEB.git",
-        "ssh://git@github.com/itspresdavis/RWN-WEB",
+        "https://github.com/itspresdavis/realworldneeds.org.git",
+        "https://github.com/itspresdavis/realworldneeds.org",
+        "git@github.com:itspresdavis/realworldneeds.org.git",
+        "git@github.com:itspresdavis/realworldneeds.org",
+        "ssh://git@github.com/itspresdavis/realworldneeds.org.git",
+        "ssh://git@github.com/itspresdavis/realworldneeds.org",
     }
     if origin not in permitted:
         raise ValueError("Source origin does not match " + REPOSITORY)

@@ -79,12 +79,13 @@ export function assertConnectivityFocusReleased(before, after) {
   check(after.events?.online === 0, "An online event occurred during the recovery journey", after.events);
 }
 
-export async function pressConnectivityRecoveryKey(client, name, code) {
+export async function pressConnectivityRecoveryKey(client, name, code, { shift = false } = {}) {
   // Match qa-search-relevance and qa-page-menu-reflow: native button Enter
   // activation needs the character-bearing phase, not just raw keydown/keyup.
   const text = name === "Enter" ? "\r" : "";
-  await client.call("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...(text ? { text, unmodifiedText: text } : {}) });
-  await client.call("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
+  const modifiers = shift ? { modifiers: 8 } : {}; // CDP Shift bit, on both key phases.
+  await client.call("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...modifiers, ...(text ? { text, unmodifiedText: text } : {}) });
+  await client.call("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...modifiers });
 }
 
 export async function settleConnectivityFocus() {
